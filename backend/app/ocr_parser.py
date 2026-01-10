@@ -1,13 +1,22 @@
 """
 OCR识别模块：使用PaddleOCR识别入库单图片
+注意：OCR功能在云端部署时被禁用（依赖包太大）
 """
 import os
 from typing import Optional, Dict, List
-import numpy as np
-import cv2
 import logging
 
 logger = logging.getLogger(__name__)
+
+# 尝试导入 OCR 相关依赖（云端部署时可能不可用）
+OCR_AVAILABLE = False
+try:
+    import numpy as np
+    import cv2
+    OCR_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"OCR 依赖不可用（numpy/cv2 未安装）: {e}")
+    logger.warning("OCR 功能已禁用，请在本地运行以使用图片识别功能")
 
 # 初始化OCR引擎（单例模式）
 ocr_engine = None
@@ -16,6 +25,10 @@ _ocr_init_attempted = False  # 标记是否已尝试初始化
 def get_ocr_engine():
     """获取OCR引擎（单例模式，避免重复加载模型）"""
     global ocr_engine, _ocr_init_attempted
+    
+    # 检查 OCR 依赖是否可用
+    if not OCR_AVAILABLE:
+        raise RuntimeError("OCR 功能不可用：numpy/cv2 未安装。请在本地运行以使用图片识别功能。")
     
     if ocr_engine is not None:
         return ocr_engine

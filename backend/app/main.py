@@ -22,8 +22,16 @@ from .schemas import (
 from .models import InboundOrder, InboundDetail, Inventory, Customer, SalesOrder, SalesDetail, Supplier
 from .ai_parser import parse_user_message
 from .utils import to_pinyin_initials
-from .ocr_parser import extract_text_from_image
 from .routers import finance_router
+
+# OCR 功能可选导入（云端部署时可能不可用）
+OCR_ENABLED = False
+extract_text_from_image = None
+try:
+    from .ocr_parser import extract_text_from_image, OCR_AVAILABLE
+    OCR_ENABLED = OCR_AVAILABLE
+except ImportError as e:
+    pass  # OCR 不可用，将在需要时返回错误提示
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -85,6 +93,15 @@ async def recognize_inbound_sheet(file: UploadFile = File(...)):
     识别入库单图片，提取文字内容
     只识别，不入库，返回识别出的文字供用户审核
     """
+    # 检查 OCR 功能是否可用
+    if not OCR_ENABLED or extract_text_from_image is None:
+        return {
+            "success": False,
+            "message": "OCR 图片识别功能在云端版本中不可用。请在本地运行以使用此功能。",
+            "recognized_text": "",
+            "thinking_steps": ["OCR 功能已禁用（云端部署）"]
+        }
+    
     try:
         logger.info(f"收到图片上传请求：{file.filename}, 类型：{file.content_type}")
         
