@@ -23,15 +23,14 @@ from .models import InboundOrder, InboundDetail, Inventory, Customer, SalesOrder
 from .ai_parser import parse_user_message
 from .utils import to_pinyin_initials
 from .routers import finance_router
+from .ocr_parser import OCR_AVAILABLE
 
-# OCR 功能可选导入（云端部署时可能不可用）
-OCR_ENABLED = False
-extract_text_from_image = None
-try:
-    from .ocr_parser import extract_text_from_image, OCR_AVAILABLE
-    OCR_ENABLED = OCR_AVAILABLE
-except ImportError as e:
-    pass  # OCR 不可用，将在需要时返回错误提示
+# OCR 功能状态
+OCR_ENABLED = OCR_AVAILABLE
+if OCR_ENABLED:
+    from .ocr_parser import extract_text_from_image
+else:
+    extract_text_from_image = None
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
