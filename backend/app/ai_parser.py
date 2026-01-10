@@ -1,0 +1,457 @@
+import json
+import os
+import re
+import logging
+from anthropic import Anthropic
+from dotenv import load_dotenv
+from .schemas import AIResponse
+
+load_dotenv()
+
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+def parse_user_message(message: str) -> AIResponse:
+    """使用Claude API解析用户自然语言输入，必须成功"""
+    
+    prompt = f"""你是一个珠宝ERP系统的智能AI助手。你需要理解用户的自然语言输入，并提取相关信息。
+
+用户输入：{message}
+
+系统支持的功能：
+1. **入库操作**：用户要进行商品入库
+2. **查询库存**：查询商品库存信息
+3. **查询供应商**：查询供应商相关信息（列表、数量等）
+4. **供应商分析**：从多个维度分析哪个供应商最重要（总工费、总重量、商品种类、供货频次等）
+5. **生成图表**：用户想要可视化展示数据（图表、图片、可视化等）
+6. **查询入库单**：查询入库单信息
+7. **统计分析**：各种统计查询
+8. **客户管理**：创建/查询客户信息
+9. **供应商管理**：创建/查询供应商信息
+10. **销售管理**：创建/查询销售单
+
+请返回JSON格式，包含以下字段：
+- action: 用户意图，根据用户输入智能判断，可能是：
+  - "入库"：用户要进行入库操作（包含商品、重量、工费等信息）
+  - "查询库存"：用户要查询商品库存（如"查询XXX库存"、"XXX还有多少"、"帮我查一下我目前的库存"等）
+  - "查询供应商"：用户要查询供应商信息（如"有几个供应商"、"供应商有哪些"、"供应商列表"、"我现在有几个供应商"等）
+  - "供应商分析"：用户想知道"谁是最重要的供应商""核心供应商是谁"等，需要根据数据库中的供应商统计数据进行分析和排序
+  - "生成图表"：用户想要可视化展示数据（如"生成图表"、"用图表展示"、"画个图"、"可视化"、"可以生成图片给我看吗"等）
+  - "查询入库单"：用户要查询入库单信息（如"查询入库单"、"查询入库单RK1768047147249"、"入库单号RK1768047147249"、"帮我查一下入库单RK1768047147249"、"入库单RK1768047147249的详情"等）
+  - "统计分析"：用户要进行统计分析（如"总库存"、"总工费"、"统计"等）
+  - "创建客户"：用户要创建新客户（如"新建客户：张三 电话13800138000"、"添加客户"等）
+  - "查询客户"：用户要查询客户信息（如"查询客户张三"、"客户列表"、"有哪些客户"等）
+  - "创建供应商"：用户要创建新供应商（如"新建供应商：XX公司 电话13800138000"、"添加供应商"等）
+  - "创建销售单"：用户要创建销售单（包含客户、商品、工费、克重、业务员、门店代码等信息）
+  - "查询销售单"：用户要查询销售单信息（如"查询销售单"、"最近的销售单"、"张三的销售单"等）
+  - "其他"：无法识别的意图
+
+- order_no: 入库单号（字符串，仅当action为"查询入库单"且用户提供了入库单号时需要，如"RK1768047147249"）
+
+- products: 商品列表（数组，仅当action为"入库"时需要），每个商品包含：
+  - product_name: 商品名称（必填）
+  - weight: 重量/金重（克，必须是数字，必填）
+  - labor_cost: 工费（元/克，必须是数字，必填）
+  - supplier: 供应商（必填）
+
+- customer_name: 客户姓名（当action为"创建客户"、"创建销售单"、"查询客户"、"查询销售单"时需要）
+- supplier_name: 供应商名称（当action为"创建供应商"时需要）
+- phone: 电话（当action为"创建客户"、"创建供应商"时可选）
+- address: 地址（当action为"创建客户"、"创建供应商"时可选）
+- contact_person: 联系人（当action为"创建供应商"时可选）
+- supplier_type: 供应商类型（当action为"创建供应商"时可选，默认"个人"）
+- salesperson: 业务员姓名（当action为"创建销售单"时需要）
+- store_code: 门店代码（当action为"创建销售单"时可选）
+- items: 商品明细列表（数组，仅当action为"创建销售单"时需要），每个商品包含：
+  - product_name: 商品名称（必填）
+  - weight: 克重（克，必须是数字，必填）
+  - labor_cost: 工费（元/克，必须是数字，必填）
+- order_date: 日期（当action为"创建销售单"时可选，格式：YYYY-MM-DD或YYYY-MM-DD HH:MM:SS）
+
+重要提示：
+1. **意图识别要灵活**：
+   - "帮我入库"、"做个入库"、"入库"、"帮我做个入库" → action: "入库"
+   - "查询库存"、"还有多少"、"库存情况"、"帮我查一下我目前的库存" → action: "查询库存"
+   - "有几个供应商"、"供应商有哪些"、"供应商列表"、"供应商数量"、"我现在有几个供应商" → action: "查询供应商"
+   - "谁是最重要的供应商"、"核心供应商"、"最重要的供应商"、"关键供应商" → action: "供应商分析"
+   - "生成图表"、"用图表展示"、"画个图"、"可视化"、"可以生成图片给我看吗"、"给我看图表" → action: "生成图表"
+   - "查询入库单"、"入库单号"、"最近的入库单" → action: "查询入库单"
+   - "查询入库单RK1768047147249"、"入库单号RK1768047147249"、"帮我查一下入库单RK1768047147249"、"入库单RK1768047147249的详情"、"RK1768047147249"（如果包含RK开头的入库单号） → action: "查询入库单"，并提取order_no字段
+   - "总库存"、"总工费"、"统计"、"统计信息" → action: "统计分析"
+   - "新建客户"、"创建客户"、"添加客户"、"客户：XXX" → action: "创建客户"
+   - "查询客户"、"客户列表"、"有哪些客户"、"客户信息" → action: "查询客户"
+   - "新建供应商"、"创建供应商"、"添加供应商"、"供应商：XXX" → action: "创建供应商"
+   - "开销售单"、"创建销售单"、"销售单"、"开单" → action: "创建销售单"
+   - "查询销售单"、"销售单列表"、"最近的销售单" → action: "查询销售单"
+
+2. **入库操作必填字段**（仅当action为"入库"时）：
+   - product_name（商品名称）
+   - weight（重量/金重，单位：克，必须>0）
+   - labor_cost（工费，单位：元/克，必须≥0）
+   - supplier（供应商）
+
+3. **智能提取信息**：
+   - 如果用户说"8元 100克"，理解为工费8元/克，重量100克
+   - 如果用户说"工费8元，100克"，也是工费8元/克，重量100克
+   - 如果用户说"第一行是...，第二行是..."，解析为多个商品
+   - 如果多个商品共享同一供应商，每个商品都要包含supplier
+4. **供应商相关意图识别**：
+   - 当用户使用"最重要 / 核心 / 关键 / top / 最大 / 最重要的供应商 / 核心供应商 / 谁对我最重要 / 谁是我最依赖的供应商"等表述时，请将 action 设置为 "供应商分析"
+   - 当用户只是想知道"有几个供应商 / 列出所有供应商 / 供应商列表"等，不涉及"最重要/核心"这类比较时，才使用 "查询供应商"
+
+5. **上下文追问识别**（非常重要）：
+   - 当用户使用"哪X种"、"有哪些"、"列出所有"、"具体是哪些"、"哪几个"、"都有什么"、"分别是谁"、"分别是哪些"、"分别是什么"等追问时，需要根据上下文判断：
+     * 如果涉及"商品"、"库存"、"种类"、"种商品" → action: "查询库存"
+     * 如果涉及"供应商"、"哪几个供应商"、"供应商分别是谁" → action: "查询供应商"
+     * 如果涉及"客户"、"哪几个客户"、"客户分别是谁" → action: "查询客户"
+   - **特别重要**：当用户单独说"哪七种"、"哪几种"、"哪几个"、"有哪些"、"具体是哪些"、"分别是谁"、"分别是哪些"等简短追问时：
+     * 如果包含"种"字（如"哪七种"、"哪几种"、"有几种"），通常是指商品种类，应该识别为 action: "查询库存"
+     * 如果包含"供应商"，应该识别为 action: "查询供应商"
+     * 如果包含"客户"，应该识别为 action: "查询客户"
+     * **如果用户说"分别是谁"、"分别是哪些"，且之前的问题涉及供应商（如"有几个供应商"），应该识别为 action: "查询供应商"**
+     * **如果用户说"分别是谁"、"分别是哪些"，且之前的问题涉及客户（如"有几个客户"），应该识别为 action: "查询客户"**
+     * **如果用户说"分别是谁"、"分别是哪些"，且之前的问题涉及商品/库存（如"有几种商品"），应该识别为 action: "查询库存"**
+     * 如果没有任何上下文线索，但使用了"种"字，默认识别为 action: "查询库存"（因为库存查询是最常见的）
+   - 特别提示：
+     * "哪七种"、"哪几种"、"有几种"、"有哪些商品"、"列出所有库存"、"具体是哪些商品"、"分别是哪些商品" → action: "查询库存"
+     * "哪几个供应商"、"供应商有哪些"、"列出所有供应商"、"供应商分别是谁"、"分别是谁"（在供应商相关对话后） → action: "查询供应商"
+     * "哪几个客户"、"客户有哪些"、"列出所有客户"、"客户分别是谁" → action: "查询客户"
+   - 当用户使用数字+"种"、"个"等量词追问时（如"哪七种"、"哪几个"），通常是想要查看详细列表，应该识别为相应的查询操作
+
+6. **如果信息不完整**：
+   - 对于入库操作，如果缺少必填字段，设为null
+   - 对于查询操作，products设为null
+
+只返回JSON，不要其他文字。
+
+示例1（入库）：
+用户输入："古法戒指 100克 工费8元 供应商是金源珠宝，帮我做个入库"
+{{
+  "action": "入库",
+  "products": [
+    {{
+      "product_name": "古法戒指",
+      "weight": 100,
+      "labor_cost": 8,
+      "supplier": "金源珠宝"
+    }}
+  ]
+}}
+
+示例2（查询库存）：
+用户输入："查询古法戒指库存"
+{{
+  "action": "查询库存",
+  "products": null
+}}
+
+示例3（查询供应商）：
+用户输入："我现在有几个供应商"
+{{
+  "action": "查询供应商",
+  "products": null
+}}
+
+示例4（供应商分析）：
+用户输入："谁是我最重要的供应商？"
+{{
+  "action": "供应商分析",
+  "products": null
+}}
+
+示例4（查询所有库存）：
+用户输入："帮我查一下我目前的库存"
+{{
+  "action": "查询库存",
+  "products": null
+}}
+
+示例5（统计分析）：
+用户输入："总库存是多少"
+{{
+  "action": "统计分析",
+  "products": null
+}}
+
+示例6（创建客户）：
+用户输入："新建客户：张三 电话13800138000"
+{{
+  "action": "创建客户",
+  "customer_name": "张三",
+  "phone": "13800138000",
+  "products": null
+}}
+
+示例7（查询客户）：
+用户输入："查询客户张三"
+{{
+  "action": "查询客户",
+  "customer_name": "张三",
+  "products": null
+}}
+
+示例8（创建销售单）：
+用户输入："开销售单：今天，客户张三，古法戒指 50克 工费10元/克，业务员李四，门店代码001"
+{{
+  "action": "创建销售单",
+  "customer_name": "张三",
+  "salesperson": "李四",
+  "store_code": "001",
+  "order_date": "2024-01-01",
+  "items": [
+    {{
+      "product_name": "古法戒指",
+      "weight": 50,
+      "labor_cost": 10
+    }}
+  ],
+  "products": null
+}}
+
+示例9（查询销售单）：
+用户输入："查询最近张三的销售单"
+{{
+  "action": "查询销售单",
+  "customer_name": "张三",
+  "products": null
+}}
+
+示例10（上下文追问 - 查询库存）：
+用户输入："哪七种"
+说明：用户问"哪七种"，虽然没有明确说"商品"或"库存"，但"种"字通常指商品种类，应该识别为查询库存
+{{
+  "action": "查询库存",
+  "products": null
+}}
+
+示例10-1（上下文追问 - 查询库存）：
+用户输入："具体是哪些"
+说明：用户问"具体是哪些"，虽然没有明确上下文，但这是常见的追问方式，通常指商品，应该识别为查询库存
+{{
+  "action": "查询库存",
+  "products": null
+}}
+
+示例11（上下文追问 - 查询供应商）：
+用户输入："哪几个供应商"
+{{
+  "action": "查询供应商",
+  "products": null
+}}
+
+示例12（上下文追问 - 查询客户）：
+用户输入："客户有哪些"
+{{
+  "action": "查询客户",
+  "products": null
+}}
+
+示例13（上下文追问 - 查询供应商 - "分别是谁"）：
+用户输入："分别是谁"
+说明：用户问"分别是谁"，这是对"有几个供应商"或类似供应商相关问题的追问，应该识别为查询供应商
+{{
+  "action": "查询供应商",
+  "products": null
+}}
+
+示例14（上下文追问 - 查询供应商 - "分别是哪些"）：
+用户输入："分别是哪些"
+说明：用户问"分别是哪些"，这是对供应商相关问题的追问，应该识别为查询供应商
+{{
+  "action": "查询供应商",
+  "products": null
+}}
+
+示例15（查询入库单 - 带入库单号）：
+用户输入："查询入库单RK1768047147249"
+说明：用户明确提供了入库单号，应该识别为查询入库单，并提取入库单号
+{{
+  "action": "查询入库单",
+  "order_no": "RK1768047147249",
+  "products": null
+}}
+
+示例16（查询入库单 - 入库单号单独输入）：
+用户输入："RK1768047147249"
+说明：用户只输入了入库单号，应该识别为查询入库单
+{{
+  "action": "查询入库单",
+  "order_no": "RK1768047147249",
+  "products": null
+}}
+
+示例17（查询入库单 - 自然语言描述）：
+用户输入："帮我查一下入库单号RK1768047147249的详情"
+说明：用户用自然语言描述要查询入库单，应该识别为查询入库单，并提取入库单号
+{{
+  "action": "查询入库单",
+  "order_no": "RK1768047147249",
+  "products": null
+}}
+
+示例18（查询入库单 - 不指定入库单号）：
+用户输入："查询入库单"
+说明：用户要查询入库单，但没有指定具体的入库单号，应该识别为查询入库单，order_no设为null
+{{
+  "action": "查询入库单",
+  "order_no": null,
+  "products": null
+}}
+"""
+    
+    max_retries = 3
+    retry_count = 0
+    content = ""  # 初始化变量，避免作用域问题
+    
+    while retry_count < max_retries:
+        try:
+            logger.info(f"调用Claude API解析消息 (尝试 {retry_count + 1}/{max_retries}): {message}")
+            response = client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=1500,  # 增加token数量以支持多个商品
+                system="你是一个专业的珠宝ERP系统AI助手。你需要理解用户的自然语言输入，准确识别用户意图，并提取相关信息。你擅长理解各种口语化表达和业务场景。",
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+            
+            content = response.content[0].text.strip()
+            logger.info(f"Claude API原始响应: {content}")
+            
+            # 提取JSON部分（去除可能的markdown代码块标记）
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+            
+            # 尝试找到JSON对象
+            start_idx = content.find('{')
+            end_idx = content.rfind('}')
+            if start_idx != -1 and end_idx != -1:
+                content = content[start_idx:end_idx+1]
+            
+            data = json.loads(content)
+            logger.info(f"解析后的数据: {data}")
+            
+            # 处理products数组
+            if 'products' in data and isinstance(data['products'], list):
+                # 确保每个商品的数值类型正确
+                for product in data['products']:
+                    if 'weight' in product and product['weight'] is not None:
+                        try:
+                            product['weight'] = float(product['weight'])
+                        except (ValueError, TypeError):
+                            logger.warning(f"无法转换weight为数字: {product.get('weight')}")
+                            product['weight'] = None
+                    
+                    if 'labor_cost' in product and product['labor_cost'] is not None:
+                        try:
+                            product['labor_cost'] = float(product['labor_cost'])
+                        except (ValueError, TypeError):
+                            logger.warning(f"无法转换labor_cost为数字: {product.get('labor_cost')}")
+                            product['labor_cost'] = None
+            
+            # 向后兼容：如果没有products但有单个商品字段，转换为products数组
+            if 'products' not in data or not data['products']:
+                if 'product_name' in data and data.get('product_name'):
+                    data['products'] = [{
+                        'product_name': data.get('product_name'),
+                        'weight': data.get('weight'),
+                        'labor_cost': data.get('labor_cost'),
+                        'supplier': data.get('supplier')
+                    }]
+            
+            # 确保weight和labor_cost是数字类型（向后兼容）
+            if 'weight' in data and data['weight'] is not None:
+                try:
+                    data['weight'] = float(data['weight'])
+                except (ValueError, TypeError):
+                    logger.warning(f"无法转换weight为数字: {data.get('weight')}")
+                    data['weight'] = None
+            
+            if 'labor_cost' in data and data['labor_cost'] is not None:
+                try:
+                    data['labor_cost'] = float(data['labor_cost'])
+                except (ValueError, TypeError):
+                    logger.warning(f"无法转换labor_cost为数字: {data.get('labor_cost')}")
+                    data['labor_cost'] = None
+            
+            logger.info(f"[成功] Claude API调用成功，解析完成")
+            return AIResponse(**data)
+        
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON解析错误 (尝试 {retry_count + 1}/{max_retries}): {e}, 原始内容: {content}")
+            retry_count += 1
+            if retry_count >= max_retries:
+                logger.error(f"JSON解析失败，已达到最大重试次数，使用备用解析器")
+                return fallback_parser(message)
+            continue
+        
+        except Exception as e:
+            logger.error(f"AI解析出错 (尝试 {retry_count + 1}/{max_retries}): {e}, 错误类型: {type(e).__name__}")
+            retry_count += 1
+            if retry_count >= max_retries:
+                logger.error(f"API调用失败，已达到最大重试次数，使用备用解析器")
+                return fallback_parser(message)
+            # 等待一下再重试
+            import time
+            time.sleep(1)
+            continue
+    
+    # 如果所有重试都失败，使用备用解析器
+    logger.warning(f"所有重试都失败，使用备用解析器")
+    return fallback_parser(message)
+
+def fallback_parser(message: str) -> AIResponse:
+    """简单的规则匹配作为备用方案"""
+    logger.info(f"使用备用解析器处理: {message}")
+    
+    # 提取重量（数字+克）
+    weight = None
+    weight_match = re.search(r'(\d+(?:\.\d+)?)\s*克', message)
+    if weight_match:
+        weight = float(weight_match.group(1))
+    
+    # 提取工费（工费+数字+元）
+    labor_cost = None
+    labor_match = re.search(r'工费\s*(\d+(?:\.\d+)?)\s*元', message)
+    if labor_match:
+        labor_cost = float(labor_match.group(1))
+    
+    # 提取供应商（供应商是XXX 或 供应商：XXX）
+    supplier = None
+    supplier_match = re.search(r'供应商[是：:]\s*([^，,。.\n]+)', message)
+    if supplier_match:
+        supplier = supplier_match.group(1).strip()
+    
+    # 提取商品名称（通常在重量之前）
+    product_name = None
+    if weight_match:
+        before_weight = message[:weight_match.start()].strip()
+        # 移除常见的入库相关词汇
+        product_name = before_weight.replace('帮我做个入库', '').replace('入库', '').strip()
+        if not product_name or len(product_name) < 2:
+            # 如果提取失败，尝试从整个消息中提取
+            parts = message.split()
+            for part in parts:
+                if '克' not in part and '工费' not in part and '供应商' not in part and '入库' not in part:
+                    product_name = part
+                    break
+    
+    if "入库" in message:
+        return AIResponse(
+            action="入库",
+            product_name=product_name or "未知商品",
+            weight=weight,
+            labor_cost=labor_cost,
+            supplier=supplier
+        )
+    elif "查询" in message or "库存" in message:
+        return AIResponse(action="查询库存", product_name=product_name)
+    else:
+        return AIResponse(action="未知")
+
