@@ -287,6 +287,13 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
     async def generate():
         try:
             logger.info("[流式] 开始生成响应")
+            
+            # ========== 初始填充数据（强制代理开始转发）==========
+            # 发送约2KB的初始填充，某些代理需要接收到一定量数据才会开始转发
+            initial_padding = ": " + "." * 2048 + "\n\n"
+            yield initial_padding
+            logger.info("[流式] 已发送初始填充数据")
+            
             # ========== 阶段1: 意图解析（立即开始）==========
             first_chunk = f"data: {json.dumps({'type': 'thinking', 'step': '意图解析', 'message': '正在理解您的问题...', 'progress': 10}, ensure_ascii=False)}\n\n"
             logger.info(f"[流式] 发送第一个数据块: {len(first_chunk)} 字节")
@@ -499,6 +506,7 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             
             # 使用流式AI分析
             full_response = ""
+            chunk_count = 0
             try:
                 for text_chunk in ai_analyzer.analyze_stream(
                     request.message,
@@ -506,9 +514,13 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     data
                 ):
                     full_response += text_chunk
+                    chunk_count += 1
                     # 立即发送每个文本块
                     yield f"data: {json.dumps({'type': 'content', 'chunk': text_chunk}, ensure_ascii=False)}\n\n"
-                    # 不需要sleep，让文本尽可能快地流式传输
+                    
+                    # 每5个块发送一个心跳注释，强制刷新代理缓冲
+                    if chunk_count % 5 == 0:
+                        yield ": heartbeat\n\n"
             except Exception as e:
                 logger.error(f"流式AI分析失败: {e}", exc_info=True)
                 error_msg = f"AI分析过程中出现错误：{str(e)}。请稍后重试。"
@@ -541,9 +553,16 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
         generate(), 
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            # 禁用所有缓存
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            # 保持连接
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # 禁用nginx缓冲
+            # 禁用各层代理缓冲
+            "X-Accel-Buffering": "no",  # Nginx
+            "X-Content-Type-Options": "nosniff",
+            # CORS 头
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "POST, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type",
