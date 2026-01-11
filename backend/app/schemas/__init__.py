@@ -223,6 +223,46 @@ class SalesOrderResponse(BaseModel):
     details: List[SalesDetailResponse] = []
 
 
+# ============= 结算单相关 Schema =============
+
+class SettlementOrderCreate(BaseModel):
+    """创建结算单"""
+    sales_order_id: int  # 关联的销售单ID
+    payment_method: str  # 'cash_price' 结价支付 / 'physical_gold' 实物抵扣
+    gold_price: Optional[float] = None  # 当日金价（结价支付时必填）
+    physical_gold_weight: Optional[float] = None  # 客户提供的黄金重量（实物抵扣时必填）
+    remark: Optional[str] = None
+
+
+class SettlementOrderConfirm(BaseModel):
+    """确认结算单"""
+    confirmed_by: str  # 确认人
+
+
+class SettlementOrderResponse(BaseModel):
+    """结算单响应"""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    settlement_no: str
+    sales_order_id: int
+    payment_method: str
+    gold_price: Optional[float]
+    physical_gold_weight: Optional[float]
+    total_weight: float
+    material_amount: Optional[float]
+    labor_amount: float
+    total_amount: float
+    status: str
+    created_by: Optional[str]
+    confirmed_by: Optional[str]
+    confirmed_at: Optional[datetime]
+    printed_at: Optional[datetime]
+    remark: Optional[str]
+    created_at: datetime
+    # 关联的销售单信息
+    sales_order: Optional[SalesOrderResponse] = None
+
+
 # ============= 分仓库存相关 Schema =============
 
 class LocationCreate(BaseModel):
@@ -351,6 +391,10 @@ __all__ = [
     'SalesOrderCreate',
     'SalesDetailResponse',
     'SalesOrderResponse',
+    # 结算
+    'SettlementOrderCreate',
+    'SettlementOrderConfirm',
+    'SettlementOrderResponse',
     # 财务
     'AccountReceivableStatus',
     'PaymentMethod',

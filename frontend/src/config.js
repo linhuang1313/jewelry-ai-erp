@@ -25,6 +25,13 @@ export const API_ENDPOINTS = {
   TRANSFER_REJECT: (id) => `${API_BASE_URL}/api/warehouse/transfers/${id}/reject`,  // 拒收转移
   INIT_DEFAULT_LOCATIONS: `${API_BASE_URL}/api/warehouse/init-default-locations`,  // 初始化默认位置
   
+  // 结算管理相关
+  PENDING_SALES: `${API_BASE_URL}/api/settlement/pending-sales`,  // 待结算销售单
+  SETTLEMENT_ORDERS: `${API_BASE_URL}/api/settlement/orders`,  // 结算单列表
+  SETTLEMENT_ORDER: (id) => `${API_BASE_URL}/api/settlement/orders/${id}`,  // 结算单详情
+  SETTLEMENT_CONFIRM: (id) => `${API_BASE_URL}/api/settlement/orders/${id}/confirm`,  // 确认结算
+  SETTLEMENT_PRINT: (id) => `${API_BASE_URL}/api/settlement/orders/${id}/print`,  // 标记已打印
+  
   // 导出 API_BASE_URL 供服务使用
   API_BASE_URL,
 };

@@ -24,6 +24,7 @@ from .ai_parser import parse_user_message
 from .utils import to_pinyin_initials
 from .routers import finance_router
 from .routers.warehouse import router as warehouse_router
+from .routers.settlement import router as settlement_router
 from .ocr_parser import OCR_AVAILABLE
 
 # OCR 功能状态
@@ -44,6 +45,9 @@ app.include_router(finance_router)
 
 # 注册仓库管理路由
 app.include_router(warehouse_router)
+
+# 注册结算管理路由
+app.include_router(settlement_router)
 
 # 配置CORS - 支持本地开发和云端部署
 # 允许的前端域名列表

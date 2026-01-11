@@ -136,6 +136,41 @@ class SalesDetail(Base):
     inventory_id = Column(Integer, ForeignKey("inventory.id"), nullable=True)  # 关联库存（可选）
 
 
+# ============= 结算单模型 =============
+
+class SettlementOrder(Base):
+    """结算单 - 确认销售单的原料支付方式并复核"""
+    __tablename__ = "settlement_orders"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    settlement_no = Column(String(50), unique=True, index=True, nullable=False)  # 结算单号
+    sales_order_id = Column(Integer, ForeignKey("sales_orders.id"), nullable=False)  # 关联销售单
+    
+    # 原料支付方式
+    payment_method = Column(String(20), nullable=False)  # 'cash_price' 结价支付 / 'physical_gold' 实物抵扣
+    gold_price = Column(Float, nullable=True)  # 当日金价（元/克），结价支付时必填
+    physical_gold_weight = Column(Float, nullable=True)  # 客户提供的黄金重量（克），实物抵扣时必填
+    
+    # 金额计算
+    total_weight = Column(Float, nullable=False)  # 商品总克重
+    material_amount = Column(Float, nullable=True)  # 原料金额 = 金价 × 克重（结价支付时）
+    labor_amount = Column(Float, nullable=False)  # 工费金额
+    total_amount = Column(Float, nullable=False)  # 应收总额 = 原料金额 + 工费金额
+    
+    # 状态和操作信息
+    status = Column(String(20), default="pending")  # pending待结算 / confirmed已确认 / printed已打印
+    created_by = Column(String(50))  # 创建人（柜台）
+    confirmed_by = Column(String(50), nullable=True)  # 确认人（结算专员）
+    confirmed_at = Column(DateTime, nullable=True)  # 确认时间
+    printed_at = Column(DateTime, nullable=True)  # 打印时间
+    remark = Column(Text, nullable=True)  # 备注
+    
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # 关系
+    sales_order = relationship("SalesOrder", backref="settlement")
+
+
 # ============= 财务相关模型 =============
 # 从 finance.py 导入
 from .finance import AccountReceivable, PaymentRecord, ReminderRecord, ReconciliationStatement
@@ -236,6 +271,8 @@ __all__ = [
     # 销售
     'SalesOrder',
     'SalesDetail',
+    # 结算
+    'SettlementOrder',
     # 财务
     'AccountReceivable',
     'PaymentRecord',
