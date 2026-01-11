@@ -75,7 +75,8 @@ class AIResponse(BaseModel):
     # 查询相关字段
     start_date: Optional[str] = None
     end_date: Optional[str] = None
-    order_no: Optional[str] = None  # 入库单号（用于查询入库单）
+    order_no: Optional[str] = None  # 入库单号（用于查询入库单，RK开头）
+    sales_order_no: Optional[str] = None  # 销售单号（用于查询销售单，XS开头）
 
 
 # ============= 入库相关 Schema =============

@@ -281,11 +281,13 @@ async def chat(request: AIRequest, db: Session = Depends(get_db)):
         else:
             from .ai_analyzer import ai_analyzer
             
-            # 收集所有相关数据
+            # 收集所有相关数据（传入入库单号和销售单号）
             data = ai_analyzer.collect_all_data(
                 ai_response.action,
                 request.message,
-                db
+                db,
+                order_no=ai_response.order_no,  # RK开头的入库单号
+                sales_order_no=ai_response.sales_order_no  # XS开头的销售单号
             )
             
             # 使用AI进行分析
@@ -424,7 +426,8 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 'intent': ai_response.action,
                 'user_message': request.message,
                 'timestamp': datetime.now().isoformat(),
-                'order_no': ai_response.order_no if hasattr(ai_response, 'order_no') else None  # 添加入库单号
+                'order_no': ai_response.order_no if hasattr(ai_response, 'order_no') else None,  # 添加入库单号（RK开头）
+                'sales_order_no': ai_response.sales_order_no if hasattr(ai_response, 'sales_order_no') else None  # 添加销售单号（XS开头）
             }
             
             # 收集库存数据
@@ -529,30 +532,60 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         ]
                     })
             
-            # 收集销售单数据
-            sales_orders = db.query(SalesOrder).order_by(desc(SalesOrder.order_date)).limit(50).all()
-            data['sales_orders'] = []
-            for so in sales_orders:
-                details = db.query(SalesDetail).filter(SalesDetail.order_id == so.id).all()
-                data['sales_orders'].append({
-                    'order_no': so.order_no,
-                    'customer_name': so.customer_name,
-                    'salesperson': so.salesperson,
-                    'store_code': so.store_code,
-                    'total_labor_cost': so.total_labor_cost,
-                    'total_weight': so.total_weight,
-                    'status': so.status,
-                    'order_date': str(so.order_date) if so.order_date else None,
-                    'details': [
-                        {
-                            'product_name': d.product_name,
-                            'weight': d.weight,
-                            'labor_cost': d.labor_cost,
-                            'total_labor_cost': d.total_labor_cost
-                        }
-                        for d in details
-                    ]
-                })
+            # 收集销售单数据（如果指定了销售单号，只查询该销售单）
+            sales_order_no = ai_response.sales_order_no if hasattr(ai_response, 'sales_order_no') else None
+            if sales_order_no:
+                # 精确查询指定销售单
+                so = db.query(SalesOrder).filter(SalesOrder.order_no == sales_order_no).first()
+                if so:
+                    details = db.query(SalesDetail).filter(SalesDetail.order_id == so.id).all()
+                    data['sales_orders'] = [{
+                        'order_no': so.order_no,
+                        'customer_name': so.customer_name,
+                        'salesperson': so.salesperson,
+                        'store_code': so.store_code,
+                        'total_labor_cost': so.total_labor_cost,
+                        'total_weight': so.total_weight,
+                        'status': so.status,
+                        'order_date': str(so.order_date) if so.order_date else None,
+                        'details': [
+                            {
+                                'product_name': d.product_name,
+                                'weight': d.weight,
+                                'labor_cost': d.labor_cost,
+                                'total_labor_cost': d.total_labor_cost
+                            }
+                            for d in details
+                        ]
+                    }]
+                else:
+                    # 销售单不存在
+                    data['sales_orders'] = []
+            else:
+                # 查询最近的销售单（最多50个）
+                sales_orders = db.query(SalesOrder).order_by(desc(SalesOrder.order_date)).limit(50).all()
+                data['sales_orders'] = []
+                for so in sales_orders:
+                    details = db.query(SalesDetail).filter(SalesDetail.order_id == so.id).all()
+                    data['sales_orders'].append({
+                        'order_no': so.order_no,
+                        'customer_name': so.customer_name,
+                        'salesperson': so.salesperson,
+                        'store_code': so.store_code,
+                        'total_labor_cost': so.total_labor_cost,
+                        'total_weight': so.total_weight,
+                        'status': so.status,
+                        'order_date': str(so.order_date) if so.order_date else None,
+                        'details': [
+                            {
+                                'product_name': d.product_name,
+                                'weight': d.weight,
+                                'labor_cost': d.labor_cost,
+                                'total_labor_cost': d.total_labor_cost
+                            }
+                            for d in details
+                        ]
+                    })
             
             # 收集总体统计
             data['statistics'] = {

@@ -22,21 +22,23 @@ class AIAnalyzer:
         load_dotenv()
         self.client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
     
-    def collect_all_data(self, intent: str, user_message: str, db: Session, order_no: Optional[str] = None) -> Dict[str, Any]:
+    def collect_all_data(self, intent: str, user_message: str, db: Session, order_no: Optional[str] = None, sales_order_no: Optional[str] = None) -> Dict[str, Any]:
         """根据用户意图智能收集所有相关数据
         
         Args:
             intent: 用户意图
             user_message: 用户消息
             db: 数据库会话
-            order_no: 入库单号（可选，用于精确查询）
+            order_no: 入库单号（可选，RK开头，用于精确查询入库单）
+            sales_order_no: 销售单号（可选，XS开头，用于精确查询销售单）
         """
         data = {
             "context": {
                 "intent": intent,
                 "user_message": user_message,
                 "timestamp": datetime.now().isoformat(),
-                "order_no": order_no  # 添加入库单号到上下文
+                "order_no": order_no,  # 入库单号
+                "sales_order_no": sales_order_no  # 销售单号
             }
         }
         
@@ -261,12 +263,16 @@ class AIAnalyzer:
         # 格式化数据
         data_text = self.format_data_for_ai(data)
         
-        # 检查是否是查询入库单
+        # 检查是否是查询入库单（RK开头）
         order_no = data.get("context", {}).get("order_no")
-        is_specific_order_query = intent == "查询入库单" and order_no
+        is_specific_inbound_query = intent == "查询入库单" and order_no
+        
+        # 检查是否是查询销售单（XS开头）
+        sales_order_no = data.get("context", {}).get("sales_order_no")
+        is_specific_sales_query = intent == "查询销售单" and sales_order_no
         
         # 构建AI提示词
-        if is_specific_order_query:
+        if is_specific_inbound_query:
             # 查询特定入库单的提示词
             prompt = f"""你是一个专业的珠宝ERP系统AI分析专家。用户要查询特定入库单的详细信息。
 
@@ -286,6 +292,26 @@ class AIAnalyzer:
 4. **友好提示**：如果入库单不存在，友好地告知用户
 
 请用自然、专业的语言回答，直接展示入库单的详细信息。"""
+        elif is_specific_sales_query:
+            # 查询特定销售单的提示词
+            prompt = f"""你是一个专业的珠宝ERP系统AI分析专家。用户要查询特定销售单的详细信息。
+
+**用户问题：** {user_message}
+**用户意图：** {intent}
+**销售单号：** {sales_order_no}
+
+以下是系统数据库中的相关数据：
+
+{data_text}
+
+请基于这些数据，详细回答用户关于销售单 {sales_order_no} 的问题。要求：
+
+1. **详细展示**：完整展示该销售单的所有信息（销售单号、客户名、业务员、销售日期、商品明细、总重量、总工费、状态等）
+2. **格式清晰**：使用清晰的格式，便于阅读
+3. **数据准确**：确保所有数据准确无误
+4. **友好提示**：如果销售单不存在，友好地告知用户
+
+请用自然、专业的语言回答，直接展示销售单的详细信息。注意：销售单号以XS开头，不要与入库单（RK开头）混淆。"""
         else:
             # 通用分析的提示词
             prompt = f"""你是一个专业的珠宝ERP系统AI分析专家。用户提出了以下问题：
