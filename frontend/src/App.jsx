@@ -1577,8 +1577,8 @@ function App() {
                       </button>
                     </>
                   )}
-                  {/* 分仓库存按钮 - 商品专员 + 管理层 */}
-                  {(userRole === 'product' || userRole === 'manager') && (
+                  {/* 分仓库存按钮 - 柜台(接收) + 商品专员 + 管理层 */}
+                  {(userRole === 'counter' || userRole === 'product' || userRole === 'manager') && (
                     <button
                       onClick={() => setCurrentPage('warehouse')}
                       className="flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-xl 
@@ -1658,95 +1658,158 @@ function App() {
                 <h2 className="text-[32px] font-semibold text-gray-900 mb-3 tracking-tight">
                   开始新的对话
                 </h2>
+                {/* 角色提示文字 */}
                 <p className="text-[17px] text-gray-600 mb-8 max-w-md mx-auto">
-                  试试说："古法黄金戒指 100克 工费6元 供应商是金源珠宝，帮我做个入库"
+                  {userRole === 'counter' && '试试说："帮我开一张销售单，客户张三，业务员李四，古法戒指 50克 工费8元"'}
+                  {userRole === 'product' && '试试说："古法黄金戒指 100克 工费6元 供应商是金源珠宝，帮我做个入库"'}
+                  {userRole === 'settlement' && '试试说："查看今天待结算的订单"'}
+                  {userRole === 'finance' && '试试说："查看本月财务对账情况"'}
+                  {userRole === 'sales' && '试试说："查询客户张三的购买记录"'}
+                  {userRole === 'manager' && '试试说："查看今日销售数据汇总"'}
                 </p>
                 
-                {/* 快捷操作卡片 */}
+                {/* 角色快捷操作卡片 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
-                  <div 
-                    onClick={() => {
-                      // 点击商品入库，填充示例文本到输入框
-                      setInput("古法黄金戒指 100克 工费6元 供应商是金源珠宝，帮我做个入库")
-                    }}
-                    className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                  >
-                    <div className="text-2xl mb-3">📦</div>
-                    <h3 className="font-semibold text-gray-900 mb-2">商品入库</h3>
-                    <p className="text-sm text-gray-600">快速录入商品信息</p>
-                  </div>
-                  <div 
-                    onClick={async () => {
-                      // 点击查询库存，直接发送查询指令
-                      if (loading) return
-                      
-                      const message = "查询库存"
-                      setMessages(prev => [...prev, { type: 'user', content: message }])
-                      setLoading(true)
-
-                      try {
-                        const response = await fetch(API_ENDPOINTS.CHAT, {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                          },
-                          body: JSON.stringify({ message }),
-                        })
-
-                        const data = await response.json()
-                        setLoading(false)
-
-                        if (data.success) {
-                          let systemMessage = data.message
-                          
-                          // 如果有思考过程，先显示思考过程
-                          if (data.thinking_steps && data.thinking_steps.length > 0) {
-                            systemMessage = "💭 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + systemMessage
-                          }
-
-                          // 如果是查询所有库存（返回inventories数组）
-                          if (data.inventories && Array.isArray(data.inventories) && data.inventories.length > 0) {
-                            systemMessage += `\n\n📦 商品列表：\n`
-                            data.inventories.forEach((inv, idx) => {
-                              systemMessage += `${idx + 1}. ${inv.product_name}：${inv.total_weight}克`
-                              if (inv.latest_labor_cost) {
-                                systemMessage += `，最新工费：${inv.latest_labor_cost}元/克`
-                              }
-                              if (inv.avg_labor_cost) {
-                                systemMessage += `，平均工费：${inv.avg_labor_cost.toFixed(2)}元/克`
-                              }
-                              systemMessage += `\n`
-                            })
-                            
-                            if (data.total_weight) {
-                              systemMessage += `\n💰 总库存：${data.total_weight.toFixed(2)}克`
-                            }
-                          }
-
-                          setMessages(prev => [...prev, { 
-                            type: 'system', 
-                            content: systemMessage 
-                          }])
-                        } else {
-                          setMessages(prev => [...prev, { 
-                            type: 'system', 
-                            content: `❌ ${data.message || '操作失败'}`
-                          }])
-                        }
-                      } catch (error) {
-                        setLoading(false)
-                        setMessages(prev => [...prev, { 
-                          type: 'system', 
-                          content: `❌ 网络错误：${error.message}`
-                        }])
-                      }
-                    }}
-                    className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                  >
-                    <div className="text-2xl mb-3">📊</div>
-                    <h3 className="font-semibold text-gray-900 mb-2">查询库存</h3>
-                    <p className="text-sm text-gray-600">查看当前库存情况</p>
-                  </div>
+                  
+                  {/* 柜台角色：快速开单 + 接收库存 */}
+                  {userRole === 'counter' && (
+                    <>
+                      <div 
+                        onClick={() => {
+                          setInput("帮我开一张销售单，客户张三，业务员李四，古法戒指 50克 工费8元")
+                        }}
+                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                      >
+                        <div className="text-2xl mb-3">🧾</div>
+                        <h3 className="font-semibold text-gray-900 mb-2">快速开单</h3>
+                        <p className="text-sm text-gray-600">创建销售单</p>
+                      </div>
+                      <div 
+                        onClick={() => setCurrentPage('warehouse')}
+                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                      >
+                        <div className="text-2xl mb-3">📥</div>
+                        <h3 className="font-semibold text-gray-900 mb-2">接收库存</h3>
+                        <p className="text-sm text-gray-600">接收从仓库转移的商品</p>
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* 商品专员角色：商品入库 + 查询库存 */}
+                  {userRole === 'product' && (
+                    <>
+                      <div 
+                        onClick={() => {
+                          setInput("古法黄金戒指 100克 工费6元 供应商是金源珠宝，帮我做个入库")
+                        }}
+                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                      >
+                        <div className="text-2xl mb-3">📦</div>
+                        <h3 className="font-semibold text-gray-900 mb-2">商品入库</h3>
+                        <p className="text-sm text-gray-600">快速录入商品信息</p>
+                      </div>
+                      <div 
+                        onClick={() => setCurrentPage('warehouse')}
+                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                      >
+                        <div className="text-2xl mb-3">📊</div>
+                        <h3 className="font-semibold text-gray-900 mb-2">分仓库存</h3>
+                        <p className="text-sm text-gray-600">管理仓库库存和转移</p>
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* 结算专员角色：待结算 + 结算管理 */}
+                  {userRole === 'settlement' && (
+                    <>
+                      <div 
+                        onClick={() => setCurrentPage('settlement')}
+                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                      >
+                        <div className="text-2xl mb-3">📋</div>
+                        <h3 className="font-semibold text-gray-900 mb-2">待结算订单</h3>
+                        <p className="text-sm text-gray-600">查看待结算的销售单</p>
+                      </div>
+                      <div 
+                        onClick={() => setCurrentPage('customer')}
+                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                      >
+                        <div className="text-2xl mb-3">👥</div>
+                        <h3 className="font-semibold text-gray-900 mb-2">客户管理</h3>
+                        <p className="text-sm text-gray-600">管理客户信息</p>
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* 财务角色：财务对账 + 报表查看 */}
+                  {userRole === 'finance' && (
+                    <>
+                      <div 
+                        onClick={() => setCurrentPage('finance')}
+                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                      >
+                        <div className="text-2xl mb-3">💰</div>
+                        <h3 className="font-semibold text-gray-900 mb-2">财务对账</h3>
+                        <p className="text-sm text-gray-600">查看财务对账情况</p>
+                      </div>
+                      <div 
+                        onClick={() => {
+                          setInput("查看本月销售汇总报表")
+                        }}
+                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                      >
+                        <div className="text-2xl mb-3">📈</div>
+                        <h3 className="font-semibold text-gray-900 mb-2">查看报表</h3>
+                        <p className="text-sm text-gray-600">销售与财务报表</p>
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* 业务员角色：销售查询 + 客户管理 */}
+                  {userRole === 'sales' && (
+                    <>
+                      <div 
+                        onClick={() => {
+                          setInput("查询我的销售记录")
+                        }}
+                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                      >
+                        <div className="text-2xl mb-3">📋</div>
+                        <h3 className="font-semibold text-gray-900 mb-2">销售查询</h3>
+                        <p className="text-sm text-gray-600">查看销售记录</p>
+                      </div>
+                      <div 
+                        onClick={() => setCurrentPage('finance')}
+                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                      >
+                        <div className="text-2xl mb-3">💼</div>
+                        <h3 className="font-semibold text-gray-900 mb-2">财务对账</h3>
+                        <p className="text-sm text-gray-600">查看销售对账</p>
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* 管理层角色：数据分析 + 数据导出 */}
+                  {userRole === 'manager' && (
+                    <>
+                      <div 
+                        onClick={() => setCurrentPage('analytics')}
+                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                      >
+                        <div className="text-2xl mb-3">📊</div>
+                        <h3 className="font-semibold text-gray-900 mb-2">数据分析</h3>
+                        <p className="text-sm text-gray-600">查看业务数据分析</p>
+                      </div>
+                      <div 
+                        onClick={() => setCurrentPage('export')}
+                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                      >
+                        <div className="text-2xl mb-3">📥</div>
+                        <h3 className="font-semibold text-gray-900 mb-2">数据导出</h3>
+                        <p className="text-sm text-gray-600">导出各类数据报表</p>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
