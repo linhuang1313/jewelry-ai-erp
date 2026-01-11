@@ -7,7 +7,8 @@ import { createCardFromBackend, updateCard, createNewCard } from './utils/inboun
 import { confirmInbound, reportError } from './services/inboundService'
 import { FinancePage } from './components/finance'
 import { AnalyticsPage } from './components/AnalyticsPage'
-import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3 } from 'lucide-react'
+import { ExportPage } from './components/ExportPage'
+import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download } from 'lucide-react'
 
 // 用户角色配置
 const USER_ROLES = [
@@ -1540,15 +1541,26 @@ function App() {
                 <>
                   {/* 数据分析按钮 - 仅管理层显示 */}
                   {userRole === 'manager' && (
-                    <button
-                      onClick={() => setCurrentPage('analytics')}
-                      className="flex items-center space-x-2 px-4 py-2 bg-purple-500 text-white rounded-xl 
-                                 hover:bg-purple-600 transition-all duration-200 font-medium text-[15px] 
-                                 shadow-sm hover:shadow-md"
-                    >
-                      <BarChart3 className="w-4 h-4" />
-                      <span>数据分析</span>
-                    </button>
+                    <>
+                      <button
+                        onClick={() => setCurrentPage('analytics')}
+                        className="flex items-center space-x-2 px-4 py-2 bg-purple-500 text-white rounded-xl 
+                                   hover:bg-purple-600 transition-all duration-200 font-medium text-[15px] 
+                                   shadow-sm hover:shadow-md"
+                      >
+                        <BarChart3 className="w-4 h-4" />
+                        <span>数据分析</span>
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage('export')}
+                        className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-xl 
+                                   hover:bg-green-600 transition-all duration-200 font-medium text-[15px] 
+                                   shadow-sm hover:shadow-md"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>数据导出</span>
+                      </button>
+                    </>
                   )}
                   {/* 财务对账按钮 */}
                   <button
@@ -2311,6 +2323,12 @@ function App() {
         {currentPage === 'analytics' && (
           <div className="flex-1 overflow-hidden">
             <AnalyticsPage onBack={() => setCurrentPage('chat')} />
+          </div>
+        )}
+
+        {currentPage === 'export' && (
+          <div className="flex-1 overflow-hidden">
+            <ExportPage onBack={() => setCurrentPage('chat')} />
           </div>
         )}
       </div>

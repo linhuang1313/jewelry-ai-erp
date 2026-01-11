@@ -12,6 +12,7 @@ anthropic>=0.7.0
 # 工具库
 pypinyin>=0.49.0
 reportlab>=4.0.0
+openpyxl>=3.1.0
 
 # 注意：以下 OCR 相关依赖已移除以减少云端部署大小
 # 如需 OCR 功能，请在本地运行时取消注释
