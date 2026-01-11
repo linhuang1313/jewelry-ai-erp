@@ -12,6 +12,7 @@ const ROLE_CONFIG: Record<string, { name: string; icon: React.ElementType; color
   sales: { name: '业务员', icon: User, color: '#3B82F6', bgColor: 'bg-blue-50' },
   finance: { name: '财务', icon: Briefcase, color: '#10B981', bgColor: 'bg-green-50' },
   product: { name: '商品专员', icon: Package, color: '#F59E0B', bgColor: 'bg-orange-50' },
+  settlement: { name: '结算专员', icon: Briefcase, color: '#06B6D4', bgColor: 'bg-cyan-50' },
   manager: { name: '管理层', icon: Crown, color: '#8B5CF6', bgColor: 'bg-purple-50' },
 };
 

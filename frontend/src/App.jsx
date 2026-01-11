@@ -8,13 +8,14 @@ import { confirmInbound, reportError } from './services/inboundService'
 import { FinancePage } from './components/finance'
 import { AnalyticsPage } from './components/AnalyticsPage'
 import { ExportPage } from './components/ExportPage'
-import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download } from 'lucide-react'
+import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator } from 'lucide-react'
 
 // 用户角色配置
 const USER_ROLES = [
   { id: 'sales', name: '业务员', icon: User, color: 'text-blue-600', bg: 'bg-blue-50' },
   { id: 'finance', name: '财务', icon: Briefcase, color: 'text-green-600', bg: 'bg-green-50' },
   { id: 'product', name: '商品专员', icon: Package, color: 'text-orange-600', bg: 'bg-orange-50' },
+  { id: 'settlement', name: '结算专员', icon: Calculator, color: 'text-cyan-600', bg: 'bg-cyan-50' },
   { id: 'manager', name: '管理层', icon: Crown, color: 'text-purple-600', bg: 'bg-purple-50' },
 ]
 import {
