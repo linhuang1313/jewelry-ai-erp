@@ -6,7 +6,8 @@ import { JewelryInboundCardComponent } from './components/JewelryInboundCard'
 import { createCardFromBackend, updateCard, createNewCard } from './utils/inboundHelpers'
 import { confirmInbound, reportError } from './services/inboundService'
 import { FinancePage } from './components/finance'
-import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown } from 'lucide-react'
+import { AnalyticsPage } from './components/AnalyticsPage'
+import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3 } from 'lucide-react'
 
 // 用户角色配置
 const USER_ROLES = [
@@ -1534,17 +1535,32 @@ function App() {
                 )}
               </div>
 
-              {/* 财务对账 / 返回聊天 按钮 */}
+              {/* 导航按钮 */}
               {currentPage === 'chat' ? (
-                <button
-                  onClick={() => setCurrentPage('finance')}
-                  className="flex items-center space-x-2 px-4 py-2 bg-[#007aff] text-white rounded-xl 
-                             hover:bg-[#0051d5] transition-all duration-200 font-medium text-[15px] 
-                             shadow-sm hover:shadow-md"
-                >
-                  <DollarSign className="w-4 h-4" />
-                  <span>财务对账</span>
-                </button>
+                <>
+                  {/* 数据分析按钮 - 仅管理层显示 */}
+                  {userRole === 'manager' && (
+                    <button
+                      onClick={() => setCurrentPage('analytics')}
+                      className="flex items-center space-x-2 px-4 py-2 bg-purple-500 text-white rounded-xl 
+                                 hover:bg-purple-600 transition-all duration-200 font-medium text-[15px] 
+                                 shadow-sm hover:shadow-md"
+                    >
+                      <BarChart3 className="w-4 h-4" />
+                      <span>数据分析</span>
+                    </button>
+                  )}
+                  {/* 财务对账按钮 */}
+                  <button
+                    onClick={() => setCurrentPage('finance')}
+                    className="flex items-center space-x-2 px-4 py-2 bg-[#007aff] text-white rounded-xl 
+                               hover:bg-[#0051d5] transition-all duration-200 font-medium text-[15px] 
+                               shadow-sm hover:shadow-md"
+                  >
+                    <DollarSign className="w-4 h-4" />
+                    <span>财务对账</span>
+                  </button>
+                </>
               ) : (
                 <button
                   onClick={() => setCurrentPage('chat')}
@@ -2289,6 +2305,12 @@ function App() {
         {currentPage === 'finance' && (
           <div className="flex-1 overflow-y-auto">
             <FinancePage />
+          </div>
+        )}
+
+        {currentPage === 'analytics' && (
+          <div className="flex-1 overflow-hidden">
+            <AnalyticsPage onBack={() => setCurrentPage('chat')} />
           </div>
         )}
       </div>

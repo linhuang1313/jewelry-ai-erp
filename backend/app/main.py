@@ -1849,3 +1849,212 @@ async def handle_create_sales_order(ai_response, db: Session) -> Dict[str, Any]:
         }
 
 # handle_query_sales_orders - 已由AI分析引擎替代
+
+
+# ============= 统计分析 API =============
+
+@app.get("/api/analytics/overview")
+async def get_analytics_overview(db: Session = Depends(get_db)):
+    """获取对话分析概览数据"""
+    try:
+        from sqlalchemy import func, case, distinct
+        from datetime import timedelta
+        
+        today = datetime.now().date()
+        week_ago = today - timedelta(days=7)
+        month_ago = today - timedelta(days=30)
+        
+        # 总对话数
+        total_chats = db.query(func.count(ChatLog.id)).filter(
+            ChatLog.message_type == "user"
+        ).scalar() or 0
+        
+        # 本周对话数
+        week_chats = db.query(func.count(ChatLog.id)).filter(
+            ChatLog.message_type == "user",
+            func.date(ChatLog.created_at) >= week_ago
+        ).scalar() or 0
+        
+        # 今日对话数
+        today_chats = db.query(func.count(ChatLog.id)).filter(
+            ChatLog.message_type == "user",
+            func.date(ChatLog.created_at) == today
+        ).scalar() or 0
+        
+        # 按角色统计
+        role_stats = db.query(
+            ChatLog.user_role,
+            func.count(ChatLog.id).label("count")
+        ).filter(
+            ChatLog.message_type == "user"
+        ).group_by(ChatLog.user_role).all()
+        
+        role_distribution = {stat.user_role: stat.count for stat in role_stats}
+        
+        # 按意图统计（Top 10）
+        intent_stats = db.query(
+            ChatLog.intent,
+            func.count(ChatLog.id).label("count")
+        ).filter(
+            ChatLog.message_type == "assistant",
+            ChatLog.intent.isnot(None)
+        ).group_by(ChatLog.intent).order_by(
+            func.count(ChatLog.id).desc()
+        ).limit(10).all()
+        
+        intent_distribution = [{"intent": stat.intent, "count": stat.count} for stat in intent_stats]
+        
+        # 平均响应时间
+        avg_response_time = db.query(
+            func.avg(ChatLog.response_time_ms)
+        ).filter(
+            ChatLog.message_type == "assistant",
+            ChatLog.response_time_ms.isnot(None)
+        ).scalar() or 0
+        
+        # 成功率
+        total_responses = db.query(func.count(ChatLog.id)).filter(
+            ChatLog.message_type == "assistant"
+        ).scalar() or 1
+        successful_responses = db.query(func.count(ChatLog.id)).filter(
+            ChatLog.message_type == "assistant",
+            ChatLog.is_successful == 1
+        ).scalar() or 0
+        success_rate = (successful_responses / total_responses) * 100 if total_responses > 0 else 100
+        
+        return {
+            "success": True,
+            "data": {
+                "total_chats": total_chats,
+                "week_chats": week_chats,
+                "today_chats": today_chats,
+                "role_distribution": role_distribution,
+                "intent_distribution": intent_distribution,
+                "avg_response_time_ms": round(avg_response_time, 2),
+                "success_rate": round(success_rate, 2)
+            }
+        }
+    except Exception as e:
+        logger.error(f"获取分析概览失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
+
+
+@app.get("/api/analytics/role/{role}")
+async def get_role_analytics(role: str, db: Session = Depends(get_db)):
+    """获取特定角色的详细分析数据"""
+    try:
+        from sqlalchemy import func
+        from datetime import timedelta
+        
+        today = datetime.now().date()
+        week_ago = today - timedelta(days=7)
+        
+        # 该角色的总对话数
+        total_chats = db.query(func.count(ChatLog.id)).filter(
+            ChatLog.user_role == role,
+            ChatLog.message_type == "user"
+        ).scalar() or 0
+        
+        # 本周对话数
+        week_chats = db.query(func.count(ChatLog.id)).filter(
+            ChatLog.user_role == role,
+            ChatLog.message_type == "user",
+            func.date(ChatLog.created_at) >= week_ago
+        ).scalar() or 0
+        
+        # 该角色最常用的意图（Top 5）
+        top_intents = db.query(
+            ChatLog.intent,
+            func.count(ChatLog.id).label("count")
+        ).filter(
+            ChatLog.user_role == role,
+            ChatLog.message_type == "assistant",
+            ChatLog.intent.isnot(None)
+        ).group_by(ChatLog.intent).order_by(
+            func.count(ChatLog.id).desc()
+        ).limit(5).all()
+        
+        # 最近的对话记录（最新10条）
+        recent_chats = db.query(ChatLog).filter(
+            ChatLog.user_role == role,
+            ChatLog.message_type == "user"
+        ).order_by(ChatLog.created_at.desc()).limit(10).all()
+        
+        # 热门关键词提取（简单实现：从内容中提取）
+        all_contents = db.query(ChatLog.content).filter(
+            ChatLog.user_role == role,
+            ChatLog.message_type == "user"
+        ).limit(100).all()
+        
+        # 简单的关键词统计
+        keyword_counts = {}
+        keywords_to_track = ["库存", "入库", "供应商", "客户", "销售", "订单", "对账", "收款", "图表"]
+        for content_row in all_contents:
+            content = content_row.content or ""
+            for keyword in keywords_to_track:
+                if keyword in content:
+                    keyword_counts[keyword] = keyword_counts.get(keyword, 0) + 1
+        
+        hot_keywords = sorted(keyword_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+        
+        return {
+            "success": True,
+            "data": {
+                "role": role,
+                "total_chats": total_chats,
+                "week_chats": week_chats,
+                "top_intents": [{"intent": t.intent, "count": t.count} for t in top_intents],
+                "hot_keywords": [{"keyword": k, "count": c} for k, c in hot_keywords],
+                "recent_chats": [
+                    {
+                        "content": chat.content[:100] if chat.content else "",
+                        "created_at": chat.created_at.isoformat() if chat.created_at else None
+                    }
+                    for chat in recent_chats
+                ]
+            }
+        }
+    except Exception as e:
+        logger.error(f"获取角色分析失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
+
+
+@app.get("/api/analytics/daily")
+async def get_daily_analytics(days: int = 7, db: Session = Depends(get_db)):
+    """获取每日对话趋势数据"""
+    try:
+        from sqlalchemy import func
+        from datetime import timedelta
+        
+        today = datetime.now().date()
+        start_date = today - timedelta(days=days)
+        
+        # 按日期和角色统计
+        daily_stats = db.query(
+            func.date(ChatLog.created_at).label("date"),
+            ChatLog.user_role,
+            func.count(ChatLog.id).label("count")
+        ).filter(
+            ChatLog.message_type == "user",
+            func.date(ChatLog.created_at) >= start_date
+        ).group_by(
+            func.date(ChatLog.created_at),
+            ChatLog.user_role
+        ).order_by(func.date(ChatLog.created_at)).all()
+        
+        # 整理数据
+        daily_data = {}
+        for stat in daily_stats:
+            date_str = str(stat.date)
+            if date_str not in daily_data:
+                daily_data[date_str] = {"date": date_str, "total": 0, "by_role": {}}
+            daily_data[date_str]["total"] += stat.count
+            daily_data[date_str]["by_role"][stat.user_role] = stat.count
+        
+        return {
+            "success": True,
+            "data": list(daily_data.values())
+        }
+    except Exception as e:
+        logger.error(f"获取每日分析失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
