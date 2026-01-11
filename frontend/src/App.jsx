@@ -1566,36 +1566,42 @@ function App() {
                       </button>
                     </>
                   )}
-                  {/* 分仓库存按钮 */}
-                  <button
-                    onClick={() => setCurrentPage('warehouse')}
-                    className="flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-xl 
-                               hover:bg-orange-600 transition-all duration-200 font-medium text-[15px] 
-                               shadow-sm hover:shadow-md"
-                  >
-                    <Warehouse className="w-4 h-4" />
-                    <span>分仓库存</span>
-                  </button>
-                  {/* 结算管理按钮 */}
-                  <button
-                    onClick={() => setCurrentPage('settlement')}
-                    className="flex items-center space-x-2 px-4 py-2 bg-cyan-500 text-white rounded-xl 
-                               hover:bg-cyan-600 transition-all duration-200 font-medium text-[15px] 
-                               shadow-sm hover:shadow-md"
-                  >
-                    <Calculator className="w-4 h-4" />
-                    <span>结算管理</span>
-                  </button>
-                  {/* 财务对账按钮 */}
-                  <button
-                    onClick={() => setCurrentPage('finance')}
-                    className="flex items-center space-x-2 px-4 py-2 bg-[#007aff] text-white rounded-xl 
-                               hover:bg-[#0051d5] transition-all duration-200 font-medium text-[15px] 
-                               shadow-sm hover:shadow-md"
-                  >
-                    <DollarSign className="w-4 h-4" />
-                    <span>财务对账</span>
-                  </button>
+                  {/* 分仓库存按钮 - 商品专员 + 管理层 */}
+                  {(selectedRole === 'product' || selectedRole === 'manager') && (
+                    <button
+                      onClick={() => setCurrentPage('warehouse')}
+                      className="flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-xl 
+                                 hover:bg-orange-600 transition-all duration-200 font-medium text-[15px] 
+                                 shadow-sm hover:shadow-md"
+                    >
+                      <Warehouse className="w-4 h-4" />
+                      <span>分仓库存</span>
+                    </button>
+                  )}
+                  {/* 结算管理按钮 - 结算专员 + 管理层 */}
+                  {(selectedRole === 'settlement' || selectedRole === 'manager') && (
+                    <button
+                      onClick={() => setCurrentPage('settlement')}
+                      className="flex items-center space-x-2 px-4 py-2 bg-cyan-500 text-white rounded-xl 
+                                 hover:bg-cyan-600 transition-all duration-200 font-medium text-[15px] 
+                                 shadow-sm hover:shadow-md"
+                    >
+                      <Calculator className="w-4 h-4" />
+                      <span>结算管理</span>
+                    </button>
+                  )}
+                  {/* 财务对账按钮 - 业务员 + 财务 + 管理层 */}
+                  {(selectedRole === 'sales' || selectedRole === 'finance' || selectedRole === 'manager') && (
+                    <button
+                      onClick={() => setCurrentPage('finance')}
+                      className="flex items-center space-x-2 px-4 py-2 bg-[#007aff] text-white rounded-xl 
+                                 hover:bg-[#0051d5] transition-all duration-200 font-medium text-[15px] 
+                                 shadow-sm hover:shadow-md"
+                    >
+                      <DollarSign className="w-4 h-4" />
+                      <span>财务对账</span>
+                    </button>
+                  )}
                 </>
               ) : (
                 <button
