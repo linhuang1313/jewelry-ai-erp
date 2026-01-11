@@ -8,7 +8,8 @@ import { confirmInbound, reportError } from './services/inboundService'
 import { FinancePage } from './components/finance'
 import { AnalyticsPage } from './components/AnalyticsPage'
 import { ExportPage } from './components/ExportPage'
-import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator } from 'lucide-react'
+import { WarehousePage } from './components/WarehousePage'
+import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse } from 'lucide-react'
 
 // 用户角色配置
 const USER_ROLES = [
@@ -120,7 +121,7 @@ function App() {
     return true
   })
   const [conversationTitle, setConversationTitle] = useState('新对话') // 当前对话标题
-  const [currentPage, setCurrentPage] = useState('chat') // 'chat' 或 'finance'
+  const [currentPage, setCurrentPage] = useState('chat') // 'chat', 'finance', 'warehouse', 'analytics', 'export'
   
   // 用户角色相关状态
   const [userRole, setUserRole] = useState(() => {
@@ -1563,6 +1564,16 @@ function App() {
                       </button>
                     </>
                   )}
+                  {/* 分仓库存按钮 */}
+                  <button
+                    onClick={() => setCurrentPage('warehouse')}
+                    className="flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-xl 
+                               hover:bg-orange-600 transition-all duration-200 font-medium text-[15px] 
+                               shadow-sm hover:shadow-md"
+                  >
+                    <Warehouse className="w-4 h-4" />
+                    <span>分仓库存</span>
+                  </button>
                   {/* 财务对账按钮 */}
                   <button
                     onClick={() => setCurrentPage('finance')}
@@ -2318,6 +2329,12 @@ function App() {
         {currentPage === 'finance' && (
           <div className="flex-1 overflow-y-auto">
             <FinancePage />
+          </div>
+        )}
+
+        {currentPage === 'warehouse' && (
+          <div className="flex-1 overflow-y-auto">
+            <WarehousePage />
           </div>
         )}
 

@@ -160,6 +160,69 @@ class ChatLog(Base):
     created_at = Column(DateTime, server_default=func.now(), index=True)  # 创建时间
 
 
+# ============= 仓库/位置管理模型 =============
+
+class Location(Base):
+    """仓库/位置表 - 管理不同的库存位置"""
+    __tablename__ = "locations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), unique=True, index=True, nullable=False)  # 位置代码: warehouse, showroom_1
+    name = Column(String(100), nullable=False)  # 位置名称: 商品部仓库, 展厅1
+    location_type = Column(String(20), nullable=False)  # 类型: warehouse(仓库), showroom(展厅), transit(在途)
+    description = Column(Text, nullable=True)  # 描述
+    is_active = Column(Integer, default=1)  # 是否启用
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # 关系
+    inventory_items = relationship("LocationInventory", backref="location")
+
+
+class LocationInventory(Base):
+    """分仓库存表 - 按位置记录库存"""
+    __tablename__ = "location_inventory"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    product_name = Column(String(200), nullable=False, index=True)  # 商品名称
+    location_id = Column(Integer, ForeignKey("locations.id"), nullable=False)  # 所在位置
+    weight = Column(Float, default=0.0)  # 库存重量
+    last_update = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    
+    # 唯一约束：同一位置同一商品只有一条记录
+    __table_args__ = (
+        # UniqueConstraint handled by index
+    )
+
+
+class InventoryTransfer(Base):
+    """货品转移单 - 记录库存在不同位置间的转移"""
+    __tablename__ = "inventory_transfers"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    transfer_no = Column(String(50), unique=True, index=True, nullable=False)  # 转移单号
+    product_name = Column(String(200), nullable=False)  # 商品名称
+    weight = Column(Float, nullable=False)  # 转移重量
+    from_location_id = Column(Integer, ForeignKey("locations.id"), nullable=False)  # 发出位置
+    to_location_id = Column(Integer, ForeignKey("locations.id"), nullable=False)  # 目标位置
+    status = Column(String(20), default="pending")  # 状态: pending(待接收), received(已接收), rejected(已拒收)
+    
+    # 发起信息
+    created_by = Column(String(50))  # 发起人
+    created_at = Column(DateTime, server_default=func.now())
+    remark = Column(Text, nullable=True)  # 备注
+    
+    # 接收信息
+    received_by = Column(String(50), nullable=True)  # 接收人
+    received_at = Column(DateTime, nullable=True)  # 接收时间
+    actual_weight = Column(Float, nullable=True)  # 实际接收重量
+    weight_diff = Column(Float, nullable=True)  # 重量差异 (实际-预期)
+    diff_reason = Column(Text, nullable=True)  # 差异原因
+    
+    # 关系
+    from_location = relationship("Location", foreign_keys=[from_location_id])
+    to_location = relationship("Location", foreign_keys=[to_location_id])
+
+
 # 导出所有模型
 __all__ = [
     # 入库
@@ -180,4 +243,8 @@ __all__ = [
     'ReconciliationStatement',
     # 对话日志
     'ChatLog',
+    # 分仓库存
+    'Location',
+    'LocationInventory',
+    'InventoryTransfer',
 ]

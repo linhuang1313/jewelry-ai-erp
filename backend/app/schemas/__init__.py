@@ -223,6 +223,84 @@ class SalesOrderResponse(BaseModel):
     details: List[SalesDetailResponse] = []
 
 
+# ============= 分仓库存相关 Schema =============
+
+class LocationCreate(BaseModel):
+    """创建仓库/位置"""
+    code: str  # 位置代码
+    name: str  # 位置名称
+    location_type: str  # 类型: warehouse/showroom/transit
+    description: Optional[str] = None
+
+
+class LocationResponse(BaseModel):
+    """仓库/位置响应"""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    code: str
+    name: str
+    location_type: str
+    description: Optional[str]
+    is_active: int
+    created_at: datetime
+
+
+class LocationInventoryResponse(BaseModel):
+    """分仓库存响应"""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    product_name: str
+    location_id: int
+    location_name: Optional[str] = None  # 位置名称（额外字段）
+    location_code: Optional[str] = None  # 位置代码（额外字段）
+    weight: float
+    last_update: datetime
+
+
+class LocationInventorySummary(BaseModel):
+    """分仓库存汇总"""
+    product_name: str
+    total_weight: float  # 总库存
+    locations: List[LocationInventoryResponse]  # 各位置库存
+
+
+class InventoryTransferCreate(BaseModel):
+    """创建货品转移单"""
+    product_name: str
+    weight: float
+    from_location_id: int
+    to_location_id: int
+    remark: Optional[str] = None
+
+
+class InventoryTransferReceive(BaseModel):
+    """接收货品转移"""
+    actual_weight: float  # 实际接收重量
+    diff_reason: Optional[str] = None  # 差异原因（如有）
+
+
+class InventoryTransferResponse(BaseModel):
+    """货品转移单响应"""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    transfer_no: str
+    product_name: str
+    weight: float
+    from_location_id: int
+    to_location_id: int
+    from_location_name: Optional[str] = None
+    to_location_name: Optional[str] = None
+    status: str
+    created_by: Optional[str]
+    created_at: datetime
+    remark: Optional[str]
+    received_by: Optional[str]
+    received_at: Optional[datetime]
+    actual_weight: Optional[float]
+    weight_diff: Optional[float]
+    diff_reason: Optional[str]
+
+
 # ============= 财务相关 Schema =============
 # 从 finance.py 导入
 from .finance import (
@@ -295,4 +373,12 @@ __all__ = [
     'ApiResponse',
     'ReceivableListResponse',
     'StatisticsResponse',
+    # 分仓库存
+    'LocationCreate',
+    'LocationResponse',
+    'LocationInventoryResponse',
+    'LocationInventorySummary',
+    'InventoryTransferCreate',
+    'InventoryTransferReceive',
+    'InventoryTransferResponse',
 ]

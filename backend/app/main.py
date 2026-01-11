@@ -19,10 +19,11 @@ from .schemas import (
     SupplierCreate, SupplierResponse,
     SalesOrderCreate, SalesOrderResponse, SalesDetailResponse, SalesDetailItem
 )
-from .models import InboundOrder, InboundDetail, Inventory, Customer, SalesOrder, SalesDetail, Supplier, ChatLog
+from .models import InboundOrder, InboundDetail, Inventory, Customer, SalesOrder, SalesDetail, Supplier, ChatLog, Location, LocationInventory
 from .ai_parser import parse_user_message
 from .utils import to_pinyin_initials
 from .routers import finance_router
+from .routers.warehouse import router as warehouse_router
 from .ocr_parser import OCR_AVAILABLE
 
 # OCR 功能状态
@@ -40,6 +41,9 @@ app = FastAPI(title="AI-ERP珠宝入库BETA测试")
 
 # 注册财务对账路由
 app.include_router(finance_router)
+
+# 注册仓库管理路由
+app.include_router(warehouse_router)
 
 # 配置CORS - 支持本地开发和云端部署
 # 允许的前端域名列表
@@ -64,6 +68,26 @@ app.add_middleware(
 async def startup_event():
     init_db()
     logger.info("数据库初始化完成")
+    
+    # 初始化默认位置
+    from .database import SessionLocal
+    db = SessionLocal()
+    try:
+        existing = db.query(Location).first()
+        if not existing:
+            default_locations = [
+                Location(code="warehouse", name="商品部仓库", location_type="warehouse", description="总仓库，入库货品存放处"),
+                Location(code="showroom_1", name="展厅1", location_type="showroom", description="一楼展厅"),
+                Location(code="showroom_2", name="展厅2", location_type="showroom", description="二楼展厅"),
+            ]
+            for loc in default_locations:
+                db.add(loc)
+            db.commit()
+            logger.info("默认位置初始化完成")
+    except Exception as e:
+        logger.error(f"初始化默认位置失败: {e}")
+    finally:
+        db.close()
 
 @app.get("/")
 async def root():
@@ -844,13 +868,42 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
         )
         db.add(detail)
         
-        # 更新或创建库存
+        # 更新或创建库存（总库存表）
         inventory = db.query(Inventory).filter(Inventory.product_name == product_name).first()
         if inventory:
             inventory.total_weight += weight
         else:
             inventory = Inventory(product_name=product_name, total_weight=weight)
             db.add(inventory)
+        
+        # 更新分仓库存（默认入库到"商品部仓库"）
+        default_location = db.query(Location).filter(Location.code == "warehouse").first()
+        if not default_location:
+            # 如果默认位置不存在，创建它
+            default_location = Location(
+                code="warehouse",
+                name="商品部仓库",
+                location_type="warehouse",
+                description="默认入库位置"
+            )
+            db.add(default_location)
+            db.flush()
+        
+        # 更新或创建分仓库存记录
+        location_inventory = db.query(LocationInventory).filter(
+            LocationInventory.product_name == product_name,
+            LocationInventory.location_id == default_location.id
+        ).first()
+        
+        if location_inventory:
+            location_inventory.weight += weight
+        else:
+            location_inventory = LocationInventory(
+                product_name=product_name,
+                location_id=default_location.id,
+                weight=weight
+            )
+            db.add(location_inventory)
         
         # 更新供应商统计信息
         if supplier_obj:
