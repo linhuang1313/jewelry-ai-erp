@@ -1466,6 +1466,62 @@ async def get_customer(customer_id: int, db: Session = Depends(get_db)):
             "message": f"查询客户详情失败: {str(e)}"
         }
 
+
+@app.put("/api/customers/{customer_id}")
+async def update_customer(customer_id: int, data: CustomerCreate, db: Session = Depends(get_db)):
+    """更新客户信息"""
+    try:
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        if not customer:
+            return {"success": False, "message": "客户不存在"}
+        
+        # 更新字段
+        if data.name:
+            customer.name = data.name
+        if data.phone is not None:
+            customer.phone = data.phone
+        if data.wechat is not None:
+            customer.wechat = data.wechat
+        if data.address is not None:
+            customer.address = data.address
+        if data.remark is not None:
+            customer.remark = data.remark
+        
+        db.commit()
+        db.refresh(customer)
+        
+        return {
+            "success": True,
+            "message": f"客户【{customer.name}】信息已更新",
+            "customer": CustomerResponse.model_validate(customer).model_dump(mode='json')
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"更新客户失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
+
+
+@app.delete("/api/customers/{customer_id}")
+async def delete_customer(customer_id: int, db: Session = Depends(get_db)):
+    """删除客户（软删除）"""
+    try:
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        if not customer:
+            return {"success": False, "message": "客户不存在"}
+        
+        customer.status = "inactive"
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": f"客户【{customer.name}】已删除"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"删除客户失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
+
+
 # ==================== 业务员管理API ====================
 
 @app.get("/api/salespersons")

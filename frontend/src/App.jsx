@@ -11,7 +11,8 @@ import { ExportPage } from './components/ExportPage'
 import { WarehousePage } from './components/WarehousePage'
 import { SettlementPage } from './components/SettlementPage'
 import { SalespersonPage } from './components/SalespersonPage'
-import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store, Users } from 'lucide-react'
+import { CustomerPage } from './components/CustomerPage'
+import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store, Users, UserPlus } from 'lucide-react'
 
 // 用户角色配置
 const USER_ROLES = [
@@ -1600,6 +1601,18 @@ function App() {
                       <span>结算管理</span>
                     </button>
                   )}
+                  {/* 客户管理按钮 - 柜台 + 结算专员 + 管理层 */}
+                  {(userRole === 'counter' || userRole === 'settlement' || userRole === 'manager') && (
+                    <button
+                      onClick={() => setCurrentPage('customer')}
+                      className="flex items-center space-x-2 px-4 py-2 bg-teal-500 text-white rounded-xl 
+                                 hover:bg-teal-600 transition-all duration-200 font-medium text-[15px] 
+                                 shadow-sm hover:shadow-md"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      <span>客户管理</span>
+                    </button>
+                  )}
                   {/* 财务对账按钮 - 业务员 + 财务 + 管理层 */}
                   {(userRole === 'sales' || userRole === 'finance' || userRole === 'manager') && (
                     <button
@@ -2387,6 +2400,12 @@ function App() {
         {currentPage === 'salesperson' && (
           <div className="flex-1 overflow-y-auto">
             <SalespersonPage />
+          </div>
+        )}
+
+        {currentPage === 'customer' && (
+          <div className="flex-1 overflow-y-auto">
+            <CustomerPage />
           </div>
         )}
       </div>
