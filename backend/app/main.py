@@ -1527,6 +1527,43 @@ async def create_salesperson(data: SalespersonCreate, db: Session = Depends(get_
         return {"success": False, "message": str(e)}
 
 
+@app.put("/api/salespersons/{salesperson_id}")
+async def update_salesperson(salesperson_id: int, data: SalespersonCreate, db: Session = Depends(get_db)):
+    """更新业务员信息"""
+    try:
+        salesperson = db.query(Salesperson).filter(Salesperson.id == salesperson_id).first()
+        if not salesperson:
+            return {"success": False, "message": "业务员不存在"}
+        
+        # 检查新名字是否与其他业务员重复
+        if data.name != salesperson.name:
+            existing = db.query(Salesperson).filter(
+                Salesperson.name == data.name,
+                Salesperson.id != salesperson_id
+            ).first()
+            if existing:
+                return {"success": False, "message": f"业务员【{data.name}】已存在"}
+        
+        salesperson.name = data.name
+        if data.phone is not None:
+            salesperson.phone = data.phone
+        if data.remark is not None:
+            salesperson.remark = data.remark
+        
+        db.commit()
+        db.refresh(salesperson)
+        
+        return {
+            "success": True,
+            "message": f"业务员信息已更新",
+            "salesperson": SalespersonResponse.model_validate(salesperson).model_dump(mode='json')
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"更新业务员失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
+
+
 @app.delete("/api/salespersons/{salesperson_id}")
 async def delete_salesperson(salesperson_id: int, db: Session = Depends(get_db)):
     """删除业务员（软删除）"""

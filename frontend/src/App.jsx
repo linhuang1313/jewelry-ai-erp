@@ -10,7 +10,8 @@ import { AnalyticsPage } from './components/AnalyticsPage'
 import { ExportPage } from './components/ExportPage'
 import { WarehousePage } from './components/WarehousePage'
 import { SettlementPage } from './components/SettlementPage'
-import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store } from 'lucide-react'
+import { SalespersonPage } from './components/SalespersonPage'
+import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store, Users } from 'lucide-react'
 
 // 用户角色配置
 const USER_ROLES = [
@@ -1564,6 +1565,15 @@ function App() {
                         <Download className="w-4 h-4" />
                         <span>数据导出</span>
                       </button>
+                      <button
+                        onClick={() => setCurrentPage('salesperson')}
+                        className="flex items-center space-x-2 px-4 py-2 bg-indigo-500 text-white rounded-xl 
+                                   hover:bg-indigo-600 transition-all duration-200 font-medium text-[15px] 
+                                   shadow-sm hover:shadow-md"
+                      >
+                        <Users className="w-4 h-4" />
+                        <span>业务员管理</span>
+                      </button>
                     </>
                   )}
                   {/* 分仓库存按钮 - 商品专员 + 管理层 */}
@@ -2371,6 +2381,12 @@ function App() {
         {currentPage === 'export' && (
           <div className="flex-1 overflow-hidden">
             <ExportPage onBack={() => setCurrentPage('chat')} />
+          </div>
+        )}
+
+        {currentPage === 'salesperson' && (
+          <div className="flex-1 overflow-y-auto">
+            <SalespersonPage />
           </div>
         )}
       </div>
