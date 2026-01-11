@@ -465,8 +465,7 @@ async def init_default_locations(db: Session = Depends(get_db)):
     
     default_locations = [
         {"code": "warehouse", "name": "商品部仓库", "location_type": "warehouse", "description": "总仓库，入库货品存放处"},
-        {"code": "showroom_1", "name": "展厅1", "location_type": "showroom", "description": "一楼展厅"},
-        {"code": "showroom_2", "name": "展厅2", "location_type": "showroom", "description": "二楼展厅"},
+        {"code": "showroom", "name": "展厅", "location_type": "showroom", "description": "销售展厅"},
     ]
     
     for loc in default_locations:

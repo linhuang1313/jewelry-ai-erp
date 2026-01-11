@@ -77,8 +77,7 @@ async def startup_event():
         if not existing:
             default_locations = [
                 Location(code="warehouse", name="商品部仓库", location_type="warehouse", description="总仓库，入库货品存放处"),
-                Location(code="showroom_1", name="展厅1", location_type="showroom", description="一楼展厅"),
-                Location(code="showroom_2", name="展厅2", location_type="showroom", description="二楼展厅"),
+                Location(code="showroom", name="展厅", location_type="showroom", description="销售展厅"),
             ]
             for loc in default_locations:
                 db.add(loc)
