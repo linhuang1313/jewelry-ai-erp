@@ -12,7 +12,8 @@ import { WarehousePage } from './components/WarehousePage'
 import { SettlementPage } from './components/SettlementPage'
 import { SalespersonPage } from './components/SalespersonPage'
 import { CustomerPage } from './components/CustomerPage'
-import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store, Users, UserPlus } from 'lucide-react'
+import { QuickOrderModal } from './components/QuickOrderModal'
+import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store, Users, UserPlus, FileText } from 'lucide-react'
 
 // 用户角色配置
 const USER_ROLES = [
@@ -126,6 +127,7 @@ function App() {
   })
   const [conversationTitle, setConversationTitle] = useState('新对话') // 当前对话标题
   const [currentPage, setCurrentPage] = useState('chat') // 'chat', 'finance', 'warehouse', 'settlement', 'analytics', 'export'
+  const [showQuickOrderModal, setShowQuickOrderModal] = useState(false) // 快捷开单弹窗
   
   // 用户角色相关状态
   const [userRole, setUserRole] = useState(() => {
@@ -1601,6 +1603,18 @@ function App() {
                       <span>结算管理</span>
                     </button>
                   )}
+                  {/* 快捷开单按钮 - 柜台 + 结算专员 */}
+                  {(userRole === 'counter' || userRole === 'settlement') && (
+                    <button
+                      onClick={() => setShowQuickOrderModal(true)}
+                      className="flex items-center space-x-2 px-4 py-2 bg-emerald-500 text-white rounded-xl 
+                                 hover:bg-emerald-600 transition-all duration-200 font-medium text-[15px] 
+                                 shadow-sm hover:shadow-md"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span>快捷开单</span>
+                    </button>
+                  )}
                   {/* 客户管理按钮 - 柜台 + 结算专员 + 管理层 */}
                   {(userRole === 'counter' || userRole === 'settlement' || userRole === 'manager') && (
                     <button
@@ -1675,9 +1689,7 @@ function App() {
                   {userRole === 'counter' && (
                     <>
                       <div 
-                        onClick={() => {
-                          setInput("帮我开一张销售单，客户张三，业务员李四，古法戒指 50克 工费8元")
-                        }}
+                        onClick={() => setShowQuickOrderModal(true)}
                         className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                       >
                         <div className="text-2xl mb-3">🧾</div>
@@ -2472,6 +2484,17 @@ function App() {
           </div>
         )}
       </div>
+
+      {/* 快捷开单弹窗 - 仅柜台和结算专员可用 */}
+      {(userRole === 'counter' || userRole === 'settlement') && (
+        <QuickOrderModal
+          isOpen={showQuickOrderModal}
+          onClose={() => setShowQuickOrderModal(false)}
+          onSuccess={() => {
+            // 开单成功后可以刷新数据或显示提示
+          }}
+        />
+      )}
     </div>
   )
 }
