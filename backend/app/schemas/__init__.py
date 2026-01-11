@@ -8,6 +8,26 @@ from datetime import datetime
 from typing import Optional, List, Union
 
 
+# ============= 业务员 Schema =============
+
+class SalespersonCreate(BaseModel):
+    """创建业务员请求"""
+    name: str
+    phone: Optional[str] = None
+    remark: Optional[str] = None
+
+
+class SalespersonResponse(BaseModel):
+    """业务员响应"""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    phone: Optional[str] = None
+    status: str
+    create_time: datetime
+    remark: Optional[str] = None
+
+
 # ============= AI 相关 Schema =============
 
 class AIRequest(BaseModel):

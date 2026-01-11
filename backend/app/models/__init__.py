@@ -9,6 +9,20 @@ from sqlalchemy.sql import func
 from ..database import Base
 
 
+# ============= 业务员模型 =============
+
+class Salesperson(Base):
+    """业务员表"""
+    __tablename__ = "salespersons"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), unique=True, nullable=False, index=True)  # 业务员姓名
+    phone = Column(String(20))  # 电话
+    status = Column(String(20), default="active")  # active/inactive
+    create_time = Column(DateTime(timezone=True), server_default=func.now())
+    remark = Column(Text)  # 备注
+
+
 # ============= 入库相关模型 =============
 
 class InboundOrder(Base):
