@@ -146,10 +146,10 @@ async def get_settlement_orders(
 @router.post("/orders", response_model=SettlementOrderResponse)
 async def create_settlement_order(
     data: SettlementOrderCreate,
-    created_by: str = "柜台",
+    created_by: str = "结算专员",
     db: Session = Depends(get_db)
 ):
-    """创建结算单（柜台创建）"""
+    """创建结算单（结算专员创建）"""
     # 查找销售单
     sales_order = db.query(SalesOrder).filter(SalesOrder.id == data.sales_order_id).first()
     if not sales_order:
