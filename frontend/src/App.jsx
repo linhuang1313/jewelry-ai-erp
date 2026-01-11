@@ -1567,7 +1567,7 @@ function App() {
                     </>
                   )}
                   {/* 分仓库存按钮 - 商品专员 + 管理层 */}
-                  {(selectedRole === 'product' || selectedRole === 'manager') && (
+                  {(userRole === 'product' || userRole === 'manager') && (
                     <button
                       onClick={() => setCurrentPage('warehouse')}
                       className="flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-xl 
@@ -1579,7 +1579,7 @@ function App() {
                     </button>
                   )}
                   {/* 结算管理按钮 - 结算专员 + 管理层 */}
-                  {(selectedRole === 'settlement' || selectedRole === 'manager') && (
+                  {(userRole === 'settlement' || userRole === 'manager') && (
                     <button
                       onClick={() => setCurrentPage('settlement')}
                       className="flex items-center space-x-2 px-4 py-2 bg-cyan-500 text-white rounded-xl 
@@ -1591,7 +1591,7 @@ function App() {
                     </button>
                   )}
                   {/* 财务对账按钮 - 业务员 + 财务 + 管理层 */}
-                  {(selectedRole === 'sales' || selectedRole === 'finance' || selectedRole === 'manager') && (
+                  {(userRole === 'sales' || userRole === 'finance' || userRole === 'manager') && (
                     <button
                       onClick={() => setCurrentPage('finance')}
                       className="flex items-center space-x-2 px-4 py-2 bg-[#007aff] text-white rounded-xl 

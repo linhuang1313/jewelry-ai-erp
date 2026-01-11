@@ -6,3 +6,10 @@ export { ReminderManagement } from './ReminderManagement';
 export { ReconciliationGenerator } from './ReconciliationGenerator';
 export { PaymentDialog } from './PaymentDialog';
 
+
+export { AccountReceivableTable } from './AccountReceivableTable';
+export { PaymentRecordTable } from './PaymentRecordTable';
+export { ReminderManagement } from './ReminderManagement';
+export { ReconciliationGenerator } from './ReconciliationGenerator';
+export { PaymentDialog } from './PaymentDialog';
+
