@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config';
 import {
-  Users, Plus, Trash2, Edit2, Check, X, RefreshCw, Phone, User,
-  MapPin, MessageSquare, Search, UserPlus
+  Users, Plus, Trash2, Edit2, Check, X, RefreshCw, User,
+  MapPin, Search, UserPlus
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -33,8 +33,6 @@ export const CustomerPage: React.FC = () => {
   // 新客户表单
   const [newCustomer, setNewCustomer] = useState({
     name: '',
-    phone: '',
-    wechat: '',
     address: '',
     customer_type: '个人',
     remark: ''
@@ -43,8 +41,6 @@ export const CustomerPage: React.FC = () => {
   // 编辑客户表单
   const [editForm, setEditForm] = useState({
     name: '',
-    phone: '',
-    wechat: '',
     address: '',
     remark: ''
   });
@@ -93,8 +89,6 @@ export const CustomerPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: newCustomer.name.trim(),
-          phone: newCustomer.phone.trim() || null,
-          wechat: newCustomer.wechat.trim() || null,
           address: newCustomer.address.trim() || null,
           customer_type: newCustomer.customer_type,
           remark: newCustomer.remark.trim() || null
@@ -103,7 +97,7 @@ export const CustomerPage: React.FC = () => {
       const data = await response.json();
       if (data.success) {
         toast.success(data.message || '添加成功');
-        setNewCustomer({ name: '', phone: '', wechat: '', address: '', customer_type: '个人', remark: '' });
+        setNewCustomer({ name: '', address: '', customer_type: '个人', remark: '' });
         setShowAddForm(false);
         fetchCustomers();
       } else {
@@ -141,8 +135,6 @@ export const CustomerPage: React.FC = () => {
     setEditingId(customer.id);
     setEditForm({
       name: customer.name,
-      phone: customer.phone || '',
-      wechat: customer.wechat || '',
       address: customer.address || '',
       remark: customer.remark || ''
     });
@@ -161,8 +153,6 @@ export const CustomerPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: editForm.name.trim(),
-          phone: editForm.phone.trim() || null,
-          wechat: editForm.wechat.trim() || null,
           address: editForm.address.trim() || null,
           remark: editForm.remark.trim() || null
         }),
@@ -183,7 +173,7 @@ export const CustomerPage: React.FC = () => {
   // 取消编辑
   const cancelEdit = () => {
     setEditingId(null);
-    setEditForm({ name: '', phone: '', wechat: '', address: '', remark: '' });
+    setEditForm({ name: '', address: '', remark: '' });
   };
 
   return (
@@ -258,7 +248,7 @@ export const CustomerPage: React.FC = () => {
             <Plus className="w-5 h-5 mr-2 text-green-600" />
             添加新客户
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-gray-600 mb-1">姓名 *</label>
               <div className="relative">
@@ -268,48 +258,6 @@ export const CustomerPage: React.FC = () => {
                   value={newCustomer.name}
                   onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})}
                   placeholder="客户姓名"
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
-                             focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">电话</label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={newCustomer.phone}
-                  onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})}
-                  placeholder="电话号码"
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
-                             focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">微信</label>
-              <div className="relative">
-                <MessageSquare className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={newCustomer.wechat}
-                  onChange={(e) => setNewCustomer({...newCustomer, wechat: e.target.value})}
-                  placeholder="微信号"
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
-                             focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">地址</label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={newCustomer.address}
-                  onChange={(e) => setNewCustomer({...newCustomer, address: e.target.value})}
-                  placeholder="地址"
                   className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
                              focus:ring-2 focus:ring-blue-500"
                 />
@@ -327,6 +275,20 @@ export const CustomerPage: React.FC = () => {
                 <option value="企业">企业</option>
                 <option value="批发商">批发商</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">地址</label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={newCustomer.address}
+                  onChange={(e) => setNewCustomer({...newCustomer, address: e.target.value})}
+                  placeholder="地址"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
+                             focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">备注</label>
@@ -384,10 +346,10 @@ export const CustomerPage: React.FC = () => {
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">客户编号</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">姓名</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">电话</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">类型</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">地址</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">备注</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">累计购买</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">购买次数</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
                 </tr>
               </thead>
@@ -410,20 +372,6 @@ export const CustomerPage: React.FC = () => {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      {editingId === customer.id ? (
-                        <input
-                          type="text"
-                          value={editForm.phone}
-                          onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
-                          className="px-2 py-1 border border-blue-300 rounded-lg focus:outline-none 
-                                     focus:ring-2 focus:ring-blue-500 text-sm w-28"
-                          placeholder="电话"
-                        />
-                      ) : (
-                        <span className="text-sm text-gray-600">{customer.phone || '-'}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
                       <span className={`px-2 py-1 text-xs rounded-full ${
                         customer.customer_type === '企业' ? 'bg-purple-100 text-purple-700' :
                         customer.customer_type === '批发商' ? 'bg-orange-100 text-orange-700' :
@@ -432,11 +380,36 @@ export const CustomerPage: React.FC = () => {
                         {customer.customer_type}
                       </span>
                     </td>
+                    <td className="px-4 py-3">
+                      {editingId === customer.id ? (
+                        <input
+                          type="text"
+                          value={editForm.address}
+                          onChange={(e) => setEditForm({...editForm, address: e.target.value})}
+                          className="px-2 py-1 border border-blue-300 rounded-lg focus:outline-none 
+                                     focus:ring-2 focus:ring-blue-500 text-sm w-28"
+                          placeholder="地址"
+                        />
+                      ) : (
+                        <span className="text-sm text-gray-600">{customer.address || '-'}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {editingId === customer.id ? (
+                        <input
+                          type="text"
+                          value={editForm.remark}
+                          onChange={(e) => setEditForm({...editForm, remark: e.target.value})}
+                          className="px-2 py-1 border border-blue-300 rounded-lg focus:outline-none 
+                                     focus:ring-2 focus:ring-blue-500 text-sm w-28"
+                          placeholder="备注"
+                        />
+                      ) : (
+                        <span className="text-sm text-gray-600">{customer.remark || '-'}</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-sm font-medium text-green-600">
                       ¥{customer.total_purchase_amount.toFixed(2)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {customer.total_purchase_count}次
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center space-x-2">
