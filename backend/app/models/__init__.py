@@ -141,6 +141,25 @@ class SalesDetail(Base):
 from .finance import AccountReceivable, PaymentRecord, ReminderRecord, ReconciliationStatement
 
 
+# ============= 对话日志模型 =============
+
+class ChatLog(Base):
+    """对话日志表 - 记录用户与AI的对话，用于数据分析和知识库构建"""
+    __tablename__ = "chat_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String(50), index=True)  # 对话会话ID
+    user_role = Column(String(20), index=True)  # 用户角色: sales/finance/product/manager
+    message_type = Column(String(10))  # 消息类型: user/assistant
+    content = Column(Text)  # 消息内容
+    intent = Column(String(50), nullable=True, index=True)  # AI识别的意图
+    entities = Column(Text, nullable=True)  # 提取的实体（JSON格式）
+    response_time_ms = Column(Integer, nullable=True)  # 响应时间（毫秒）
+    is_successful = Column(Integer, default=1)  # 是否成功处理
+    error_message = Column(Text, nullable=True)  # 错误信息
+    created_at = Column(DateTime, server_default=func.now(), index=True)  # 创建时间
+
+
 # 导出所有模型
 __all__ = [
     # 入库
@@ -159,4 +178,6 @@ __all__ = [
     'PaymentRecord',
     'ReminderRecord',
     'ReconciliationStatement',
+    # 对话日志
+    'ChatLog',
 ]

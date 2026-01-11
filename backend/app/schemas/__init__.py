@@ -13,6 +13,8 @@ from typing import Optional, List, Union
 class AIRequest(BaseModel):
     """AI 请求"""
     message: str
+    user_role: Optional[str] = "sales"  # 用户角色: sales/finance/product/manager
+    session_id: Optional[str] = None  # 对话会话ID
 
 
 class ProductItem(BaseModel):

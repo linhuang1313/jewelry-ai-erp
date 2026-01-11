@@ -6,7 +6,15 @@ import { JewelryInboundCardComponent } from './components/JewelryInboundCard'
 import { createCardFromBackend, updateCard, createNewCard } from './utils/inboundHelpers'
 import { confirmInbound, reportError } from './services/inboundService'
 import { FinancePage } from './components/finance'
-import { DollarSign, ArrowLeft } from 'lucide-react'
+import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown } from 'lucide-react'
+
+// 用户角色配置
+const USER_ROLES = [
+  { id: 'sales', name: '业务员', icon: User, color: 'text-blue-600', bg: 'bg-blue-50' },
+  { id: 'finance', name: '财务', icon: Briefcase, color: 'text-green-600', bg: 'bg-green-50' },
+  { id: 'product', name: '商品专员', icon: Package, color: 'text-orange-600', bg: 'bg-orange-50' },
+  { id: 'manager', name: '管理层', icon: Crown, color: 'text-purple-600', bg: 'bg-purple-50' },
+]
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -110,6 +118,17 @@ function App() {
   })
   const [conversationTitle, setConversationTitle] = useState('新对话') // 当前对话标题
   const [currentPage, setCurrentPage] = useState('chat') // 'chat' 或 'finance'
+  
+  // 用户角色相关状态
+  const [userRole, setUserRole] = useState(() => {
+    // 从 localStorage 读取保存的角色，默认为业务员
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('userRole') || 'sales'
+    }
+    return 'sales'
+  })
+  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false)
+  const roleDropdownRef = useRef(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -118,6 +137,29 @@ function App() {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // 切换用户角色
+  const changeUserRole = (roleId) => {
+    setUserRole(roleId)
+    localStorage.setItem('userRole', roleId)
+    setRoleDropdownOpen(false)
+  }
+
+  // 获取当前角色信息
+  const getCurrentRole = () => {
+    return USER_ROLES.find(r => r.id === userRole) || USER_ROLES[0]
+  }
+
+  // 点击外部关闭角色下拉菜单
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (roleDropdownRef.current && !roleDropdownRef.current.contains(event.target)) {
+        setRoleDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   // 加载历史对话记录
   useEffect(() => {
@@ -266,7 +308,7 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify({ message: userMessage, user_role: userRole }),
       })
 
       console.log('收到响应，状态码:', response.status)
@@ -638,7 +680,7 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify({ message: userMessage, user_role: userRole }),
       })
 
       const data = await response.json()
@@ -1114,7 +1156,7 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: textToProcess }),
+        body: JSON.stringify({ message: textToProcess, user_role: userRole }),
       })
 
       const data = await response.json()
@@ -1442,6 +1484,57 @@ function App() {
             
             {/* 右侧按钮区域 */}
             <div className="flex items-center space-x-3">
+              {/* 角色选择器 */}
+              <div className="relative" ref={roleDropdownRef}>
+                <button
+                  onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
+                  className={`flex items-center space-x-2 px-3 py-2 rounded-xl border border-gray-200
+                             hover:bg-gray-50 transition-all duration-200 font-medium text-[14px]
+                             ${getCurrentRole().bg}`}
+                >
+                  {React.createElement(getCurrentRole().icon, { 
+                    className: `w-4 h-4 ${getCurrentRole().color}` 
+                  })}
+                  <span className={getCurrentRole().color}>{getCurrentRole().name}</span>
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 
+                                          ${roleDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {/* 下拉菜单 */}
+                {roleDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 
+                                  py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="px-3 py-2 text-xs text-gray-400 font-medium">选择角色</div>
+                    {USER_ROLES.map((role) => {
+                      const IconComponent = role.icon
+                      const isActive = userRole === role.id
+                      return (
+                        <button
+                          key={role.id}
+                          onClick={() => changeUserRole(role.id)}
+                          className={`w-full flex items-center space-x-3 px-3 py-2.5 text-left
+                                     hover:bg-gray-50 transition-colors duration-150
+                                     ${isActive ? role.bg : ''}`}
+                        >
+                          <IconComponent className={`w-4 h-4 ${role.color}`} />
+                          <span className={`text-[14px] font-medium ${isActive ? role.color : 'text-gray-700'}`}>
+                            {role.name}
+                          </span>
+                          {isActive && (
+                            <span className="ml-auto">
+                              <svg className={`w-4 h-4 ${role.color}`} fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* 财务对账 / 返回聊天 按钮 */}
               {currentPage === 'chat' ? (
                 <button
                   onClick={() => setCurrentPage('finance')}

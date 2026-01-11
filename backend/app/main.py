@@ -19,7 +19,7 @@ from .schemas import (
     SupplierCreate, SupplierResponse,
     SalesOrderCreate, SalesOrderResponse, SalesDetailResponse, SalesDetailItem
 )
-from .models import InboundOrder, InboundDetail, Inventory, Customer, SalesOrder, SalesDetail, Supplier
+from .models import InboundOrder, InboundDetail, Inventory, Customer, SalesOrder, SalesDetail, Supplier, ChatLog
 from .ai_parser import parse_user_message
 from .utils import to_pinyin_initials
 from .routers import finance_router
@@ -85,6 +85,41 @@ async def root():
         "paddle_available": paddle_available,
         "paddle_path": paddle_path
     }
+
+# ============= 对话日志辅助函数 =============
+
+def log_chat_message(
+    db: Session,
+    session_id: str,
+    user_role: str,
+    message_type: str,
+    content: str,
+    intent: str = None,
+    entities: dict = None,
+    response_time_ms: int = None,
+    is_successful: bool = True,
+    error_message: str = None
+):
+    """记录对话日志到数据库"""
+    try:
+        chat_log = ChatLog(
+            session_id=session_id or f"session_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            user_role=user_role or "sales",
+            message_type=message_type,
+            content=content[:10000] if content else "",  # 限制内容长度
+            intent=intent,
+            entities=json.dumps(entities, ensure_ascii=False) if entities else None,
+            response_time_ms=response_time_ms,
+            is_successful=1 if is_successful else 0,
+            error_message=error_message
+        )
+        db.add(chat_log)
+        db.commit()
+        logger.info(f"[对话日志] 已记录: role={user_role}, type={message_type}, intent={intent}")
+    except Exception as e:
+        logger.error(f"[对话日志] 记录失败: {e}")
+        db.rollback()
+
 
 @app.post("/api/recognize-inbound-sheet")
 async def recognize_inbound_sheet(file: UploadFile = File(...)):
@@ -282,7 +317,19 @@ async def chat_stream_options():
 async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
     """流式响应聊天接口 - 显示思考过程和内容逐字生成"""
     
-    logger.info(f"[流式] 收到请求: {request.message}")
+    logger.info(f"[流式] 收到请求: {request.message}, 角色: {request.user_role}")
+    
+    # 记录用户消息到日志
+    start_time = datetime.now()
+    session_id = request.session_id or f"session_{start_time.strftime('%Y%m%d%H%M%S%f')}"
+    
+    log_chat_message(
+        db=db,
+        session_id=session_id,
+        user_role=request.user_role,
+        message_type="user",
+        content=request.message
+    )
     
     async def generate():
         try:
@@ -544,9 +591,34 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             # ========== 最终完成 ==========
             yield f"data: {json.dumps({'type': 'complete', 'data': {'success': True, 'message': full_response, 'raw_data': data, 'action': ai_response.action, 'chart_data': chart_data_result.get('chart_data'), 'pie_data': chart_data_result.get('pie_data')}, 'progress': 100}, ensure_ascii=False)}\n\n"
             
+            # 记录 AI 回复到日志
+            end_time = datetime.now()
+            response_time_ms = int((end_time - start_time).total_seconds() * 1000)
+            log_chat_message(
+                db=db,
+                session_id=session_id,
+                user_role=request.user_role,
+                message_type="assistant",
+                content=full_response[:5000] if full_response else "",  # 限制长度
+                intent=ai_response.action,
+                response_time_ms=response_time_ms,
+                is_successful=True
+            )
+            
         except Exception as e:
             logger.error(f"流式处理出错: {e}", exc_info=True)
             yield f"data: {json.dumps({'type': 'error', 'message': f'处理出错：{str(e)}'}, ensure_ascii=False)}\n\n"
+            
+            # 记录错误日志
+            log_chat_message(
+                db=db,
+                session_id=session_id,
+                user_role=request.user_role,
+                message_type="assistant",
+                content="",
+                is_successful=False,
+                error_message=str(e)
+            )
     
     logger.info("[流式] 创建StreamingResponse")
     return StreamingResponse(
