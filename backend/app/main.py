@@ -1465,6 +1465,45 @@ async def get_customer(customer_id: int, db: Session = Depends(get_db)):
             "message": f"查询客户详情失败: {str(e)}"
         }
 
+# ==================== 智能匹配API ====================
+
+@app.get("/api/customers/suggest-salesperson")
+async def suggest_salesperson(customer_name: str, db: Session = Depends(get_db)):
+    """根据客户名智能推荐业务员（基于历史销售记录）"""
+    try:
+        if not customer_name or not customer_name.strip():
+            return {"success": True, "salesperson": None, "hint": "请输入客户名"}
+        
+        customer_name = customer_name.strip()
+        
+        # 查找该客户最近一次的销售单
+        latest_order = db.query(SalesOrder).filter(
+            SalesOrder.customer_name == customer_name,
+            SalesOrder.status != "已取消"
+        ).order_by(SalesOrder.create_time.desc()).first()
+        
+        if latest_order and latest_order.salesperson:
+            last_date = latest_order.create_time.strftime('%Y-%m-%d') if latest_order.create_time else "未知"
+            return {
+                "success": True,
+                "salesperson": latest_order.salesperson,
+                "hint": f"已自动匹配业务员（上次服务：{last_date}）",
+                "is_new_customer": False
+            }
+        
+        # 如果没有历史记录，返回空
+        return {
+            "success": True,
+            "salesperson": None,
+            "hint": "新客户，请手动输入业务员",
+            "is_new_customer": True
+        }
+    
+    except Exception as e:
+        logger.error(f"查询业务员推荐失败: {e}", exc_info=True)
+        return {"success": False, "salesperson": None, "error": str(e)}
+
+
 # ==================== 销售单管理API ====================
 
 @app.post("/api/sales/orders")
@@ -1819,12 +1858,27 @@ async def handle_create_sales_order(ai_response, db: Session) -> Dict[str, Any]:
                 "parsed": message
             }
         
+        # ========== 智能匹配业务员 ==========
+        auto_matched_salesperson = False
         if not salesperson:
-            return {
-                "success": False,
-                "message": "未找到业务员姓名，请提供业务员姓名",
-                "parsed": message
-            }
+            # 根据客户名查找历史销售记录，自动匹配业务员
+            latest_order = db.query(SalesOrder).filter(
+                SalesOrder.customer_name == customer_name.strip(),
+                SalesOrder.status != "已取消"
+            ).order_by(SalesOrder.create_time.desc()).first()
+            
+            if latest_order and latest_order.salesperson:
+                salesperson = latest_order.salesperson
+                auto_matched_salesperson = True
+                logger.info(f"自动匹配业务员: 客户={customer_name} -> 业务员={salesperson}")
+            else:
+                return {
+                    "success": False,
+                    "message": f"未找到业务员姓名。这是新客户【{customer_name}】的第一笔订单，请提供业务员姓名",
+                    "parsed": message,
+                    "hint": "新客户需要指定业务员"
+                }
+        # ========== 智能匹配结束 ==========
         
         if not items_data or len(items_data) == 0:
             return {
@@ -1896,6 +1950,12 @@ async def handle_create_sales_order(ai_response, db: Session) -> Dict[str, Any]:
         )
         
         result = await create_sales_order(order_data, db)
+        
+        # 如果业务员是自动匹配的，在消息中添加提示
+        if result.get('success') and auto_matched_salesperson:
+            result['message'] = f"✅ {result.get('message', '销售单创建成功')}（业务员【{salesperson}】已根据历史记录自动匹配）"
+            result['auto_matched_salesperson'] = True
+        
         return result
     except Exception as e:
         logger.error(f"处理创建销售单失败: {e}", exc_info=True)
