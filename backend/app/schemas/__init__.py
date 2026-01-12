@@ -254,9 +254,9 @@ class SalesOrderResponse(BaseModel):
 class SettlementOrderCreate(BaseModel):
     """创建结算单"""
     sales_order_id: int  # 关联的销售单ID
-    payment_method: str  # 'cash_price' 结价支付 / 'physical_gold' 实物抵扣
-    gold_price: Optional[float] = None  # 当日金价（结价支付时必填）
-    physical_gold_weight: Optional[float] = None  # 客户提供的黄金重量（实物抵扣时必填）
+    payment_method: str  # 'cash_price' 结价支付 / 'physical_gold' 结料（实物抵扣）
+    gold_price: Optional[float] = None  # 当日金价（结价时必填）
+    use_deposit: Optional[float] = None  # 使用存料抵扣的重量（克，结料时可选）
     remark: Optional[str] = None
 
 
@@ -287,6 +287,10 @@ class SettlementOrderResponse(BaseModel):
     created_at: datetime
     # 关联的销售单信息
     sales_order: Optional[SalesOrderResponse] = None
+    # 金料收取信息（仅结料时有值）
+    gold_received: Optional[float] = None  # 已收金料总重量
+    gold_remaining_due: Optional[float] = None  # 剩余欠款金料
+    deposit_used: Optional[float] = None  # 使用存料抵扣的重量
 
 
 # ============= 分仓库存相关 Schema =============
@@ -427,6 +431,149 @@ class ReturnOrderResponse(BaseModel):
     remark: Optional[str]
 
 
+# ============= 金料管理相关 Schema =============
+
+class GoldReceiptCreate(BaseModel):
+    """创建收料单（结算专员收到客户原料后创建）"""
+    settlement_order_id: int  # 关联的结算单ID
+    gold_weight: float  # 实际收到的金料重量（克）
+    remark: Optional[str] = None  # 备注
+
+
+class GoldPaymentCreate(BaseModel):
+    """创建付料单（料部支付供应商）"""
+    supplier_id: int  # 供应商ID
+    inbound_order_id: Optional[int] = None  # 关联的入库单ID（可选）
+    gold_weight: float  # 支付的金料重量（克）
+    remark: Optional[str] = None  # 备注
+
+
+class GoldMaterialTransactionConfirm(BaseModel):
+    """确认金料流转记录（料部确认收到原料）"""
+    confirmed_by: str  # 确认人
+
+
+class GoldMaterialTransactionResponse(BaseModel):
+    """金料流转记录响应"""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    transaction_no: str  # 流转单号
+    transaction_type: str  # 'income' 收入 / 'expense' 支出
+    
+    # 收入场景
+    settlement_order_id: Optional[int] = None
+    settlement_no: Optional[str] = None  # 结算单号（额外字段）
+    customer_id: Optional[int] = None
+    customer_name: Optional[str] = None
+    
+    # 支出场景
+    inbound_order_id: Optional[int] = None
+    inbound_order_no: Optional[str] = None  # 入库单号（额外字段）
+    supplier_id: Optional[int] = None
+    supplier_name: Optional[str] = None
+    
+    # 金料信息
+    gold_weight: float  # 金料重量（克）
+    
+    # 状态和时间
+    status: str  # pending待确认 / confirmed已确认 / cancelled已取消
+    created_by: Optional[str] = None
+    confirmed_by: Optional[str] = None
+    confirmed_at: Optional[datetime] = None
+    created_at: datetime
+    
+    # 单据打印时间
+    receipt_printed_at: Optional[datetime] = None
+    payment_printed_at: Optional[datetime] = None
+    
+    remark: Optional[str] = None
+
+
+class GoldMaterialBalanceResponse(BaseModel):
+    """金料库存余额响应"""
+    total_income: float  # 累计收入（克）
+    total_expense: float  # 累计支出（克）
+    current_balance: float  # 当前余额（克）
+
+
+class CustomerGoldDepositResponse(BaseModel):
+    """客户存料响应"""
+    model_config = ConfigDict(from_attributes=True)
+    customer_id: int
+    customer_name: str
+    current_balance: float  # 当前存料余额（克）
+    total_deposited: float  # 累计存入
+    total_used: float  # 累计使用
+    last_transaction_at: Optional[datetime] = None
+
+
+class CustomerGoldDepositTransactionResponse(BaseModel):
+    """客户存料交易记录响应"""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    customer_id: int
+    customer_name: str
+    transaction_type: str  # 'deposit' 存入 / 'use' 使用 / 'refund' 退还
+    gold_transaction_id: Optional[int] = None
+    settlement_order_id: Optional[int] = None
+    amount: float  # 本次交易金额（克）
+    balance_before: float  # 交易前余额
+    balance_after: float  # 交易后余额
+    status: str
+    created_at: datetime
+    created_by: Optional[str] = None
+    remark: Optional[str] = None
+
+
+class CustomerTransactionResponse(BaseModel):
+    """客户往来账记录响应"""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    customer_id: int
+    customer_name: str
+    transaction_type: str  # 'sales' / 'settlement' / 'gold_receipt' / 'payment'
+    
+    # 关联单据
+    sales_order_id: Optional[int] = None
+    settlement_order_id: Optional[int] = None
+    gold_transaction_id: Optional[int] = None
+    
+    # 关联单据号（额外字段）
+    related_order_no: Optional[str] = None
+    
+    # 金额信息
+    amount: float  # 金额（元）
+    gold_weight: float  # 金料重量（克）
+    
+    # 欠款信息
+    gold_due_before: float  # 交易前金料欠款
+    gold_due_after: float  # 交易后金料欠款
+    
+    status: str
+    created_at: datetime
+    remark: Optional[str] = None
+
+
+class CustomerAccountSummary(BaseModel):
+    """客户账户汇总信息"""
+    customer_id: int
+    customer_name: str
+    
+    # 金料欠款
+    current_gold_due: float  # 当前金料欠款（克）
+    total_gold_due: float  # 累计应支付金料（克）
+    total_gold_received: float  # 累计已收金料（克）
+    
+    # 存料信息
+    current_deposit: float  # 当前存料余额（克）
+    total_deposited: float  # 累计存入
+    total_used: float  # 累计使用
+    
+    # 交易记录
+    transactions: List[CustomerTransactionResponse] = []
+    deposit_transactions: List[CustomerGoldDepositTransactionResponse] = []
+
+
 # ============= 财务相关 Schema =============
 # 从 finance.py 导入
 from .finance import (
@@ -517,4 +664,14 @@ __all__ = [
     'ReturnOrderReject',
     'ReturnOrderComplete',
     'ReturnOrderResponse',
+    # 金料管理
+    'GoldReceiptCreate',
+    'GoldPaymentCreate',
+    'GoldMaterialTransactionConfirm',
+    'GoldMaterialTransactionResponse',
+    'GoldMaterialBalanceResponse',
+    'CustomerGoldDepositResponse',
+    'CustomerGoldDepositTransactionResponse',
+    'CustomerTransactionResponse',
+    'CustomerAccountSummary',
 ]

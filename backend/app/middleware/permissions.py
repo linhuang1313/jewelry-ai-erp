@@ -63,6 +63,11 @@ ROLE_PERMISSIONS = {
         'can_return_to_supplier': False,
         'can_return_to_warehouse': False,
         'can_view_finance': False,
+        # 金料管理权限
+        'can_create_gold_receipt': True,   # 可以创建收料单（收到客户原料后）
+        'can_view_gold_material': True,    # 可以查看金料记录
+        'can_confirm_gold_receive': False, # 不能确认收到原料（料部职责）
+        'can_create_gold_payment': False,  # 不能创建付料单（料部职责）
     },
     
     # 业务员
@@ -103,6 +108,32 @@ ROLE_PERMISSIONS = {
         'can_view_finance': True,          # 可以查看财务
     },
     
+    # 料部 - 管理金料的收发
+    'material': {
+        'can_inbound': False,
+        'can_create_sales': False,
+        'can_create_settlement': False,
+        'can_transfer': False,
+        'can_receive_transfer': False,
+        'can_manage_customers': False,
+        'can_view_customers': True,        # 可以查看客户（查询关联信息）
+        'can_manage_suppliers': False,
+        'can_view_suppliers': True,        # 可以查看供应商（查询关联信息）
+        'can_manage_salespersons': False,
+        'can_view_analytics': False,
+        'can_export': False,
+        'can_delete': False,
+        'can_return_to_supplier': False,
+        'can_return_to_warehouse': False,
+        'can_view_finance': False,
+        # 金料管理权限（核心职责）
+        'can_create_gold_receipt': False,  # 不能创建收料单（结算专员职责）
+        'can_view_gold_material': True,    # 可以查看金料记录
+        'can_confirm_gold_receive': True,  # 可以确认收到原料（从结算同事处）
+        'can_create_gold_payment': True,   # 可以创建付料单（支付供应商）
+        'can_manage_gold_material': True,  # 可以管理金料流转（核心权限）
+    },
+    
     # 管理层 - 拥有所有权限
     'manager': {
         'can_inbound': True,
@@ -113,6 +144,7 @@ ROLE_PERMISSIONS = {
         'can_manage_customers': True,
         'can_view_customers': True,        # 可以查看客户
         'can_manage_suppliers': True,
+        'can_view_suppliers': True,        # 可以查看供应商
         'can_manage_salespersons': True,
         'can_view_analytics': True,
         'can_export': True,
@@ -120,6 +152,12 @@ ROLE_PERMISSIONS = {
         'can_return_to_supplier': True,
         'can_return_to_warehouse': True,
         'can_view_finance': True,
+        # 金料管理权限（全部）
+        'can_create_gold_receipt': True,
+        'can_view_gold_material': True,
+        'can_confirm_gold_receive': True,
+        'can_create_gold_payment': True,
+        'can_manage_gold_material': True,
     }
 }
 
@@ -133,6 +171,7 @@ PERMISSION_NAMES = {
     'can_manage_customers': '客户管理',
     'can_view_customers': '查看客户',
     'can_manage_suppliers': '供应商管理',
+    'can_view_suppliers': '查看供应商',
     'can_manage_salespersons': '业务员管理',
     'can_view_analytics': '数据分析',
     'can_export': '数据导出',
@@ -140,6 +179,12 @@ PERMISSION_NAMES = {
     'can_return_to_supplier': '退货给供应商',
     'can_return_to_warehouse': '退货给商品部',
     'can_view_finance': '财务管理',
+    # 金料管理权限
+    'can_create_gold_receipt': '创建收料单',
+    'can_view_gold_material': '查看金料记录',
+    'can_confirm_gold_receive': '确认收到原料',
+    'can_create_gold_payment': '创建付料单',
+    'can_manage_gold_material': '管理金料流转',
 }
 
 # AI操作到权限的映射
@@ -151,6 +196,10 @@ ACTION_TO_PERMISSION = {
     '接收库存': 'can_receive_transfer',
     '创建客户': 'can_manage_customers',
     '创建供应商': 'can_manage_suppliers',
+    # 金料操作
+    '创建收料单': 'can_create_gold_receipt',
+    '确认收料': 'can_confirm_gold_receive',
+    '创建付料单': 'can_create_gold_payment',
 }
 
 
@@ -212,6 +261,7 @@ def get_permission_denied_message(permission: str, role: str = None) -> str:
         'can_manage_customers': '请联系柜台人员或管理层',
         'can_view_customers': '请联系柜台人员、业务员或管理层',
         'can_manage_suppliers': '请联系商品专员或管理层',
+        'can_view_suppliers': '请联系商品专员、料部或管理层',
         'can_manage_salespersons': '请联系管理层',
         'can_view_analytics': '请联系管理层',
         'can_export': '请联系管理层',
@@ -219,6 +269,12 @@ def get_permission_denied_message(permission: str, role: str = None) -> str:
         'can_return_to_supplier': '请联系商品专员或管理层',
         'can_return_to_warehouse': '请联系柜台人员或管理层',
         'can_view_finance': '请联系财务人员或管理层',
+        # 金料管理
+        'can_create_gold_receipt': '请联系结算专员或管理层',
+        'can_view_gold_material': '请联系结算专员、料部或管理层',
+        'can_confirm_gold_receive': '请联系料部或管理层',
+        'can_create_gold_payment': '请联系料部或管理层',
+        'can_manage_gold_material': '请联系料部或管理层',
     }
     
     suggestion = suggestions.get(permission, '')

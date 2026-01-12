@@ -342,6 +342,144 @@ class ReturnOrder(Base):
     inbound_order = relationship("InboundOrder", foreign_keys=[inbound_order_id])
 
 
+# ============= 金料管理模型 =============
+
+class GoldMaterialTransaction(Base):
+    """金料流转记录表 - 收料单（SL）和付料单（FL）"""
+    __tablename__ = "gold_material_transactions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    transaction_no = Column(String(50), unique=True, index=True, nullable=False)  # 流转单号（SL收料/FL付料）
+    
+    # 流转类型
+    transaction_type = Column(String(20), nullable=False, index=True)  # 'income' 收入（收料）/ 'expense' 支出（付料）
+    
+    # 收入场景（从客户收料）
+    settlement_order_id = Column(Integer, ForeignKey("settlement_orders.id"), nullable=True)  # 关联结算单
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)  # 客户ID
+    customer_name = Column(String(100), nullable=True)  # 客户名称（冗余，便于查询）
+    
+    # 支出场景（支付供应商）
+    inbound_order_id = Column(Integer, ForeignKey("inbound_orders.id"), nullable=True)  # 关联入库单
+    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=True)  # 供应商ID
+    supplier_name = Column(String(100), nullable=True)  # 供应商名称（冗余）
+    
+    # 金料信息
+    gold_weight = Column(Float, nullable=False)  # 金料重量（克）
+    
+    # 状态和时间
+    status = Column(String(20), default="pending", index=True)  # pending待确认 / confirmed已确认 / cancelled已取消
+    created_by = Column(String(50))  # 创建人（结算专员创建收料单，料部创建付料单）
+    confirmed_by = Column(String(50), nullable=True)  # 确认人（料部）
+    confirmed_at = Column(DateTime, nullable=True)  # 确认时间
+    created_at = Column(DateTime, server_default=func.now())  # 创建时间
+    
+    # 单据生成时间
+    receipt_printed_at = Column(DateTime, nullable=True)  # 收料单打印时间（收入时）
+    payment_printed_at = Column(DateTime, nullable=True)  # 付料单打印时间（支出时）
+    
+    # 备注
+    remark = Column(Text, nullable=True)
+    
+    # 关系
+    settlement_order = relationship("SettlementOrder", foreign_keys=[settlement_order_id])
+    inbound_order = relationship("InboundOrder", foreign_keys=[inbound_order_id])
+    customer = relationship("Customer", foreign_keys=[customer_id])
+    supplier = relationship("Supplier", foreign_keys=[supplier_id])
+
+
+class CustomerGoldDeposit(Base):
+    """客户存料表 - 记录客户预存的金料余额"""
+    __tablename__ = "customer_gold_deposits"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, unique=True, index=True)  # 客户ID（唯一）
+    customer_name = Column(String(100), nullable=False)  # 客户名称（冗余）
+    
+    # 存料余额
+    current_balance = Column(Float, default=0.0)  # 当前存料余额（克）
+    
+    # 统计信息
+    total_deposited = Column(Float, default=0.0)  # 累计存入
+    total_used = Column(Float, default=0.0)  # 累计使用
+    last_transaction_at = Column(DateTime, nullable=True)  # 最后交易时间
+    
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+    
+    # 关系
+    customer = relationship("Customer", backref="gold_deposit")
+
+
+class CustomerGoldDepositTransaction(Base):
+    """客户存料交易记录表 - 记录存料的存入和使用"""
+    __tablename__ = "customer_gold_deposit_transactions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_name = Column(String(100), nullable=False)  # 客户名称（冗余）
+    
+    # 交易类型
+    transaction_type = Column(String(20), nullable=False, index=True)  # 'deposit' 存入 / 'use' 使用 / 'refund' 退还
+    
+    # 关联单据
+    gold_transaction_id = Column(Integer, ForeignKey("gold_material_transactions.id"), nullable=True)  # 收料单（存入时）
+    settlement_order_id = Column(Integer, ForeignKey("settlement_orders.id"), nullable=True)  # 结算单（使用时）
+    
+    # 存料信息
+    amount = Column(Float, nullable=False)  # 本次交易金额（克）
+    balance_before = Column(Float, nullable=False)  # 交易前余额
+    balance_after = Column(Float, nullable=False)  # 交易后余额
+    
+    # 状态和时间
+    status = Column(String(20), default="active")  # active有效 / cancelled已取消
+    created_at = Column(DateTime, server_default=func.now())
+    created_by = Column(String(50))  # 操作人
+    remark = Column(Text, nullable=True)  # 备注
+    
+    # 关系
+    customer = relationship("Customer", backref="deposit_transactions")
+    gold_transaction = relationship("GoldMaterialTransaction", foreign_keys=[gold_transaction_id])
+    settlement_order = relationship("SettlementOrder", foreign_keys=[settlement_order_id])
+
+
+class CustomerTransaction(Base):
+    """客户往来账记录表 - 记录客户的所有交易和欠款变化"""
+    __tablename__ = "customer_transactions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_name = Column(String(100), nullable=False)  # 客户名称（冗余）
+    
+    # 交易类型
+    transaction_type = Column(String(20), nullable=False, index=True)  
+    # 'sales' 销售 / 'settlement' 结算 / 'gold_receipt' 收料 / 'payment' 付款
+    
+    # 关联单据
+    sales_order_id = Column(Integer, ForeignKey("sales_orders.id"), nullable=True)
+    settlement_order_id = Column(Integer, ForeignKey("settlement_orders.id"), nullable=True)
+    gold_transaction_id = Column(Integer, ForeignKey("gold_material_transactions.id"), nullable=True)
+    
+    # 金额信息
+    amount = Column(Float, default=0.0)  # 金额（元）
+    gold_weight = Column(Float, default=0.0)  # 金料重量（克）
+    
+    # 欠款信息（金料）
+    gold_due_before = Column(Float, default=0.0)  # 本次交易前金料欠款
+    gold_due_after = Column(Float, default=0.0)  # 本次交易后金料欠款
+    
+    # 状态和时间
+    status = Column(String(20), default="active")  # active有效 / cancelled已取消
+    created_at = Column(DateTime, server_default=func.now())
+    remark = Column(Text, nullable=True)  # 备注
+    
+    # 关系
+    customer = relationship("Customer", backref="transactions")
+    sales_order = relationship("SalesOrder", foreign_keys=[sales_order_id])
+    settlement_order = relationship("SettlementOrder", foreign_keys=[settlement_order_id])
+    gold_transaction = relationship("GoldMaterialTransaction", foreign_keys=[gold_transaction_id])
+
+
 # 导出所有模型
 __all__ = [
     # 入库
@@ -372,4 +510,9 @@ __all__ = [
     'ReturnOrder',
     # 预警设置
     'InventoryAlertSetting',
+    # 金料管理
+    'GoldMaterialTransaction',
+    'CustomerGoldDeposit',
+    'CustomerGoldDepositTransaction',
+    'CustomerTransaction',
 ]

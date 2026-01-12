@@ -66,8 +66,14 @@ export const ROLE_PERMISSIONS = {
     canReturnToSupplier: false,
     canReturnToWarehouse: false,
     canViewFinance: false,
+    // 金料管理权限
+    canCreateGoldReceipt: true,     // 可以创建收料单（收到客户原料后）
+    canViewGoldMaterial: true,      // 可以查看金料记录
+    canConfirmGoldReceive: false,   // 不能确认收到原料（料部职责）
+    canCreateGoldPayment: false,    // 不能创建付料单（料部职责）
+    canManageGoldMaterial: false,   // 不能管理金料流转
     
-    pages: ['chat', 'settlement'],
+    pages: ['chat', 'settlement', 'gold-material'],
   },
   
   // 业务员
@@ -112,6 +118,34 @@ export const ROLE_PERMISSIONS = {
     pages: ['chat', 'finance'],
   },
   
+  // 料部 - 管理金料的收发
+  material: {
+    canInbound: false,
+    canCreateSales: false,
+    canCreateSettlement: false,
+    canTransfer: false,
+    canReceiveTransfer: false,
+    canManageCustomers: false,
+    canViewCustomers: true,         // 可以查看客户（查询关联信息）
+    canManageSuppliers: false,
+    canViewSuppliers: true,         // 可以查看供应商（查询关联信息）
+    canManageSalespersons: false,
+    canViewAnalytics: false,
+    canExport: false,
+    canDelete: false,
+    canReturnToSupplier: false,
+    canReturnToWarehouse: false,
+    canViewFinance: false,
+    // 金料管理权限（核心职责）
+    canCreateGoldReceipt: false,    // 不能创建收料单（结算专员职责）
+    canViewGoldMaterial: true,      // 可以查看金料记录
+    canConfirmGoldReceive: true,    // 可以确认收到原料（从结算同事处）
+    canCreateGoldPayment: true,     // 可以创建付料单（支付供应商）
+    canManageGoldMaterial: true,    // 可以管理金料流转（核心权限）
+    
+    pages: ['chat', 'gold-material', 'customer', 'supplier'],
+  },
+  
   // 管理层 - 拥有所有权限
   manager: {
     canInbound: true,
@@ -122,6 +156,7 @@ export const ROLE_PERMISSIONS = {
     canManageCustomers: true,
     canViewCustomers: true,         // 可以查看客户
     canManageSuppliers: true,
+    canViewSuppliers: true,         // 可以查看供应商
     canManageSalespersons: true,
     canViewAnalytics: true,
     canExport: true,
@@ -129,8 +164,14 @@ export const ROLE_PERMISSIONS = {
     canReturnToSupplier: true,
     canReturnToWarehouse: true,
     canViewFinance: true,
+    // 金料管理权限（全部）
+    canCreateGoldReceipt: true,
+    canViewGoldMaterial: true,
+    canConfirmGoldReceive: true,
+    canCreateGoldPayment: true,
+    canManageGoldMaterial: true,
     
-    pages: ['chat', 'warehouse', 'settlement', 'finance', 'analytics', 'export', 'salesperson', 'customer', 'supplier', 'return'],
+    pages: ['chat', 'warehouse', 'settlement', 'finance', 'analytics', 'export', 'salesperson', 'customer', 'supplier', 'return', 'gold-material'],
   }
 };
 
@@ -184,12 +225,19 @@ export function getPermissionDeniedMessage(action) {
     'manageCustomers': '您没有客户管理的权限（创建/编辑/删除），请联系柜台人员或管理层',
     'viewCustomers': '您没有查看客户的权限，请联系柜台人员、业务员或管理层',
     'manageSuppliers': '您没有供应商管理的权限，请联系商品专员或管理层',
+    'viewSuppliers': '您没有查看供应商的权限，请联系商品专员、料部或管理层',
     'manageSalespersons': '您没有业务员管理的权限，请联系管理层',
     'viewAnalytics': '您没有查看数据分析的权限，请联系管理层',
     'export': '您没有数据导出的权限，请联系管理层',
     'delete': '您没有删除数据的权限，请联系管理层',
     'returnToSupplier': '您没有退货给供应商的权限，请联系商品专员或管理层',
     'returnToWarehouse': '您没有退货给商品部的权限，请联系柜台人员或管理层',
+    // 金料管理
+    'createGoldReceipt': '您没有创建收料单的权限，请联系结算专员或管理层',
+    'viewGoldMaterial': '您没有查看金料记录的权限，请联系结算专员、料部或管理层',
+    'confirmGoldReceive': '您没有确认收到原料的权限，请联系料部或管理层',
+    'createGoldPayment': '您没有创建付料单的权限，请联系料部或管理层',
+    'manageGoldMaterial': '您没有管理金料流转的权限，请联系料部或管理层',
   };
   
   return actionMessages[action] || '您没有执行此操作的权限';
@@ -208,5 +256,11 @@ export const PERMISSION_ACTIONS = {
   '数据分析': 'canViewAnalytics',
   '数据导出': 'canExport',
   '删除': 'canDelete',
+  // 金料管理
+  '创建收料单': 'canCreateGoldReceipt',
+  '查看金料': 'canViewGoldMaterial',
+  '确认收料': 'canConfirmGoldReceive',
+  '创建付料单': 'canCreateGoldPayment',
+  '金料管理': 'canManageGoldMaterial',
 };
 

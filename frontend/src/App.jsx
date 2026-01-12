@@ -17,7 +17,7 @@ import { QuickOrderModal } from './components/QuickOrderModal'
 import { QuickReturnModal } from './components/QuickReturnModal'
 import { SupplierPage } from './components/SupplierPage'
 import ReturnPage from './components/ReturnPage'
-import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store, Users, UserPlus, FileText, History, Building2, RotateCcw } from 'lucide-react'
+import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store, Users, UserPlus, FileText, History, Building2, RotateCcw, Scale } from 'lucide-react'
 import { ChatHistoryPanel } from './components/ChatHistoryPanel'
 
 // 用户角色配置
@@ -26,6 +26,7 @@ const USER_ROLES = [
   { id: 'sales', name: '业务员', icon: User, color: 'text-blue-600', bg: 'bg-blue-50' },
   { id: 'product', name: '商品专员', icon: Package, color: 'text-orange-600', bg: 'bg-orange-50' },
   { id: 'settlement', name: '结算专员', icon: Calculator, color: 'text-cyan-600', bg: 'bg-cyan-50' },
+  { id: 'material', name: '料部', icon: Scale, color: 'text-yellow-600', bg: 'bg-yellow-50' },
   { id: 'finance', name: '财务', icon: Briefcase, color: 'text-green-600', bg: 'bg-green-50' },
   { id: 'manager', name: '管理层', icon: Crown, color: 'text-purple-600', bg: 'bg-purple-50' },
 ]
