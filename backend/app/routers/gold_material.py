@@ -7,7 +7,7 @@
 - 客户往来账查询
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, func, extract, and_
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict
@@ -40,6 +40,14 @@ from ..schemas import (
     CustomerAccountSummary,
 )
 from ..middleware.permissions import has_permission
+from ..utils.document_generator import (
+    PDFGenerator,
+    HTMLGenerator,
+    build_gold_transaction_fields,
+    format_datetime,
+    get_current_time_str,
+    get_status_label,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,23 +57,38 @@ router = APIRouter(prefix="/api/gold-material", tags=["金料管理"])
 # ==================== 辅助函数 ====================
 
 def build_transaction_response(transaction: GoldMaterialTransaction, db: Session) -> dict:
-    """构建金料流转记录响应"""
+    """
+    构建金料流转记录响应
+    
+    优化说明：
+    - 如果已经通过 joinedload 预加载了关联数据，直接使用，避免额外查询
+    - 如果没有预加载，回退到手动查询（兼容单个记录查询场景）
+    """
     settlement_no = None
     inbound_order_no = None
     
+    # 优先使用预加载的数据，否则手动查询
     if transaction.settlement_order_id:
-        settlement = db.query(SettlementOrder).filter(
-            SettlementOrder.id == transaction.settlement_order_id
-        ).first()
-        if settlement:
-            settlement_no = settlement.settlement_no
+        # 检查是否已预加载
+        if hasattr(transaction, 'settlement_order') and transaction.settlement_order:
+            settlement_no = transaction.settlement_order.settlement_no
+        else:
+            settlement = db.query(SettlementOrder).filter(
+                SettlementOrder.id == transaction.settlement_order_id
+            ).first()
+            if settlement:
+                settlement_no = settlement.settlement_no
     
     if transaction.inbound_order_id:
-        inbound = db.query(InboundOrder).filter(
-            InboundOrder.id == transaction.inbound_order_id
-        ).first()
-        if inbound:
-            inbound_order_no = inbound.order_no
+        # 检查是否已预加载
+        if hasattr(transaction, 'inbound_order') and transaction.inbound_order:
+            inbound_order_no = transaction.inbound_order.order_no
+        else:
+            inbound = db.query(InboundOrder).filter(
+                InboundOrder.id == transaction.inbound_order_id
+            ).first()
+            if inbound:
+                inbound_order_no = inbound.order_no
     
     return {
         "id": transaction.id,
@@ -269,7 +292,11 @@ async def get_gold_receipts(
     if not has_permission(user_role, 'can_view_gold_material'):
         raise HTTPException(status_code=403, detail="权限不足：您没有【查看金料记录】的权限")
     
-    query = db.query(GoldMaterialTransaction).filter(
+    # 使用 joinedload 预加载关联数据，避免 N+1 查询问题
+    query = db.query(GoldMaterialTransaction).options(
+        joinedload(GoldMaterialTransaction.settlement_order),
+        joinedload(GoldMaterialTransaction.customer)
+    ).filter(
         GoldMaterialTransaction.transaction_type == 'income'
     )
     
@@ -605,7 +632,11 @@ async def get_gold_payments(
     if not has_permission(user_role, 'can_view_gold_material'):
         raise HTTPException(status_code=403, detail="权限不足：您没有【查看金料记录】的权限")
     
-    query = db.query(GoldMaterialTransaction).filter(
+    # 使用 joinedload 预加载关联数据，避免 N+1 查询问题
+    query = db.query(GoldMaterialTransaction).options(
+        joinedload(GoldMaterialTransaction.inbound_order),
+        joinedload(GoldMaterialTransaction.supplier)
+    ).filter(
         GoldMaterialTransaction.transaction_type == 'expense'
     )
     
@@ -1012,223 +1043,53 @@ async def download_receipt(
             raise HTTPException(status_code=404, detail="收料单不存在")
         
         # 获取关联信息
-        settlement = None
-        customer = None
+        settlement_no = None
         if transaction.settlement_order_id:
             settlement = db.query(SettlementOrder).filter(
                 SettlementOrder.id == transaction.settlement_order_id
             ).first()
-        if transaction.customer_id:
-            customer = db.query(Customer).filter(
-                Customer.id == transaction.customer_id
-            ).first()
+            if settlement:
+                settlement_no = settlement.settlement_no
+        
+        # 构建字段列表
+        fields = build_gold_transaction_fields(
+            transaction, 
+            'receipt',
+            {"settlement_no": settlement_no}
+        )
         
         if format == "pdf":
-            try:
-                from reportlab.lib.pagesizes import A4
-                from reportlab.pdfgen import canvas
-                from reportlab.lib.units import mm
-                from reportlab.pdfbase import pdfmetrics
-                from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-                import io
-                from ..timezone_utils import to_china_time, format_china_time
-                
-                # 生成PDF
-                buffer = io.BytesIO()
-                p = canvas.Canvas(buffer, pagesize=A4)
-                width, height = A4
-                
-                # 使用 CID 字体
-                try:
-                    pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
-                    chinese_font = 'STSong-Light'
-                except Exception as cid_error:
-                    logger.warning(f"注册CID字体失败: {cid_error}")
-                    chinese_font = None
-                
-                # 标题
-                if chinese_font:
-                    p.setFont(chinese_font, 18)
-                else:
-                    p.setFont("Helvetica-Bold", 18)
-                p.drawString(50, height - 50, "收料单")
-                
-                # 收料单信息
-                font_size = 12
-                y = height - 100
-                if chinese_font:
-                    p.setFont(chinese_font, font_size)
-                else:
-                    p.setFont("Helvetica", font_size)
-                
-                # 收料单号
-                p.drawString(50, y, f"收料单号：{transaction.transaction_no}")
-                y -= 25
-                
-                # 结算单号
-                if settlement:
-                    p.drawString(50, y, f"结算单号：{settlement.settlement_no}")
-                    y -= 25
-                
-                # 客户名称
-                if transaction.customer_name:
-                    p.drawString(50, y, f"客户名称：{transaction.customer_name}")
-                    y -= 25
-                
-                # 金料重量
-                p.drawString(50, y, f"金料重量：{transaction.gold_weight:.2f} 克")
-                y -= 25
-                
-                # 状态
-                status_map = {
-                    "pending": "待确认",
-                    "confirmed": "已确认",
-                    "cancelled": "已取消"
+            from fastapi.responses import StreamingResponse
+            
+            generator = PDFGenerator("收料单")
+            generator.add_title()
+            for label, value, _ in fields:
+                if value:
+                    generator.add_field(label, value)
+            generator.add_footer()
+            buffer = generator.generate()
+            
+            filename = f"receipt_{transaction.transaction_no}.pdf"
+            return StreamingResponse(
+                buffer,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Access-Control-Allow-Origin": "*",
                 }
-                status_str = status_map.get(transaction.status, transaction.status)
-                p.drawString(50, y, f"状态：{status_str}")
-                y -= 25
-                
-                # 创建时间
-                if transaction.created_at:
-                    china_time = to_china_time(transaction.created_at)
-                    create_time_str = format_china_time(china_time, '%Y-%m-%d %H:%M:%S')
-                else:
-                    create_time_str = "未知"
-                p.drawString(50, y, f"创建时间：{create_time_str}")
-                y -= 25
-                
-                # 创建人
-                if transaction.created_by:
-                    p.drawString(50, y, f"创建人：{transaction.created_by}")
-                    y -= 25
-                
-                # 确认信息
-                if transaction.confirmed_by:
-                    p.drawString(50, y, f"确认人：{transaction.confirmed_by}")
-                    y -= 25
-                if transaction.confirmed_at:
-                    china_time = to_china_time(transaction.confirmed_at)
-                    confirm_time_str = format_china_time(china_time, '%Y-%m-%d %H:%M:%S')
-                    p.drawString(50, y, f"确认时间：{confirm_time_str}")
-                    y -= 25
-                
-                # 备注
-                if transaction.remark:
-                    p.drawString(50, y, f"备注：{transaction.remark}")
-                    y -= 25
-                
-                # 打印时间
-                print_time = format_china_time(china_now(), '%Y-%m-%d %H:%M:%S')
-                p.drawString(50, 50, f"打印时间：{print_time}")
-                
-                p.save()
-                buffer.seek(0)
-                
-                filename = f"receipt_{transaction.transaction_no}.pdf"
-                
-                from fastapi.responses import StreamingResponse
-                return StreamingResponse(
-                    buffer,
-                    media_type="application/pdf",
-                    headers={
-                        "Content-Disposition": f'attachment; filename="{filename}"',
-                        "Access-Control-Allow-Origin": "*",
-                    }
-                )
-            except Exception as pdf_error:
-                logger.error(f"生成PDF失败: {pdf_error}", exc_info=True)
-                raise HTTPException(status_code=500, detail=f"生成PDF失败: {str(pdf_error)}")
+            )
         
         elif format == "html":
-            # 生成HTML（用于打印）
             from fastapi.responses import HTMLResponse
-            from ..timezone_utils import to_china_time, format_china_time
             
-            # 格式化时间
-            if transaction.created_at:
-                china_time = to_china_time(transaction.created_at)
-                create_time_str = format_china_time(china_time, '%Y-%m-%d %H:%M:%S')
-            else:
-                create_time_str = "未知"
-            
-            confirm_time_str = None
-            if transaction.confirmed_at:
-                china_time = to_china_time(transaction.confirmed_at)
-                confirm_time_str = format_china_time(china_time, '%Y-%m-%d %H:%M:%S')
-            
-            status_map = {
-                "pending": "待确认",
-                "confirmed": "已确认",
-                "cancelled": "已取消"
-            }
-            status_str = status_map.get(transaction.status, transaction.status)
-            
-            html_content = f"""
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>收料单 - {transaction.transaction_no}</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: 'Microsoft YaHei', Arial, sans-serif; padding: 20px; background: #f5f5f5; }}
-        .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 40px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-        .header {{ text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }}
-        .header h1 {{ font-size: 28px; color: #333; margin-bottom: 10px; }}
-        .info-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }}
-        .info-item {{ margin-bottom: 15px; }}
-        .info-label {{ font-weight: bold; color: #666; margin-bottom: 5px; font-size: 14px; }}
-        .info-value {{ color: #333; font-size: 16px; }}
-        .full-width {{ grid-column: 1 / -1; }}
-        .footer {{ margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #999; font-size: 12px; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>收料单</h1>
-        </div>
-        
-        <div class="info-grid">
-            <div class="info-item">
-                <div class="info-label">收料单号</div>
-                <div class="info-value">{transaction.transaction_no}</div>
-            </div>
-            {f'<div class="info-item"><div class="info-label">结算单号</div><div class="info-value">{settlement.settlement_no}</div></div>' if settlement else ''}
-            {f'<div class="info-item"><div class="info-label">客户名称</div><div class="info-value">{transaction.customer_name or "-"}</div></div>' if transaction.customer_name else ''}
-            <div class="info-item">
-                <div class="info-label">金料重量</div>
-                <div class="info-value">{transaction.gold_weight:.2f} 克</div>
-            </div>
-            <div class="info-item">
-                <div class="info-label">状态</div>
-                <div class="info-value">{status_str}</div>
-            </div>
-            <div class="info-item">
-                <div class="info-label">创建时间</div>
-                <div class="info-value">{create_time_str}</div>
-            </div>
-            {f'<div class="info-item"><div class="info-label">创建人</div><div class="info-value">{transaction.created_by or "-"}</div></div>' if transaction.created_by else ''}
-            {f'<div class="info-item"><div class="info-label">确认人</div><div class="info-value">{transaction.confirmed_by or "-"}</div></div>' if transaction.confirmed_by else ''}
-            {f'<div class="info-item"><div class="info-label">确认时间</div><div class="info-value">{confirm_time_str or "-"}</div></div>' if confirm_time_str else ''}
-            {f'<div class="info-item full-width"><div class="info-label">备注</div><div class="info-value">{transaction.remark or "-"}</div></div>' if transaction.remark else ''}
-        </div>
-        
-        <div class="footer">
-            <p>打印时间：{format_china_time(china_now(), '%Y-%m-%d %H:%M:%S')}</p>
-        </div>
-    </div>
-</body>
-</html>
-"""
+            generator = HTMLGenerator("收料单", transaction.transaction_no)
+            for label, value, full_width in fields:
+                generator.add_field_if(label, value, full_width)
+            html_content = generator.generate()
             
             return HTMLResponse(
                 content=html_content,
-                headers={
-                    "Access-Control-Allow-Origin": "*",
-                }
+                headers={"Access-Control-Allow-Origin": "*"}
             )
         
         else:
@@ -1276,219 +1137,53 @@ async def download_payment(
             raise HTTPException(status_code=404, detail="付料单不存在")
         
         # 获取关联信息
-        supplier = None
-        inbound = None
-        if transaction.supplier_id:
-            supplier = db.query(Supplier).filter(Supplier.id == transaction.supplier_id).first()
+        inbound_order_no = None
         if transaction.inbound_order_id:
-            inbound = db.query(InboundOrder).filter(InboundOrder.id == transaction.inbound_order_id).first()
+            inbound = db.query(InboundOrder).filter(
+                InboundOrder.id == transaction.inbound_order_id
+            ).first()
+            if inbound:
+                inbound_order_no = inbound.order_no
+        
+        # 构建字段列表
+        fields = build_gold_transaction_fields(
+            transaction, 
+            'payment',
+            {"inbound_order_no": inbound_order_no}
+        )
         
         if format == "pdf":
-            try:
-                from reportlab.lib.pagesizes import A4
-                from reportlab.pdfgen import canvas
-                from reportlab.lib.units import mm
-                from reportlab.pdfbase import pdfmetrics
-                from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-                import io
-                from ..timezone_utils import to_china_time, format_china_time
-                
-                # 生成PDF
-                buffer = io.BytesIO()
-                p = canvas.Canvas(buffer, pagesize=A4)
-                width, height = A4
-                
-                # 使用 CID 字体
-                try:
-                    pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
-                    chinese_font = 'STSong-Light'
-                except Exception as cid_error:
-                    logger.warning(f"注册CID字体失败: {cid_error}")
-                    chinese_font = None
-                
-                # 标题
-                if chinese_font:
-                    p.setFont(chinese_font, 18)
-                else:
-                    p.setFont("Helvetica-Bold", 18)
-                p.drawString(50, height - 50, "付料单")
-                
-                # 付料单信息
-                font_size = 12
-                y = height - 100
-                if chinese_font:
-                    p.setFont(chinese_font, font_size)
-                else:
-                    p.setFont("Helvetica", font_size)
-                
-                # 付料单号
-                p.drawString(50, y, f"付料单号：{transaction.transaction_no}")
-                y -= 25
-                
-                # 供应商
-                if transaction.supplier_name:
-                    p.drawString(50, y, f"供应商：{transaction.supplier_name}")
-                    y -= 25
-                
-                # 入库单号
-                if inbound:
-                    p.drawString(50, y, f"入库单号：{inbound.order_no}")
-                    y -= 25
-                
-                # 金料重量
-                p.drawString(50, y, f"金料重量：{transaction.gold_weight:.2f} 克")
-                y -= 25
-                
-                # 状态
-                status_map = {
-                    "pending": "待确认",
-                    "confirmed": "已确认",
-                    "cancelled": "已取消"
+            from fastapi.responses import StreamingResponse
+            
+            generator = PDFGenerator("付料单")
+            generator.add_title()
+            for label, value, _ in fields:
+                if value:
+                    generator.add_field(label, value)
+            generator.add_footer()
+            buffer = generator.generate()
+            
+            filename = f"payment_{transaction.transaction_no}.pdf"
+            return StreamingResponse(
+                buffer,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Access-Control-Allow-Origin": "*",
                 }
-                status_str = status_map.get(transaction.status, transaction.status)
-                p.drawString(50, y, f"状态：{status_str}")
-                y -= 25
-                
-                # 创建时间
-                if transaction.created_at:
-                    china_time = to_china_time(transaction.created_at)
-                    create_time_str = format_china_time(china_time, '%Y-%m-%d %H:%M:%S')
-                else:
-                    create_time_str = "未知"
-                p.drawString(50, y, f"创建时间：{create_time_str}")
-                y -= 25
-                
-                # 创建人
-                if transaction.created_by:
-                    p.drawString(50, y, f"创建人：{transaction.created_by}")
-                    y -= 25
-                
-                # 确认信息
-                if transaction.confirmed_by:
-                    p.drawString(50, y, f"确认人：{transaction.confirmed_by}")
-                    y -= 25
-                if transaction.confirmed_at:
-                    china_time = to_china_time(transaction.confirmed_at)
-                    confirm_time_str = format_china_time(china_time, '%Y-%m-%d %H:%M:%S')
-                    p.drawString(50, y, f"确认时间：{confirm_time_str}")
-                    y -= 25
-                
-                # 备注
-                if transaction.remark:
-                    p.drawString(50, y, f"备注：{transaction.remark}")
-                    y -= 25
-                
-                # 打印时间
-                print_time = format_china_time(china_now(), '%Y-%m-%d %H:%M:%S')
-                p.drawString(50, 50, f"打印时间：{print_time}")
-                
-                p.save()
-                buffer.seek(0)
-                
-                filename = f"payment_{transaction.transaction_no}.pdf"
-                
-                from fastapi.responses import StreamingResponse
-                return StreamingResponse(
-                    buffer,
-                    media_type="application/pdf",
-                    headers={
-                        "Content-Disposition": f'attachment; filename="{filename}"',
-                        "Access-Control-Allow-Origin": "*",
-                    }
-                )
-            except Exception as pdf_error:
-                logger.error(f"生成PDF失败: {pdf_error}", exc_info=True)
-                raise HTTPException(status_code=500, detail=f"生成PDF失败: {str(pdf_error)}")
+            )
         
         elif format == "html":
-            # 生成HTML（用于打印）
             from fastapi.responses import HTMLResponse
-            from ..timezone_utils import to_china_time, format_china_time
             
-            # 格式化时间
-            if transaction.created_at:
-                china_time = to_china_time(transaction.created_at)
-                create_time_str = format_china_time(china_time, '%Y-%m-%d %H:%M:%S')
-            else:
-                create_time_str = "未知"
-            
-            confirm_time_str = None
-            if transaction.confirmed_at:
-                china_time = to_china_time(transaction.confirmed_at)
-                confirm_time_str = format_china_time(china_time, '%Y-%m-%d %H:%M:%S')
-            
-            status_map = {
-                "pending": "待确认",
-                "confirmed": "已确认",
-                "cancelled": "已取消"
-            }
-            status_str = status_map.get(transaction.status, transaction.status)
-            
-            html_content = f"""
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>付料单 - {transaction.transaction_no}</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: 'Microsoft YaHei', Arial, sans-serif; padding: 20px; background: #f5f5f5; }}
-        .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 40px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-        .header {{ text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }}
-        .header h1 {{ font-size: 28px; color: #333; margin-bottom: 10px; }}
-        .info-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }}
-        .info-item {{ margin-bottom: 15px; }}
-        .info-label {{ font-weight: bold; color: #666; margin-bottom: 5px; font-size: 14px; }}
-        .info-value {{ color: #333; font-size: 16px; }}
-        .full-width {{ grid-column: 1 / -1; }}
-        .footer {{ margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #999; font-size: 12px; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>付料单</h1>
-        </div>
-        
-        <div class="info-grid">
-            <div class="info-item">
-                <div class="info-label">付料单号</div>
-                <div class="info-value">{transaction.transaction_no}</div>
-            </div>
-            {f'<div class="info-item"><div class="info-label">供应商</div><div class="info-value">{transaction.supplier_name or "-"}</div></div>' if transaction.supplier_name else ''}
-            {f'<div class="info-item"><div class="info-label">入库单号</div><div class="info-value">{inbound.order_no}</div></div>' if inbound else ''}
-            <div class="info-item">
-                <div class="info-label">金料重量</div>
-                <div class="info-value">{transaction.gold_weight:.2f} 克</div>
-            </div>
-            <div class="info-item">
-                <div class="info-label">状态</div>
-                <div class="info-value">{status_str}</div>
-            </div>
-            <div class="info-item">
-                <div class="info-label">创建时间</div>
-                <div class="info-value">{create_time_str}</div>
-            </div>
-            {f'<div class="info-item"><div class="info-label">创建人</div><div class="info-value">{transaction.created_by or "-"}</div></div>' if transaction.created_by else ''}
-            {f'<div class="info-item"><div class="info-label">确认人</div><div class="info-value">{transaction.confirmed_by or "-"}</div></div>' if transaction.confirmed_by else ''}
-            {f'<div class="info-item"><div class="info-label">确认时间</div><div class="info-value">{confirm_time_str or "-"}</div></div>' if confirm_time_str else ''}
-            {f'<div class="info-item full-width"><div class="info-label">备注</div><div class="info-value">{transaction.remark or "-"}</div></div>' if transaction.remark else ''}
-        </div>
-        
-        <div class="footer">
-            <p>打印时间：{format_china_time(china_now(), '%Y-%m-%d %H:%M:%S')}</p>
-        </div>
-    </div>
-</body>
-</html>
-"""
+            generator = HTMLGenerator("付料单", transaction.transaction_no)
+            for label, value, full_width in fields:
+                generator.add_field_if(label, value, full_width)
+            html_content = generator.generate()
             
             return HTMLResponse(
                 content=html_content,
-                headers={
-                    "Access-Control-Allow-Origin": "*",
-                }
+                headers={"Access-Control-Allow-Origin": "*"}
             )
         
         else:
