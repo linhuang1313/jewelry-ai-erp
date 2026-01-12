@@ -272,6 +272,61 @@ class InventoryTransfer(Base):
     to_location = relationship("Location", foreign_keys=[to_location_id])
 
 
+# ============= 退货单模型 =============
+
+class ReturnOrder(Base):
+    """退货单表 - 记录商品部退给供应商或展厅退给商品部的退货"""
+    __tablename__ = "return_orders"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    return_no = Column(String(50), unique=True, index=True, nullable=False)  # 退货单号
+    
+    # 退货类型: to_supplier(退给供应商) / to_warehouse(退给商品部)
+    return_type = Column(String(30), nullable=False, index=True)
+    
+    # 商品信息
+    product_name = Column(String(200), nullable=False)  # 商品名称
+    return_weight = Column(Float, nullable=False)  # 退货克重
+    
+    # 来源位置（发起退货的位置）
+    from_location_id = Column(Integer, ForeignKey("locations.id"), nullable=True)
+    
+    # 退给供应商时的供应商ID
+    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=True)
+    
+    # 关联原入库单（可选，便于追溯）
+    inbound_order_id = Column(Integer, ForeignKey("inbound_orders.id"), nullable=True)
+    
+    # 退货原因
+    return_reason = Column(String(50), nullable=False)  # 原因分类: 质量问题/款式不符/数量差异/工艺瑕疵/其他
+    reason_detail = Column(Text, nullable=True)  # 详细说明
+    
+    # 状态: pending待审批 / approved已批准 / completed已完成 / rejected已驳回
+    status = Column(String(20), default="pending", index=True)
+    
+    # 发起信息
+    created_by = Column(String(50))  # 发起人
+    created_at = Column(DateTime, server_default=func.now())  # 发起时间
+    
+    # 审批信息
+    approved_by = Column(String(50), nullable=True)  # 审批人
+    approved_at = Column(DateTime, nullable=True)  # 审批时间
+    reject_reason = Column(Text, nullable=True)  # 驳回原因
+    
+    # 完成信息
+    completed_by = Column(String(50), nullable=True)  # 完成操作人
+    completed_at = Column(DateTime, nullable=True)  # 完成时间
+    
+    # 附件和备注
+    images = Column(Text, nullable=True)  # 退货图片（JSON数组存储URL）
+    remark = Column(Text, nullable=True)  # 备注
+    
+    # 关系
+    from_location = relationship("Location", foreign_keys=[from_location_id])
+    supplier = relationship("Supplier", foreign_keys=[supplier_id])
+    inbound_order = relationship("InboundOrder", foreign_keys=[inbound_order_id])
+
+
 # 导出所有模型
 __all__ = [
     # 入库
@@ -298,4 +353,6 @@ __all__ = [
     'Location',
     'LocationInventory',
     'InventoryTransfer',
+    # 退货
+    'ReturnOrder',
 ]

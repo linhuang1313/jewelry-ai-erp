@@ -14,7 +14,8 @@ import { SalespersonPage } from './components/SalespersonPage'
 import { CustomerPage } from './components/CustomerPage'
 import { QuickOrderModal } from './components/QuickOrderModal'
 import { SupplierPage } from './components/SupplierPage'
-import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store, Users, UserPlus, FileText, History, Building2 } from 'lucide-react'
+import ReturnPage from './components/ReturnPage'
+import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store, Users, UserPlus, FileText, History, Building2, RotateCcw } from 'lucide-react'
 import { ChatHistoryPanel } from './components/ChatHistoryPanel'
 
 // 用户角色配置
@@ -1642,6 +1643,18 @@ function App() {
                       <span>供应商管理</span>
                     </button>
                   )}
+                  {/* 退货管理按钮 - 商品专员 + 柜台 + 管理层 */}
+                  {(userRole === 'product' || userRole === 'counter' || userRole === 'manager') && (
+                    <button
+                      onClick={() => setCurrentPage('returns')}
+                      className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-xl 
+                                 hover:bg-red-600 transition-all duration-200 font-medium text-[15px] 
+                                 shadow-sm hover:shadow-md"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      <span>退货管理</span>
+                    </button>
+                  )}
                   {/* 财务对账按钮 - 业务员 + 财务 + 管理层 */}
                   {(userRole === 'sales' || userRole === 'finance' || userRole === 'manager') && (
                     <button
@@ -2512,6 +2525,12 @@ function App() {
         {currentPage === 'supplier' && (
           <div className="flex-1 overflow-y-auto">
             <SupplierPage userRole={userRole} />
+          </div>
+        )}
+
+        {currentPage === 'returns' && (
+          <div className="flex-1 overflow-y-auto">
+            <ReturnPage userRole={userRole} />
           </div>
         )}
       </div>

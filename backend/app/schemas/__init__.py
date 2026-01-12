@@ -367,6 +367,66 @@ class InventoryTransferResponse(BaseModel):
     diff_reason: Optional[str]
 
 
+# ============= 退货单相关 Schema =============
+
+class ReturnOrderCreate(BaseModel):
+    """创建退货单"""
+    return_type: str  # to_supplier(退给供应商) / to_warehouse(退给商品部)
+    product_name: str  # 商品名称
+    return_weight: float  # 退货克重
+    from_location_id: Optional[int] = None  # 发起位置ID
+    supplier_id: Optional[int] = None  # 供应商ID（退给供应商时必填）
+    inbound_order_id: Optional[int] = None  # 关联入库单ID（可选）
+    return_reason: str  # 退货原因: 质量问题/款式不符/数量差异/工艺瑕疵/其他
+    reason_detail: Optional[str] = None  # 详细说明
+    images: Optional[List[str]] = None  # 退货图片URL列表
+    remark: Optional[str] = None  # 备注
+
+
+class ReturnOrderApprove(BaseModel):
+    """审批退货单"""
+    approved_by: str  # 审批人
+
+
+class ReturnOrderReject(BaseModel):
+    """驳回退货单"""
+    rejected_by: str  # 驳回人
+    reject_reason: str  # 驳回原因
+
+
+class ReturnOrderComplete(BaseModel):
+    """完成退货"""
+    completed_by: str  # 完成操作人
+
+
+class ReturnOrderResponse(BaseModel):
+    """退货单响应"""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    return_no: str
+    return_type: str
+    product_name: str
+    return_weight: float
+    from_location_id: Optional[int]
+    from_location_name: Optional[str] = None
+    supplier_id: Optional[int]
+    supplier_name: Optional[str] = None
+    inbound_order_id: Optional[int]
+    inbound_order_no: Optional[str] = None
+    return_reason: str
+    reason_detail: Optional[str]
+    status: str
+    created_by: Optional[str]
+    created_at: datetime
+    approved_by: Optional[str]
+    approved_at: Optional[datetime]
+    reject_reason: Optional[str]
+    completed_by: Optional[str]
+    completed_at: Optional[datetime]
+    images: Optional[str]  # JSON字符串
+    remark: Optional[str]
+
+
 # ============= 财务相关 Schema =============
 # 从 finance.py 导入
 from .finance import (
@@ -451,4 +511,10 @@ __all__ = [
     'InventoryTransferCreate',
     'InventoryTransferReceive',
     'InventoryTransferResponse',
+    # 退货单
+    'ReturnOrderCreate',
+    'ReturnOrderApprove',
+    'ReturnOrderReject',
+    'ReturnOrderComplete',
+    'ReturnOrderResponse',
 ]

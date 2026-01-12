@@ -28,6 +28,7 @@ from .routers.warehouse import router as warehouse_router
 from .routers.settlement import router as settlement_router
 from .routers.suppliers import router as suppliers_router
 from .routers.customers import router as customers_router
+from .routers.returns import router as returns_router
 from .ocr_parser import OCR_AVAILABLE
 
 # 百度云 OCR（云端可用）
@@ -59,6 +60,9 @@ app.include_router(suppliers_router)
 
 # 注册客户管理路由
 app.include_router(customers_router)
+
+# 注册退货管理路由
+app.include_router(returns_router)
 
 # 注册结算管理路由
 app.include_router(settlement_router)
