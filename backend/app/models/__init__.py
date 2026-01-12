@@ -272,6 +272,21 @@ class InventoryTransfer(Base):
     to_location = relationship("Location", foreign_keys=[to_location_id])
 
 
+# ============= 库存预警设置模型 =============
+
+class InventoryAlertSetting(Base):
+    """库存预警设置表"""
+    __tablename__ = "inventory_alert_settings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    product_name = Column(String(200), unique=True, nullable=False, index=True)  # 商品名称
+    min_weight = Column(Float, default=50.0)  # 最低库存阈值（克）
+    slow_days = Column(Integer, default=30)  # 滞销天数阈值
+    is_enabled = Column(Integer, default=1)  # 是否启用预警
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+
 # ============= 退货单模型 =============
 
 class ReturnOrder(Base):
@@ -355,4 +370,6 @@ __all__ = [
     'InventoryTransfer',
     # 退货
     'ReturnOrder',
+    # 预警设置
+    'InventoryAlertSetting',
 ]

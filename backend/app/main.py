@@ -46,6 +46,7 @@ from .routers.settlement import router as settlement_router
 from .routers.suppliers import router as suppliers_router
 from .routers.customers import router as customers_router
 from .routers.returns import router as returns_router
+from .routers.analytics import router as analytics_router
 from .ocr_parser import OCR_AVAILABLE
 
 # 百度云 OCR（云端可用）
@@ -83,6 +84,9 @@ app.include_router(returns_router)
 
 # 注册结算管理路由
 app.include_router(settlement_router)
+
+# 注册数据分析路由
+app.include_router(analytics_router)
 
 # 配置CORS - 支持本地开发和云端部署
 # 允许的前端域名列表
