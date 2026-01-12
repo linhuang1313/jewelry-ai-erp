@@ -23,6 +23,7 @@ from .schemas import (
 from .models import InboundOrder, InboundDetail, Inventory, Customer, SalesOrder, SalesDetail, Supplier, ChatLog, Location, LocationInventory, Salesperson
 from .ai_parser import parse_user_message
 from .utils import to_pinyin_initials
+from . import context_manager as ctx
 from .routers import finance_router
 from .routers.warehouse import router as warehouse_router
 from .routers.settlement import router as settlement_router
@@ -362,6 +363,15 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
         content=request.message
     )
     
+    # ========== 上下文工程：Read-Before-Decide ==========
+    # 加载会话上下文（文件系统作为外部记忆）
+    session_context = ctx.load_session_context(session_id)
+    context_summary = ctx.generate_context_summary(session_id)
+    knowledge_base = ctx.load_knowledge_base()
+    
+    if context_summary:
+        logger.info(f"[Context] 已加载会话上下文，当前目标: {session_context.get('goal', '无')}")
+    
     # ========== 查询最近的对话历史（用于上下文理解）==========
     conversation_history = []
     try:
@@ -397,9 +407,31 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             yield first_chunk
             await asyncio.sleep(0.05)
             
+            # 构建增强的消息（包含上下文和知识库）
+            enhanced_message = request.message
+            if context_summary or knowledge_base:
+                context_parts = []
+                if knowledge_base:
+                    context_parts.append(f"【业务规则参考】\n{knowledge_base[:1000]}...")  # 截取前1000字符
+                if context_summary:
+                    context_parts.append(f"【会话上下文】\n{context_summary}")
+                context_parts.append(f"【用户请求】\n{request.message}")
+                enhanced_message = "\n\n".join(context_parts)
+            
             # 传递对话历史给 AI 解析器
-            ai_response = parse_user_message(request.message, conversation_history)
+            ai_response = parse_user_message(enhanced_message, conversation_history)
             logger.info(f"[流式] 识别到意图: {ai_response.action}")
+            
+            # 更新上下文中的实体信息
+            entities_to_save = {}
+            if ai_response.product_name:
+                entities_to_save["last_product"] = ai_response.product_name
+            if ai_response.customer_name:
+                entities_to_save["last_customer"] = ai_response.customer_name
+            if ai_response.supplier_name or ai_response.supplier:
+                entities_to_save["last_supplier"] = ai_response.supplier_name or ai_response.supplier
+            if entities_to_save:
+                ctx.update_entities(session_id, entities_to_save)
             
             yield f"data: {json.dumps({'type': 'thinking', 'step': '意图解析', 'message': f'已识别意图：{ai_response.action}', 'progress': 20, 'status': 'complete'}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0.05)
@@ -421,6 +453,14 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     elif ai_response.action == "创建转移单":
                         result = await handle_create_transfer(ai_response, db)
                     
+                    # 【上下文工程】记录成功操作（Append-Only）
+                    action_desc = f"{ai_response.action}"
+                    if ai_response.product_name:
+                        action_desc += f" - {ai_response.product_name}"
+                    if ai_response.weight:
+                        action_desc += f" {ai_response.weight}g"
+                    ctx.append_action(session_id, action_desc, result.get("message", "成功"), success=True)
+                    
                     logger.info(f"[流式] {ai_response.action}操作完成，准备返回结果")
                     # 确保 result 可以被 JSON 序列化
                     result_json = json.dumps({'type': 'complete', 'data': result}, ensure_ascii=False, default=str)
@@ -430,6 +470,15 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 except Exception as op_error:
                     logger.error(f"[流式] 执行{ai_response.action}操作时出错: {op_error}", exc_info=True)
                     error_msg = f"执行{ai_response.action}操作失败: {str(op_error)}"
+                    
+                    # 【上下文工程】记录错误（Failure Traces）
+                    ctx.record_error(
+                        session_id, 
+                        error_type=f"{ai_response.action}失败",
+                        error_detail=str(op_error),
+                        context_info=request.message
+                    )
+                    
                     yield f"data: {json.dumps({'type': 'error', 'message': error_msg}, ensure_ascii=False)}\n\n"
                     return
             
@@ -2663,6 +2712,105 @@ async def search_chat_logs(
 
 
 # 供应商管理 API 已移至 routers/suppliers.py
+
+
+# ============= 上下文工程 API =============
+
+@app.get("/api/context/{session_id}")
+async def get_session_context(session_id: str):
+    """获取会话上下文"""
+    try:
+        context = ctx.load_session_context(session_id)
+        summary = ctx.generate_context_summary(session_id)
+        return {
+            "success": True,
+            "context": context,
+            "summary": summary
+        }
+    except Exception as e:
+        logger.error(f"获取上下文失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
+
+
+@app.post("/api/context/{session_id}/goal")
+async def set_session_goal(session_id: str, goal: str, phases: List[str] = None):
+    """设置会话目标和阶段"""
+    try:
+        context = ctx.update_session_goal(session_id, goal, phases)
+        return {
+            "success": True,
+            "message": f"目标已设置: {goal}",
+            "context": context
+        }
+    except Exception as e:
+        logger.error(f"设置目标失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
+
+
+@app.post("/api/context/{session_id}/note")
+async def add_session_note(session_id: str, note: str, category: str = "general"):
+    """添加会话笔记"""
+    try:
+        context = ctx.add_note(session_id, note, category)
+        return {
+            "success": True,
+            "message": "笔记已添加",
+            "notes_count": len(context.get("notes", []))
+        }
+    except Exception as e:
+        logger.error(f"添加笔记失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
+
+
+@app.delete("/api/context/{session_id}")
+async def clear_session_context(session_id: str):
+    """清除会话上下文"""
+    try:
+        ctx.clear_session(session_id)
+        return {"success": True, "message": f"会话 {session_id} 的上下文已清除"}
+    except Exception as e:
+        logger.error(f"清除上下文失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
+
+
+@app.get("/api/context/list/all")
+async def list_all_contexts():
+    """列出所有会话上下文"""
+    try:
+        sessions = ctx.list_sessions()
+        contexts = []
+        for sid in sessions:
+            c = ctx.load_session_context(sid)
+            contexts.append({
+                "session_id": sid,
+                "goal": c.get("goal"),
+                "last_updated": c.get("last_updated"),
+                "actions_count": len(c.get("completed_actions", [])),
+                "errors_count": len(c.get("errors", []))
+            })
+        return {
+            "success": True,
+            "sessions": contexts,
+            "total": len(contexts)
+        }
+    except Exception as e:
+        logger.error(f"列出上下文失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
+
+
+@app.get("/api/knowledge-base")
+async def get_knowledge_base():
+    """获取业务知识库内容"""
+    try:
+        knowledge = ctx.load_knowledge_base()
+        return {
+            "success": True,
+            "content": knowledge,
+            "length": len(knowledge)
+        }
+    except Exception as e:
+        logger.error(f"获取知识库失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
 
 
 @app.get("/api/export/inventory")
