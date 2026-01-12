@@ -2,7 +2,7 @@ import json
 import os
 import re
 import logging
-from anthropic import Anthropic
+from openai import OpenAI
 from dotenv import load_dotenv
 from .schemas import AIResponse
 
@@ -12,7 +12,11 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+# DeepSeek API 客户端（使用 OpenAI 兼容格式）
+client = OpenAI(
+    api_key=os.getenv("DEEPSEEK_API_KEY"),
+    base_url="https://api.deepseek.com"
+)
 
 def parse_user_message(message: str) -> AIResponse:
     """使用Claude API解析用户自然语言输入，必须成功"""
@@ -352,19 +356,24 @@ def parse_user_message(message: str) -> AIResponse:
     
     while retry_count < max_retries:
         try:
-            logger.info(f"调用Claude API解析消息 (尝试 {retry_count + 1}/{max_retries}): {message}")
-            response = client.messages.create(
-                model="claude-sonnet-4-5-20250929",
-                max_tokens=1500,  # 增加token数量以支持多个商品
-                system="你是一个专业的珠宝ERP系统AI助手。你需要理解用户的自然语言输入，准确识别用户意图，并提取相关信息。你擅长理解各种口语化表达和业务场景。",
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }]
+            logger.info(f"调用 DeepSeek API 解析消息 (尝试 {retry_count + 1}/{max_retries}): {message}")
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                max_tokens=1500,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "你是一个专业的珠宝ERP系统AI助手。你需要理解用户的自然语言输入，准确识别用户意图，并提取相关信息。你擅长理解各种口语化表达和业务场景。"
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
             )
             
-            content = response.content[0].text.strip()
-            logger.info(f"Claude API原始响应: {content}")
+            content = response.choices[0].message.content.strip()
+            logger.info(f"DeepSeek API 原始响应: {content}")
             
             # 提取JSON部分（去除可能的markdown代码块标记）
             if "```json" in content:

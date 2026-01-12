@@ -1,5 +1,5 @@
 """通用AI分析引擎 - 替代所有查询和分析函数"""
-from anthropic import Anthropic
+from openai import OpenAI
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 import json
@@ -14,13 +14,17 @@ from .models import (
 logger = logging.getLogger(__name__)
 
 class AIAnalyzer:
-    """通用AI分析引擎 - 替代所有查询和分析函数"""
+    """通用AI分析引擎 - 使用 DeepSeek API"""
     
     def __init__(self):
         from dotenv import load_dotenv
         import os
         load_dotenv()
-        self.client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        # DeepSeek API 客户端（使用 OpenAI 兼容格式）
+        self.client = OpenAI(
+            api_key=os.getenv("DEEPSEEK_API_KEY"),
+            base_url="https://api.deepseek.com"
+        )
     
     def collect_all_data(self, intent: str, user_message: str, db: Session, order_no: Optional[str] = None, sales_order_no: Optional[str] = None) -> Dict[str, Any]:
         """根据用户意图智能收集所有相关数据
@@ -342,17 +346,22 @@ class AIAnalyzer:
 **请严格遵守上述策略，不要过度解读用户意图。用户问简单问题时，就给简单答案。**"""
         
         try:
-            response = self.client.messages.create(
-                model="claude-sonnet-4-5-20250929",
+            response = self.client.chat.completions.create(
+                model="deepseek-chat",
                 max_tokens=4000,
-                system="你是一个珠宝ERP系统AI助手。核心原则：回答要简洁精准，匹配问题的复杂度。简单问题给简短答案（1-3句话），只有用户明确要求分析时才给详细报告。不要过度解读，不要主动展开分析。",
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }]
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "你是一个珠宝ERP系统AI助手。核心原则：回答要简洁精准，匹配问题的复杂度。简单问题给简短答案（1-3句话），只有用户明确要求分析时才给详细报告。不要过度解读，不要主动展开分析。"
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
             )
             
-            return response.content[0].text.strip()
+            return response.choices[0].message.content.strip()
         except Exception as e:
             logger.error(f"AI分析失败: {e}", exc_info=True)
             return f"分析过程中出现错误：{str(e)}。请稍后重试。"
@@ -472,39 +481,51 @@ class AIAnalyzer:
         system_prompt = "你是珠宝ERP助手。简单问题给简短答案（50字以内），只有用户要求分析时才给详细报告。"
         
         try:
-            # 使用流式API
-            with self.client.messages.stream(
-                model="claude-sonnet-4-5-20250929",
+            # 使用流式API（DeepSeek/OpenAI 格式）
+            stream = self.client.chat.completions.create(
+                model="deepseek-chat",
                 max_tokens=2000,
-                system=system_prompt,
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }]
-            ) as stream:
-                # 流式发送每个文本块
-                for text_block in stream.text_stream:
-                    yield text_block
-        except AttributeError:
-            # 如果不支持stream方法，使用普通模式并模拟流式
-            logger.warning("Claude API不支持stream方法，使用普通模式并模拟流式")
-            response = self.client.messages.create(
-                model="claude-sonnet-4-5-20250929",
-                max_tokens=2000,
-                system=system_prompt,
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }]
+                stream=True,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_prompt
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
             )
-            full_text = response.content[0].text.strip()
-            # 模拟流式：逐字符发送
-            for char in full_text:
-                yield char
+            # 流式发送每个文本块
+            for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
         except Exception as e:
             logger.error(f"AI流式分析失败: {e}", exc_info=True)
-            error_msg = f"分析过程中出现错误：{str(e)}。请稍后重试。"
-            yield error_msg
+            # 回退到非流式模式
+            try:
+                response = self.client.chat.completions.create(
+                    model="deepseek-chat",
+                    max_tokens=2000,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": system_prompt
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ]
+                )
+                full_text = response.choices[0].message.content.strip()
+                # 模拟流式：逐字符发送
+                for char in full_text:
+                    yield char
+            except Exception as fallback_error:
+                logger.error(f"AI回退分析也失败: {fallback_error}", exc_info=True)
+                yield f"分析过程中出现错误：{str(e)}。请稍后重试。"
 
 # 全局实例
 ai_analyzer = AIAnalyzer()
