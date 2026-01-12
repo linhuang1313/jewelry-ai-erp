@@ -10,6 +10,7 @@ import json
 import logging
 
 from ..database import get_db
+from ..timezone_utils import china_now
 from ..models import ReturnOrder, Location, Supplier, InboundOrder, LocationInventory
 from ..schemas import (
     ReturnOrderCreate, 
@@ -165,7 +166,7 @@ async def create_return_order(
                 }
         
         # 生成退货单号
-        now = datetime.now()
+        now = china_now()
         count = db.query(ReturnOrder).filter(
             ReturnOrder.return_no.like(f"TH{now.strftime('%Y%m%d')}%")
         ).count()
@@ -246,7 +247,7 @@ async def approve_return_order(
         # 更新状态
         return_order.status = "approved"
         return_order.approved_by = data.approved_by
-        return_order.approved_at = datetime.now()
+        return_order.approved_at = china_now()
         
         db.commit()
         db.refresh(return_order)
@@ -282,7 +283,7 @@ async def reject_return_order(
         # 更新状态
         return_order.status = "rejected"
         return_order.approved_by = data.rejected_by
-        return_order.approved_at = datetime.now()
+        return_order.approved_at = china_now()
         return_order.reject_reason = data.reject_reason
         
         db.commit()
@@ -344,7 +345,7 @@ async def complete_return_order(
         # 更新退货单状态
         return_order.status = "completed"
         return_order.completed_by = data.completed_by
-        return_order.completed_at = datetime.now()
+        return_order.completed_at = china_now()
         
         db.commit()
         db.refresh(return_order)

@@ -8,6 +8,7 @@ from datetime import datetime
 import logging
 
 from ..database import get_db
+from ..timezone_utils import china_now
 from ..models import SettlementOrder, SalesOrder, SalesDetail
 from ..schemas import (
     SettlementOrderCreate,
@@ -175,7 +176,7 @@ async def create_settlement_order(
         raise HTTPException(status_code=400, detail="无效的支付方式")
     
     # 生成结算单号
-    now = datetime.now()
+    now = china_now()
     count = db.query(SettlementOrder).filter(
         SettlementOrder.settlement_no.like(f"JS{now.strftime('%Y%m%d')}%")
     ).count()
@@ -245,7 +246,7 @@ async def confirm_settlement_order(
     # 更新结算单状态
     settlement.status = "confirmed"
     settlement.confirmed_by = data.confirmed_by
-    settlement.confirmed_at = datetime.now()
+    settlement.confirmed_at = china_now()
     
     # 更新销售单状态为已结算
     sales_order = db.query(SalesOrder).filter(SalesOrder.id == settlement.sales_order_id).first()
@@ -293,7 +294,7 @@ async def mark_settlement_printed(
         raise HTTPException(status_code=400, detail="请先确认结算单")
     
     settlement.status = "printed"
-    settlement.printed_at = datetime.now()
+    settlement.printed_at = china_now()
     
     db.commit()
     db.refresh(settlement)
@@ -382,4 +383,5 @@ async def get_settlement_order(
         created_at=settlement.created_at,
         sales_order=sales_order_response
     )
+
 

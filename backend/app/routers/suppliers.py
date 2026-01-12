@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from datetime import datetime
+from ..timezone_utils import china_now
 import logging
 
 from ..database import get_db
@@ -81,7 +82,7 @@ async def create_supplier(
             return {"success": False, "message": f"供应商【{supplier_data.name}】已存在"}
         
         # 生成供应商编号
-        now = datetime.now()
+        now = china_now()
         count = db.query(Supplier).filter(
             Supplier.supplier_no.like(f"SUP{now.strftime('%Y%m%d')}%")
         ).count()

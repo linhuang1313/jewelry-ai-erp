@@ -3,8 +3,24 @@ from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import logging
+
+# 中国时区 UTC+8
+CHINA_TZ = timezone(timedelta(hours=8))
+
+def china_now() -> datetime:
+    """获取中国时间（UTC+8）"""
+    return datetime.now(CHINA_TZ)
+
+def to_china_time(dt: datetime) -> datetime:
+    """将任意datetime转换为中国时间"""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        # 假设无时区的时间是UTC
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(CHINA_TZ)
 import tempfile
 import os
 import json
@@ -930,13 +946,13 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
                 "error": "validation_failed"
             }
         
-        # 生成入库单号
+        # 生成入库单号（使用中国时间）
         pinyin_initials = to_pinyin_initials(product_name)
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        timestamp = china_now().strftime("%Y%m%d%H%M%S")
         order_no = f"RK{pinyin_initials}{timestamp}"
         
         # 创建入库单
-        order = InboundOrder(order_no=order_no)
+        order = InboundOrder(order_no=order_no, create_time=china_now())
         db.add(order)
         db.flush()
         
@@ -950,7 +966,7 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
             ).first()
             
             if not supplier_obj:
-                supplier_no = f"GYS{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                supplier_no = f"GYS{china_now().strftime('%Y%m%d%H%M%S')}"
                 supplier_obj = Supplier(
                     supplier_no=supplier_no,
                     name=supplier_name,
@@ -1740,7 +1756,7 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
                 customer_id = customer.id
             else:
                 # 客户不存在，自动创建
-                customer_no = f"KH{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                customer_no = f"KH{china_now().strftime('%Y%m%d%H%M%S')}"
                 customer = Customer(
                     customer_no=customer_no,
                     name=customer_name,
@@ -1754,8 +1770,8 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
         total_labor_cost = sum(item.labor_cost * item.weight for item in order_data.items)
         total_weight = sum(item.weight for item in order_data.items)
         
-        # 生成销售单号
-        order_no = f"XS{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        # 生成销售单号（使用中国时间）
+        order_no = f"XS{china_now().strftime('%Y%m%d%H%M%S')}"
         
         # 创建销售单
         sales_order = SalesOrder(

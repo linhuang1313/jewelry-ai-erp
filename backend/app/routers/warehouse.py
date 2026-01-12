@@ -9,6 +9,7 @@ from datetime import datetime
 import logging
 
 from ..database import get_db
+from ..timezone_utils import china_now
 from ..models import Location, LocationInventory, InventoryTransfer, Inventory
 from ..schemas import (
     LocationCreate,
@@ -273,7 +274,7 @@ async def create_transfer(
         )
     
     # 生成转移单号
-    now = datetime.now()
+    now = china_now()
     count = db.query(InventoryTransfer).filter(
         InventoryTransfer.transfer_no.like(f"TR{now.strftime('%Y%m%d')}%")
     ).count()
@@ -343,7 +344,7 @@ async def receive_transfer(
     # 更新转移单状态
     transfer.status = "received"
     transfer.received_by = received_by
-    transfer.received_at = datetime.now()
+    transfer.received_at = china_now()
     transfer.actual_weight = receive_data.actual_weight
     transfer.weight_diff = receive_data.actual_weight - transfer.weight
     transfer.diff_reason = receive_data.diff_reason
@@ -409,7 +410,7 @@ async def reject_transfer(
     # 更新转移单状态
     transfer.status = "rejected"
     transfer.received_by = received_by
-    transfer.received_at = datetime.now()
+    transfer.received_at = china_now()
     transfer.diff_reason = reason
     
     # 退回发出位置库存
@@ -475,4 +476,5 @@ async def init_default_locations(db: Session = Depends(get_db)):
     db.commit()
     
     return {"message": "默认位置初始化成功", "locations": default_locations}
+
 

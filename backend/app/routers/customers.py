@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from datetime import datetime
+from ..timezone_utils import china_now
 from typing import Optional
 import logging
 
@@ -35,7 +36,7 @@ async def create_customer(customer_data: CustomerCreate, db: Session = Depends(g
             }
         
         # 生成客户编号
-        customer_no = f"KH{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        customer_no = f"KH{china_now().strftime('%Y%m%d%H%M%S')}"
         
         customer = Customer(
             customer_no=customer_no,
