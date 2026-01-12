@@ -85,9 +85,15 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [keyword, setKeyword] = useState('');
   
+  // 根据角色确定默认退货类型
+  const getDefaultReturnType = () => {
+    if (userRole === 'counter') return 'to_warehouse';  // 柜台只能退给商品部
+    return 'to_supplier';  // 商品专员和管理层默认退给供应商
+  };
+
   // 新建表单
   const [formData, setFormData] = useState({
-    return_type: 'to_supplier',
+    return_type: getDefaultReturnType(),
     product_name: '',
     return_weight: '',
     from_location_id: '',
@@ -96,6 +102,9 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
     reason_detail: '',
     remark: '',
   });
+
+  // 判断是否显示退货类型选择（只有管理层可以选择）
+  const canSelectReturnType = userRole === 'manager';
 
   // 加载数据
   useEffect(() => {
@@ -273,7 +282,7 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
 
   const resetForm = () => {
     setFormData({
-      return_type: 'to_supplier',
+      return_type: getDefaultReturnType(),
       product_name: '',
       return_weight: '',
       from_location_id: '',
@@ -463,21 +472,50 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
         }}>
-          <div style={{ background: '#1e293b', borderRadius: '16px', padding: '24px', width: '500px', maxHeight: '90vh', overflow: 'auto', border: '1px solid #475569' }}>
-            <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '18px' }}>📦 新建退货单</h3>
+          <div style={{ background: '#1e293b', borderRadius: '16px', padding: '24px', width: '500px', maxHeight: '90vh', overflow: 'auto', border: '1px solid #475569', position: 'relative' }}>
+            {/* 标题栏带关闭按钮 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '18px' }}>📦 新建退货单</h3>
+              <button
+                onClick={() => { setShowCreateModal(false); resetForm(); }}
+                style={{ 
+                  background: 'none', 
+                  border: 'none', 
+                  color: '#94a3b8', 
+                  fontSize: '24px', 
+                  cursor: 'pointer',
+                  padding: '0 8px',
+                  lineHeight: 1
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.color = '#f8fafc')}
+                onMouseOut={(e) => (e.currentTarget.style.color = '#94a3b8')}
+              >
+                ×
+              </button>
+            </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '13px' }}>退货类型 *</label>
-                <select
-                  value={formData.return_type}
-                  onChange={(e) => setFormData({ ...formData, return_type: e.target.value, supplier_id: '' })}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid #475569', color: '#e2e8f0' }}
-                >
-                  <option value="to_supplier">退给供应商</option>
-                  <option value="to_warehouse">退给商品部</option>
-                </select>
-              </div>
+              {/* 退货类型 - 只有管理层可以选择，其他角色自动确定 */}
+              {canSelectReturnType ? (
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '13px' }}>退货类型 *</label>
+                  <select
+                    value={formData.return_type}
+                    onChange={(e) => setFormData({ ...formData, return_type: e.target.value, supplier_id: '' })}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid #475569', color: '#e2e8f0' }}
+                  >
+                    <option value="to_supplier">退给供应商</option>
+                    <option value="to_warehouse">退给商品部</option>
+                  </select>
+                </div>
+              ) : (
+                <div style={{ padding: '12px', background: '#0f172a', borderRadius: '8px', border: '1px solid #475569' }}>
+                  <span style={{ color: '#94a3b8', fontSize: '13px' }}>退货类型：</span>
+                  <span style={{ color: '#fbbf24', fontWeight: '600', marginLeft: '8px' }}>
+                    {formData.return_type === 'to_supplier' ? '退给供应商' : '退给商品部'}
+                  </span>
+                </div>
+              )}
               
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '13px' }}>商品名称 *</label>
@@ -593,7 +631,26 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
           backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
         }}>
           <div style={{ background: '#1e293b', borderRadius: '16px', padding: '24px', width: '500px', maxHeight: '90vh', overflow: 'auto', border: '1px solid #475569' }}>
-            <h3 style={{ margin: '0 0 20px 0', color: '#f8fafc', fontSize: '18px' }}>📋 退货单详情</h3>
+            {/* 标题栏带关闭按钮 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '18px' }}>📋 退货单详情</h3>
+              <button
+                onClick={() => { setShowDetailModal(false); setSelectedReturn(null); }}
+                style={{ 
+                  background: 'none', 
+                  border: 'none', 
+                  color: '#94a3b8', 
+                  fontSize: '24px', 
+                  cursor: 'pointer',
+                  padding: '0 8px',
+                  lineHeight: 1
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.color = '#f8fafc')}
+                onMouseOut={(e) => (e.currentTarget.style.color = '#94a3b8')}
+              >
+                ×
+              </button>
+            </div>
             
             <div style={{ display: 'grid', gap: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#0f172a', borderRadius: '8px' }}>
