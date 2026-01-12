@@ -1926,7 +1926,7 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 快捷退货卡片 - 需要退货给供应商权限 */}
+                  {/* 快捷退货卡片 - 商品专员（退给供应商） */}
                   {hasPermission(userRole, 'canReturnToSupplier') && (
                     <div 
                       onClick={() => setShowQuickReturnModal(true)}
@@ -1934,7 +1934,19 @@ function App() {
                     >
                       <div className="text-2xl mb-3">🔄</div>
                       <h3 className="font-semibold text-gray-900 mb-2">快捷退货</h3>
-                      <p className="text-sm text-gray-600">快速创建退货单</p>
+                      <p className="text-sm text-gray-600">快速创建退货单（退给供应商）</p>
+                    </div>
+                  )}
+                  
+                  {/* 快捷退货卡片 - 柜台（退给商品部） */}
+                  {hasPermission(userRole, 'canReturnToWarehouse') && (
+                    <div 
+                      onClick={() => setShowQuickReturnModal(true)}
+                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                    >
+                      <div className="text-2xl mb-3">🔄</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">快捷退货</h3>
+                      <p className="text-sm text-gray-600">快速创建退货单（退给商品部）</p>
                     </div>
                   )}
                   
@@ -2695,8 +2707,8 @@ function App() {
         />
       )}
 
-      {/* 快捷退货弹窗 - 仅商品专员可用 */}
-      {hasPermission(userRole, 'canReturnToSupplier') && (
+      {/* 快捷退货弹窗 - 商品专员和柜台可用 */}
+      {(hasPermission(userRole, 'canReturnToSupplier') || hasPermission(userRole, 'canReturnToWarehouse')) && (
         <QuickReturnModal
           isOpen={showQuickReturnModal}
           onClose={() => setShowQuickReturnModal(false)}

@@ -38,6 +38,32 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
+  // 根据角色确定退货配置
+  const getReturnConfig = () => {
+    if (userRole === 'counter') {
+      return {
+        returnType: 'to_warehouse',
+        locationCode: 'showroom',
+        locationName: '展厅',
+        needSupplier: false,
+        title: '快捷退货（退给商品部）',
+        subtitle: '快速创建退货单（退给商品部）'
+      };
+    } else {
+      // 商品专员
+      return {
+        returnType: 'to_supplier',
+        locationCode: 'warehouse',
+        locationName: '商品部仓库',
+        needSupplier: true,
+        title: '快捷退货（退给供应商）',
+        subtitle: '快速创建退货单（退给供应商）'
+      };
+    }
+  };
+
+  const returnConfig = getReturnConfig();
+
   // 表单数据
   const [formData, setFormData] = useState({
     product_name: '',
@@ -55,20 +81,22 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
   // 加载供应商和位置列表
   useEffect(() => {
     if (isOpen) {
-      fetchSuppliers();
+      if (returnConfig.needSupplier) {
+        fetchSuppliers();
+      }
       fetchLocations();
     }
   }, [isOpen]);
 
-  // 设置默认位置（商品部仓库）
+  // 根据角色自动设置固定位置（每次弹窗打开时）
   useEffect(() => {
-    if (locations.length > 0 && !formData.from_location_id) {
-      const warehouse = locations.find(loc => loc.code === 'warehouse');
-      if (warehouse) {
-        setFormData(prev => ({ ...prev, from_location_id: String(warehouse.id) }));
+    if (isOpen && locations.length > 0) {
+      const targetLocation = locations.find(loc => loc.code === returnConfig.locationCode);
+      if (targetLocation) {
+        setFormData(prev => ({ ...prev, from_location_id: String(targetLocation.id) }));
       }
     }
-  }, [locations]);
+  }, [isOpen, locations, returnConfig.locationCode]);
 
   const fetchSuppliers = async () => {
     try {
@@ -100,11 +128,11 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
     if (!formData.return_weight || parseFloat(formData.return_weight) <= 0) {
       return '请输入有效的退货克重';
     }
-    if (!formData.supplier_id) {
+    if (returnConfig.needSupplier && !formData.supplier_id) {
       return '请选择供应商';
     }
     if (!formData.from_location_id) {
-      return '请选择发起位置';
+      return '发起位置未设置';
     }
     return null;
   };
@@ -125,10 +153,10 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            return_type: 'to_supplier', // 商品专员只能退给供应商
+            return_type: returnConfig.returnType, // 根据角色确定退货类型
             product_name: formData.product_name.trim(),
             return_weight: parseFloat(formData.return_weight),
-            supplier_id: parseInt(formData.supplier_id),
+            supplier_id: returnConfig.needSupplier ? parseInt(formData.supplier_id) : null,
             from_location_id: parseInt(formData.from_location_id),
             return_reason: formData.return_reason,
             reason_detail: formData.reason_detail.trim() || null,
@@ -282,8 +310,8 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
               <Package className="w-5 h-5 text-red-600" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">快捷退货</h2>
-              <p className="text-sm text-gray-500">快速创建退货单（退给供应商）</p>
+              <h2 className="text-xl font-bold text-gray-900">{returnConfig.title}</h2>
+              <p className="text-sm text-gray-500">{returnConfig.subtitle}</p>
             </div>
           </div>
           <button
@@ -329,44 +357,37 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
             />
           </div>
 
-          {/* 供应商 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              供应商 <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={formData.supplier_id}
-              onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
-                         focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            >
-              <option value="">请选择供应商</option>
-              {suppliers.map(supplier => (
-                <option key={supplier.id} value={supplier.id}>
-                  {supplier.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* 供应商（仅商品专员需要） */}
+          {returnConfig.needSupplier && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                供应商 <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.supplier_id}
+                onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
+                           focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="">请选择供应商</option>
+                {suppliers.map(supplier => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-          {/* 发起位置 */}
+          {/* 发起位置（固定显示，不可修改） */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               发起位置 <span className="text-red-500">*</span>
             </label>
-            <select
-              value={formData.from_location_id}
-              onChange={(e) => setFormData({ ...formData, from_location_id: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
-                         focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            >
-              <option value="">请选择位置</option>
-              {locations.map(location => (
-                <option key={location.id} value={location.id}>
-                  {location.name}
-                </option>
-              ))}
-            </select>
+            <div className="w-full px-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 text-gray-700">
+              {returnConfig.locationName}
+            </div>
+            <p className="mt-1 text-xs text-gray-500">此位置已根据您的角色自动设置</p>
           </div>
 
           {/* 退货原因 */}
