@@ -153,11 +153,65 @@ function App() {
     scrollToBottom()
   }, [messages])
 
+  // 获取当前角色的历史记录key
+  const getHistoryKey = (role) => {
+    return `conversationHistory_${role}`
+  }
+
+  // 加载指定角色的历史记录
+  const loadRoleHistory = (role) => {
+    const historyKey = getHistoryKey(role)
+    const history = JSON.parse(localStorage.getItem(historyKey) || '[]')
+    setConversationHistory(history)
+    return history
+  }
+
   // 切换用户角色
   const changeUserRole = (roleId) => {
-    // 如果切换到不同角色，重置聊天界面（避免权限混淆和上下文混乱）
+    // 如果切换到不同角色，保存当前对话并加载新角色的历史记录
     if (roleId !== userRole) {
-      newConversation() // 清空消息、重置会话ID、重置对话标题
+      // 先保存当前角色的对话（如果有消息）
+      if (messages.length > 0) {
+        // 直接保存到当前角色的历史记录（不使用延迟保存）
+        const currentHistoryKey = getHistoryKey(userRole)
+        const currentHistory = JSON.parse(localStorage.getItem(currentHistoryKey) || '[]')
+        
+        // 自动生成对话标题
+        let title = conversationTitle
+        if (title === '新对话' || !currentConversationId) {
+          const firstUserMessage = messages.find(m => m.type === 'user')
+          if (firstUserMessage) {
+            title = firstUserMessage.content.substring(0, 20) || '新对话'
+            if (firstUserMessage.content.length > 20) title += '...'
+          }
+        }
+        
+        const conversation = {
+          id: currentConversationId || Date.now().toString(),
+          title: title,
+          messages: messages,
+          createdAt: currentConversationId ? 
+            (currentHistory.find(c => c.id === currentConversationId)?.createdAt || new Date().toISOString()) :
+            new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+        
+        const existingIndex = currentHistory.findIndex(h => h.id === conversation.id)
+        if (existingIndex >= 0) {
+          currentHistory[existingIndex] = conversation
+        } else {
+          currentHistory.unshift(conversation)
+        }
+        
+        // 只保留最近50个对话
+        const limitedHistory = currentHistory.slice(0, 50)
+        localStorage.setItem(currentHistoryKey, JSON.stringify(limitedHistory))
+      }
+      
+      // 切换到新角色，加载新角色的历史记录
+      loadRoleHistory(roleId)
+      // 开始新对话
+      newConversation()
     }
     setUserRole(roleId)
     localStorage.setItem('userRole', roleId)
@@ -180,18 +234,19 @@ function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // 加载历史对话记录
+  // 加载当前角色的历史对话记录
   useEffect(() => {
-    const history = JSON.parse(localStorage.getItem('conversationHistory') || '[]')
-    setConversationHistory(history)
-  }, [])
+    loadRoleHistory(userRole)
+  }, [userRole]) // 当角色变化时重新加载
 
-  // 保存对话到历史记录
+  // 保存对话到历史记录（保存到当前角色的历史记录）
   const saveConversation = () => {
     if (messages.length === 0) return
     
-    // 从localStorage获取最新历史记录
-    const history = JSON.parse(localStorage.getItem('conversationHistory') || '[]')
+    // 获取当前角色的历史记录key
+    const historyKey = getHistoryKey(userRole)
+    // 从localStorage获取当前角色的最新历史记录
+    const history = JSON.parse(localStorage.getItem(historyKey) || '[]')
     
     // 自动生成对话标题（使用第一条用户消息的前20个字符）
     let title = conversationTitle
@@ -224,7 +279,7 @@ function App() {
     
     // 只保留最近50个对话
     const limitedHistory = history.slice(0, 50)
-    localStorage.setItem('conversationHistory', JSON.stringify(limitedHistory))
+    localStorage.setItem(historyKey, JSON.stringify(limitedHistory))
     setConversationHistory(limitedHistory)
     setCurrentConversationId(conversation.id)
   }
@@ -240,10 +295,12 @@ function App() {
     }
   }, [messages])
 
-  // 加载指定对话
+  // 加载指定对话（从当前角色的历史记录加载）
   const loadConversation = (conversationId) => {
+    // 获取当前角色的历史记录key
+    const historyKey = getHistoryKey(userRole)
     // 从localStorage重新读取最新数据，确保数据是最新的
-    const history = JSON.parse(localStorage.getItem('conversationHistory') || '[]')
+    const history = JSON.parse(localStorage.getItem(historyKey) || '[]')
     const conversation = history.find(c => c.id === conversationId)
     if (conversation) {
       setMessages(conversation.messages)
@@ -275,11 +332,13 @@ function App() {
     }
   }
 
-  // 删除对话
+  // 删除对话（从当前角色的历史记录删除）
   const deleteConversation = (conversationId, e) => {
     e.stopPropagation()
+    // 获取当前角色的历史记录key
+    const historyKey = getHistoryKey(userRole)
     const history = conversationHistory.filter(c => c.id !== conversationId)
-    localStorage.setItem('conversationHistory', JSON.stringify(history))
+    localStorage.setItem(historyKey, JSON.stringify(history))
     setConversationHistory(history)
     if (currentConversationId === conversationId) {
       newConversation()
