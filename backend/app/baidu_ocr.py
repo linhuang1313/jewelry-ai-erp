@@ -1,12 +1,14 @@
 """
 百度智能云 OCR 模块
-使用百度云通用文字识别 API 进行图片文字识别
+使用百度云文字识别 API 进行图片文字识别
+支持通用文字识别和表格识别
 """
 import os
 import base64
 import requests
 import logging
-from typing import Dict, Optional
+import json
+from typing import Dict, Optional, List
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,7 +22,9 @@ BAIDU_SECRET_KEY = os.getenv("BAIDU_OCR_SECRET_KEY", "")
 # API 地址
 TOKEN_URL = "https://aip.baidubce.com/oauth/2.0/token"
 OCR_URL = "https://aip.baidubce.com/rest/2.0/ocr/v1/accurate_basic"  # 高精度版
-OCR_GENERAL_URL = "https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic"  # 通用版（免费额度更多）
+OCR_GENERAL_URL = "https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic"  # 通用版
+OCR_TABLE_URL = "https://aip.baidubce.com/rest/2.0/ocr/v1/table"  # 表格识别（同步）
+OCR_FORM_URL = "https://aip.baidubce.com/rest/2.0/ocr/v1/form"  # 表单识别
 
 # 缓存 access_token
 _access_token = None
@@ -146,13 +150,142 @@ def recognize_image(image_path: str = None, image_bytes: bytes = None, use_accur
         raise RuntimeError(f"OCR 请求失败: {e}")
 
 
-def extract_text_from_image(image_path: str = None, image_bytes: bytes = None) -> str:
+def recognize_table(image_path: str = None, image_bytes: bytes = None) -> Dict:
     """
-    从图片中提取文字（简化接口）
+    识别表格图片，保持表格结构
+    
+    Args:
+        image_path: 图片文件路径
+        image_bytes: 图片二进制数据
+    
+    Returns:
+        识别结果字典，包含表格结构化数据
+    """
+    if not is_ocr_configured():
+        raise RuntimeError("百度云 OCR 未配置：请设置 BAIDU_OCR_API_KEY 和 BAIDU_OCR_SECRET_KEY")
+    
+    # 获取图片数据
+    if image_bytes:
+        image_data = image_bytes
+    elif image_path:
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"图片文件不存在: {image_path}")
+        with open(image_path, "rb") as f:
+            image_data = f.read()
+    else:
+        raise ValueError("请提供 image_path 或 image_bytes")
+    
+    # Base64 编码
+    image_base64 = base64.b64encode(image_data).decode("utf-8")
+    
+    # 获取 access_token
+    access_token = get_access_token()
+    
+    # 调用表格识别 API
+    try:
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        params = {"access_token": access_token}
+        data = {
+            "image": image_base64,
+        }
+        
+        response = requests.post(
+            OCR_TABLE_URL,
+            headers=headers,
+            params=params,
+            data=data,
+            timeout=60  # 表格识别可能需要更长时间
+        )
+        result = response.json()
+        
+        if "error_code" in result:
+            error_msg = result.get("error_msg", "未知错误")
+            logger.error(f"百度云表格识别失败: {error_msg}")
+            # 如果表格识别失败，回退到通用识别
+            logger.info("回退到通用文字识别...")
+            return recognize_image(image_bytes=image_data)
+        
+        # 解析表格结果
+        tables_result = result.get("tables_result", [])
+        forms_result = result.get("forms_result", [])
+        
+        # 构建格式化的文本输出
+        formatted_lines = []
+        
+        # 处理表格数据
+        for table in tables_result:
+            body = table.get("body", [])
+            if body:
+                # 按行号分组
+                rows = {}
+                for cell in body:
+                    row_idx = cell.get("row_start", 0)
+                    if row_idx not in rows:
+                        rows[row_idx] = []
+                    rows[row_idx].append({
+                        "col": cell.get("col_start", 0),
+                        "text": cell.get("words", "")
+                    })
+                
+                # 按行输出，列用制表符分隔
+                for row_idx in sorted(rows.keys()):
+                    cells = sorted(rows[row_idx], key=lambda x: x["col"])
+                    row_text = "\t".join([c["text"] for c in cells])
+                    formatted_lines.append(row_text)
+        
+        # 处理表单数据（如果有）
+        for form in forms_result:
+            for item in form:
+                key = item.get("word_name", "")
+                value = item.get("word", "")
+                if key or value:
+                    formatted_lines.append(f"{key}: {value}")
+        
+        # 如果没有识别到表格，回退到通用识别
+        if not formatted_lines:
+            logger.info("未识别到表格结构，回退到通用文字识别...")
+            return recognize_image(image_bytes=image_data)
+        
+        full_text = "\n".join(formatted_lines)
+        
+        logger.info(f"百度云表格识别完成，识别到 {len(formatted_lines)} 行数据")
+        
+        return {
+            "success": True,
+            "full_text": full_text,
+            "line_count": len(formatted_lines),
+            "tables_result": tables_result,
+            "forms_result": forms_result,
+            "log_id": result.get("log_id"),
+            "is_table": True
+        }
+        
+    except requests.RequestException as e:
+        logger.error(f"百度云表格识别请求失败: {e}")
+        raise RuntimeError(f"表格识别请求失败: {e}")
+
+
+def extract_text_from_image(image_path: str = None, image_bytes: bytes = None, use_table: bool = True) -> str:
+    """
+    从图片中提取文字（智能选择识别方式）
+    
+    Args:
+        image_path: 图片文件路径
+        image_bytes: 图片二进制数据
+        use_table: 是否优先使用表格识别（默认True，适用于单据类图片）
     
     Returns:
         识别到的完整文本
     """
+    if use_table:
+        # 优先尝试表格识别
+        try:
+            result = recognize_table(image_path=image_path, image_bytes=image_bytes)
+            return result.get("full_text", "")
+        except Exception as e:
+            logger.warning(f"表格识别失败，回退到通用识别: {e}")
+    
+    # 使用通用识别
     result = recognize_image(image_path=image_path, image_bytes=image_bytes)
     return result.get("full_text", "")
 
