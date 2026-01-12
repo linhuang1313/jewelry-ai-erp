@@ -2735,6 +2735,12 @@ function App() {
             <ReturnPage userRole={userRole} />
           </div>
         )}
+
+        {currentPage === 'gold-material' && (
+          <div className="flex-1 overflow-y-auto">
+            <GoldMaterialPage userRole={userRole} />
+          </div>
+        )}
       </div>
 
       {/* 快捷开单弹窗 - 仅柜台和结算专员可用 */}
