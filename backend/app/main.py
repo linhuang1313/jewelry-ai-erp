@@ -1149,87 +1149,92 @@ async def download_inbound_order(
                 p = canvas.Canvas(buffer, pagesize=A4)
                 width, height = A4
                 
-                # 尝试注册中文字体（如果可用）
+                # 尝试注册中文字体（优先使用项目内字体，然后系统字体）
                 chinese_font = None
-                try:
-                    # 尝试使用系统字体（Windows通常有SimHei）
-                    font_path = 'C:/Windows/Fonts/simhei.ttf'
+                font_paths = [
+                    # 优先：项目内字体目录
+                    os.path.join(os.path.dirname(__file__), 'fonts', 'simhei.ttf'),
+                    os.path.join(os.path.dirname(__file__), 'fonts', 'simsun.ttc'),
+                    os.path.join(os.path.dirname(__file__), 'fonts', 'NotoSansCJK-Regular.ttf'),
+                    # 备选：Windows系统字体
+                    'C:/Windows/Fonts/simhei.ttf',
+                    'C:/Windows/Fonts/simsun.ttc',
+                    # Linux系统字体
+                    '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+                    '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
+                ]
+                
+                for font_path in font_paths:
                     if os.path.exists(font_path):
                         try:
-                            pdfmetrics.registerFont(TTFont('SimHei', font_path))
-                            chinese_font = 'SimHei'
-                            logger.info("成功加载中文字体: SimHei")
+                            font_name = 'ChineseFont'
+                            if 'simhei' in font_path.lower():
+                                font_name = 'SimHei'
+                            elif 'simsun' in font_path.lower():
+                                font_name = 'SimSun'
+                            elif 'noto' in font_path.lower():
+                                font_name = 'NotoSansCJK'
+                            elif 'wqy' in font_path.lower():
+                                font_name = 'WQY'
+                            
+                            pdfmetrics.registerFont(TTFont(font_name, font_path))
+                            chinese_font = font_name
+                            logger.info(f"成功加载中文字体: {font_name} from {font_path}")
+                            break
                         except Exception as register_error:
-                            logger.warning(f"注册SimHei字体失败: {register_error}")
-                            chinese_font = None
-                    else:
-                        logger.info(f"SimHei字体文件不存在: {font_path}")
-                except Exception as font_error:
-                    logger.warning(f"加载SimHei字体时出错: {font_error}")
-                
-                # 如果SimHei加载失败，尝试SimSun
-                if not chinese_font:
-                    try:
-                        font_path = 'C:/Windows/Fonts/simsun.ttc'
-                        if os.path.exists(font_path):
-                            try:
-                                pdfmetrics.registerFont(TTFont('SimSun', font_path))
-                                chinese_font = 'SimSun'
-                                logger.info("成功加载中文字体: SimSun")
-                            except Exception as register_error:
-                                logger.warning(f"注册SimSun字体失败: {register_error}")
-                        else:
-                            logger.info(f"SimSun字体文件不存在: {font_path}")
-                    except Exception as font_error2:
-                        logger.warning(f"加载SimSun字体时出错: {font_error2}")
+                            logger.warning(f"注册字体失败 {font_path}: {register_error}")
+                            continue
                 
                 if not chinese_font:
-                    logger.info("未加载中文字体，将使用英文标签")
+                    logger.warning("未找到中文字体，PDF将显示英文标签（中文内容可能乱码）")
+                    # 即使没有中文字体，也强制使用中文标签（使用Helvetica，可能乱码但至少标签是中文）
+                    chinese_font = None  # 保持None，但标签仍用中文
                 
-                # 标题
+                # 标题（始终使用中文，即使没有中文字体）
                 if chinese_font:
                     p.setFont(chinese_font, 18)
-                    p.drawString(50, height - 50, "珠宝入库单")
                 else:
                     p.setFont("Helvetica-Bold", 18)
-                    p.drawString(50, height - 50, "Inbound Order")
+                p.drawString(50, height - 50, "珠宝入库单")
                 
-                # 入库单信息
+                # 入库单信息（始终使用中文标签）
+                from .timezone_utils import to_china_time, format_china_time
+                
                 font_size = 12
                 y = height - 100
+                # 设置字体
                 if chinese_font:
                     p.setFont(chinese_font, font_size)
-                    p.drawString(50, y, f"入库单号：{order.order_no}")
-                    y -= 25
-                    create_time_str = order.create_time.strftime('%Y-%m-%d %H:%M:%S') if order.create_time else "未知"
-                    p.drawString(50, y, f"入库时间：{create_time_str}")
-                    y -= 25
-                    p.drawString(50, y, f"操作员：{order.operator}")
                 else:
                     p.setFont("Helvetica", font_size)
-                    p.drawString(50, y, f"Order No: {order.order_no}")
-                    y -= 25
-                    create_time_str = order.create_time.strftime('%Y-%m-%d %H:%M:%S') if order.create_time else "Unknown"
-                    p.drawString(50, y, f"Time: {create_time_str}")
-                    y -= 25
-                    p.drawString(50, y, f"Operator: {order.operator}")
+                
+                # 入库单号
+                p.drawString(50, y, f"入库单号：{order.order_no}")
+                y -= 25
+                
+                # 入库时间（使用时区转换）
+                if order.create_time:
+                    china_time = to_china_time(order.create_time)
+                    create_time_str = format_china_time(china_time, '%Y-%m-%d %H:%M:%S')
+                else:
+                    create_time_str = "未知"
+                p.drawString(50, y, f"入库时间：{create_time_str}")
+                y -= 25
+                
+                # 操作员
+                p.drawString(50, y, f"操作员：{order.operator}")
                 y -= 40
                 
-                # 表格标题
+                # 表格标题（始终使用中文）
                 if chinese_font:
                     p.setFont(chinese_font, 11)
-                    p.drawString(50, y, "商品名称")
-                    p.drawString(200, y, "重量(克)")
-                    p.drawString(280, y, "工费(元/克)")
-                    p.drawString(360, y, "总成本(元)")
-                    p.drawString(450, y, "供应商")
                 else:
                     p.setFont("Helvetica-Bold", 11)
-                    p.drawString(50, y, "Product")
-                    p.drawString(200, y, "Weight(g)")
-                    p.drawString(280, y, "Labor(g)")
-                    p.drawString(360, y, "Total")
-                    p.drawString(450, y, "Supplier")
+                p.drawString(50, y, "商品名称")
+                p.drawString(200, y, "重量(克)")
+                p.drawString(280, y, "工费(元/克)")
+                p.drawString(360, y, "总成本(元)")
+                p.drawString(450, y, "供应商")
                 y -= 25
                 
                 # 分隔线
@@ -1245,21 +1250,16 @@ async def download_inbound_order(
                     if y < page_height:  # 换页
                         p.showPage()
                         y = height - 50
-                        # 重新绘制表头
+                        # 重新绘制表头（始终使用中文）
                         if chinese_font:
                             p.setFont(chinese_font, 11)
-                            p.drawString(50, y, "商品名称")
-                            p.drawString(200, y, "重量(克)")
-                            p.drawString(280, y, "工费(元/克)")
-                            p.drawString(360, y, "总成本(元)")
-                            p.drawString(450, y, "供应商")
                         else:
                             p.setFont("Helvetica-Bold", 11)
-                            p.drawString(50, y, "Product")
-                            p.drawString(200, y, "Weight(g)")
-                            p.drawString(280, y, "Labor(g)")
-                            p.drawString(360, y, "Total")
-                            p.drawString(450, y, "Supplier")
+                        p.drawString(50, y, "商品名称")
+                        p.drawString(200, y, "重量(克)")
+                        p.drawString(280, y, "工费(元/克)")
+                        p.drawString(360, y, "总成本(元)")
+                        p.drawString(450, y, "供应商")
                         y -= 25
                         p.line(50, y, width - 50, y)
                         y -= 15
@@ -1290,20 +1290,17 @@ async def download_inbound_order(
                     total_weight += detail.weight
                     y -= 20
                 
-                # 总计
+                # 总计（始终使用中文）
                 y -= 10
                 p.line(50, y, width - 50, y)
                 y -= 20
                 if chinese_font:
                     p.setFont(chinese_font, 12)
-                    p.drawString(50, y, f"总重量：{total_weight:.2f} 克")
-                    y -= 25
-                    p.drawString(50, y, f"总成本：¥{total_cost:.2f}")
                 else:
                     p.setFont("Helvetica-Bold", 12)
-                    p.drawString(50, y, f"Total Weight: {total_weight:.2f} g")
-                    y -= 25
-                    p.drawString(50, y, f"Total Cost: ¥{total_cost:.2f}")
+                p.drawString(50, y, f"总重量：{total_weight:.2f} 克")
+                y -= 25
+                p.drawString(50, y, f"总成本：¥{total_cost:.2f}")
                 
                 p.save()
                 buffer.seek(0)
