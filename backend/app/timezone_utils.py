@@ -17,8 +17,9 @@ def to_china_time(dt: datetime) -> datetime:
     if dt is None:
         return None
     if dt.tzinfo is None:
-        # 假设无时区的时间是UTC
-        dt = dt.replace(tzinfo=timezone.utc)
+        # 假设无时区的时间已经是中国时间（因为我们使用 china_now() 存储）
+        # 直接返回，不做转换
+        return dt.replace(tzinfo=CHINA_TZ)
     return dt.astimezone(CHINA_TZ)
 
 

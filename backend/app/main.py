@@ -1140,69 +1140,35 @@ async def download_inbound_order(
                 from reportlab.pdfgen import canvas
                 from reportlab.lib.units import mm
                 from reportlab.pdfbase import pdfmetrics
-                from reportlab.pdfbase.ttfonts import TTFont
+                from reportlab.pdfbase.cidfonts import UnicodeCIDFont
                 import io
                 import os
+                from .timezone_utils import to_china_time, format_china_time
                 
                 # 生成PDF
                 buffer = io.BytesIO()
                 p = canvas.Canvas(buffer, pagesize=A4)
                 width, height = A4
                 
-                # 尝试注册中文字体（优先使用项目内字体，然后系统字体）
-                chinese_font = None
-                font_paths = [
-                    # 优先：项目内字体目录
-                    os.path.join(os.path.dirname(__file__), 'fonts', 'simhei.ttf'),
-                    os.path.join(os.path.dirname(__file__), 'fonts', 'simsun.ttc'),
-                    os.path.join(os.path.dirname(__file__), 'fonts', 'NotoSansCJK-Regular.ttf'),
-                    # 备选：Windows系统字体
-                    'C:/Windows/Fonts/simhei.ttf',
-                    'C:/Windows/Fonts/simsun.ttc',
-                    # Linux系统字体
-                    '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
-                    '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
-                ]
+                # 使用 CID 字体（内置支持中文，无需外部字体文件）
+                try:
+                    pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+                    chinese_font = 'STSong-Light'
+                    logger.info("成功注册中文CID字体: STSong-Light")
+                except Exception as cid_error:
+                    logger.warning(f"注册CID字体失败: {cid_error}")
+                    chinese_font = None
                 
-                for font_path in font_paths:
-                    if os.path.exists(font_path):
-                        try:
-                            font_name = 'ChineseFont'
-                            if 'simhei' in font_path.lower():
-                                font_name = 'SimHei'
-                            elif 'simsun' in font_path.lower():
-                                font_name = 'SimSun'
-                            elif 'noto' in font_path.lower():
-                                font_name = 'NotoSansCJK'
-                            elif 'wqy' in font_path.lower():
-                                font_name = 'WQY'
-                            
-                            pdfmetrics.registerFont(TTFont(font_name, font_path))
-                            chinese_font = font_name
-                            logger.info(f"成功加载中文字体: {font_name} from {font_path}")
-                            break
-                        except Exception as register_error:
-                            logger.warning(f"注册字体失败 {font_path}: {register_error}")
-                            continue
-                
-                if not chinese_font:
-                    logger.warning("未找到中文字体，PDF将显示英文标签（中文内容可能乱码）")
-                    # 即使没有中文字体，也强制使用中文标签（使用Helvetica，可能乱码但至少标签是中文）
-                    chinese_font = None  # 保持None，但标签仍用中文
-                
-                # 标题（始终使用中文，即使没有中文字体）
+                # 标题
                 if chinese_font:
                     p.setFont(chinese_font, 18)
                 else:
                     p.setFont("Helvetica-Bold", 18)
                 p.drawString(50, height - 50, "珠宝入库单")
                 
-                # 入库单信息（始终使用中文标签）
-                from .timezone_utils import to_china_time, format_china_time
-                
+                # 入库单信息
                 font_size = 12
                 y = height - 100
-                # 设置字体
                 if chinese_font:
                     p.setFont(chinese_font, font_size)
                 else:
