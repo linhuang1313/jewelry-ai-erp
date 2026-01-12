@@ -158,12 +158,45 @@ function App() {
     return `conversationHistory_${role}`
   }
 
-  // 加载指定角色的历史记录
-  const loadRoleHistory = (role) => {
-    const historyKey = getHistoryKey(role)
-    const history = JSON.parse(localStorage.getItem(historyKey) || '[]')
-    setConversationHistory(history)
-    return history
+  // 加载指定角色的历史记录（从后端API获取并同步到localStorage）
+  const loadRoleHistory = async (role) => {
+    try {
+      // 先从后端API获取该角色的会话列表
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-sessions?user_role=${role}&limit=50`)
+      const data = await response.json()
+      
+      if (data.success && data.sessions) {
+        // 将后端会话数据转换为前端对话记录格式
+        const history = data.sessions.map(session => ({
+          id: session.session_id,
+          title: session.summary || '新对话',
+          messages: [], // 消息内容在加载时再获取
+          createdAt: session.start_time || new Date().toISOString(),
+          updatedAt: session.end_time || new Date().toISOString(),
+          messageCount: session.message_count,
+          lastIntent: session.last_intent
+        }))
+        
+        // 同步到localStorage
+        const historyKey = getHistoryKey(role)
+        localStorage.setItem(historyKey, JSON.stringify(history))
+        setConversationHistory(history)
+        return history
+      } else {
+        // 如果API失败，从localStorage读取
+        const historyKey = getHistoryKey(role)
+        const history = JSON.parse(localStorage.getItem(historyKey) || '[]')
+        setConversationHistory(history)
+        return history
+      }
+    } catch (error) {
+      console.error('从后端加载历史记录失败，使用本地缓存:', error)
+      // 如果API失败，从localStorage读取
+      const historyKey = getHistoryKey(role)
+      const history = JSON.parse(localStorage.getItem(historyKey) || '[]')
+      setConversationHistory(history)
+      return history
+    }
   }
 
   // 切换用户角色
@@ -295,25 +328,68 @@ function App() {
     }
   }, [messages])
 
-  // 加载指定对话（从当前角色的历史记录加载）
-  const loadConversation = (conversationId) => {
-    // 获取当前角色的历史记录key
-    const historyKey = getHistoryKey(userRole)
-    // 从localStorage重新读取最新数据，确保数据是最新的
-    const history = JSON.parse(localStorage.getItem(historyKey) || '[]')
-    const conversation = history.find(c => c.id === conversationId)
-    if (conversation) {
-      setMessages(conversation.messages)
-      setCurrentConversationId(conversation.id)
-      setConversationTitle(conversation.title)
-      // 更新历史记录列表，确保侧边栏显示最新数据
-      setConversationHistory(history)
-      // 只在移动端关闭侧边栏，桌面端保持打开
-      if (window.innerWidth < 1024) {
-        setSidebarOpen(false)
+  // 加载指定对话（从后端API加载完整消息内容）
+  const loadConversation = async (conversationId) => {
+    try {
+      // 从后端API获取该会话的完整消息
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-history/${conversationId}`)
+      const data = await response.json()
+      
+      if (data.success && data.messages) {
+        // 将后端消息格式转换为前端消息格式
+        const messages = data.messages.map(msg => ({
+          type: msg.message_type === 'user' ? 'user' : 'assistant',
+          content: msg.content || '',
+          id: msg.id
+        }))
+        
+        // 从历史记录中获取对话标题
+        const history = conversationHistory
+        const conversation = history.find(c => c.id === conversationId)
+        const title = conversation?.title || messages.find(m => m.type === 'user')?.content?.substring(0, 20) || '新对话'
+        
+        setMessages(messages)
+        setCurrentConversationId(conversationId)
+        setConversationTitle(title)
+        
+        // 只在移动端关闭侧边栏，桌面端保持打开
+        if (window.innerWidth < 1024) {
+          setSidebarOpen(false)
+        } else {
+          // 桌面端确保侧边栏打开
+          setSidebarOpen(true)
+        }
       } else {
-        // 桌面端确保侧边栏打开
-        setSidebarOpen(true)
+        // 如果API失败，尝试从localStorage加载
+        const historyKey = getHistoryKey(userRole)
+        const history = JSON.parse(localStorage.getItem(historyKey) || '[]')
+        const conversation = history.find(c => c.id === conversationId)
+        if (conversation && conversation.messages) {
+          setMessages(conversation.messages)
+          setCurrentConversationId(conversation.id)
+          setConversationTitle(conversation.title)
+          if (window.innerWidth < 1024) {
+            setSidebarOpen(false)
+          } else {
+            setSidebarOpen(true)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('加载对话失败，尝试从本地加载:', error)
+      // 如果API失败，尝试从localStorage加载
+      const historyKey = getHistoryKey(userRole)
+      const history = JSON.parse(localStorage.getItem(historyKey) || '[]')
+      const conversation = history.find(c => c.id === conversationId)
+      if (conversation && conversation.messages) {
+        setMessages(conversation.messages)
+        setCurrentConversationId(conversation.id)
+        setConversationTitle(conversation.title)
+        if (window.innerWidth < 1024) {
+          setSidebarOpen(false)
+        } else {
+          setSidebarOpen(true)
+        }
       }
     }
   }
