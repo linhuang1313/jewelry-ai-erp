@@ -14,6 +14,7 @@ import { SettlementPage } from './components/SettlementPage'
 import { SalespersonPage } from './components/SalespersonPage'
 import { CustomerPage } from './components/CustomerPage'
 import { QuickOrderModal } from './components/QuickOrderModal'
+import { QuickReturnModal } from './components/QuickReturnModal'
 import { SupplierPage } from './components/SupplierPage'
 import ReturnPage from './components/ReturnPage'
 import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store, Users, UserPlus, FileText, History, Building2, RotateCcw } from 'lucide-react'
@@ -132,6 +133,7 @@ function App() {
   const [conversationTitle, setConversationTitle] = useState('新对话') // 当前对话标题
   const [currentPage, setCurrentPage] = useState('chat') // 'chat', 'finance', 'warehouse', 'settlement', 'analytics', 'export'
   const [showQuickOrderModal, setShowQuickOrderModal] = useState(false) // 快捷开单弹窗
+  const [showQuickReturnModal, setShowQuickReturnModal] = useState(false) // 快捷退货弹窗
   const [showHistoryPanel, setShowHistoryPanel] = useState(false) // 历史回溯面板
   
   // 用户角色相关状态
@@ -1924,6 +1926,18 @@ function App() {
                     </div>
                   )}
                   
+                  {/* 快捷退货卡片 - 需要退货给供应商权限 */}
+                  {hasPermission(userRole, 'canReturnToSupplier') && (
+                    <div 
+                      onClick={() => setShowQuickReturnModal(true)}
+                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                    >
+                      <div className="text-2xl mb-3">🔄</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">快捷退货</h3>
+                      <p className="text-sm text-gray-600">快速创建退货单</p>
+                    </div>
+                  )}
+                  
                   {/* 结算管理卡片 - 需要创建结算单权限 */}
                   {hasPermission(userRole, 'canCreateSettlement') && (
                     <div 
@@ -2678,6 +2692,18 @@ function App() {
           onSuccess={() => {
             // 开单成功后可以刷新数据或显示提示
           }}
+        />
+      )}
+
+      {/* 快捷退货弹窗 - 仅商品专员可用 */}
+      {hasPermission(userRole, 'canReturnToSupplier') && (
+        <QuickReturnModal
+          isOpen={showQuickReturnModal}
+          onClose={() => setShowQuickReturnModal(false)}
+          onSuccess={() => {
+            // 退货单创建成功后可以刷新数据
+          }}
+          userRole={userRole}
         />
       )}
 
