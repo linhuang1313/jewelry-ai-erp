@@ -1302,6 +1302,15 @@ async def download_inbound_order(
         
         elif format == "html":
             # 生成HTML（用于打印）
+            from .timezone_utils import to_china_time, format_china_time
+            
+            # 转换入库时间为中国时间
+            if order.create_time:
+                china_time = to_china_time(order.create_time)
+                create_time_str = format_china_time(china_time, '%Y-%m-%d %H:%M:%S')
+            else:
+                create_time_str = '未知'
+            
             html_content = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -1396,7 +1405,7 @@ async def download_inbound_order(
         </div>
         <div class="info-item">
             <span class="info-label">入库时间：</span>
-            <span>{order.create_time.strftime('%Y-%m-%d %H:%M:%S') if order.create_time else '未知'}</span>
+            <span>{create_time_str}</span>
         </div>
         <div class="info-item">
             <span class="info-label">操作员：</span>
