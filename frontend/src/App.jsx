@@ -155,6 +155,10 @@ function App() {
 
   // 切换用户角色
   const changeUserRole = (roleId) => {
+    // 如果切换到不同角色，重置聊天界面（避免权限混淆和上下文混乱）
+    if (roleId !== userRole) {
+      newConversation() // 清空消息、重置会话ID、重置对话标题
+    }
     setUserRole(roleId)
     localStorage.setItem('userRole', roleId)
     setRoleDropdownOpen(false)
