@@ -28,12 +28,17 @@ from .routers.warehouse import router as warehouse_router
 from .routers.settlement import router as settlement_router
 from .ocr_parser import OCR_AVAILABLE
 
-# OCR 功能状态
-OCR_ENABLED = OCR_AVAILABLE
-if OCR_ENABLED:
-    from .ocr_parser import extract_text_from_image
+# 百度云 OCR（云端可用）
+from .baidu_ocr import is_ocr_configured as is_baidu_ocr_configured, extract_text_from_image as baidu_extract_text
+
+# OCR 功能状态：优先使用百度云 OCR，其次使用本地 PaddleOCR
+BAIDU_OCR_ENABLED = is_baidu_ocr_configured()
+LOCAL_OCR_ENABLED = OCR_AVAILABLE
+
+if LOCAL_OCR_ENABLED:
+    from .ocr_parser import extract_text_from_image as local_extract_text
 else:
-    extract_text_from_image = None
+    local_extract_text = None
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -153,15 +158,15 @@ def log_chat_message(
 async def recognize_inbound_sheet(file: UploadFile = File(...)):
     """
     识别入库单图片，提取文字内容
-    只识别，不入库，返回识别出的文字供用户审核
+    优先使用百度云 OCR，其次使用本地 PaddleOCR
     """
     # 检查 OCR 功能是否可用
-    if not OCR_ENABLED or extract_text_from_image is None:
+    if not BAIDU_OCR_ENABLED and not LOCAL_OCR_ENABLED:
         return {
             "success": False,
-            "message": "OCR 图片识别功能在云端版本中不可用。请在本地运行以使用此功能。",
+            "message": "OCR 功能未配置。请设置百度云 OCR 密钥（BAIDU_OCR_API_KEY 和 BAIDU_OCR_SECRET_KEY）或在本地安装 PaddleOCR。",
             "recognized_text": "",
-            "thinking_steps": ["OCR 功能已禁用（云端部署）"]
+            "thinking_steps": ["OCR 功能未配置"]
         }
     
     try:
@@ -175,17 +180,29 @@ async def recognize_inbound_sheet(file: UploadFile = File(...)):
                 "recognized_text": ""
             }
         
-        # 创建临时文件保存上传的图片
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1] if file.filename else '.jpg') as tmp_file:
-            # 读取上传的文件内容
-            content = await file.read()
-            tmp_file.write(content)
-            tmp_file_path = tmp_file.name
+        # 读取上传的文件内容
+        content = await file.read()
+        
+        # 确定使用哪种 OCR
+        ocr_method = "百度云 OCR" if BAIDU_OCR_ENABLED else "本地 PaddleOCR"
+        logger.info(f"使用 {ocr_method} 进行识别")
         
         try:
-            # 调用OCR识别
-            logger.info(f"开始OCR识别，临时文件：{tmp_file_path}")
-            recognized_text = extract_text_from_image(tmp_file_path)
+            if BAIDU_OCR_ENABLED:
+                # 使用百度云 OCR（直接传入图片字节）
+                recognized_text = baidu_extract_text(image_bytes=content)
+            else:
+                # 使用本地 PaddleOCR（需要临时文件）
+                with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1] if file.filename else '.jpg') as tmp_file:
+                    tmp_file.write(content)
+                    tmp_file_path = tmp_file.name
+                
+                try:
+                    recognized_text = local_extract_text(tmp_file_path)
+                finally:
+                    # 清理临时文件
+                    if os.path.exists(tmp_file_path):
+                        os.unlink(tmp_file_path)
             
             logger.info(f"OCR识别完成，识别到 {len(recognized_text)} 个字符")
             
@@ -199,37 +216,16 @@ async def recognize_inbound_sheet(file: UploadFile = File(...)):
             
             return {
                 "success": True,
-                "message": "图片识别成功",
+                "message": f"图片识别成功（{ocr_method}）",
                 "recognized_text": recognized_text,
                 "thinking_steps": [
                     f"已识别图片：{file.filename}",
+                    f"使用：{ocr_method}",
                     f"识别出 {len(recognized_text.split(chr(10)))} 行文字",
                     "请检查识别内容是否正确"
                 ]
             }
         
-        except ImportError as import_error:
-            # 处理依赖缺失的情况
-            error_msg = str(import_error)
-            if "paddle" in error_msg.lower():
-                user_friendly_msg = (
-                    "OCR功能需要安装 paddlepaddle 依赖。\n\n"
-                    "安装方法：\n"
-                    "1. 访问 https://www.paddlepaddle.org.cn/install/quick\n"
-                    "2. 根据您的系统选择安装方式\n"
-                    "3. 或者尝试：pip install paddlepaddle\n\n"
-                    "注意：Python 3.14 可能还不被支持，建议使用 Python 3.10-3.11"
-                )
-            else:
-                user_friendly_msg = f"缺少必要的依赖：{error_msg}"
-            
-            logger.error(f"OCR依赖缺失：{import_error}", exc_info=True)
-            return {
-                "success": False,
-                "message": user_friendly_msg,
-                "recognized_text": "",
-                "thinking_steps": [f"OCR依赖缺失：{error_msg}"]
-            }
         except Exception as ocr_error:
             logger.error(f"OCR识别失败：{ocr_error}", exc_info=True)
             return {
@@ -238,15 +234,6 @@ async def recognize_inbound_sheet(file: UploadFile = File(...)):
                 "recognized_text": "",
                 "thinking_steps": [f"OCR识别过程出错：{str(ocr_error)}"]
             }
-        
-        finally:
-            # 清理临时文件
-            try:
-                if os.path.exists(tmp_file_path):
-                    os.unlink(tmp_file_path)
-                    logger.info(f"已删除临时文件：{tmp_file_path}")
-            except Exception as cleanup_error:
-                logger.warning(f"清理临时文件失败：{cleanup_error}")
     
     except Exception as e:
         logger.error(f"处理图片上传时出错：{e}", exc_info=True)

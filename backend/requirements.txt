@@ -9,6 +9,9 @@ python-multipart>=0.0.6
 # 数据库驱动
 psycopg2-binary>=2.9.0  # PostgreSQL 驱动
 
+# HTTP 请求
+requests>=2.28.0  # 用于百度云 OCR API
+
 # AI 功能
 anthropic>=0.7.0
 
