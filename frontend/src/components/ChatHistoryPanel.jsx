@@ -30,7 +30,7 @@ export function ChatHistoryPanel({ isOpen, onClose, onLoadSession, userRole }) {
   const fetchSessions = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`${API_ENDPOINTS.BASE_URL}/api/chat-sessions?limit=50`)
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-sessions?limit=50`)
       const data = await response.json()
       if (data.success) {
         setSessions(data.sessions || [])
@@ -46,7 +46,7 @@ export function ChatHistoryPanel({ isOpen, onClose, onLoadSession, userRole }) {
   const fetchSessionMessages = async (sessionId) => {
     setLoading(true)
     try {
-      const response = await fetch(`${API_ENDPOINTS.BASE_URL}/api/chat-history/${sessionId}`)
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-history/${sessionId}`)
       const data = await response.json()
       if (data.success) {
         setSessionMessages(data.messages || [])
@@ -65,7 +65,7 @@ export function ChatHistoryPanel({ isOpen, onClose, onLoadSession, userRole }) {
     setIsSearching(true)
     try {
       const response = await fetch(
-        `${API_ENDPOINTS.BASE_URL}/api/chat-logs/search?keyword=${encodeURIComponent(searchKeyword)}&limit=30`
+        `${API_ENDPOINTS.API_BASE_URL}/api/chat-logs/search?keyword=${encodeURIComponent(searchKeyword)}&limit=30`
       )
       const data = await response.json()
       if (data.success) {
