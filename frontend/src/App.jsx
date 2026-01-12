@@ -13,7 +13,8 @@ import { SettlementPage } from './components/SettlementPage'
 import { SalespersonPage } from './components/SalespersonPage'
 import { CustomerPage } from './components/CustomerPage'
 import { QuickOrderModal } from './components/QuickOrderModal'
-import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store, Users, UserPlus, FileText } from 'lucide-react'
+import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store, Users, UserPlus, FileText, History } from 'lucide-react'
+import { ChatHistoryPanel } from './components/ChatHistoryPanel'
 
 // 用户角色配置
 const USER_ROLES = [
@@ -128,6 +129,7 @@ function App() {
   const [conversationTitle, setConversationTitle] = useState('新对话') // 当前对话标题
   const [currentPage, setCurrentPage] = useState('chat') // 'chat', 'finance', 'warehouse', 'settlement', 'analytics', 'export'
   const [showQuickOrderModal, setShowQuickOrderModal] = useState(false) // 快捷开单弹窗
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false) // 历史回溯面板
   
   // 用户角色相关状态
   const [userRole, setUserRole] = useState(() => {
@@ -1639,6 +1641,16 @@ function App() {
                       <span>财务对账</span>
                     </button>
                   )}
+                  {/* 历史回溯按钮 - 所有角色都可用 */}
+                  <button
+                    onClick={() => setShowHistoryPanel(true)}
+                    className="flex items-center space-x-2 px-4 py-2 bg-slate-600 text-white rounded-xl 
+                               hover:bg-slate-700 transition-all duration-200 font-medium text-[15px] 
+                               shadow-sm hover:shadow-md"
+                  >
+                    <History className="w-4 h-4" />
+                    <span>历史回溯</span>
+                  </button>
                 </>
               ) : (
                 <button
@@ -2495,6 +2507,25 @@ function App() {
           }}
         />
       )}
+
+      {/* 历史回溯面板 - 所有角色可用 */}
+      <ChatHistoryPanel
+        isOpen={showHistoryPanel}
+        onClose={() => setShowHistoryPanel(false)}
+        userRole={userRole}
+        onLoadSession={(sessionId, messages) => {
+          // 加载历史对话到当前聊天
+          if (messages && messages.length > 0) {
+            const formattedMessages = messages.map(msg => ({
+              role: msg.message_type === 'user' ? 'user' : 'assistant',
+              content: msg.content,
+              timestamp: msg.created_at
+            }))
+            setMessages(formattedMessages)
+            setShowHistoryPanel(false)
+          }
+        }}
+      />
     </div>
   )
 }
