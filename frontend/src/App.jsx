@@ -1488,7 +1488,11 @@ function App() {
                 </svg>
               </button>
               
-              <div>
+              <div 
+                className="cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => setCurrentPage('chat')}
+                title="点击返回首页"
+              >
                 <h1 className="text-[28px] font-semibold text-gray-900 tracking-tight">
                   珠宝ERP系统
                 </h1>
