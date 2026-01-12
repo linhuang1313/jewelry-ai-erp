@@ -1770,8 +1770,8 @@ function App() {
                       <span>快捷开单</span>
                     </button>
                   )}
-                  {/* 客户管理按钮 - 使用权限检查 */}
-                  {hasPermission(userRole, 'canManageCustomers') && (
+                  {/* 客户管理按钮 - 使用权限检查（查看或管理权限） */}
+                  {(hasPermission(userRole, 'canViewCustomers') || hasPermission(userRole, 'canManageCustomers')) && (
                     <button
                       onClick={() => setCurrentPage('customer')}
                       className="flex items-center space-x-2 px-4 py-2 bg-teal-500 text-white rounded-xl 
@@ -1936,8 +1936,8 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 客户管理卡片 - 需要客户管理权限 */}
-                  {hasPermission(userRole, 'canManageCustomers') && (
+                  {/* 客户管理卡片 - 需要查看或管理权限 */}
+                  {(hasPermission(userRole, 'canViewCustomers') || hasPermission(userRole, 'canManageCustomers')) && (
                     <div 
                       onClick={() => setCurrentPage('customer')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"

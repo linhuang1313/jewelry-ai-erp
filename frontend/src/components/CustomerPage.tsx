@@ -30,7 +30,9 @@ interface CustomerPageProps {
 export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager' }) => {
   // 权限检查
   const canDelete = hasPermission(userRole, 'canDelete');
-  const canEdit = hasPermission(userRole, 'canManageCustomers');
+  const canEdit = hasPermission(userRole, 'canManageCustomers'); // 可以编辑客户
+  const canAdd = hasPermission(userRole, 'canManageCustomers'); // 可以添加客户
+  const canView = hasPermission(userRole, 'canViewCustomers') || hasPermission(userRole, 'canManageCustomers'); // 可以查看客户（查看权限或管理权限）
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchName, setSearchName] = useState('');
@@ -57,9 +59,12 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
   const fetchCustomers = async () => {
     setLoading(true);
     try {
-      const url = searchName 
-        ? `${API_BASE_URL}/api/customers?name=${encodeURIComponent(searchName)}`
-        : `${API_BASE_URL}/api/customers`;
+      const params = new URLSearchParams();
+      if (searchName) {
+        params.append('name', searchName);
+      }
+      params.append('user_role', userRole);
+      const url = `${API_BASE_URL}/api/customers?${params.toString()}`;
       const response = await fetch(url);
       const data = await response.json();
       if (data.success) {
@@ -92,7 +97,7 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
 
     setAdding(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/customers`, {
+      const response = await fetch(`${API_BASE_URL}/api/customers?user_role=${encodeURIComponent(userRole)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -123,7 +128,7 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
     if (!confirm(`确定要删除客户【${name}】吗？`)) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/customers/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/customers/${id}?user_role=${encodeURIComponent(userRole)}`, {
         method: 'DELETE',
       });
       const data = await response.json();
@@ -156,7 +161,7 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/customers/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/customers/${id}?user_role=${encodeURIComponent(userRole)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -198,14 +203,16 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
           </div>
         </div>
         <div className="flex items-center space-x-3">
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl
-                       hover:bg-blue-700 transition-all"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>新增客户</span>
-          </button>
+          {canAdd && (
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl
+                         hover:bg-blue-700 transition-all"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>新增客户</span>
+            </button>
+          )}
           <button
             onClick={fetchCustomers}
             className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl
@@ -250,7 +257,7 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
       </div>
 
       {/* 添加新客户表单 */}
-      {showAddForm && (
+      {showAddForm && canAdd && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
             <Plus className="w-5 h-5 mr-2 text-green-600" />

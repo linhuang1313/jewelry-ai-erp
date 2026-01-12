@@ -13,7 +13,8 @@ export const ROLE_PERMISSIONS = {
     canCreateSettlement: false,     // 不能创建结算单
     canTransfer: false,             // 不能发起转移
     canReceiveTransfer: true,       // 可以接收转移
-    canManageCustomers: true,       // 可以管理客户
+    canManageCustomers: true,       // 可以管理客户（创建/编辑/删除）
+    canViewCustomers: true,         // 可以查看客户（查询/往来账）
     canManageSuppliers: false,      // 不能管理供应商
     canManageSalespersons: false,   // 不能管理业务员
     canViewAnalytics: false,        // 不能看数据分析
@@ -35,6 +36,7 @@ export const ROLE_PERMISSIONS = {
     canTransfer: true,              // 可以发起转移
     canReceiveTransfer: false,      // 不能接收转移（在商品部）
     canManageCustomers: false,      // 不能管理客户
+    canViewCustomers: false,        // 不能查看客户
     canManageSuppliers: true,       // 可以管理供应商（但不能删除）
     canManageSalespersons: false,   // 不能管理业务员
     canViewAnalytics: false,        // 不能看数据分析
@@ -55,6 +57,7 @@ export const ROLE_PERMISSIONS = {
     canTransfer: false,
     canReceiveTransfer: false,
     canManageCustomers: false,
+    canViewCustomers: false,        // 不能查看客户
     canManageSuppliers: false,
     canManageSalespersons: false,
     canViewAnalytics: false,
@@ -74,7 +77,8 @@ export const ROLE_PERMISSIONS = {
     canCreateSettlement: false,
     canTransfer: false,
     canReceiveTransfer: false,
-    canManageCustomers: true,       // 可以管理客户
+    canManageCustomers: false,      // 不能管理客户（不能创建/编辑/删除）
+    canViewCustomers: true,         // 可以查看客户（查询/往来账）
     canManageSuppliers: false,
     canManageSalespersons: false,
     canViewAnalytics: false,
@@ -95,6 +99,7 @@ export const ROLE_PERMISSIONS = {
     canTransfer: false,
     canReceiveTransfer: false,
     canManageCustomers: false,
+    canViewCustomers: false,        // 不能查看客户
     canManageSuppliers: false,
     canManageSalespersons: false,
     canViewAnalytics: false,        // 财务有自己的财务页面
@@ -115,6 +120,7 @@ export const ROLE_PERMISSIONS = {
     canTransfer: true,
     canReceiveTransfer: true,
     canManageCustomers: true,
+    canViewCustomers: true,         // 可以查看客户
     canManageSuppliers: true,
     canManageSalespersons: true,
     canViewAnalytics: true,
@@ -175,7 +181,8 @@ export function getPermissionDeniedMessage(action) {
     'createSettlement': '您没有创建结算单的权限，请联系结算专员或管理层',
     'transfer': '您没有发起库存转移的权限，请联系商品专员或管理层',
     'receiveTransfer': '您没有接收库存的权限，请联系柜台人员或管理层',
-    'manageCustomers': '您没有客户管理的权限',
+    'manageCustomers': '您没有客户管理的权限（创建/编辑/删除），请联系柜台人员或管理层',
+    'viewCustomers': '您没有查看客户的权限，请联系柜台人员、业务员或管理层',
     'manageSuppliers': '您没有供应商管理的权限，请联系商品专员或管理层',
     'manageSalespersons': '您没有业务员管理的权限，请联系管理层',
     'viewAnalytics': '您没有查看数据分析的权限，请联系管理层',

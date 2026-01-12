@@ -15,7 +15,8 @@ ROLE_PERMISSIONS = {
         'can_create_settlement': False,    # 不能创建结算单
         'can_transfer': False,             # 不能发起转移
         'can_receive_transfer': True,      # 可以接收转移
-        'can_manage_customers': True,      # 可以管理客户
+        'can_manage_customers': True,      # 可以管理客户（创建/编辑/删除）
+        'can_view_customers': True,        # 可以查看客户（查询/往来账）
         'can_manage_suppliers': False,     # 不能管理供应商
         'can_manage_salespersons': False,  # 不能管理业务员
         'can_view_analytics': False,       # 不能看数据分析
@@ -34,6 +35,7 @@ ROLE_PERMISSIONS = {
         'can_transfer': True,              # 可以发起转移
         'can_receive_transfer': False,     # 不能接收转移
         'can_manage_customers': False,     # 不能管理客户
+        'can_view_customers': False,       # 不能查看客户
         'can_manage_suppliers': True,      # 可以管理供应商（但不能删除）
         'can_manage_salespersons': False,  # 不能管理业务员
         'can_view_analytics': False,       # 不能看数据分析
@@ -52,6 +54,7 @@ ROLE_PERMISSIONS = {
         'can_transfer': False,
         'can_receive_transfer': False,
         'can_manage_customers': False,
+        'can_view_customers': False,       # 不能查看客户
         'can_manage_suppliers': False,
         'can_manage_salespersons': False,
         'can_view_analytics': False,
@@ -69,7 +72,8 @@ ROLE_PERMISSIONS = {
         'can_create_settlement': False,
         'can_transfer': False,
         'can_receive_transfer': False,
-        'can_manage_customers': True,      # 可以管理客户
+        'can_manage_customers': False,     # 不能管理客户（不能创建/编辑/删除）
+        'can_view_customers': True,        # 可以查看客户（查询/往来账）
         'can_manage_suppliers': False,
         'can_manage_salespersons': False,
         'can_view_analytics': False,
@@ -88,6 +92,7 @@ ROLE_PERMISSIONS = {
         'can_transfer': False,
         'can_receive_transfer': False,
         'can_manage_customers': False,
+        'can_view_customers': False,       # 不能查看客户
         'can_manage_suppliers': False,
         'can_manage_salespersons': False,
         'can_view_analytics': False,
@@ -106,6 +111,7 @@ ROLE_PERMISSIONS = {
         'can_transfer': True,
         'can_receive_transfer': True,
         'can_manage_customers': True,
+        'can_view_customers': True,        # 可以查看客户
         'can_manage_suppliers': True,
         'can_manage_salespersons': True,
         'can_view_analytics': True,
@@ -125,6 +131,7 @@ PERMISSION_NAMES = {
     'can_transfer': '发起库存转移',
     'can_receive_transfer': '接收库存',
     'can_manage_customers': '客户管理',
+    'can_view_customers': '查看客户',
     'can_manage_suppliers': '供应商管理',
     'can_manage_salespersons': '业务员管理',
     'can_view_analytics': '数据分析',
@@ -202,7 +209,8 @@ def get_permission_denied_message(permission: str, role: str = None) -> str:
         'can_create_settlement': '请联系结算专员或管理层',
         'can_transfer': '请联系商品专员或管理层',
         'can_receive_transfer': '请联系柜台人员或管理层',
-        'can_manage_customers': '请联系柜台人员、业务员或管理层',
+        'can_manage_customers': '请联系柜台人员或管理层',
+        'can_view_customers': '请联系柜台人员、业务员或管理层',
         'can_manage_suppliers': '请联系商品专员或管理层',
         'can_manage_salespersons': '请联系管理层',
         'can_view_analytics': '请联系管理层',

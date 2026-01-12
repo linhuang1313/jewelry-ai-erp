@@ -19,8 +19,17 @@ router = APIRouter(prefix="/api/customers", tags=["客户管理"])
 
 
 @router.post("")
-async def create_customer(customer_data: CustomerCreate, db: Session = Depends(get_db)):
+async def create_customer(
+    customer_data: CustomerCreate,
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
     """创建客户"""
+    # 权限检查 - 需要 can_manage_customers 权限
+    from ..middleware.permissions import has_permission
+    if not has_permission(user_role, 'can_manage_customers'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【客户管理】的权限（创建/编辑/删除）")
+    
     try:
         # 检查客户是否已存在
         existing = db.query(Customer).filter(
@@ -61,8 +70,17 @@ async def create_customer(customer_data: CustomerCreate, db: Session = Depends(g
 
 
 @router.get("")
-async def get_customers(name: Optional[str] = None, db: Session = Depends(get_db)):
+async def get_customers(
+    name: Optional[str] = None,
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
     """获取客户列表"""
+    # 权限检查 - 需要 can_view_customers 或 can_manage_customers 权限
+    from ..middleware.permissions import has_permission
+    if not has_permission(user_role, 'can_view_customers') and not has_permission(user_role, 'can_manage_customers'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【查看客户】的权限")
+    
     try:
         query = db.query(Customer).filter(Customer.status == "active")
         
@@ -121,8 +139,17 @@ async def suggest_salesperson(customer_name: str, db: Session = Depends(get_db))
 
 
 @router.get("/{customer_id}")
-async def get_customer(customer_id: int, db: Session = Depends(get_db)):
+async def get_customer(
+    customer_id: int,
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
     """获取客户详情"""
+    # 权限检查 - 需要 can_view_customers 或 can_manage_customers 权限
+    from ..middleware.permissions import has_permission
+    if not has_permission(user_role, 'can_view_customers') and not has_permission(user_role, 'can_manage_customers'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【查看客户】的权限")
+    
     try:
         customer = db.query(Customer).filter(Customer.id == customer_id).first()
         
@@ -145,8 +172,18 @@ async def get_customer(customer_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{customer_id}")
-async def update_customer(customer_id: int, data: CustomerCreate, db: Session = Depends(get_db)):
+async def update_customer(
+    customer_id: int,
+    data: CustomerCreate,
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
     """更新客户信息"""
+    # 权限检查 - 需要 can_manage_customers 权限
+    from ..middleware.permissions import has_permission
+    if not has_permission(user_role, 'can_manage_customers'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【客户管理】的权限（创建/编辑/删除）")
+    
     try:
         customer = db.query(Customer).filter(Customer.id == customer_id).first()
         if not customer:
