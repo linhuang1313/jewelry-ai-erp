@@ -17,6 +17,7 @@ import { QuickOrderModal } from './components/QuickOrderModal'
 import { QuickReturnModal } from './components/QuickReturnModal'
 import { SupplierPage } from './components/SupplierPage'
 import ReturnPage from './components/ReturnPage'
+import GoldMaterialPage from './components/GoldMaterialPage'
 import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store, Users, UserPlus, FileText, History, Building2, RotateCcw, Scale } from 'lucide-react'
 import { ChatHistoryPanel } from './components/ChatHistoryPanel'
 
@@ -1809,6 +1810,18 @@ function App() {
                       <span>退货管理</span>
                     </button>
                   )}
+                  {/* 金料管理按钮 - 料部和管理层可见 */}
+                  {(hasPermission(userRole, 'canViewGoldMaterial') || hasPermission(userRole, 'canManageGoldMaterial')) && (
+                    <button
+                      onClick={() => setCurrentPage('gold-material')}
+                      className="flex items-center space-x-2 px-4 py-2 bg-yellow-500 text-white rounded-xl 
+                                 hover:bg-yellow-600 transition-all duration-200 font-medium text-[15px] 
+                                 shadow-sm hover:shadow-md"
+                    >
+                      <Scale className="w-4 h-4" />
+                      <span>金料管理</span>
+                    </button>
+                  )}
                   {/* 财务对账按钮 - 使用权限检查 */}
                   {hasPermission(userRole, 'canViewFinance') && (
                     <button
@@ -2020,6 +2033,33 @@ function App() {
                       <div className="text-2xl mb-3">📥</div>
                       <h3 className="font-semibold text-gray-900 mb-2">数据导出</h3>
                       <p className="text-sm text-gray-600">导出各类数据报表</p>
+                    </div>
+                  )}
+                  
+                  {/* 金料管理卡片 - 料部和管理层 */}
+                  {(hasPermission(userRole, 'canViewGoldMaterial') || hasPermission(userRole, 'canManageGoldMaterial')) && (
+                    <div 
+                      onClick={() => setCurrentPage('gold-material')}
+                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                    >
+                      <div className="text-2xl mb-3">⚖️</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">金料管理</h3>
+                      <p className="text-sm text-gray-600">金料台账、收料、付料</p>
+                    </div>
+                  )}
+                  
+                  {/* 创建付料单卡片 - 料部 */}
+                  {hasPermission(userRole, 'canCreateGoldPayment') && (
+                    <div 
+                      onClick={() => {
+                        setCurrentPage('gold-material');
+                        // 可以通过状态控制打开创建付料单弹窗
+                      }}
+                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                    >
+                      <div className="text-2xl mb-3">📝</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">创建付料单</h3>
+                      <p className="text-sm text-gray-600">支付供应商金料</p>
                     </div>
                   )}
                 </div>

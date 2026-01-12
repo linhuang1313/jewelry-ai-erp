@@ -440,6 +440,12 @@ class GoldReceiptCreate(BaseModel):
     remark: Optional[str] = None  # 备注
 
 
+class GoldReceiptUpdate(BaseModel):
+    """修改收料单"""
+    gold_weight: Optional[float] = None  # 修改金料重量
+    remark: Optional[str] = None  # 修改备注
+
+
 class GoldPaymentCreate(BaseModel):
     """创建付料单（料部支付供应商）"""
     supplier_id: int  # 供应商ID
@@ -666,6 +672,7 @@ __all__ = [
     'ReturnOrderResponse',
     # 金料管理
     'GoldReceiptCreate',
+    'GoldReceiptUpdate',
     'GoldPaymentCreate',
     'GoldMaterialTransactionConfirm',
     'GoldMaterialTransactionResponse',
