@@ -106,6 +106,12 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
   // 判断是否显示退货类型选择（只有管理层可以选择）
   const canSelectReturnType = userRole === 'manager';
 
+  // 根据角色获取默认位置code
+  const getDefaultLocationCode = () => {
+    if (userRole === 'counter') return 'showroom';  // 柜台在展厅
+    return 'warehouse';  // 商品专员在商品部仓库
+  };
+
   // 加载数据
   useEffect(() => {
     fetchReturns();
@@ -113,6 +119,17 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
     fetchSuppliers();
     fetchStats();
   }, [filterType, filterStatus, keyword]);
+
+  // 当位置数据加载完成后，自动设置默认位置
+  useEffect(() => {
+    if (locations.length > 0 && !formData.from_location_id) {
+      const defaultCode = getDefaultLocationCode();
+      const defaultLocation = locations.find(loc => loc.code === defaultCode);
+      if (defaultLocation) {
+        setFormData(prev => ({ ...prev, from_location_id: String(defaultLocation.id) }));
+      }
+    }
+  }, [locations, userRole]);
 
   const fetchReturns = async () => {
     setLoading(true);
@@ -281,11 +298,15 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
   };
 
   const resetForm = () => {
+    // 获取默认位置ID
+    const defaultCode = getDefaultLocationCode();
+    const defaultLocation = locations.find(loc => loc.code === defaultCode);
+    
     setFormData({
       return_type: getDefaultReturnType(),
       product_name: '',
       return_weight: '',
-      from_location_id: '',
+      from_location_id: defaultLocation ? String(defaultLocation.id) : '',
       supplier_id: '',
       return_reason: '质量问题',
       reason_detail: '',
@@ -540,19 +561,29 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
                 />
               </div>
               
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '13px' }}>发起位置</label>
-                <select
-                  value={formData.from_location_id}
-                  onChange={(e) => setFormData({ ...formData, from_location_id: e.target.value })}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid #475569', color: '#e2e8f0' }}
-                >
-                  <option value="">选择位置（可选）</option>
-                  {locations.map((loc) => (
-                    <option key={loc.id} value={loc.id}>{loc.name}</option>
-                  ))}
-                </select>
-              </div>
+              {/* 发起位置 - 非管理层自动固定，管理层可选择 */}
+              {canSelectReturnType ? (
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '13px' }}>发起位置</label>
+                  <select
+                    value={formData.from_location_id}
+                    onChange={(e) => setFormData({ ...formData, from_location_id: e.target.value })}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid #475569', color: '#e2e8f0' }}
+                  >
+                    <option value="">选择位置（可选）</option>
+                    {locations.map((loc) => (
+                      <option key={loc.id} value={loc.id}>{loc.name}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div style={{ padding: '12px', background: '#0f172a', borderRadius: '8px', border: '1px solid #475569' }}>
+                  <span style={{ color: '#94a3b8', fontSize: '13px' }}>发起位置：</span>
+                  <span style={{ color: '#fbbf24', fontWeight: '600', marginLeft: '8px' }}>
+                    {locations.find(loc => String(loc.id) === formData.from_location_id)?.name || '加载中...'}
+                  </span>
+                </div>
+              )}
               
               {formData.return_type === 'to_supplier' && (
                 <div>
