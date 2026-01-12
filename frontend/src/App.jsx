@@ -13,7 +13,8 @@ import { SettlementPage } from './components/SettlementPage'
 import { SalespersonPage } from './components/SalespersonPage'
 import { CustomerPage } from './components/CustomerPage'
 import { QuickOrderModal } from './components/QuickOrderModal'
-import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store, Users, UserPlus, FileText, History } from 'lucide-react'
+import { SupplierPage } from './components/SupplierPage'
+import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store, Users, UserPlus, FileText, History, Building2 } from 'lucide-react'
 import { ChatHistoryPanel } from './components/ChatHistoryPanel'
 
 // 用户角色配置
@@ -1629,6 +1630,18 @@ function App() {
                       <span>客户管理</span>
                     </button>
                   )}
+                  {/* 供应商管理按钮 - 商品专员 + 管理层 */}
+                  {(userRole === 'product' || userRole === 'manager') && (
+                    <button
+                      onClick={() => setCurrentPage('supplier')}
+                      className="flex items-center space-x-2 px-4 py-2 bg-amber-500 text-white rounded-xl 
+                                 hover:bg-amber-600 transition-all duration-200 font-medium text-[15px] 
+                                 shadow-sm hover:shadow-md"
+                    >
+                      <Building2 className="w-4 h-4" />
+                      <span>供应商管理</span>
+                    </button>
+                  )}
                   {/* 财务对账按钮 - 业务员 + 财务 + 管理层 */}
                   {(userRole === 'sales' || userRole === 'finance' || userRole === 'manager') && (
                     <button
@@ -2493,6 +2506,12 @@ function App() {
         {currentPage === 'customer' && (
           <div className="flex-1 overflow-y-auto">
             <CustomerPage />
+          </div>
+        )}
+
+        {currentPage === 'supplier' && (
+          <div className="flex-1 overflow-y-auto">
+            <SupplierPage userRole={userRole} />
           </div>
         )}
       </div>
