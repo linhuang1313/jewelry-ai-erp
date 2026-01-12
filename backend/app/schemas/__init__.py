@@ -77,6 +77,11 @@ class AIResponse(BaseModel):
     end_date: Optional[str] = None
     order_no: Optional[str] = None  # 入库单号（用于查询入库单，RK开头）
     sales_order_no: Optional[str] = None  # 销售单号（用于查询销售单，XS开头）
+    # 库存转移相关字段
+    transfer_product_name: Optional[str] = None  # 要转移的商品名称
+    transfer_weight: Optional[float] = None  # 要转移的重量（克）
+    from_location: Optional[str] = None  # 发出位置（默认：商品部仓库）
+    to_location: Optional[str] = None  # 目标位置（如：展厅）
 
 
 # ============= 入库相关 Schema =============

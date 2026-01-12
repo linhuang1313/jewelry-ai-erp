@@ -2,6 +2,7 @@ import json
 import os
 import re
 import logging
+from typing import List, Optional
 from openai import OpenAI
 from dotenv import load_dotenv
 from .schemas import AIResponse
@@ -18,12 +19,37 @@ client = OpenAI(
     base_url="https://api.deepseek.com"
 )
 
-def parse_user_message(message: str) -> AIResponse:
-    """使用Claude API解析用户自然语言输入，必须成功"""
+def parse_user_message(message: str, conversation_history: Optional[List[dict]] = None) -> AIResponse:
+    """使用 DeepSeek API 解析用户自然语言输入，必须成功
+    
+    Args:
+        message: 用户当前输入的消息
+        conversation_history: 最近的对话历史，格式为 [{"role": "user/assistant", "content": "..."}]
+    """
+    
+    # 构建上下文部分
+    context_section = ""
+    if conversation_history and len(conversation_history) > 0:
+        context_section = """
+=== 最近对话记录（用于理解上下文）===
+"""
+        for item in conversation_history[-5:]:  # 只取最近5条
+            role_label = "用户" if item.get("role") == "user" else "系统"
+            content = item.get("content", "")[:200]  # 限制长度
+            context_section += f"{role_label}: {content}\n"
+        context_section += """
+=== 对话记录结束 ===
+
+**重要**：请结合上面的对话记录理解用户当前的输入。
+- 如果用户说"这个"、"刚才的"、"那个"等指代词，请从对话记录中找到对应的商品名称
+- 如果用户刚入库了某个商品，然后说"转移到展厅"，需要理解是转移刚入库的那个商品
+- 如果无法从上下文确定商品名称，transfer_product_name 可以设为 null，但要提取其他信息（如重量、目标位置）
+
+"""
     
     prompt = f"""你是一个珠宝ERP系统的智能AI助手。你需要理解用户的自然语言输入，并提取相关信息。
-
-用户输入：{message}
+{context_section}
+用户当前输入：{message}
 
 系统支持的功能：
 1. **入库操作**：用户要进行商品入库
@@ -36,6 +62,7 @@ def parse_user_message(message: str) -> AIResponse:
 8. **客户管理**：创建/查询客户信息
 9. **供应商管理**：创建/查询供应商信息
 10. **销售管理**：创建/查询销售单
+11. **库存转移**：将商品从一个位置转移到另一个位置（如从仓库转到展厅）
 
 请返回JSON格式，包含以下字段：
 - action: 用户意图，根据用户输入智能判断，可能是：
@@ -51,6 +78,7 @@ def parse_user_message(message: str) -> AIResponse:
   - "创建供应商"：用户要创建新供应商（如"新建供应商：XX公司 电话13800138000"、"添加供应商"等）
   - "创建销售单"：用户要创建销售单（包含客户、商品、工费、克重、业务员、门店代码等信息）
   - "查询销售单"：用户要查询销售单信息，销售单号以XS开头（如"查询销售单"、"XS20260111162534"、"查询销售单XS20260111162534"、"最近的销售单"、"张三的销售单"等）
+  - "创建转移单"：用户要将商品从一个位置转移到另一个位置（如"帮我转移到展厅"、"把XXX从仓库转到展厅"、"转移100克到展厅"等）
   - "其他"：无法识别的意图
 
 - order_no: 入库单号（字符串，仅当action为"查询入库单"且用户提供了RK开头的入库单号时需要，如"RK1768047147249"）
@@ -76,6 +104,11 @@ def parse_user_message(message: str) -> AIResponse:
   - labor_cost: 工费（元/克，必须是数字，必填）
 - order_date: 日期（当action为"创建销售单"时可选，格式：YYYY-MM-DD或YYYY-MM-DD HH:MM:SS）
 
+- transfer_product_name: 要转移的商品名称（当action为"创建转移单"时需要，如果上下文中有刚入库的商品，使用该商品名称）
+- transfer_weight: 要转移的重量（克，当action为"创建转移单"时需要）
+- from_location: 发出位置（当action为"创建转移单"时可选，默认为"商品部仓库"）
+- to_location: 目标位置（当action为"创建转移单"时需要，如"展厅"）
+
 重要提示：
 1. **意图识别要灵活**：
    - "帮我入库"、"做个入库"、"入库"、"帮我做个入库" → action: "入库"
@@ -92,6 +125,7 @@ def parse_user_message(message: str) -> AIResponse:
    - "新建供应商"、"创建供应商"、"添加供应商"、"供应商：XXX" → action: "创建供应商"
    - "开销售单"、"创建销售单"、"销售单"、"开单" → action: "创建销售单"
    - "查询销售单"、"销售单列表"、"最近的销售单" → action: "查询销售单"
+   - "转移到展厅"、"帮我转移到展厅"、"这个100克帮我转到展厅"、"把刚才的商品转到展厅"、"从仓库转到展厅" → action: "创建转移单"
 
 2. **入库操作必填字段**（仅当action为"入库"时）：
    - product_name（商品名称）
@@ -346,6 +380,42 @@ def parse_user_message(message: str) -> AIResponse:
 {{
   "action": "查询销售单",
   "sales_order_no": "XS20260111162534",
+  "products": null
+}}
+
+示例23（创建转移单 - 基本转移）：
+用户输入："帮我转移100克古法戒指到展厅"
+说明：用户要将商品转移到展厅，应该识别为创建转移单
+{{
+  "action": "创建转移单",
+  "transfer_product_name": "古法戒指",
+  "transfer_weight": 100,
+  "from_location": "商品部仓库",
+  "to_location": "展厅",
+  "products": null
+}}
+
+示例24（创建转移单 - 上下文转移）：
+用户输入："这个100克帮我转移到展厅"
+说明：用户说"这个"，需要从上下文中理解指的是哪个商品。如果上下文中刚入库了"古法黄金戒指"100克，则应该识别为转移该商品
+{{
+  "action": "创建转移单",
+  "transfer_product_name": null,
+  "transfer_weight": 100,
+  "from_location": "商品部仓库",
+  "to_location": "展厅",
+  "products": null
+}}
+
+示例25（创建转移单 - 简单转移）：
+用户输入："从仓库转50克到展厅"
+说明：用户要从仓库转移商品到展厅
+{{
+  "action": "创建转移单",
+  "transfer_product_name": null,
+  "transfer_weight": 50,
+  "from_location": "商品部仓库",
+  "to_location": "展厅",
   "products": null
 }}
 """

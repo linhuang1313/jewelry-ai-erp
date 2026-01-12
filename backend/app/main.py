@@ -263,6 +263,8 @@ async def chat(request: AIRequest, db: Session = Depends(get_db)):
             return await handle_create_supplier(ai_response, db)
         elif ai_response.action == "创建销售单":
             return await handle_create_sales_order(ai_response, db)
+        elif ai_response.action == "创建转移单":
+            return await handle_create_transfer(ai_response, db)
         
         # ========== 查询和分析操作：使用AI分析引擎 ==========
         else:
@@ -348,6 +350,25 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
         content=request.message
     )
     
+    # ========== 查询最近的对话历史（用于上下文理解）==========
+    conversation_history = []
+    try:
+        # 查询最近的5条对话记录（按时间倒序，然后反转）
+        recent_logs = db.query(ChatLog).filter(
+            ChatLog.user_role == request.user_role
+        ).order_by(desc(ChatLog.created_at)).limit(10).all()
+        
+        # 反转顺序（从旧到新）并格式化
+        for log in reversed(recent_logs):
+            if log.content:
+                conversation_history.append({
+                    "role": "user" if log.message_type == "user" else "assistant",
+                    "content": log.content
+                })
+        logger.info(f"[流式] 加载了 {len(conversation_history)} 条历史对话作为上下文")
+    except Exception as e:
+        logger.warning(f"[流式] 加载对话历史失败: {e}")
+    
     async def generate():
         try:
             logger.info("[流式] 开始生成响应")
@@ -364,14 +385,15 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             yield first_chunk
             await asyncio.sleep(0.05)
             
-            ai_response = parse_user_message(request.message)
+            # 传递对话历史给 AI 解析器
+            ai_response = parse_user_message(request.message, conversation_history)
             logger.info(f"[流式] 识别到意图: {ai_response.action}")
             
             yield f"data: {json.dumps({'type': 'thinking', 'step': '意图解析', 'message': f'已识别意图：{ai_response.action}', 'progress': 20, 'status': 'complete'}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0.05)
             
             # ========== 写操作：快速处理并返回 ==========
-            if ai_response.action in ["入库", "创建客户", "创建供应商", "创建销售单"]:
+            if ai_response.action in ["入库", "创建客户", "创建供应商", "创建销售单", "创建转移单"]:
                 yield f"data: {json.dumps({'type': 'thinking', 'step': '执行操作', 'message': f'正在执行{ai_response.action}操作...', 'progress': 30}, ensure_ascii=False)}\n\n"
                 await asyncio.sleep(0.05)
                 
@@ -384,6 +406,8 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         result = await handle_create_supplier(ai_response, db)
                     elif ai_response.action == "创建销售单":
                         result = await handle_create_sales_order(ai_response, db)
+                    elif ai_response.action == "创建转移单":
+                        result = await handle_create_transfer(ai_response, db)
                     
                     logger.info(f"[流式] {ai_response.action}操作完成，准备返回结果")
                     # 确保 result 可以被 JSON 序列化
@@ -2197,6 +2221,150 @@ async def handle_create_sales_order(ai_response, db: Session) -> Dict[str, Any]:
             "success": False,
             "message": f"处理创建销售单失败: {str(e)}"
         }
+
+
+async def handle_create_transfer(ai_response, db: Session) -> Dict[str, Any]:
+    """处理创建库存转移单操作"""
+    try:
+        # 从AI响应中提取转移信息
+        transfer_product_name = ai_response.transfer_product_name
+        transfer_weight = ai_response.transfer_weight
+        from_location_name = ai_response.from_location or "商品部仓库"  # 默认从商品部仓库发出
+        to_location_name = ai_response.to_location
+        
+        # 验证目标位置
+        if not to_location_name:
+            return {
+                "success": False,
+                "message": "请指定目标位置（如：展厅）",
+                "hint": "例如：帮我把古法戒指转移到展厅"
+            }
+        
+        # 验证重量
+        if not transfer_weight or transfer_weight <= 0:
+            return {
+                "success": False,
+                "message": "请指定要转移的重量",
+                "hint": "例如：帮我转移100克到展厅"
+            }
+        
+        # 查找发出位置
+        from_location = db.query(Location).filter(
+            Location.name.contains(from_location_name)
+        ).first()
+        if not from_location:
+            # 尝试模糊匹配
+            from_location = db.query(Location).filter(
+                Location.location_type == "warehouse"
+            ).first()
+        
+        if not from_location:
+            return {
+                "success": False,
+                "message": f"未找到发出位置：{from_location_name}",
+                "hint": "请确保仓库位置已创建"
+            }
+        
+        # 查找目标位置
+        to_location = db.query(Location).filter(
+            Location.name.contains(to_location_name)
+        ).first()
+        if not to_location:
+            # 尝试模糊匹配展厅
+            if "展厅" in to_location_name:
+                to_location = db.query(Location).filter(
+                    Location.location_type == "showroom"
+                ).first()
+        
+        if not to_location:
+            return {
+                "success": False,
+                "message": f"未找到目标位置：{to_location_name}",
+                "hint": "可用的位置：商品部仓库、展厅"
+            }
+        
+        # 如果没有指定商品名称，尝试从库存中查找
+        if not transfer_product_name:
+            # 查找该位置有库存的商品
+            location_inv = db.query(LocationInventory).filter(
+                LocationInventory.location_id == from_location.id,
+                LocationInventory.weight >= transfer_weight
+            ).first()
+            
+            if location_inv:
+                transfer_product_name = location_inv.product_name
+                logger.info(f"自动选择商品：{transfer_product_name}")
+            else:
+                return {
+                    "success": False,
+                    "message": "请指定要转移的商品名称，或确保发出位置有足够库存",
+                    "hint": "例如：帮我把古法戒指 100克转移到展厅"
+                }
+        
+        # 验证发出位置是否有足够库存
+        source_inv = db.query(LocationInventory).filter(
+            LocationInventory.location_id == from_location.id,
+            LocationInventory.product_name == transfer_product_name
+        ).first()
+        
+        if not source_inv or source_inv.weight < transfer_weight:
+            available = source_inv.weight if source_inv else 0
+            return {
+                "success": False,
+                "message": f"{from_location.name} 的 {transfer_product_name} 库存不足（当前：{available}克，需要：{transfer_weight}克）",
+                "hint": "请先入库或减少转移数量"
+            }
+        
+        # 生成转移单号
+        now = datetime.now()
+        count = db.query(InventoryTransfer).filter(
+            InventoryTransfer.transfer_no.like(f"TR{now.strftime('%Y%m%d')}%")
+        ).count()
+        transfer_no = f"TR{now.strftime('%Y%m%d')}{count + 1:03d}"
+        
+        # 创建转移单
+        db_transfer = InventoryTransfer(
+            transfer_no=transfer_no,
+            product_name=transfer_product_name,
+            weight=transfer_weight,
+            from_location_id=from_location.id,
+            to_location_id=to_location.id,
+            status="pending",
+            created_by="AI助手",
+            remark=f"通过AI对话创建"
+        )
+        db.add(db_transfer)
+        
+        # 扣减发出位置库存
+        source_inv.weight -= transfer_weight
+        
+        db.commit()
+        
+        logger.info(f"创建转移单成功: {transfer_no}, {transfer_product_name} {transfer_weight}克, "
+                   f"{from_location.name} -> {to_location.name}")
+        
+        return {
+            "success": True,
+            "message": f"✅ 转移单创建成功！\n\n"
+                      f"📋 单号：{transfer_no}\n"
+                      f"📦 商品：{transfer_product_name}\n"
+                      f"⚖️ 重量：{transfer_weight}克\n"
+                      f"📍 从：{from_location.name}\n"
+                      f"📍 到：{to_location.name}\n"
+                      f"⏳ 状态：待接收\n\n"
+                      f"请到【分仓库存】页面查看和接收转移单。",
+            "transfer_no": transfer_no,
+            "action": "创建转移单"
+        }
+        
+    except Exception as e:
+        logger.error(f"处理创建转移单失败: {e}", exc_info=True)
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"创建转移单失败: {str(e)}"
+        }
+
 
 # handle_query_sales_orders - 已由AI分析引擎替代
 
