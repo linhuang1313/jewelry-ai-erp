@@ -287,16 +287,33 @@ async def chat(request: AIRequest, db: Session = Depends(get_db)):
         ai_response = parse_user_message(request.message)
         logger.info(f"AI解析结果: action={ai_response.action}, products={ai_response.products}")
         
-        # ========== 写操作：需要保留专门函数（有业务逻辑验证和数据库写入）==========
+        # ========== 写操作：先检查权限，再执行 ==========
+        from .middleware.permissions import check_action_permission
+        
         if ai_response.action == "入库":
+            has_perm, perm_error = check_action_permission(request.user_role or 'sales', ai_response.action)
+            if not has_perm:
+                return {"success": False, "message": perm_error}
             return await handle_inbound(ai_response, db)
         elif ai_response.action == "创建客户":
+            has_perm, perm_error = check_action_permission(request.user_role or 'sales', ai_response.action)
+            if not has_perm:
+                return {"success": False, "message": perm_error}
             return await handle_create_customer(ai_response, db)
         elif ai_response.action == "创建供应商":
+            has_perm, perm_error = check_action_permission(request.user_role or 'sales', ai_response.action)
+            if not has_perm:
+                return {"success": False, "message": perm_error}
             return await handle_create_supplier(ai_response, db)
         elif ai_response.action == "创建销售单":
+            has_perm, perm_error = check_action_permission(request.user_role or 'sales', ai_response.action)
+            if not has_perm:
+                return {"success": False, "message": perm_error}
             return await handle_create_sales_order(ai_response, db)
         elif ai_response.action == "创建转移单":
+            has_perm, perm_error = check_action_permission(request.user_role or 'sales', ai_response.action)
+            if not has_perm:
+                return {"success": False, "message": perm_error}
             return await handle_create_transfer(ai_response, db)
         
         # ========== 查询和分析操作：使用AI分析引擎 ==========
@@ -456,8 +473,22 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             yield f"data: {json.dumps({'type': 'thinking', 'step': '意图解析', 'message': f'已识别意图：{ai_response.action}', 'progress': 20, 'status': 'complete'}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0.05)
             
-            # ========== 写操作：快速处理并返回 ==========
+            # ========== 写操作：先检查权限，再执行 ==========
             if ai_response.action in ["入库", "创建客户", "创建供应商", "创建销售单", "创建转移单"]:
+                # 导入权限检查模块
+                from .middleware.permissions import check_action_permission, get_permission_denied_message
+                
+                # 检查操作权限
+                user_role = request.user_role or 'sales'
+                has_perm, perm_error = check_action_permission(user_role, ai_response.action)
+                
+                if not has_perm:
+                    logger.warning(f"[流式] 权限不足: 角色={user_role}, 操作={ai_response.action}")
+                    yield f"data: {json.dumps({'type': 'thinking', 'step': '权限检查', 'message': '权限验证失败', 'progress': 25, 'status': 'error'}, ensure_ascii=False)}\n\n"
+                    await asyncio.sleep(0.1)
+                    yield f"data: {json.dumps({'type': 'complete', 'data': {'success': False, 'message': perm_error}}, ensure_ascii=False)}\n\n"
+                    return
+                
                 yield f"data: {json.dumps({'type': 'thinking', 'step': '执行操作', 'message': f'正在执行{ai_response.action}操作...', 'progress': 30}, ensure_ascii=False)}\n\n"
                 await asyncio.sleep(0.05)
                 

@@ -1,0 +1,205 @@
+/**
+ * 角色权限配置文件
+ * 定义每个角色的功能权限和可访问页面
+ */
+
+// 角色权限矩阵
+export const ROLE_PERMISSIONS = {
+  // 柜台
+  counter: {
+    // 功能权限
+    canInbound: false,              // 不能入库
+    canCreateSales: true,           // 可以开销售单
+    canCreateSettlement: false,     // 不能创建结算单
+    canTransfer: false,             // 不能发起转移
+    canReceiveTransfer: true,       // 可以接收转移
+    canManageCustomers: true,       // 可以管理客户
+    canManageSuppliers: false,      // 不能管理供应商
+    canManageSalespersons: false,   // 不能管理业务员
+    canViewAnalytics: false,        // 不能看数据分析
+    canExport: false,               // 不能导出数据
+    canDelete: false,               // 不能删除数据
+    canReturnToSupplier: false,     // 不能退货给供应商
+    canReturnToWarehouse: true,     // 可以退货给商品部
+    canViewFinance: false,          // 不能查看财务
+    
+    // 可访问页面
+    pages: ['chat', 'warehouse', 'customer', 'return'],
+  },
+  
+  // 商品专员
+  product: {
+    canInbound: true,               // 可以入库
+    canCreateSales: false,          // 不能开销售单
+    canCreateSettlement: false,     // 不能创建结算单
+    canTransfer: true,              // 可以发起转移
+    canReceiveTransfer: false,      // 不能接收转移（在商品部）
+    canManageCustomers: false,      // 不能管理客户
+    canManageSuppliers: true,       // 可以管理供应商（但不能删除）
+    canManageSalespersons: false,   // 不能管理业务员
+    canViewAnalytics: false,        // 不能看数据分析
+    canExport: false,               // 不能导出数据
+    canDelete: false,               // 不能删除数据
+    canReturnToSupplier: true,      // 可以退货给供应商
+    canReturnToWarehouse: false,    // 不能退货给商品部
+    canViewFinance: false,          // 不能查看财务
+    
+    pages: ['chat', 'warehouse', 'supplier', 'return'],
+  },
+  
+  // 结算专员
+  settlement: {
+    canInbound: false,
+    canCreateSales: false,
+    canCreateSettlement: true,      // 可以创建结算单
+    canTransfer: false,
+    canReceiveTransfer: false,
+    canManageCustomers: false,
+    canManageSuppliers: false,
+    canManageSalespersons: false,
+    canViewAnalytics: false,
+    canExport: false,
+    canDelete: false,
+    canReturnToSupplier: false,
+    canReturnToWarehouse: false,
+    canViewFinance: false,
+    
+    pages: ['chat', 'settlement'],
+  },
+  
+  // 业务员
+  sales: {
+    canInbound: false,
+    canCreateSales: false,          // 不能开销售单（只有柜台可以）
+    canCreateSettlement: false,
+    canTransfer: false,
+    canReceiveTransfer: false,
+    canManageCustomers: true,       // 可以管理客户
+    canManageSuppliers: false,
+    canManageSalespersons: false,
+    canViewAnalytics: false,
+    canExport: false,
+    canDelete: false,
+    canReturnToSupplier: false,
+    canReturnToWarehouse: false,
+    canViewFinance: false,
+    
+    pages: ['chat', 'customer'],
+  },
+  
+  // 财务
+  finance: {
+    canInbound: false,
+    canCreateSales: false,
+    canCreateSettlement: false,
+    canTransfer: false,
+    canReceiveTransfer: false,
+    canManageCustomers: false,
+    canManageSuppliers: false,
+    canManageSalespersons: false,
+    canViewAnalytics: false,        // 财务有自己的财务页面
+    canExport: false,
+    canDelete: false,
+    canReturnToSupplier: false,
+    canReturnToWarehouse: false,
+    canViewFinance: true,           // 可以查看财务
+    
+    pages: ['chat', 'finance'],
+  },
+  
+  // 管理层 - 拥有所有权限
+  manager: {
+    canInbound: true,
+    canCreateSales: true,
+    canCreateSettlement: true,
+    canTransfer: true,
+    canReceiveTransfer: true,
+    canManageCustomers: true,
+    canManageSuppliers: true,
+    canManageSalespersons: true,
+    canViewAnalytics: true,
+    canExport: true,
+    canDelete: true,
+    canReturnToSupplier: true,
+    canReturnToWarehouse: true,
+    canViewFinance: true,
+    
+    pages: ['chat', 'warehouse', 'settlement', 'finance', 'analytics', 'export', 'salesperson', 'customer', 'supplier', 'return'],
+  }
+};
+
+/**
+ * 检查角色是否有某个权限
+ * @param {string} role - 角色ID
+ * @param {string} permission - 权限名称
+ * @returns {boolean}
+ */
+export function hasPermission(role, permission) {
+  if (!role || !ROLE_PERMISSIONS[role]) {
+    return false;
+  }
+  return ROLE_PERMISSIONS[role][permission] === true;
+}
+
+/**
+ * 检查角色是否可以访问某个页面
+ * @param {string} role - 角色ID
+ * @param {string} page - 页面名称
+ * @returns {boolean}
+ */
+export function canAccessPage(role, page) {
+  if (!role || !ROLE_PERMISSIONS[role]) {
+    return false;
+  }
+  return ROLE_PERMISSIONS[role].pages?.includes(page) || false;
+}
+
+/**
+ * 获取角色的所有权限
+ * @param {string} role - 角色ID
+ * @returns {object|null}
+ */
+export function getRolePermissions(role) {
+  return ROLE_PERMISSIONS[role] || null;
+}
+
+/**
+ * 获取权限不足的错误消息
+ * @param {string} action - 操作名称
+ * @returns {string}
+ */
+export function getPermissionDeniedMessage(action) {
+  const actionMessages = {
+    'inbound': '您没有商品入库的权限，请联系商品专员或管理层',
+    'createSales': '您没有创建销售单的权限，请联系柜台人员或管理层',
+    'createSettlement': '您没有创建结算单的权限，请联系结算专员或管理层',
+    'transfer': '您没有发起库存转移的权限，请联系商品专员或管理层',
+    'receiveTransfer': '您没有接收库存的权限，请联系柜台人员或管理层',
+    'manageCustomers': '您没有客户管理的权限',
+    'manageSuppliers': '您没有供应商管理的权限，请联系商品专员或管理层',
+    'manageSalespersons': '您没有业务员管理的权限，请联系管理层',
+    'viewAnalytics': '您没有查看数据分析的权限，请联系管理层',
+    'export': '您没有数据导出的权限，请联系管理层',
+    'delete': '您没有删除数据的权限，请联系管理层',
+    'returnToSupplier': '您没有退货给供应商的权限，请联系商品专员或管理层',
+    'returnToWarehouse': '您没有退货给商品部的权限，请联系柜台人员或管理层',
+  };
+  
+  return actionMessages[action] || '您没有执行此操作的权限';
+}
+
+// 权限名称映射（用于后端通信）
+export const PERMISSION_ACTIONS = {
+  '入库': 'canInbound',
+  '创建销售单': 'canCreateSales',
+  '创建结算单': 'canCreateSettlement',
+  '创建转移单': 'canTransfer',
+  '接收库存': 'canReceiveTransfer',
+  '客户管理': 'canManageCustomers',
+  '供应商管理': 'canManageSuppliers',
+  '业务员管理': 'canManageSalespersons',
+  '数据分析': 'canViewAnalytics',
+  '数据导出': 'canExport',
+  '删除': 'canDelete',
+};
+

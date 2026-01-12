@@ -148,9 +148,14 @@ async def get_settlement_orders(
 async def create_settlement_order(
     data: SettlementOrderCreate,
     created_by: str = "结算专员",
+    user_role: str = Query(default="settlement", description="用户角色"),
     db: Session = Depends(get_db)
 ):
     """创建结算单（结算专员创建）"""
+    # 权限检查
+    from ..middleware.permissions import has_permission
+    if not has_permission(user_role, 'can_create_settlement'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【创建结算单】的权限")
     # 查找销售单
     sales_order = db.query(SalesOrder).filter(SalesOrder.id == data.sales_order_id).first()
     if not sales_order:

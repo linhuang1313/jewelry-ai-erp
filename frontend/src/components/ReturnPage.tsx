@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '../config';
+import { hasPermission } from '../config/permissions';
 
 interface ReturnOrder {
   id: number;
@@ -85,10 +86,12 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [keyword, setKeyword] = useState('');
   
-  // 根据角色确定默认退货类型
+  // 根据角色确定默认退货类型 - 使用权限系统
   const getDefaultReturnType = () => {
-    if (userRole === 'counter') return 'to_warehouse';  // 柜台只能退给商品部
-    return 'to_supplier';  // 商品专员和管理层默认退给供应商
+    if (hasPermission(userRole, 'canReturnToWarehouse') && !hasPermission(userRole, 'canReturnToSupplier')) {
+      return 'to_warehouse';  // 只能退给商品部
+    }
+    return 'to_supplier';  // 默认退给供应商
   };
 
   // 新建表单
@@ -103,12 +106,14 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
     remark: '',
   });
 
-  // 判断是否显示退货类型选择（只有管理层可以选择）
-  const canSelectReturnType = userRole === 'manager';
+  // 判断是否显示退货类型选择（需要两种退货权限都有才能选择）
+  const canSelectReturnType = hasPermission(userRole, 'canReturnToSupplier') && hasPermission(userRole, 'canReturnToWarehouse');
 
-  // 根据角色获取默认位置code
+  // 根据角色获取默认位置code - 使用权限系统
   const getDefaultLocationCode = () => {
-    if (userRole === 'counter') return 'showroom';  // 柜台在展厅
+    if (hasPermission(userRole, 'canReturnToWarehouse') && !hasPermission(userRole, 'canReturnToSupplier')) {
+      return 'showroom';  // 柜台在展厅
+    }
     return 'warehouse';  // 商品专员在商品部仓库
   };
 
@@ -314,8 +319,10 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
     });
   };
 
-  const canApprove = userRole === 'manager' || userRole === 'product';
-  const canCreate = userRole === 'product' || userRole === 'counter' || userRole === 'manager';
+  // 审批权限：管理层或商品专员（可以退给供应商的角色）
+  const canApprove = hasPermission(userRole, 'canDelete') || hasPermission(userRole, 'canReturnToSupplier');
+  // 创建权限：任何有退货权限的角色
+  const canCreate = hasPermission(userRole, 'canReturnToSupplier') || hasPermission(userRole, 'canReturnToWarehouse');
 
   return (
     <div style={{ padding: '24px', backgroundColor: '#0f172a', minHeight: '100vh', color: '#e2e8f0' }}>

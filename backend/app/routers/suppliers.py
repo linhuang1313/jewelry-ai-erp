@@ -1,7 +1,7 @@
 """
 供应商管理路由
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from datetime import datetime
@@ -177,9 +177,15 @@ async def update_supplier(
 @router.delete("/{supplier_id}")
 async def delete_supplier(
     supplier_id: int,
+    user_role: str = Query(default="manager", description="用户角色"),
     db: Session = Depends(get_db)
 ):
     """删除供应商（软删除）"""
+    # 权限检查 - 只有管理层可以删除
+    from ..middleware.permissions import has_permission
+    if not has_permission(user_role, 'can_delete'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【删除数据】的权限")
+    
     try:
         supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
         if not supplier:

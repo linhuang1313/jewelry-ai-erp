@@ -246,9 +246,14 @@ async def get_transfers(
 async def create_transfer(
     transfer: InventoryTransferCreate,
     created_by: str = "系统管理员",
+    user_role: str = Query(default="manager", description="用户角色"),
     db: Session = Depends(get_db)
 ):
     """创建货品转移单"""
+    # 权限检查
+    from ..middleware.permissions import has_permission
+    if not has_permission(user_role, 'can_transfer'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【发起库存转移】的权限")
     # 验证位置
     from_location = db.query(Location).filter(Location.id == transfer.from_location_id).first()
     to_location = db.query(Location).filter(Location.id == transfer.to_location_id).first()
@@ -331,9 +336,14 @@ async def receive_transfer(
     transfer_id: int,
     receive_data: InventoryTransferReceive,
     received_by: str = "系统管理员",
+    user_role: str = Query(default="manager", description="用户角色"),
     db: Session = Depends(get_db)
 ):
     """接收货品转移"""
+    # 权限检查
+    from ..middleware.permissions import has_permission
+    if not has_permission(user_role, 'can_receive_transfer'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【接收库存】的权限")
     transfer = db.query(InventoryTransfer).filter(InventoryTransfer.id == transfer_id).first()
     
     if not transfer:

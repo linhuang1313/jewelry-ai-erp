@@ -1,7 +1,7 @@
 """
 客户管理路由
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from datetime import datetime
@@ -179,8 +179,17 @@ async def update_customer(customer_id: int, data: CustomerCreate, db: Session = 
 
 
 @router.delete("/{customer_id}")
-async def delete_customer(customer_id: int, db: Session = Depends(get_db)):
+async def delete_customer(
+    customer_id: int,
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
     """删除客户（软删除）"""
+    # 权限检查 - 只有管理层可以删除
+    from ..middleware.permissions import has_permission
+    if not has_permission(user_role, 'can_delete'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【删除数据】的权限")
+    
     try:
         customer = db.query(Customer).filter(Customer.id == customer_id).first()
         if not customer:

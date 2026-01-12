@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config';
+import { hasPermission } from '../config/permissions';
 import {
   Users, Plus, Trash2, Edit2, Check, X, RefreshCw, User,
   MapPin, Search, UserPlus
@@ -22,7 +23,14 @@ interface Customer {
   remark: string | null;
 }
 
-export const CustomerPage: React.FC = () => {
+interface CustomerPageProps {
+  userRole?: string;
+}
+
+export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager' }) => {
+  // 权限检查
+  const canDelete = hasPermission(userRole, 'canDelete');
+  const canEdit = hasPermission(userRole, 'canManageCustomers');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchName, setSearchName] = useState('');
@@ -432,20 +440,24 @@ export const CustomerPage: React.FC = () => {
                           </>
                         ) : (
                           <>
-                            <button
-                              onClick={() => startEdit(customer)}
-                              className="p-1.5 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
-                              title="编辑"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(customer.id, customer.name)}
-                              className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                              title="删除"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {canEdit && (
+                              <button
+                                onClick={() => startEdit(customer)}
+                                className="p-1.5 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                                title="编辑"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                onClick={() => handleDelete(customer.id, customer.name)}
+                                className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                                title="删除"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </>
                         )}
                       </div>

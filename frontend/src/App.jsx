@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import React from 'react'
 import { Bar, Pie, Line, Doughnut } from 'react-chartjs-2'
 import { API_ENDPOINTS } from './config'
+import { hasPermission, canAccessPage, getPermissionDeniedMessage } from './config/permissions'
 import { JewelryInboundCardComponent } from './components/JewelryInboundCard'
 import { createCardFromBackend, updateCard, createNewCard } from './utils/inboundHelpers'
 import { confirmInbound, reportError } from './services/inboundService'
@@ -1559,8 +1560,8 @@ function App() {
               {/* 导航按钮 */}
               {currentPage === 'chat' ? (
                 <>
-                  {/* 数据分析按钮 - 仅管理层显示 */}
-                  {userRole === 'manager' && (
+                  {/* 数据分析按钮 - 使用权限检查 */}
+                  {hasPermission(userRole, 'canViewAnalytics') && (
                     <>
                       <button
                         onClick={() => setCurrentPage('analytics')}
@@ -1580,19 +1581,22 @@ function App() {
                         <Download className="w-4 h-4" />
                         <span>数据导出</span>
                       </button>
-                      <button
-                        onClick={() => setCurrentPage('salesperson')}
-                        className="flex items-center space-x-2 px-4 py-2 bg-indigo-500 text-white rounded-xl 
-                                   hover:bg-indigo-600 transition-all duration-200 font-medium text-[15px] 
-                                   shadow-sm hover:shadow-md"
-                      >
-                        <Users className="w-4 h-4" />
-                        <span>业务员管理</span>
-                      </button>
                     </>
                   )}
-                  {/* 分仓库存按钮 - 柜台(接收) + 商品专员 + 管理层 */}
-                  {(userRole === 'counter' || userRole === 'product' || userRole === 'manager') && (
+                  {/* 业务员管理按钮 - 使用权限检查 */}
+                  {hasPermission(userRole, 'canManageSalespersons') && (
+                    <button
+                      onClick={() => setCurrentPage('salesperson')}
+                      className="flex items-center space-x-2 px-4 py-2 bg-indigo-500 text-white rounded-xl 
+                                 hover:bg-indigo-600 transition-all duration-200 font-medium text-[15px] 
+                                 shadow-sm hover:shadow-md"
+                    >
+                      <Users className="w-4 h-4" />
+                      <span>业务员管理</span>
+                    </button>
+                  )}
+                  {/* 分仓库存按钮 - 柜台(接收) + 商品专员(转移) + 管理层 */}
+                  {(hasPermission(userRole, 'canReceiveTransfer') || hasPermission(userRole, 'canTransfer')) && (
                     <button
                       onClick={() => setCurrentPage('warehouse')}
                       className="flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-xl 
@@ -1603,8 +1607,8 @@ function App() {
                       <span>分仓库存</span>
                     </button>
                   )}
-                  {/* 结算管理按钮 - 结算专员 + 管理层 */}
-                  {(userRole === 'settlement' || userRole === 'manager') && (
+                  {/* 结算管理按钮 - 使用权限检查 */}
+                  {hasPermission(userRole, 'canCreateSettlement') && (
                     <button
                       onClick={() => setCurrentPage('settlement')}
                       className="flex items-center space-x-2 px-4 py-2 bg-cyan-500 text-white rounded-xl 
@@ -1615,8 +1619,8 @@ function App() {
                       <span>结算管理</span>
                     </button>
                   )}
-                  {/* 快捷开单按钮 - 柜台 + 结算专员 */}
-                  {(userRole === 'counter' || userRole === 'settlement') && (
+                  {/* 快捷开单按钮 - 使用权限检查 */}
+                  {hasPermission(userRole, 'canCreateSales') && (
                     <button
                       onClick={() => setShowQuickOrderModal(true)}
                       className="flex items-center space-x-2 px-4 py-2 bg-emerald-500 text-white rounded-xl 
@@ -1627,8 +1631,8 @@ function App() {
                       <span>快捷开单</span>
                     </button>
                   )}
-                  {/* 客户管理按钮 - 柜台 + 结算专员 + 管理层 */}
-                  {(userRole === 'counter' || userRole === 'settlement' || userRole === 'manager') && (
+                  {/* 客户管理按钮 - 使用权限检查 */}
+                  {hasPermission(userRole, 'canManageCustomers') && (
                     <button
                       onClick={() => setCurrentPage('customer')}
                       className="flex items-center space-x-2 px-4 py-2 bg-teal-500 text-white rounded-xl 
@@ -1639,8 +1643,8 @@ function App() {
                       <span>客户管理</span>
                     </button>
                   )}
-                  {/* 供应商管理按钮 - 商品专员 + 管理层 */}
-                  {(userRole === 'product' || userRole === 'manager') && (
+                  {/* 供应商管理按钮 - 使用权限检查 */}
+                  {hasPermission(userRole, 'canManageSuppliers') && (
                     <button
                       onClick={() => setCurrentPage('supplier')}
                       className="flex items-center space-x-2 px-4 py-2 bg-amber-500 text-white rounded-xl 
@@ -1651,8 +1655,8 @@ function App() {
                       <span>供应商管理</span>
                     </button>
                   )}
-                  {/* 退货管理按钮 - 商品专员 + 柜台 + 管理层 */}
-                  {(userRole === 'product' || userRole === 'counter' || userRole === 'manager') && (
+                  {/* 退货管理按钮 - 使用权限检查 */}
+                  {(hasPermission(userRole, 'canReturnToSupplier') || hasPermission(userRole, 'canReturnToWarehouse')) && (
                     <button
                       onClick={() => setCurrentPage('returns')}
                       className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-xl 
@@ -1663,8 +1667,8 @@ function App() {
                       <span>退货管理</span>
                     </button>
                   )}
-                  {/* 财务对账按钮 - 业务员 + 财务 + 管理层 */}
-                  {(userRole === 'sales' || userRole === 'finance' || userRole === 'manager') && (
+                  {/* 财务对账按钮 - 使用权限检查 */}
+                  {hasPermission(userRole, 'canViewFinance') && (
                     <button
                       onClick={() => setCurrentPage('finance')}
                       className="flex items-center space-x-2 px-4 py-2 bg-[#007aff] text-white rounded-xl 
@@ -1728,145 +1732,129 @@ function App() {
                   {userRole === 'manager' && '试试说："查看今日销售数据汇总"'}
                 </p>
                 
-                {/* 角色快捷操作卡片 */}
+                {/* 角色快捷操作卡片 - 使用权限控制 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
                   
-                  {/* 柜台角色：快速开单 + 接收库存 */}
-                  {userRole === 'counter' && (
-                    <>
-                      <div 
-                        onClick={() => setShowQuickOrderModal(true)}
-                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                      >
-                        <div className="text-2xl mb-3">🧾</div>
-                        <h3 className="font-semibold text-gray-900 mb-2">快速开单</h3>
-                        <p className="text-sm text-gray-600">创建销售单</p>
-                      </div>
-                      <div 
-                        onClick={() => setCurrentPage('warehouse')}
-                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                      >
-                        <div className="text-2xl mb-3">📥</div>
-                        <h3 className="font-semibold text-gray-900 mb-2">接收库存</h3>
-                        <p className="text-sm text-gray-600">接收从仓库转移的商品</p>
-                      </div>
-                    </>
+                  {/* 快速开单卡片 - 需要创建销售单权限 */}
+                  {hasPermission(userRole, 'canCreateSales') && (
+                    <div 
+                      onClick={() => setShowQuickOrderModal(true)}
+                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                    >
+                      <div className="text-2xl mb-3">🧾</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">快速开单</h3>
+                      <p className="text-sm text-gray-600">创建销售单</p>
+                    </div>
                   )}
                   
-                  {/* 商品专员角色：商品入库 + 查询库存 */}
-                  {userRole === 'product' && (
-                    <>
-                      <div 
-                        onClick={() => {
-                          setInput("古法黄金戒指 100克 工费6元 供应商是金源珠宝，帮我做个入库")
-                        }}
-                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                      >
-                        <div className="text-2xl mb-3">📦</div>
-                        <h3 className="font-semibold text-gray-900 mb-2">商品入库</h3>
-                        <p className="text-sm text-gray-600">快速录入商品信息</p>
-                      </div>
-                      <div 
-                        onClick={() => setCurrentPage('warehouse')}
-                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                      >
-                        <div className="text-2xl mb-3">📊</div>
-                        <h3 className="font-semibold text-gray-900 mb-2">分仓库存</h3>
-                        <p className="text-sm text-gray-600">管理仓库库存和转移</p>
-                      </div>
-                    </>
+                  {/* 接收库存卡片 - 需要接收库存权限 */}
+                  {hasPermission(userRole, 'canReceiveTransfer') && (
+                    <div 
+                      onClick={() => setCurrentPage('warehouse')}
+                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                    >
+                      <div className="text-2xl mb-3">📥</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">接收库存</h3>
+                      <p className="text-sm text-gray-600">接收从仓库转移的商品</p>
+                    </div>
                   )}
                   
-                  {/* 结算专员角色：待结算 + 结算管理 */}
-                  {userRole === 'settlement' && (
-                    <>
-                      <div 
-                        onClick={() => setCurrentPage('settlement')}
-                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                      >
-                        <div className="text-2xl mb-3">📋</div>
-                        <h3 className="font-semibold text-gray-900 mb-2">待结算订单</h3>
-                        <p className="text-sm text-gray-600">查看待结算的销售单</p>
-                      </div>
-                      <div 
-                        onClick={() => setCurrentPage('customer')}
-                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                      >
-                        <div className="text-2xl mb-3">👥</div>
-                        <h3 className="font-semibold text-gray-900 mb-2">客户管理</h3>
-                        <p className="text-sm text-gray-600">管理客户信息</p>
-                      </div>
-                    </>
+                  {/* 商品入库卡片 - 需要入库权限 */}
+                  {hasPermission(userRole, 'canInbound') && (
+                    <div 
+                      onClick={() => {
+                        setInput("古法黄金戒指 100克 工费6元 供应商是金源珠宝，帮我做个入库")
+                      }}
+                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                    >
+                      <div className="text-2xl mb-3">📦</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">商品入库</h3>
+                      <p className="text-sm text-gray-600">快速录入商品信息</p>
+                    </div>
                   )}
                   
-                  {/* 财务角色：财务对账 + 报表查看 */}
-                  {userRole === 'finance' && (
-                    <>
-                      <div 
-                        onClick={() => setCurrentPage('finance')}
-                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                      >
-                        <div className="text-2xl mb-3">💰</div>
-                        <h3 className="font-semibold text-gray-900 mb-2">财务对账</h3>
-                        <p className="text-sm text-gray-600">查看财务对账情况</p>
-                      </div>
-                      <div 
-                        onClick={() => {
-                          setInput("查看本月销售汇总报表")
-                        }}
-                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                      >
-                        <div className="text-2xl mb-3">📈</div>
-                        <h3 className="font-semibold text-gray-900 mb-2">查看报表</h3>
-                        <p className="text-sm text-gray-600">销售与财务报表</p>
-                      </div>
-                    </>
+                  {/* 库存转移卡片 - 需要转移权限 */}
+                  {hasPermission(userRole, 'canTransfer') && (
+                    <div 
+                      onClick={() => setCurrentPage('warehouse')}
+                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                    >
+                      <div className="text-2xl mb-3">📊</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">分仓库存</h3>
+                      <p className="text-sm text-gray-600">管理仓库库存和转移</p>
+                    </div>
                   )}
                   
-                  {/* 业务员角色：销售查询 + 客户管理 */}
-                  {userRole === 'sales' && (
-                    <>
-                      <div 
-                        onClick={() => {
-                          setInput("查询我的销售记录")
-                        }}
-                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                      >
-                        <div className="text-2xl mb-3">📋</div>
-                        <h3 className="font-semibold text-gray-900 mb-2">销售查询</h3>
-                        <p className="text-sm text-gray-600">查看销售记录</p>
-                      </div>
-                      <div 
-                        onClick={() => setCurrentPage('finance')}
-                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                      >
-                        <div className="text-2xl mb-3">💼</div>
-                        <h3 className="font-semibold text-gray-900 mb-2">财务对账</h3>
-                        <p className="text-sm text-gray-600">查看销售对账</p>
-                      </div>
-                    </>
+                  {/* 结算管理卡片 - 需要创建结算单权限 */}
+                  {hasPermission(userRole, 'canCreateSettlement') && (
+                    <div 
+                      onClick={() => setCurrentPage('settlement')}
+                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                    >
+                      <div className="text-2xl mb-3">📋</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">待结算订单</h3>
+                      <p className="text-sm text-gray-600">查看待结算的销售单</p>
+                    </div>
                   )}
                   
-                  {/* 管理层角色：数据分析 + 数据导出 */}
-                  {userRole === 'manager' && (
-                    <>
-                      <div 
-                        onClick={() => setCurrentPage('analytics')}
-                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                      >
-                        <div className="text-2xl mb-3">📊</div>
-                        <h3 className="font-semibold text-gray-900 mb-2">数据分析</h3>
-                        <p className="text-sm text-gray-600">查看业务数据分析</p>
-                      </div>
-                      <div 
-                        onClick={() => setCurrentPage('export')}
-                        className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                      >
-                        <div className="text-2xl mb-3">📥</div>
-                        <h3 className="font-semibold text-gray-900 mb-2">数据导出</h3>
-                        <p className="text-sm text-gray-600">导出各类数据报表</p>
-                      </div>
-                    </>
+                  {/* 客户管理卡片 - 需要客户管理权限 */}
+                  {hasPermission(userRole, 'canManageCustomers') && (
+                    <div 
+                      onClick={() => setCurrentPage('customer')}
+                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                    >
+                      <div className="text-2xl mb-3">👥</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">客户管理</h3>
+                      <p className="text-sm text-gray-600">管理客户信息</p>
+                    </div>
+                  )}
+                  
+                  {/* 财务对账卡片 - 需要财务权限 */}
+                  {hasPermission(userRole, 'canViewFinance') && (
+                    <div 
+                      onClick={() => setCurrentPage('finance')}
+                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                    >
+                      <div className="text-2xl mb-3">💰</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">财务对账</h3>
+                      <p className="text-sm text-gray-600">查看财务对账情况</p>
+                    </div>
+                  )}
+                  
+                  {/* 供应商管理卡片 - 需要供应商管理权限 */}
+                  {hasPermission(userRole, 'canManageSuppliers') && (
+                    <div 
+                      onClick={() => setCurrentPage('supplier')}
+                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                    >
+                      <div className="text-2xl mb-3">🏭</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">供应商管理</h3>
+                      <p className="text-sm text-gray-600">管理供应商信息</p>
+                    </div>
+                  )}
+                  
+                  {/* 数据分析卡片 - 需要数据分析权限 */}
+                  {hasPermission(userRole, 'canViewAnalytics') && (
+                    <div 
+                      onClick={() => setCurrentPage('analytics')}
+                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                    >
+                      <div className="text-2xl mb-3">📊</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">数据分析</h3>
+                      <p className="text-sm text-gray-600">查看业务数据分析</p>
+                    </div>
+                  )}
+                  
+                  {/* 数据导出卡片 - 需要数据导出权限 */}
+                  {hasPermission(userRole, 'canExport') && (
+                    <div 
+                      onClick={() => setCurrentPage('export')}
+                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                    >
+                      <div className="text-2xl mb-3">📥</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">数据导出</h3>
+                      <p className="text-sm text-gray-600">导出各类数据报表</p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -2526,7 +2514,7 @@ function App() {
 
         {currentPage === 'customer' && (
           <div className="flex-1 overflow-y-auto">
-            <CustomerPage />
+            <CustomerPage userRole={userRole} />
           </div>
         )}
 

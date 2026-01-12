@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { API_ENDPOINTS } from '../config'
+import { hasPermission } from '../config/permissions'
 import { Search, Plus, Edit2, Trash2, X, Building2, Phone, MapPin, User, RefreshCw } from 'lucide-react'
 
 /**
@@ -23,9 +24,9 @@ export function SupplierPage({ userRole = 'manager' }) {
   })
   const [submitting, setSubmitting] = useState(false)
 
-  // 权限检查
-  const canDelete = userRole === 'manager'
-  const canEdit = userRole === 'manager' || userRole === 'product'
+  // 权限检查 - 使用统一权限配置
+  const canDelete = hasPermission(userRole, 'canDelete')
+  const canEdit = hasPermission(userRole, 'canManageSuppliers')
 
   // 获取供应商列表
   const fetchSuppliers = async () => {

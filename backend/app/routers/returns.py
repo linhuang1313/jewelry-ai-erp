@@ -126,9 +126,17 @@ async def get_return_orders(
 async def create_return_order(
     data: ReturnOrderCreate,
     created_by: str = Query("系统管理员", description="创建人"),
+    user_role: str = Query("manager", description="用户角色"),
     db: Session = Depends(get_db)
 ):
     """创建退货单"""
+    # 权限检查
+    from ..middleware.permissions import has_permission
+    if data.return_type == "to_supplier" and not has_permission(user_role, 'can_return_to_supplier'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【退货给供应商】的权限")
+    if data.return_type == "to_warehouse" and not has_permission(user_role, 'can_return_to_warehouse'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【退货给商品部】的权限")
+    
     try:
         # 验证退货类型
         if data.return_type not in ["to_supplier", "to_warehouse"]:
