@@ -26,6 +26,8 @@ from .utils import to_pinyin_initials
 from .routers import finance_router
 from .routers.warehouse import router as warehouse_router
 from .routers.settlement import router as settlement_router
+from .routers.suppliers import router as suppliers_router
+from .routers.customers import router as customers_router
 from .ocr_parser import OCR_AVAILABLE
 
 # 百度云 OCR（云端可用）
@@ -51,6 +53,12 @@ app.include_router(finance_router)
 
 # 注册仓库管理路由
 app.include_router(warehouse_router)
+
+# 注册供应商管理路由
+app.include_router(suppliers_router)
+
+# 注册客户管理路由
+app.include_router(customers_router)
 
 # 注册结算管理路由
 app.include_router(settlement_router)
@@ -1422,148 +1430,7 @@ async def download_inbound_order(
         logger.error(f"生成入库单失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"生成入库单失败: {str(e)}")
 
-# ==================== 客户管理API ====================
-
-@app.post("/api/customers")
-async def create_customer(customer_data: CustomerCreate, db: Session = Depends(get_db)):
-    """创建客户"""
-    try:
-        # 检查客户是否已存在
-        existing = db.query(Customer).filter(
-            Customer.name == customer_data.name,
-            Customer.status == "active"
-        ).first()
-        
-        if existing:
-            return {
-                "success": False,
-                "message": f"客户 {customer_data.name} 已存在",
-                "customer": CustomerResponse.model_validate(existing).model_dump(mode='json')
-            }
-        
-        # 生成客户编号
-        customer_no = f"KH{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        
-        customer = Customer(
-            customer_no=customer_no,
-            **customer_data.model_dump()
-        )
-        db.add(customer)
-        db.commit()
-        db.refresh(customer)
-        
-        return {
-            "success": True,
-            "message": f"客户创建成功：{customer.name}",
-            "customer": CustomerResponse.model_validate(customer).model_dump(mode='json')
-        }
-    except Exception as e:
-        db.rollback()
-        logger.error(f"创建客户失败: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"创建客户失败: {str(e)}"
-        }
-
-@app.get("/api/customers")
-async def get_customers(name: Optional[str] = None, db: Session = Depends(get_db)):
-    """获取客户列表"""
-    try:
-        query = db.query(Customer).filter(Customer.status == "active")
-        
-        if name:
-            query = query.filter(Customer.name.contains(name))
-        
-        customers = query.order_by(desc(Customer.create_time)).all()
-        
-        return {
-            "success": True,
-            "customers": [CustomerResponse.model_validate(c).model_dump(mode='json') for c in customers]
-        }
-    except Exception as e:
-        logger.error(f"查询客户失败: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"查询客户失败: {str(e)}"
-        }
-
-@app.get("/api/customers/{customer_id}")
-async def get_customer(customer_id: int, db: Session = Depends(get_db)):
-    """获取客户详情"""
-    try:
-        customer = db.query(Customer).filter(Customer.id == customer_id).first()
-        
-        if not customer:
-            return {
-                "success": False,
-                "message": "客户不存在"
-            }
-        
-        return {
-            "success": True,
-            "customer": CustomerResponse.model_validate(customer).model_dump(mode='json')
-        }
-    except Exception as e:
-        logger.error(f"查询客户详情失败: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"查询客户详情失败: {str(e)}"
-        }
-
-
-@app.put("/api/customers/{customer_id}")
-async def update_customer(customer_id: int, data: CustomerCreate, db: Session = Depends(get_db)):
-    """更新客户信息"""
-    try:
-        customer = db.query(Customer).filter(Customer.id == customer_id).first()
-        if not customer:
-            return {"success": False, "message": "客户不存在"}
-        
-        # 更新字段
-        if data.name:
-            customer.name = data.name
-        if data.phone is not None:
-            customer.phone = data.phone
-        if data.wechat is not None:
-            customer.wechat = data.wechat
-        if data.address is not None:
-            customer.address = data.address
-        if data.remark is not None:
-            customer.remark = data.remark
-        
-        db.commit()
-        db.refresh(customer)
-        
-        return {
-            "success": True,
-            "message": f"客户【{customer.name}】信息已更新",
-            "customer": CustomerResponse.model_validate(customer).model_dump(mode='json')
-        }
-    except Exception as e:
-        db.rollback()
-        logger.error(f"更新客户失败: {e}", exc_info=True)
-        return {"success": False, "message": str(e)}
-
-
-@app.delete("/api/customers/{customer_id}")
-async def delete_customer(customer_id: int, db: Session = Depends(get_db)):
-    """删除客户（软删除）"""
-    try:
-        customer = db.query(Customer).filter(Customer.id == customer_id).first()
-        if not customer:
-            return {"success": False, "message": "客户不存在"}
-        
-        customer.status = "inactive"
-        db.commit()
-        
-        return {
-            "success": True,
-            "message": f"客户【{customer.name}】已删除"
-        }
-    except Exception as e:
-        db.rollback()
-        logger.error(f"删除客户失败: {e}", exc_info=True)
-        return {"success": False, "message": str(e)}
+# 客户管理API 已移至 routers/customers.py
 
 
 # ==================== 业务员管理API ====================
@@ -1723,43 +1590,7 @@ async def init_salespersons(db: Session = Depends(get_db)):
         return {"success": False, "message": str(e)}
 
 
-# ==================== 智能匹配API ====================
-
-@app.get("/api/customers/suggest-salesperson")
-async def suggest_salesperson(customer_name: str, db: Session = Depends(get_db)):
-    """根据客户名智能推荐业务员（基于历史销售记录）"""
-    try:
-        if not customer_name or not customer_name.strip():
-            return {"success": True, "salesperson": None, "hint": "请输入客户名"}
-        
-        customer_name = customer_name.strip()
-        
-        # 查找该客户最近一次的销售单
-        latest_order = db.query(SalesOrder).filter(
-            SalesOrder.customer_name == customer_name,
-            SalesOrder.status != "已取消"
-        ).order_by(SalesOrder.create_time.desc()).first()
-        
-        if latest_order and latest_order.salesperson:
-            last_date = latest_order.create_time.strftime('%Y-%m-%d') if latest_order.create_time else "未知"
-            return {
-                "success": True,
-                "salesperson": latest_order.salesperson,
-                "hint": f"已自动匹配业务员（上次服务：{last_date}）",
-                "is_new_customer": False
-            }
-        
-        # 如果没有历史记录，返回空
-        return {
-            "success": True,
-            "salesperson": None,
-            "hint": "新客户，请手动输入业务员",
-            "is_new_customer": True
-        }
-    
-    except Exception as e:
-        logger.error(f"查询业务员推荐失败: {e}", exc_info=True)
-        return {"success": False, "salesperson": None, "error": str(e)}
+# 智能匹配API 已移至 routers/customers.py
 
 
 # ==================== 销售单管理API ====================
@@ -2827,190 +2658,7 @@ async def search_chat_logs(
         return {"success": False, "message": str(e), "logs": [], "total": 0}
 
 
-# ============= 供应商管理 API =============
-
-@app.get("/api/suppliers")
-async def get_suppliers(
-    keyword: str = None,
-    status: str = "active",
-    db: Session = Depends(get_db)
-):
-    """获取供应商列表"""
-    try:
-        query = db.query(Supplier)
-        
-        if status:
-            query = query.filter(Supplier.status == status)
-        if keyword:
-            query = query.filter(
-                (Supplier.name.contains(keyword)) |
-                (Supplier.contact_person.contains(keyword)) |
-                (Supplier.phone.contains(keyword))
-            )
-        
-        suppliers = query.order_by(desc(Supplier.create_time)).all()
-        
-        return {
-            "success": True,
-            "suppliers": [
-                {
-                    "id": s.id,
-                    "supplier_no": s.supplier_no,
-                    "name": s.name,
-                    "phone": s.phone,
-                    "address": s.address,
-                    "contact_person": s.contact_person,
-                    "supplier_type": s.supplier_type,
-                    "total_supply_amount": s.total_supply_amount,
-                    "total_supply_weight": s.total_supply_weight,
-                    "total_supply_count": s.total_supply_count,
-                    "last_supply_time": s.last_supply_time.isoformat() if s.last_supply_time else None,
-                    "status": s.status,
-                    "create_time": s.create_time.isoformat() if s.create_time else None,
-                    "remark": s.remark
-                }
-                for s in suppliers
-            ],
-            "total": len(suppliers)
-        }
-    except Exception as e:
-        logger.error(f"获取供应商列表失败: {e}", exc_info=True)
-        return {"success": False, "message": str(e), "suppliers": []}
-
-
-@app.post("/api/suppliers")
-async def create_supplier(
-    supplier_data: SupplierCreate,
-    db: Session = Depends(get_db)
-):
-    """创建供应商"""
-    try:
-        # 检查是否已存在同名供应商
-        existing = db.query(Supplier).filter(
-            Supplier.name == supplier_data.name,
-            Supplier.status == "active"
-        ).first()
-        if existing:
-            return {"success": False, "message": f"供应商【{supplier_data.name}】已存在"}
-        
-        # 生成供应商编号
-        now = datetime.now()
-        count = db.query(Supplier).filter(
-            Supplier.supplier_no.like(f"SUP{now.strftime('%Y%m%d')}%")
-        ).count()
-        supplier_no = f"SUP{now.strftime('%Y%m%d')}{count + 1:03d}"
-        
-        # 创建供应商
-        supplier = Supplier(
-            supplier_no=supplier_no,
-            name=supplier_data.name,
-            phone=supplier_data.phone,
-            address=supplier_data.address,
-            contact_person=supplier_data.contact_person,
-            supplier_type=supplier_data.supplier_type or "个人",
-            remark=supplier_data.remark,
-            status="active"
-        )
-        db.add(supplier)
-        db.commit()
-        db.refresh(supplier)
-        
-        logger.info(f"创建供应商成功: {supplier.name} ({supplier.supplier_no})")
-        
-        return {
-            "success": True,
-            "message": f"供应商【{supplier.name}】创建成功",
-            "supplier": {
-                "id": supplier.id,
-                "supplier_no": supplier.supplier_no,
-                "name": supplier.name,
-                "phone": supplier.phone,
-                "address": supplier.address,
-                "contact_person": supplier.contact_person
-            }
-        }
-    except Exception as e:
-        logger.error(f"创建供应商失败: {e}", exc_info=True)
-        db.rollback()
-        return {"success": False, "message": f"创建供应商失败: {str(e)}"}
-
-
-@app.put("/api/suppliers/{supplier_id}")
-async def update_supplier(
-    supplier_id: int,
-    supplier_data: SupplierCreate,
-    db: Session = Depends(get_db)
-):
-    """更新供应商信息"""
-    try:
-        supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
-        if not supplier:
-            return {"success": False, "message": "供应商不存在"}
-        
-        # 检查是否有同名供应商
-        existing = db.query(Supplier).filter(
-            Supplier.name == supplier_data.name,
-            Supplier.id != supplier_id,
-            Supplier.status == "active"
-        ).first()
-        if existing:
-            return {"success": False, "message": f"供应商【{supplier_data.name}】已存在"}
-        
-        # 更新字段
-        supplier.name = supplier_data.name
-        supplier.phone = supplier_data.phone
-        supplier.address = supplier_data.address
-        supplier.contact_person = supplier_data.contact_person
-        supplier.supplier_type = supplier_data.supplier_type or supplier.supplier_type
-        supplier.remark = supplier_data.remark
-        
-        db.commit()
-        
-        logger.info(f"更新供应商成功: {supplier.name} ({supplier.supplier_no})")
-        
-        return {
-            "success": True,
-            "message": f"供应商【{supplier.name}】更新成功",
-            "supplier": {
-                "id": supplier.id,
-                "supplier_no": supplier.supplier_no,
-                "name": supplier.name,
-                "phone": supplier.phone,
-                "address": supplier.address,
-                "contact_person": supplier.contact_person
-            }
-        }
-    except Exception as e:
-        logger.error(f"更新供应商失败: {e}", exc_info=True)
-        db.rollback()
-        return {"success": False, "message": f"更新供应商失败: {str(e)}"}
-
-
-@app.delete("/api/suppliers/{supplier_id}")
-async def delete_supplier(
-    supplier_id: int,
-    db: Session = Depends(get_db)
-):
-    """删除供应商（软删除）"""
-    try:
-        supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
-        if not supplier:
-            return {"success": False, "message": "供应商不存在"}
-        
-        # 软删除
-        supplier.status = "deleted"
-        db.commit()
-        
-        logger.info(f"删除供应商成功: {supplier.name} ({supplier.supplier_no})")
-        
-        return {
-            "success": True,
-            "message": f"供应商【{supplier.name}】已删除"
-        }
-    except Exception as e:
-        logger.error(f"删除供应商失败: {e}", exc_info=True)
-        db.rollback()
-        return {"success": False, "message": f"删除供应商失败: {str(e)}"}
+# 供应商管理 API 已移至 routers/suppliers.py
 
 
 @app.get("/api/export/inventory")
