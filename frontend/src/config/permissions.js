@@ -45,8 +45,9 @@ export const ROLE_PERMISSIONS = {
     canReturnToSupplier: true,      // 可以退货给供应商
     canReturnToWarehouse: false,    // 不能退货给商品部
     canViewFinance: false,          // 不能查看财务
+    canManageProductCodes: true,    // 可以管理商品编码（F/FL编码）
     
-    pages: ['chat', 'warehouse', 'supplier', 'return'],
+    pages: ['chat', 'warehouse', 'supplier', 'return', 'product-codes'],
   },
   
   // 结算专员
@@ -185,8 +186,10 @@ export const ROLE_PERMISSIONS = {
     canCompleteWithdrawal: true,
     canCreateTransfer: true,
     canConfirmTransfer: true,
+    // 商品编码管理
+    canManageProductCodes: true,
     
-    pages: ['chat', 'warehouse', 'settlement', 'finance', 'analytics', 'export', 'salesperson', 'customer', 'supplier', 'return', 'gold-material'],
+    pages: ['chat', 'warehouse', 'settlement', 'finance', 'analytics', 'export', 'salesperson', 'customer', 'supplier', 'return', 'gold-material', 'product-codes'],
   }
 };
 

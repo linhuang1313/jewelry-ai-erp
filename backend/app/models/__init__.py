@@ -42,6 +42,7 @@ class InboundDetail(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("inbound_orders.id"))
+    product_code = Column(String(20), nullable=True, index=True)  # 商品编码（JPJZ, F00000001等）
     product_name = Column(String(200), nullable=False)
     product_category = Column(String(100))
     weight = Column(Float, nullable=False)
@@ -568,6 +569,34 @@ class CustomerTransfer(Base):
     to_customer = relationship("Customer", foreign_keys=[to_customer_id], backref="transfers_in")
 
 
+# ============= 商品编码模型 =============
+
+class ProductCode(Base):
+    """商品编码表 - 管理预定义编码、F编码（一码一件）、FL编码（批量）"""
+    __tablename__ = "product_codes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(20), unique=True, nullable=False, index=True)  # 编码（JPJZ, F00000001, FL0001）
+    name = Column(String(200), nullable=False)  # 商品名称
+    
+    # 编码类型: predefined(预定义) / f_single(F一码一件) / fl_batch(FL批量)
+    code_type = Column(String(20), nullable=False, index=True)
+    
+    # 是否为唯一编码（F编码为True，表示一码一件）
+    is_unique = Column(Integer, default=0)  # 0=非唯一, 1=唯一
+    
+    # 是否已使用（仅对F编码有效）
+    is_used = Column(Integer, default=0)  # 0=未使用, 1=已使用
+    
+    # 创建信息
+    created_by = Column(String(50), nullable=True)  # 创建人（仅F/FL编码）
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+    
+    # 备注
+    remark = Column(Text, nullable=True)
+
+
 # 导出所有模型
 __all__ = [
     # 入库
@@ -606,4 +635,6 @@ __all__ = [
     # 客户取料和转料
     'CustomerWithdrawal',
     'CustomerTransfer',
+    # 商品编码
+    'ProductCode',
 ]

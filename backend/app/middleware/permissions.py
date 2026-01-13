@@ -44,6 +44,7 @@ ROLE_PERMISSIONS = {
         'can_return_to_supplier': True,    # 可以退货给供应商
         'can_return_to_warehouse': False,  # 不能退货给商品部
         'can_view_finance': False,         # 不能查看财务
+        'can_manage_product_codes': True,  # 可以管理商品编码（F/FL编码）
     },
     
     # 结算专员
@@ -173,6 +174,8 @@ ROLE_PERMISSIONS = {
         'can_complete_withdrawal': True,
         'can_create_transfer': True,
         'can_confirm_transfer': True,
+        # 商品编码管理
+        'can_manage_product_codes': True,
     }
 }
 
@@ -205,6 +208,8 @@ PERMISSION_NAMES = {
     'can_complete_withdrawal': '完成取料',
     'can_create_transfer': '创建转料单',
     'can_confirm_transfer': '确认转料',
+    # 商品编码管理
+    'can_manage_product_codes': '管理商品编码',
 }
 
 # AI操作到权限的映射

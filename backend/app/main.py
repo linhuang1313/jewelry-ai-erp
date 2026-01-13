@@ -48,6 +48,7 @@ from .routers.customers import router as customers_router
 from .routers.returns import router as returns_router
 from .routers.analytics import router as analytics_router
 from .routers.gold_material import router as gold_material_router
+from .routers.product_codes import router as product_codes_router
 from .ocr_parser import OCR_AVAILABLE
 
 # 百度云 OCR（云端可用）
@@ -92,6 +93,9 @@ app.include_router(analytics_router)
 # 注册金料管理路由
 app.include_router(gold_material_router)
 
+# 注册商品编码管理路由
+app.include_router(product_codes_router)
+
 # 配置CORS - 支持本地开发和云端部署
 # 允许的前端域名列表
 ALLOWED_ORIGINS = [
@@ -115,6 +119,19 @@ app.add_middleware(
 async def startup_event():
     init_db()
     logger.info("数据库初始化完成")
+    
+    # 初始化预定义商品编码
+    from .init_product_codes import init_product_codes
+    from .database import SessionLocal
+    db = SessionLocal()
+    try:
+        count = init_product_codes(db)
+        if count > 0:
+            logger.info(f"已初始化 {count} 个预定义商品编码")
+    except Exception as e:
+        logger.error(f"初始化商品编码失败: {e}")
+    finally:
+        db.close()
     
     # 初始化默认位置
     from .database import SessionLocal

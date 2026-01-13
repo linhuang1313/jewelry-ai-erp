@@ -39,6 +39,7 @@ class AIRequest(BaseModel):
 
 class ProductItem(BaseModel):
     """单个商品项"""
+    product_code: Optional[str] = None  # 商品编码（JPJZ, F00000001等）
     product_name: str
     weight: float
     labor_cost: float  # 每克工费
@@ -668,6 +669,44 @@ class CustomerTransferResponse(BaseModel):
     remark: Optional[str] = None
 
 
+# ============= 商品编码 Schema =============
+
+class ProductCodeCreate(BaseModel):
+    """创建商品编码（仅F/FL编码）"""
+    code: str  # 编码（F00000001 或 FL0001）
+    name: str  # 商品名称
+    code_type: str  # f_single（一码一件）或 fl_batch（批量）
+    remark: Optional[str] = None
+
+
+class ProductCodeUpdate(BaseModel):
+    """更新商品编码"""
+    name: Optional[str] = None
+    remark: Optional[str] = None
+
+
+class ProductCodeResponse(BaseModel):
+    """商品编码响应"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    code: str  # 编码
+    name: str  # 商品名称
+    code_type: str  # predefined / f_single / fl_batch
+    is_unique: int  # 是否唯一编码
+    is_used: int  # 是否已使用
+    created_by: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    remark: Optional[str] = None
+
+
+class ProductCodeSearchResponse(BaseModel):
+    """商品编码搜索响应"""
+    codes: List["ProductCodeResponse"]
+    total: int
+
+
 # ============= 财务相关 Schema =============
 # 从 finance.py 导入
 from .finance import (
@@ -778,4 +817,9 @@ __all__ = [
     'CustomerTransferCreate',
     'CustomerTransferConfirm',
     'CustomerTransferResponse',
+    # 商品编码
+    'ProductCodeCreate',
+    'ProductCodeUpdate',
+    'ProductCodeResponse',
+    'ProductCodeSearchResponse',
 ]

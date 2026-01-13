@@ -18,6 +18,7 @@ import { QuickReturnModal } from './components/QuickReturnModal'
 import { SupplierPage } from './components/SupplierPage'
 import ReturnPage from './components/ReturnPage'
 import GoldMaterialPage from './components/GoldMaterialPage'
+import ProductCodePage from './components/ProductCodePage'
 import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store, Users, UserPlus, FileText, History, Building2, RotateCcw, Scale } from 'lucide-react'
 import { ChatHistoryPanel } from './components/ChatHistoryPanel'
 
@@ -1822,6 +1823,18 @@ function App() {
                       <span>金料管理</span>
                     </button>
                   )}
+                  {/* 商品编码按钮 - 商品专员和管理层可见 */}
+                  {hasPermission(userRole, 'canManageProductCodes') && (
+                    <button
+                      onClick={() => setCurrentPage('product-codes')}
+                      className="flex items-center space-x-2 px-4 py-2 bg-amber-500 text-white rounded-xl 
+                                 hover:bg-amber-600 transition-all duration-200 font-medium text-[15px] 
+                                 shadow-sm hover:shadow-md"
+                    >
+                      <Package className="w-4 h-4" />
+                      <span>商品编码</span>
+                    </button>
+                  )}
                   {/* 财务对账按钮 - 使用权限检查 */}
                   {hasPermission(userRole, 'canViewFinance') && (
                     <button
@@ -2045,6 +2058,18 @@ function App() {
                       <div className="text-2xl mb-3">⚖️</div>
                       <h3 className="font-semibold text-gray-900 mb-2">金料管理</h3>
                       <p className="text-sm text-gray-600">金料台账、收料、付料</p>
+                    </div>
+                  )}
+                  
+                  {/* 商品编码管理卡片 - 商品专员和管理层 */}
+                  {hasPermission(userRole, 'canManageProductCodes') && (
+                    <div 
+                      onClick={() => setCurrentPage('product-codes')}
+                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                    >
+                      <div className="text-2xl mb-3">🏷️</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">商品编码</h3>
+                      <p className="text-sm text-gray-600">管理F编码、FL编码</p>
                     </div>
                   )}
                   
@@ -2739,6 +2764,12 @@ function App() {
         {currentPage === 'gold-material' && (
           <div className="flex-1 overflow-y-auto">
             <GoldMaterialPage userRole={userRole} />
+          </div>
+        )}
+
+        {currentPage === 'product-codes' && (
+          <div className="flex-1 overflow-y-auto">
+            <ProductCodePage userRole={userRole} />
           </div>
         )}
       </div>
