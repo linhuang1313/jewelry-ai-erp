@@ -535,9 +535,19 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     
                     logger.info(f"[流式] {ai_response.action}操作完成，准备返回结果")
                     logger.info(f"[流式] result 包含的字段: {list(result.keys()) if isinstance(result, dict) else type(result)}")
-                    if isinstance(result, dict) and 'all_products' in result:
-                        logger.info(f"[流式] all_products 数量: {len(result['all_products'])}")
-                        logger.info(f"[流式] all_products 内容: {result['all_products']}")
+                    
+                    # 详细日志：检查 all_products
+                    if isinstance(result, dict):
+                        has_all_products = 'all_products' in result
+                        logger.info(f"[流式][重要] result 是否包含 all_products: {has_all_products}")
+                        if has_all_products:
+                            logger.info(f"[流式][重要] all_products 数量: {len(result['all_products'])}")
+                            for i, p in enumerate(result['all_products']):
+                                logger.info(f"[流式][重要] 商品{i+1}: {p}")
+                        else:
+                            logger.warning(f"[流式][警告] result 中没有 all_products 字段！")
+                            logger.warning(f"[流式][警告] result 完整内容: {result}")
+                    
                     # 确保 result 可以被 JSON 序列化
                     result_json = json.dumps({'type': 'complete', 'data': result}, ensure_ascii=False, default=str)
                     logger.info(f"[流式] 序列化后的JSON长度: {len(result_json)} 字符")
