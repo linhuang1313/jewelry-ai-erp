@@ -641,39 +641,19 @@ function App() {
                     if (data.data?.success && data.data?.pending && data.data?.card_data) {
                       // 方案B：创建待确认的卡片（status: 'pending'）
                       try {
-                        // 检查是否有多个商品（all_products数组）
+                        // 统一使用 all_products（如果没有则使用 card_data 作为单元素数组）
                         console.log('【调试】data.data.all_products 原始值:', data.data.all_products)
-                        console.log('【调试】data.data.all_products 类型:', typeof data.data.all_products)
-                        console.log('【调试】data.data.all_products 是否为数组:', Array.isArray(data.data.all_products))
+                        console.log('【调试】data.data.card_data 原始值:', data.data.card_data)
                         
-                        const allProducts = data.data.all_products || [data.data.card_data]
+                        const allProducts = data.data.all_products && data.data.all_products.length > 0 
+                          ? data.data.all_products 
+                          : [data.data.card_data]
                         console.log('收到待确认商品数据，共', allProducts.length, '个商品:', allProducts)
-                        console.log('【调试】allProducts.length:', allProducts.length, '是否 > 1:', allProducts.length > 1)
                         
-                        if (allProducts.length > 1) {
-                          // 多商品入库：创建多个卡片
-                          inboundCards = allProducts.map((cardData, index) => {
-                            const card = createNewCard({
-                              productName: cardData.product_name,
-                              goldWeight: cardData.weight,
-                              laborCostPerGram: cardData.labor_cost,
-                              totalCost: cardData.total_cost,
-                              supplier: {
-                                id: 0,
-                                name: cardData.supplier || '未知供应商',
-                              },
-                              status: 'pending',
-                              source: 'api',
-                              createdAt: new Date(),
-                            })
-                            card.barcode = ''
-                            return card
-                          })
-                          console.log('创建多商品待确认入库卡片，共', inboundCards.length, '张')
-                        } else {
-                          // 单商品入库：保持原逻辑
-                          const cardData = allProducts[0]
-                          inboundCard = createNewCard({
+                        // 统一创建卡片数组（无论单商品还是多商品）
+                        inboundCards = allProducts.map((cardData, index) => {
+                          console.log(`【调试】创建卡片${index+1}:`, cardData)
+                          const card = createNewCard({
                             productName: cardData.product_name,
                             goldWeight: cardData.weight,
                             laborCostPerGram: cardData.labor_cost,
@@ -686,10 +666,15 @@ function App() {
                             source: 'api',
                             createdAt: new Date(),
                           })
-                          if (!inboundCard.barcode) {
-                            inboundCard.barcode = ''
-                          }
-                          console.log('创建单商品待确认入库卡片，状态:', inboundCard.status)
+                          card.barcode = ''
+                          return card
+                        })
+                        console.log('创建入库卡片，共', inboundCards.length, '张:', inboundCards)
+                        
+                        // 如果只有一个商品，同时设置 inboundCard（向后兼容）
+                        if (inboundCards.length === 1) {
+                          inboundCard = inboundCards[0]
+                          inboundCards = null  // 单商品时清空数组，使用单卡片显示
                         }
                       } catch (error) {
                         console.error('创建入库卡片失败:', error)
