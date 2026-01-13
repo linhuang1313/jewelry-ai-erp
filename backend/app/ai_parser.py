@@ -63,6 +63,12 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
 9. **供应商管理**：创建/查询供应商信息
 10. **销售管理**：创建/查询销售单
 11. **库存转移**：将商品从一个位置转移到另一个位置（如从仓库转到展厅）
+12. **退货操作**：用户要进行退货（退给供应商或退回商品部）
+
+**关键词优先级识别（非常重要）**：
+- "退"、"退货"、"退给"、"退回" → 优先识别为"退货"操作，而不是入库！
+- "入"、"入库"、"帮我入" → 识别为"入库"操作
+- 当同时出现"退"和其他信息时，必须识别为退货操作
 
 请返回JSON格式，包含以下字段：
 - action: 用户意图，根据用户输入智能判断，可能是：
@@ -79,7 +85,14 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
   - "创建销售单"：用户要创建销售单（包含客户、商品、工费、克重、业务员、门店代码等信息）
   - "查询销售单"：用户要查询销售单信息，销售单号以XS开头（如"查询销售单"、"XS20260111162534"、"查询销售单XS20260111162534"、"最近的销售单"、"张三的销售单"等）
   - "创建转移单"：用户要将商品从一个位置转移到另一个位置（如"帮我转移到展厅"、"把XXX从仓库转到展厅"、"转移100克到展厅"等）
+  - "退货"：用户要进行退货操作（如"退货给金源珠宝"、"退给供应商"、"10克古法戒指退给金源珠宝"、"退回商品部"等）
   - "其他"：无法识别的意图
+
+**关于"退货"和"入库"的区分（极其重要）**：
+- 用户说"退"、"退货"、"退给"、"退回" → action必须是"退货"
+- 用户说"入"、"入库"、"帮我入" → action必须是"入库"
+- "退货给金源珠宝10克古法戒指 工费5元" → 这是退货，不是入库！
+- "古法戒指100克 工费8元 供应商金源珠宝 入库" → 这才是入库
 
 - order_no: 入库单号（字符串，仅当action为"查询入库单"且用户提供了RK开头的入库单号时需要，如"RK1768047147249"）
 - sales_order_no: 销售单号（字符串，仅当action为"查询销售单"且用户提供了XS开头的销售单号时需要，如"XS20260111162534"）
@@ -544,6 +557,40 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
   "to_location": "展厅",
   "products": null
 }}
+
+示例26（退货 - 退给供应商）：
+用户输入："退货给金源珠宝10克古法戒指 工费5元"
+说明：用户要退货给供应商，注意这是"退货"不是"入库"！关键词是"退货给"
+{{
+  "action": "退货",
+  "product_name": "古法戒指",
+  "weight": 10,
+  "labor_cost": 5,
+  "supplier": "金源珠宝",
+  "products": null
+}}
+
+示例27（退货 - 退给供应商简写）：
+用户输入："10克古法戒指退给金源珠宝"
+说明：用户要退货给供应商，"退给"是退货关键词
+{{
+  "action": "退货",
+  "product_name": "古法戒指",
+  "weight": 10,
+  "supplier": "金源珠宝",
+  "products": null
+}}
+
+示例28（退货 - 退回商品部）：
+用户输入："退回商品部 古法手镯 50克"
+说明：从展厅退回商品部
+{{
+  "action": "退货",
+  "product_name": "古法手镯",
+  "weight": 50,
+  "to_location": "商品部仓库",
+  "products": null
+}}
 """
     
     max_retries = 3
@@ -691,7 +738,16 @@ def fallback_parser(message: str) -> AIResponse:
                     product_name = part
                     break
     
-    if "入库" in message:
+    # 优先检测退货关键词（退、退货、退给、退回）
+    if "退" in message or "退货" in message or "退给" in message or "退回" in message:
+        return AIResponse(
+            action="退货",
+            product_name=product_name or "未知商品",
+            weight=weight,
+            labor_cost=labor_cost,
+            supplier=supplier
+        )
+    elif "入库" in message or "入" in message:
         return AIResponse(
             action="入库",
             product_name=product_name or "未知商品",
