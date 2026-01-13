@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import React from 'react'
+import { Toaster } from 'react-hot-toast'
 import { Bar, Pie, Line, Doughnut } from 'react-chartjs-2'
 import { API_ENDPOINTS } from './config'
 import { hasPermission, canAccessPage, getPermissionDeniedMessage } from './config/permissions'
@@ -3006,6 +3007,29 @@ function App() {
             setMessages(formattedMessages)
             setShowHistoryPanel(false)
           }
+        }}
+      />
+      
+      {/* Toast 通知容器 */}
+      <Toaster 
+        position="top-center"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            zIndex: 99999,
+          },
+          success: {
+            style: {
+              background: '#10b981',
+              color: 'white',
+            },
+          },
+          error: {
+            style: {
+              background: '#ef4444',
+              color: 'white',
+            },
+          },
         }}
       />
     </div>
