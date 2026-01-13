@@ -72,6 +72,11 @@ export const ROLE_PERMISSIONS = {
     canConfirmGoldReceive: false,   // 不能确认收到原料（料部职责）
     canCreateGoldPayment: false,    // 不能创建付料单（料部职责）
     canManageGoldMaterial: false,   // 不能管理金料流转
+    // 客户取料/转料权限
+    canCreateWithdrawal: true,      // 可以创建取料单
+    canCompleteWithdrawal: false,   // 不能完成取料（料部职责）
+    canCreateTransfer: true,        // 可以创建转料单
+    canConfirmTransfer: false,      // 不能确认转料（料部职责）
     
     pages: ['chat', 'settlement', 'gold-material'],
   },
@@ -142,6 +147,11 @@ export const ROLE_PERMISSIONS = {
     canConfirmGoldReceive: true,    // 可以确认收到原料（从结算同事处）
     canCreateGoldPayment: true,     // 可以创建付料单（支付供应商）
     canManageGoldMaterial: true,    // 可以管理金料流转（核心权限）
+    // 客户取料/转料权限
+    canCreateWithdrawal: false,     // 不能创建取料单（结算职责）
+    canCompleteWithdrawal: true,    // 可以完成取料（发出金料）
+    canCreateTransfer: false,       // 不能创建转料单（结算职责）
+    canConfirmTransfer: true,       // 可以确认转料
     
     pages: ['chat', 'gold-material', 'customer', 'supplier'],
   },
@@ -170,6 +180,11 @@ export const ROLE_PERMISSIONS = {
     canConfirmGoldReceive: true,
     canCreateGoldPayment: true,
     canManageGoldMaterial: true,
+    // 客户取料/转料权限（全部）
+    canCreateWithdrawal: true,
+    canCompleteWithdrawal: true,
+    canCreateTransfer: true,
+    canConfirmTransfer: true,
     
     pages: ['chat', 'warehouse', 'settlement', 'finance', 'analytics', 'export', 'salesperson', 'customer', 'supplier', 'return', 'gold-material'],
   }
@@ -238,6 +253,11 @@ export function getPermissionDeniedMessage(action) {
     'confirmGoldReceive': '您没有确认收到原料的权限，请联系料部或管理层',
     'createGoldPayment': '您没有创建付料单的权限，请联系料部或管理层',
     'manageGoldMaterial': '您没有管理金料流转的权限，请联系料部或管理层',
+    // 客户取料/转料
+    'createWithdrawal': '您没有创建取料单的权限，请联系结算专员或管理层',
+    'completeWithdrawal': '您没有完成取料的权限，请联系料部或管理层',
+    'createTransfer': '您没有创建转料单的权限，请联系结算专员或管理层',
+    'confirmTransfer': '您没有确认转料的权限，请联系料部或管理层',
   };
   
   return actionMessages[action] || '您没有执行此操作的权限';
@@ -262,5 +282,10 @@ export const PERMISSION_ACTIONS = {
   '确认收料': 'canConfirmGoldReceive',
   '创建付料单': 'canCreateGoldPayment',
   '金料管理': 'canManageGoldMaterial',
+  // 客户取料/转料
+  '创建取料单': 'canCreateWithdrawal',
+  '完成取料': 'canCompleteWithdrawal',
+  '创建转料单': 'canCreateTransfer',
+  '确认转料': 'canConfirmTransfer',
 };
 

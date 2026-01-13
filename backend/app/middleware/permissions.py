@@ -68,6 +68,11 @@ ROLE_PERMISSIONS = {
         'can_view_gold_material': True,    # 可以查看金料记录
         'can_confirm_gold_receive': False, # 不能确认收到原料（料部职责）
         'can_create_gold_payment': False,  # 不能创建付料单（料部职责）
+        # 客户取料/转料权限
+        'can_create_withdrawal': True,     # 可以创建取料单
+        'can_complete_withdrawal': False,  # 不能完成取料（料部职责）
+        'can_create_transfer': True,       # 可以创建转料单
+        'can_confirm_transfer': False,     # 不能确认转料（料部职责）
     },
     
     # 业务员
@@ -132,6 +137,11 @@ ROLE_PERMISSIONS = {
         'can_confirm_gold_receive': True,  # 可以确认收到原料（从结算同事处）
         'can_create_gold_payment': True,   # 可以创建付料单（支付供应商）
         'can_manage_gold_material': True,  # 可以管理金料流转（核心权限）
+        # 客户取料/转料权限
+        'can_create_withdrawal': False,    # 不能创建取料单（结算职责）
+        'can_complete_withdrawal': True,   # 可以完成取料（发出金料）
+        'can_create_transfer': False,      # 不能创建转料单（结算职责）
+        'can_confirm_transfer': True,      # 可以确认转料
     },
     
     # 管理层 - 拥有所有权限
@@ -158,6 +168,11 @@ ROLE_PERMISSIONS = {
         'can_confirm_gold_receive': True,
         'can_create_gold_payment': True,
         'can_manage_gold_material': True,
+        # 客户取料/转料权限（全部）
+        'can_create_withdrawal': True,
+        'can_complete_withdrawal': True,
+        'can_create_transfer': True,
+        'can_confirm_transfer': True,
     }
 }
 
@@ -185,6 +200,11 @@ PERMISSION_NAMES = {
     'can_confirm_gold_receive': '确认收到原料',
     'can_create_gold_payment': '创建付料单',
     'can_manage_gold_material': '管理金料流转',
+    # 客户取料/转料权限
+    'can_create_withdrawal': '创建取料单',
+    'can_complete_withdrawal': '完成取料',
+    'can_create_transfer': '创建转料单',
+    'can_confirm_transfer': '确认转料',
 }
 
 # AI操作到权限的映射

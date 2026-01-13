@@ -21,6 +21,8 @@ from ..models import (
     CustomerGoldDeposit,
     CustomerGoldDepositTransaction,
     CustomerTransaction,
+    CustomerWithdrawal,
+    CustomerTransfer,
     SettlementOrder,
     SalesOrder,
     InboundOrder,
@@ -38,6 +40,13 @@ from ..schemas import (
     CustomerGoldDepositTransactionResponse,
     CustomerTransactionResponse,
     CustomerAccountSummary,
+    CustomerWithdrawalCreate,
+    CustomerWithdrawalUpdate,
+    CustomerWithdrawalComplete,
+    CustomerWithdrawalResponse,
+    CustomerTransferCreate,
+    CustomerTransferConfirm,
+    CustomerTransferResponse,
 )
 from ..middleware.permissions import has_permission
 from ..utils.document_generator import (
@@ -1489,4 +1498,621 @@ async def export_gold_ledger(
     
     else:
         raise HTTPException(status_code=400, detail="不支持的格式，请使用 excel 或 pdf")
+
+
+# ==================== 客户取料单管理 ====================
+
+def get_or_create_customer_deposit(customer_id: int, customer_name: str, db: Session) -> CustomerGoldDeposit:
+    """获取或创建客户存料记录"""
+    deposit = db.query(CustomerGoldDeposit).filter(
+        CustomerGoldDeposit.customer_id == customer_id
+    ).first()
+    
+    if not deposit:
+        deposit = CustomerGoldDeposit(
+            customer_id=customer_id,
+            customer_name=customer_name,
+            current_balance=0.0,
+            total_deposited=0.0,
+            total_used=0.0
+        )
+        db.add(deposit)
+        db.flush()
+    
+    return deposit
+
+
+@router.post("/withdrawals", response_model=CustomerWithdrawalResponse)
+async def create_customer_withdrawal(
+    data: CustomerWithdrawalCreate,
+    user_role: str = Query(default="settlement", description="用户角色"),
+    created_by: str = Query(default="结算", description="创建人"),
+    db: Session = Depends(get_db)
+):
+    """
+    创建客户取料单
+    
+    - 验证客户存料余额是否足够
+    - 创建取料单（待料部确认）
+    """
+    # 权限检查
+    if not has_permission(user_role, 'can_create_withdrawal'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【创建取料单】的权限")
+    
+    # 验证客户
+    customer = db.query(Customer).filter(Customer.id == data.customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    
+    # 验证存料余额
+    deposit = db.query(CustomerGoldDeposit).filter(
+        CustomerGoldDeposit.customer_id == data.customer_id
+    ).first()
+    
+    if not deposit or deposit.current_balance < data.gold_weight:
+        current_balance = deposit.current_balance if deposit else 0.0
+        raise HTTPException(
+            status_code=400,
+            detail=f"客户存料余额不足。当前余额：{current_balance:.2f}克，申请取料：{data.gold_weight:.2f}克"
+        )
+    
+    # 生成取料单号（QL开头）
+    now = china_now()
+    count = db.query(CustomerWithdrawal).filter(
+        CustomerWithdrawal.withdrawal_no.like(f"QL{now.strftime('%Y%m%d')}%")
+    ).count()
+    withdrawal_no = f"QL{now.strftime('%Y%m%d')}{count + 1:03d}"
+    
+    # 创建取料单
+    withdrawal = CustomerWithdrawal(
+        withdrawal_no=withdrawal_no,
+        customer_id=customer.id,
+        customer_name=customer.name,
+        gold_weight=data.gold_weight,
+        withdrawal_type=data.withdrawal_type,
+        destination_company=data.destination_company,
+        destination_address=data.destination_address,
+        authorized_person=data.authorized_person,
+        authorized_phone=data.authorized_phone,
+        status="pending",
+        created_by=created_by,
+        remark=data.remark
+    )
+    db.add(withdrawal)
+    db.commit()
+    db.refresh(withdrawal)
+    
+    logger.info(f"创建取料单: {withdrawal_no}, 客户: {customer.name}, 克重: {data.gold_weight}克")
+    
+    return withdrawal
+
+
+@router.get("/withdrawals")
+async def get_customer_withdrawals(
+    status: Optional[str] = None,
+    customer_id: Optional[int] = None,
+    user_role: str = Query(default="settlement", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """获取客户取料单列表"""
+    # 权限检查
+    if not has_permission(user_role, 'can_view_gold_material'):
+        raise HTTPException(status_code=403, detail="权限不足")
+    
+    query = db.query(CustomerWithdrawal).options(
+        joinedload(CustomerWithdrawal.customer)
+    )
+    
+    if status:
+        query = query.filter(CustomerWithdrawal.status == status)
+    if customer_id:
+        query = query.filter(CustomerWithdrawal.customer_id == customer_id)
+    
+    withdrawals = query.order_by(desc(CustomerWithdrawal.created_at)).all()
+    
+    return {
+        "success": True,
+        "withdrawals": [CustomerWithdrawalResponse.model_validate(w) for w in withdrawals],
+        "total": len(withdrawals)
+    }
+
+
+@router.post("/withdrawals/{withdrawal_id}/complete")
+async def complete_customer_withdrawal(
+    withdrawal_id: int,
+    data: CustomerWithdrawalComplete,
+    user_role: str = Query(default="material", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    完成取料单（料部确认发出）
+    
+    - 更新取料单状态为completed
+    - 扣减客户存料余额
+    - 创建存料交易记录
+    """
+    # 权限检查
+    if not has_permission(user_role, 'can_complete_withdrawal'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【完成取料】的权限")
+    
+    withdrawal = db.query(CustomerWithdrawal).filter(
+        CustomerWithdrawal.id == withdrawal_id
+    ).first()
+    
+    if not withdrawal:
+        raise HTTPException(status_code=404, detail="取料单不存在")
+    
+    if withdrawal.status != "pending":
+        raise HTTPException(status_code=400, detail=f"取料单状态为 {withdrawal.status}，无法完成")
+    
+    # 验证存料余额
+    deposit = db.query(CustomerGoldDeposit).filter(
+        CustomerGoldDeposit.customer_id == withdrawal.customer_id
+    ).first()
+    
+    if not deposit or deposit.current_balance < withdrawal.gold_weight:
+        current_balance = deposit.current_balance if deposit else 0.0
+        raise HTTPException(
+            status_code=400,
+            detail=f"客户存料余额不足。当前余额：{current_balance:.2f}克，取料需要：{withdrawal.gold_weight:.2f}克"
+        )
+    
+    # 更新取料单状态
+    withdrawal.status = "completed"
+    withdrawal.completed_by = data.completed_by
+    withdrawal.completed_at = china_now()
+    
+    # 扣减存料余额
+    balance_before = deposit.current_balance
+    deposit.current_balance -= withdrawal.gold_weight
+    deposit.total_used += withdrawal.gold_weight
+    deposit.last_transaction_at = china_now()
+    
+    # 创建存料交易记录
+    deposit_transaction = CustomerGoldDepositTransaction(
+        customer_id=withdrawal.customer_id,
+        customer_name=withdrawal.customer_name,
+        transaction_type='use',
+        amount=withdrawal.gold_weight,
+        balance_before=balance_before,
+        balance_after=deposit.current_balance,
+        created_by=data.completed_by,
+        remark=f"取料单：{withdrawal.withdrawal_no}" + 
+               (f"，送至：{withdrawal.destination_company}" if withdrawal.destination_company else "")
+    )
+    db.add(deposit_transaction)
+    
+    db.commit()
+    db.refresh(withdrawal)
+    
+    logger.info(f"完成取料单: {withdrawal.withdrawal_no}, 客户: {withdrawal.customer_name}, "
+               f"克重: {withdrawal.gold_weight}克, 余额: {deposit.current_balance}克")
+    
+    return {
+        "success": True,
+        "message": "取料单已完成",
+        "withdrawal": CustomerWithdrawalResponse.model_validate(withdrawal)
+    }
+
+
+@router.post("/withdrawals/{withdrawal_id}/cancel")
+async def cancel_customer_withdrawal(
+    withdrawal_id: int,
+    user_role: str = Query(default="settlement", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """取消取料单（仅待处理状态可取消）"""
+    withdrawal = db.query(CustomerWithdrawal).filter(
+        CustomerWithdrawal.id == withdrawal_id
+    ).first()
+    
+    if not withdrawal:
+        raise HTTPException(status_code=404, detail="取料单不存在")
+    
+    if withdrawal.status != "pending":
+        raise HTTPException(status_code=400, detail="只能取消待处理的取料单")
+    
+    withdrawal.status = "cancelled"
+    db.commit()
+    db.refresh(withdrawal)
+    
+    return {
+        "success": True,
+        "message": "取料单已取消",
+        "withdrawal": CustomerWithdrawalResponse.model_validate(withdrawal)
+    }
+
+
+@router.get("/withdrawals/{withdrawal_id}/download")
+async def download_customer_withdrawal(
+    withdrawal_id: int,
+    format: str = Query("html", pattern="^(pdf|html)$"),
+    db: Session = Depends(get_db)
+):
+    """下载或打印取料单"""
+    withdrawal = db.query(CustomerWithdrawal).filter(
+        CustomerWithdrawal.id == withdrawal_id
+    ).first()
+    
+    if not withdrawal:
+        raise HTTPException(status_code=404, detail="取料单不存在")
+    
+    # 更新打印时间
+    withdrawal.printed_at = china_now()
+    db.commit()
+    
+    # 构建字段
+    fields = [
+        ("取料单号", withdrawal.withdrawal_no, False),
+        ("客户名称", withdrawal.customer_name, False),
+        ("取料克重", f"{withdrawal.gold_weight:.2f} 克", False),
+        ("取料方式", "自取" if withdrawal.withdrawal_type == "self" else "送到其他公司", False),
+    ]
+    
+    if withdrawal.destination_company:
+        fields.append(("目的地公司", withdrawal.destination_company, False))
+    if withdrawal.destination_address:
+        fields.append(("目的地地址", withdrawal.destination_address, True))
+    if withdrawal.authorized_person:
+        fields.append(("授权取料人", withdrawal.authorized_person, False))
+    if withdrawal.authorized_phone:
+        fields.append(("取料人电话", withdrawal.authorized_phone, False))
+    
+    fields.append(("状态", get_status_label(withdrawal.status), False))
+    fields.append(("创建时间", format_datetime(withdrawal.created_at), False))
+    
+    if withdrawal.created_by:
+        fields.append(("创建人", withdrawal.created_by, False))
+    if withdrawal.completed_by:
+        fields.append(("完成人", withdrawal.completed_by, False))
+    if withdrawal.completed_at:
+        fields.append(("完成时间", format_datetime(withdrawal.completed_at), False))
+    if withdrawal.remark:
+        fields.append(("备注", withdrawal.remark, True))
+    
+    if format == "pdf":
+        from fastapi.responses import StreamingResponse
+        
+        generator = PDFGenerator("客户取料单")
+        generator.add_title()
+        for label, value, _ in fields:
+            if value:
+                generator.add_field(label, value)
+        generator.add_footer()
+        buffer = generator.generate()
+        
+        filename = f"withdrawal_{withdrawal.withdrawal_no}.pdf"
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Access-Control-Allow-Origin": "*",
+            }
+        )
+    
+    else:
+        from fastapi.responses import HTMLResponse
+        
+        generator = HTMLGenerator("客户取料单", withdrawal.withdrawal_no)
+        for label, value, full_width in fields:
+            generator.add_field_if(label, value, full_width)
+        html_content = generator.generate()
+        
+        return HTMLResponse(
+            content=html_content,
+            headers={"Access-Control-Allow-Origin": "*"}
+        )
+
+
+# ==================== 客户转料单管理 ====================
+
+@router.post("/transfers", response_model=CustomerTransferResponse)
+async def create_customer_transfer(
+    data: CustomerTransferCreate,
+    user_role: str = Query(default="settlement", description="用户角色"),
+    created_by: str = Query(default="结算", description="创建人"),
+    db: Session = Depends(get_db)
+):
+    """
+    创建客户转料单
+    
+    - 验证转出客户存料余额是否足够
+    - 创建转料单（待料部确认）
+    """
+    # 权限检查
+    if not has_permission(user_role, 'can_create_transfer'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【创建转料单】的权限")
+    
+    # 验证转出客户
+    from_customer = db.query(Customer).filter(Customer.id == data.from_customer_id).first()
+    if not from_customer:
+        raise HTTPException(status_code=404, detail="转出客户不存在")
+    
+    # 验证转入客户
+    to_customer = db.query(Customer).filter(Customer.id == data.to_customer_id).first()
+    if not to_customer:
+        raise HTTPException(status_code=404, detail="转入客户不存在")
+    
+    if data.from_customer_id == data.to_customer_id:
+        raise HTTPException(status_code=400, detail="转出客户和转入客户不能相同")
+    
+    # 验证转出客户存料余额
+    from_deposit = db.query(CustomerGoldDeposit).filter(
+        CustomerGoldDeposit.customer_id == data.from_customer_id
+    ).first()
+    
+    if not from_deposit or from_deposit.current_balance < data.gold_weight:
+        current_balance = from_deposit.current_balance if from_deposit else 0.0
+        raise HTTPException(
+            status_code=400,
+            detail=f"转出客户存料余额不足。当前余额：{current_balance:.2f}克，申请转料：{data.gold_weight:.2f}克"
+        )
+    
+    # 生成转料单号（ZL开头）
+    now = china_now()
+    count = db.query(CustomerTransfer).filter(
+        CustomerTransfer.transfer_no.like(f"ZL{now.strftime('%Y%m%d')}%")
+    ).count()
+    transfer_no = f"ZL{now.strftime('%Y%m%d')}{count + 1:03d}"
+    
+    # 创建转料单
+    transfer = CustomerTransfer(
+        transfer_no=transfer_no,
+        from_customer_id=from_customer.id,
+        from_customer_name=from_customer.name,
+        to_customer_id=to_customer.id,
+        to_customer_name=to_customer.name,
+        gold_weight=data.gold_weight,
+        status="pending",
+        created_by=created_by,
+        remark=data.remark
+    )
+    db.add(transfer)
+    db.commit()
+    db.refresh(transfer)
+    
+    logger.info(f"创建转料单: {transfer_no}, {from_customer.name} -> {to_customer.name}, 克重: {data.gold_weight}克")
+    
+    return transfer
+
+
+@router.get("/transfers")
+async def get_customer_transfers(
+    status: Optional[str] = None,
+    customer_id: Optional[int] = None,
+    user_role: str = Query(default="settlement", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """获取客户转料单列表"""
+    # 权限检查
+    if not has_permission(user_role, 'can_view_gold_material'):
+        raise HTTPException(status_code=403, detail="权限不足")
+    
+    query = db.query(CustomerTransfer).options(
+        joinedload(CustomerTransfer.from_customer),
+        joinedload(CustomerTransfer.to_customer)
+    )
+    
+    if status:
+        query = query.filter(CustomerTransfer.status == status)
+    if customer_id:
+        query = query.filter(
+            (CustomerTransfer.from_customer_id == customer_id) | 
+            (CustomerTransfer.to_customer_id == customer_id)
+        )
+    
+    transfers = query.order_by(desc(CustomerTransfer.created_at)).all()
+    
+    return {
+        "success": True,
+        "transfers": [CustomerTransferResponse.model_validate(t) for t in transfers],
+        "total": len(transfers)
+    }
+
+
+@router.post("/transfers/{transfer_id}/confirm")
+async def confirm_customer_transfer(
+    transfer_id: int,
+    data: CustomerTransferConfirm,
+    user_role: str = Query(default="material", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    确认转料单（料部确认）
+    
+    - 更新转料单状态为completed
+    - 扣减转出客户存料余额
+    - 增加转入客户存料余额
+    - 创建双方存料交易记录
+    """
+    # 权限检查
+    if not has_permission(user_role, 'can_confirm_transfer'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【确认转料】的权限")
+    
+    transfer = db.query(CustomerTransfer).filter(
+        CustomerTransfer.id == transfer_id
+    ).first()
+    
+    if not transfer:
+        raise HTTPException(status_code=404, detail="转料单不存在")
+    
+    if transfer.status != "pending":
+        raise HTTPException(status_code=400, detail=f"转料单状态为 {transfer.status}，无法确认")
+    
+    # 验证转出客户存料余额
+    from_deposit = db.query(CustomerGoldDeposit).filter(
+        CustomerGoldDeposit.customer_id == transfer.from_customer_id
+    ).first()
+    
+    if not from_deposit or from_deposit.current_balance < transfer.gold_weight:
+        current_balance = from_deposit.current_balance if from_deposit else 0.0
+        raise HTTPException(
+            status_code=400,
+            detail=f"转出客户存料余额不足。当前余额：{current_balance:.2f}克，转料需要：{transfer.gold_weight:.2f}克"
+        )
+    
+    # 获取或创建转入客户存料记录
+    to_deposit = get_or_create_customer_deposit(
+        transfer.to_customer_id,
+        transfer.to_customer_name,
+        db
+    )
+    
+    # 更新转料单状态
+    transfer.status = "completed"
+    transfer.confirmed_by = data.confirmed_by
+    transfer.confirmed_at = china_now()
+    
+    # 扣减转出客户存料
+    from_balance_before = from_deposit.current_balance
+    from_deposit.current_balance -= transfer.gold_weight
+    from_deposit.total_used += transfer.gold_weight
+    from_deposit.last_transaction_at = china_now()
+    
+    # 增加转入客户存料
+    to_balance_before = to_deposit.current_balance
+    to_deposit.current_balance += transfer.gold_weight
+    to_deposit.total_deposited += transfer.gold_weight
+    to_deposit.last_transaction_at = china_now()
+    
+    # 创建转出客户交易记录
+    from_transaction = CustomerGoldDepositTransaction(
+        customer_id=transfer.from_customer_id,
+        customer_name=transfer.from_customer_name,
+        transaction_type='use',
+        amount=transfer.gold_weight,
+        balance_before=from_balance_before,
+        balance_after=from_deposit.current_balance,
+        created_by=data.confirmed_by,
+        remark=f"转料单：{transfer.transfer_no}，转出至：{transfer.to_customer_name}"
+    )
+    db.add(from_transaction)
+    
+    # 创建转入客户交易记录
+    to_transaction = CustomerGoldDepositTransaction(
+        customer_id=transfer.to_customer_id,
+        customer_name=transfer.to_customer_name,
+        transaction_type='deposit',
+        amount=transfer.gold_weight,
+        balance_before=to_balance_before,
+        balance_after=to_deposit.current_balance,
+        created_by=data.confirmed_by,
+        remark=f"转料单：{transfer.transfer_no}，转入自：{transfer.from_customer_name}"
+    )
+    db.add(to_transaction)
+    
+    db.commit()
+    db.refresh(transfer)
+    
+    logger.info(f"确认转料单: {transfer.transfer_no}, "
+               f"{transfer.from_customer_name}({from_deposit.current_balance}克) -> "
+               f"{transfer.to_customer_name}({to_deposit.current_balance}克), "
+               f"克重: {transfer.gold_weight}克")
+    
+    return {
+        "success": True,
+        "message": "转料单已确认",
+        "transfer": CustomerTransferResponse.model_validate(transfer)
+    }
+
+
+@router.post("/transfers/{transfer_id}/cancel")
+async def cancel_customer_transfer(
+    transfer_id: int,
+    user_role: str = Query(default="settlement", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """取消转料单（仅待确认状态可取消）"""
+    transfer = db.query(CustomerTransfer).filter(
+        CustomerTransfer.id == transfer_id
+    ).first()
+    
+    if not transfer:
+        raise HTTPException(status_code=404, detail="转料单不存在")
+    
+    if transfer.status != "pending":
+        raise HTTPException(status_code=400, detail="只能取消待确认的转料单")
+    
+    transfer.status = "cancelled"
+    db.commit()
+    db.refresh(transfer)
+    
+    return {
+        "success": True,
+        "message": "转料单已取消",
+        "transfer": CustomerTransferResponse.model_validate(transfer)
+    }
+
+
+@router.get("/transfers/{transfer_id}/download")
+async def download_customer_transfer(
+    transfer_id: int,
+    format: str = Query("html", pattern="^(pdf|html)$"),
+    db: Session = Depends(get_db)
+):
+    """下载或打印转料单"""
+    transfer = db.query(CustomerTransfer).filter(
+        CustomerTransfer.id == transfer_id
+    ).first()
+    
+    if not transfer:
+        raise HTTPException(status_code=404, detail="转料单不存在")
+    
+    # 更新打印时间
+    transfer.printed_at = china_now()
+    db.commit()
+    
+    # 构建字段
+    fields = [
+        ("转料单号", transfer.transfer_no, False),
+        ("转出客户", transfer.from_customer_name, False),
+        ("转入客户", transfer.to_customer_name, False),
+        ("转料克重", f"{transfer.gold_weight:.2f} 克", False),
+        ("状态", get_status_label(transfer.status), False),
+        ("创建时间", format_datetime(transfer.created_at), False),
+    ]
+    
+    if transfer.created_by:
+        fields.append(("创建人", transfer.created_by, False))
+    if transfer.confirmed_by:
+        fields.append(("确认人", transfer.confirmed_by, False))
+    if transfer.confirmed_at:
+        fields.append(("确认时间", format_datetime(transfer.confirmed_at), False))
+    if transfer.remark:
+        fields.append(("备注", transfer.remark, True))
+    
+    if format == "pdf":
+        from fastapi.responses import StreamingResponse
+        
+        generator = PDFGenerator("客户转料单")
+        generator.add_title()
+        for label, value, _ in fields:
+            if value:
+                generator.add_field(label, value)
+        generator.add_footer()
+        buffer = generator.generate()
+        
+        filename = f"transfer_{transfer.transfer_no}.pdf"
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Access-Control-Allow-Origin": "*",
+            }
+        )
+    
+    else:
+        from fastapi.responses import HTMLResponse
+        
+        generator = HTMLGenerator("客户转料单", transfer.transfer_no)
+        for label, value, full_width in fields:
+            generator.add_field_if(label, value, full_width)
+        html_content = generator.generate()
+        
+        return HTMLResponse(
+            content=html_content,
+            headers={"Access-Control-Allow-Origin": "*"}
+        )
 

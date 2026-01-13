@@ -580,6 +580,94 @@ class CustomerAccountSummary(BaseModel):
     deposit_transactions: List[CustomerGoldDepositTransactionResponse] = []
 
 
+# ============= 客户取料单 Schema =============
+
+class CustomerWithdrawalCreate(BaseModel):
+    """创建客户取料单"""
+    customer_id: int  # 客户ID
+    gold_weight: float  # 取料克重
+    withdrawal_type: str = "self"  # 取料方式：self 自取 / deliver 送到其他公司
+    destination_company: Optional[str] = None  # 目的地公司
+    destination_address: Optional[str] = None  # 目的地地址
+    authorized_person: Optional[str] = None  # 授权取料人
+    authorized_phone: Optional[str] = None  # 取料人电话
+    remark: Optional[str] = None
+
+
+class CustomerWithdrawalUpdate(BaseModel):
+    """更新客户取料单"""
+    gold_weight: Optional[float] = None
+    withdrawal_type: Optional[str] = None
+    destination_company: Optional[str] = None
+    destination_address: Optional[str] = None
+    authorized_person: Optional[str] = None
+    authorized_phone: Optional[str] = None
+    remark: Optional[str] = None
+
+
+class CustomerWithdrawalComplete(BaseModel):
+    """完成取料单"""
+    completed_by: str  # 完成人
+
+
+class CustomerWithdrawalResponse(BaseModel):
+    """客户取料单响应"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    withdrawal_no: str  # 取料单号
+    customer_id: int
+    customer_name: str
+    gold_weight: float  # 取料克重
+    withdrawal_type: str  # 取料方式
+    destination_company: Optional[str] = None
+    destination_address: Optional[str] = None
+    authorized_person: Optional[str] = None
+    authorized_phone: Optional[str] = None
+    status: str  # pending / completed / cancelled
+    created_by: Optional[str] = None
+    created_at: Optional[datetime] = None
+    completed_by: Optional[str] = None
+    completed_at: Optional[datetime] = None
+    printed_at: Optional[datetime] = None
+    remark: Optional[str] = None
+
+
+# ============= 客户转料单 Schema =============
+
+class CustomerTransferCreate(BaseModel):
+    """创建客户转料单"""
+    from_customer_id: int  # 转出客户ID
+    to_customer_id: int  # 转入客户ID
+    gold_weight: float  # 转料克重
+    remark: Optional[str] = None
+
+
+class CustomerTransferConfirm(BaseModel):
+    """确认转料单"""
+    confirmed_by: str  # 确认人
+
+
+class CustomerTransferResponse(BaseModel):
+    """客户转料单响应"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    transfer_no: str  # 转料单号
+    from_customer_id: int
+    from_customer_name: str
+    to_customer_id: int
+    to_customer_name: str
+    gold_weight: float  # 转料克重
+    status: str  # pending / completed / cancelled
+    created_by: Optional[str] = None
+    created_at: Optional[datetime] = None
+    confirmed_by: Optional[str] = None
+    confirmed_at: Optional[datetime] = None
+    printed_at: Optional[datetime] = None
+    remark: Optional[str] = None
+
+
 # ============= 财务相关 Schema =============
 # 从 finance.py 导入
 from .finance import (
@@ -681,4 +769,13 @@ __all__ = [
     'CustomerGoldDepositTransactionResponse',
     'CustomerTransactionResponse',
     'CustomerAccountSummary',
+    # 客户取料单
+    'CustomerWithdrawalCreate',
+    'CustomerWithdrawalUpdate',
+    'CustomerWithdrawalComplete',
+    'CustomerWithdrawalResponse',
+    # 客户转料单
+    'CustomerTransferCreate',
+    'CustomerTransferConfirm',
+    'CustomerTransferResponse',
 ]

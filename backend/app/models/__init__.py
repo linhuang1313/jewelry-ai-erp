@@ -480,6 +480,94 @@ class CustomerTransaction(Base):
     gold_transaction = relationship("GoldMaterialTransaction", foreign_keys=[gold_transaction_id])
 
 
+# ============= 客户取料单模型 =============
+
+class CustomerWithdrawal(Base):
+    """客户取料单 - 客户从存料中取走黄金原料"""
+    __tablename__ = "customer_withdrawals"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    withdrawal_no = Column(String(50), unique=True, index=True, nullable=False)  # 取料单号（QL开头）
+    
+    # 客户信息
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_name = Column(String(100), nullable=False)  # 客户名称
+    
+    # 取料信息
+    gold_weight = Column(Float, nullable=False)  # 取料克重
+    
+    # 取料方式：self 自取 / deliver 送到其他公司
+    withdrawal_type = Column(String(20), default="self")
+    
+    # 目的地信息（送到其他公司时）
+    destination_company = Column(String(100), nullable=True)  # 目的地公司（如：古唐、鑫韵）
+    destination_address = Column(Text, nullable=True)  # 目的地地址
+    
+    # 授权取料人信息
+    authorized_person = Column(String(100), nullable=True)  # 授权取料人姓名
+    authorized_phone = Column(String(20), nullable=True)  # 取料人电话
+    
+    # 状态：pending待处理 / completed已完成 / cancelled已取消
+    status = Column(String(20), default="pending", index=True)
+    
+    # 创建信息（结算专员创建）
+    created_by = Column(String(50))
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # 完成信息（料部确认发出）
+    completed_by = Column(String(50), nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    
+    # 打印时间
+    printed_at = Column(DateTime, nullable=True)
+    
+    # 备注
+    remark = Column(Text, nullable=True)
+    
+    # 关系
+    customer = relationship("Customer", backref="withdrawals")
+
+
+class CustomerTransfer(Base):
+    """客户转料单 - 客户之间转移存料"""
+    __tablename__ = "customer_transfers"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    transfer_no = Column(String(50), unique=True, index=True, nullable=False)  # 转料单号（ZL开头）
+    
+    # 转出客户信息
+    from_customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    from_customer_name = Column(String(100), nullable=False)
+    
+    # 转入客户信息
+    to_customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    to_customer_name = Column(String(100), nullable=False)
+    
+    # 转料信息
+    gold_weight = Column(Float, nullable=False)  # 转料克重
+    
+    # 状态：pending待确认 / completed已完成 / cancelled已取消
+    status = Column(String(20), default="pending", index=True)
+    
+    # 创建信息（结算专员创建）
+    created_by = Column(String(50))
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # 确认信息（料部确认）
+    confirmed_by = Column(String(50), nullable=True)
+    confirmed_at = Column(DateTime, nullable=True)
+    
+    # 打印时间
+    printed_at = Column(DateTime, nullable=True)
+    
+    # 备注
+    remark = Column(Text, nullable=True)
+    
+    # 关系
+    from_customer = relationship("Customer", foreign_keys=[from_customer_id], backref="transfers_out")
+    to_customer = relationship("Customer", foreign_keys=[to_customer_id], backref="transfers_in")
+
+
 # 导出所有模型
 __all__ = [
     # 入库
@@ -515,4 +603,7 @@ __all__ = [
     'CustomerGoldDeposit',
     'CustomerGoldDepositTransaction',
     'CustomerTransaction',
+    # 客户取料和转料
+    'CustomerWithdrawal',
+    'CustomerTransfer',
 ]

@@ -65,11 +65,55 @@ interface GoldMaterialPageProps {
   userRole: string;
 }
 
+interface CustomerWithdrawal {
+  id: number;
+  withdrawal_no: string;
+  customer_id: number;
+  customer_name: string;
+  gold_weight: number;
+  withdrawal_type: 'self' | 'deliver';
+  destination_company: string | null;
+  destination_address: string | null;
+  authorized_person: string | null;
+  authorized_phone: string | null;
+  status: string;
+  created_by: string | null;
+  created_at: string;
+  completed_by: string | null;
+  completed_at: string | null;
+  printed_at: string | null;
+  remark: string | null;
+}
+
+interface CustomerTransfer {
+  id: number;
+  transfer_no: string;
+  from_customer_id: number;
+  from_customer_name: string;
+  to_customer_id: number;
+  to_customer_name: string;
+  gold_weight: number;
+  status: string;
+  created_by: string | null;
+  created_at: string;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  printed_at: string | null;
+  remark: string | null;
+}
+
+interface Customer {
+  id: number;
+  name: string;
+  current_deposit?: number;
+}
+
 // ==================== 常量定义 ====================
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   pending: { label: '待确认', color: '#f59e0b' },
   confirmed: { label: '已确认', color: '#10b981' },
+  completed: { label: '已完成', color: '#10b981' },
   cancelled: { label: '已取消', color: '#6b7280' },
 };
 
@@ -83,7 +127,7 @@ const INITIAL_PAYMENT_FORM = {
 // ==================== 组件 ====================
 
 export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
-  const [activeTab, setActiveTab] = useState<'ledger' | 'receipts' | 'payments' | 'balance'>('ledger');
+  const [activeTab, setActiveTab] = useState<'ledger' | 'receipts' | 'payments' | 'balance' | 'withdrawals' | 'transfers'>('ledger');
   
   // 台账数据
   const [ledger, setLedger] = useState<LedgerDay[]>([]);
@@ -110,6 +154,35 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
   // 待确认收料单（料部）
   const [pendingReceipts, setPendingReceipts] = useState<GoldTransaction[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
+  
+  // 取料单数据
+  const [withdrawals, setWithdrawals] = useState<CustomerWithdrawal[]>([]);
+  const [withdrawalsLoading, setWithdrawalsLoading] = useState(false);
+  const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
+  const [withdrawalFormData, setWithdrawalFormData] = useState({
+    customer_id: '',
+    gold_weight: '',
+    withdrawal_type: 'self',
+    destination_company: '',
+    destination_address: '',
+    authorized_person: '',
+    authorized_phone: '',
+    remark: ''
+  });
+  
+  // 转料单数据
+  const [transfers, setTransfers] = useState<CustomerTransfer[]>([]);
+  const [transfersLoading, setTransfersLoading] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferFormData, setTransferFormData] = useState({
+    from_customer_id: '',
+    to_customer_id: '',
+    gold_weight: '',
+    remark: ''
+  });
+  
+  // 客户列表（用于取料单和转料单）
+  const [customers, setCustomers] = useState<Customer[]>([]);
 
   // ==================== API 调用函数 ====================
 
@@ -221,6 +294,191 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
     }
   }, []);
 
+  // 加载客户列表
+  const loadCustomers = useCallback(async () => {
+    const data = await apiGet<{ customers: Customer[] }>(
+      '/api/customers',
+      { showErrorToast: false }
+    );
+    
+    if (data) {
+      setCustomers(data.customers || []);
+    }
+  }, []);
+
+  // 加载取料单列表
+  const loadWithdrawals = useCallback(async () => {
+    setWithdrawalsLoading(true);
+    const params = buildQueryString({ user_role: userRole });
+    
+    const data = await apiGet<{ withdrawals: CustomerWithdrawal[] }>(
+      `/api/gold-material/withdrawals?${params}`,
+      { showErrorToast: true }
+    );
+    
+    if (data) {
+      setWithdrawals(data.withdrawals || []);
+    }
+    setWithdrawalsLoading(false);
+  }, [userRole]);
+
+  // 加载转料单列表
+  const loadTransfers = useCallback(async () => {
+    setTransfersLoading(true);
+    const params = buildQueryString({ user_role: userRole });
+    
+    const data = await apiGet<{ transfers: CustomerTransfer[] }>(
+      `/api/gold-material/transfers?${params}`,
+      { showErrorToast: true }
+    );
+    
+    if (data) {
+      setTransfers(data.transfers || []);
+    }
+    setTransfersLoading(false);
+  }, [userRole]);
+
+  // 创建取料单
+  const createWithdrawal = async () => {
+    if (!withdrawalFormData.customer_id || !withdrawalFormData.gold_weight) {
+      toast.error('请填写客户和取料克重');
+      return;
+    }
+    
+    const data = await apiPost(
+      `/api/gold-material/withdrawals?user_role=${userRole}&created_by=${userRole === 'settlement' ? '结算' : '管理'}`,
+      {
+        customer_id: parseInt(withdrawalFormData.customer_id),
+        gold_weight: parseFloat(withdrawalFormData.gold_weight),
+        withdrawal_type: withdrawalFormData.withdrawal_type,
+        destination_company: withdrawalFormData.destination_company || null,
+        destination_address: withdrawalFormData.destination_address || null,
+        authorized_person: withdrawalFormData.authorized_person || null,
+        authorized_phone: withdrawalFormData.authorized_phone || null,
+        remark: withdrawalFormData.remark || null
+      },
+      { showErrorToast: true }
+    );
+    
+    if (data) {
+      toast.success('取料单创建成功');
+      setShowWithdrawalModal(false);
+      setWithdrawalFormData({
+        customer_id: '',
+        gold_weight: '',
+        withdrawal_type: 'self',
+        destination_company: '',
+        destination_address: '',
+        authorized_person: '',
+        authorized_phone: '',
+        remark: ''
+      });
+      loadWithdrawals();
+    }
+  };
+
+  // 创建转料单
+  const createTransfer = async () => {
+    if (!transferFormData.from_customer_id || !transferFormData.to_customer_id || !transferFormData.gold_weight) {
+      toast.error('请填写转出客户、转入客户和转料克重');
+      return;
+    }
+    
+    if (transferFormData.from_customer_id === transferFormData.to_customer_id) {
+      toast.error('转出客户和转入客户不能相同');
+      return;
+    }
+    
+    const data = await apiPost(
+      `/api/gold-material/transfers?user_role=${userRole}&created_by=${userRole === 'settlement' ? '结算' : '管理'}`,
+      {
+        from_customer_id: parseInt(transferFormData.from_customer_id),
+        to_customer_id: parseInt(transferFormData.to_customer_id),
+        gold_weight: parseFloat(transferFormData.gold_weight),
+        remark: transferFormData.remark || null
+      },
+      { showErrorToast: true }
+    );
+    
+    if (data) {
+      toast.success('转料单创建成功');
+      setShowTransferModal(false);
+      setTransferFormData({
+        from_customer_id: '',
+        to_customer_id: '',
+        gold_weight: '',
+        remark: ''
+      });
+      loadTransfers();
+    }
+  };
+
+  // 完成取料单（料部）
+  const completeWithdrawal = async (withdrawalId: number) => {
+    const data = await apiPost(
+      `/api/gold-material/withdrawals/${withdrawalId}/complete?user_role=${userRole}`,
+      { completed_by: userRole === 'material' ? '料部' : '管理' },
+      { showErrorToast: true }
+    );
+    
+    if (data) {
+      toast.success('取料单已完成');
+      loadWithdrawals();
+    }
+  };
+
+  // 确认转料单（料部）
+  const confirmTransfer = async (transferId: number) => {
+    const data = await apiPost(
+      `/api/gold-material/transfers/${transferId}/confirm?user_role=${userRole}`,
+      { confirmed_by: userRole === 'material' ? '料部' : '管理' },
+      { showErrorToast: true }
+    );
+    
+    if (data) {
+      toast.success('转料单已确认');
+      loadTransfers();
+    }
+  };
+
+  // 取消取料单
+  const cancelWithdrawal = async (withdrawalId: number) => {
+    const data = await apiPost(
+      `/api/gold-material/withdrawals/${withdrawalId}/cancel?user_role=${userRole}`,
+      {},
+      { showErrorToast: true }
+    );
+    
+    if (data) {
+      toast.success('取料单已取消');
+      loadWithdrawals();
+    }
+  };
+
+  // 取消转料单
+  const cancelTransfer = async (transferId: number) => {
+    const data = await apiPost(
+      `/api/gold-material/transfers/${transferId}/cancel?user_role=${userRole}`,
+      {},
+      { showErrorToast: true }
+    );
+    
+    if (data) {
+      toast.success('转料单已取消');
+      loadTransfers();
+    }
+  };
+
+  // 打印取料单
+  const printWithdrawal = (withdrawalId: number) => {
+    openDownloadUrl(`${API_ENDPOINTS.API_BASE_URL}/api/gold-material/withdrawals/${withdrawalId}/download?format=html`);
+  };
+
+  // 打印转料单
+  const printTransfer = (transferId: number) => {
+    openDownloadUrl(`${API_ENDPOINTS.API_BASE_URL}/api/gold-material/transfers/${transferId}/download?format=html`);
+  };
+
   // ==================== 初始化 ====================
 
   useEffect(() => {
@@ -230,6 +488,13 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
     startDate.setDate(startDate.getDate() - 30);
     setLedgerEndDate(endDate.toISOString().split('T')[0]);
     setLedgerStartDate(startDate.toISOString().split('T')[0]);
+    
+    // 加载客户列表（结算和料部都需要）
+    if (userRole === 'material' || userRole === 'settlement' || userRole === 'manager') {
+      loadCustomers();
+      loadWithdrawals();
+      loadTransfers();
+    }
     
     // 根据角色加载数据
     if (userRole === 'material') {
@@ -241,7 +506,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
     } else if (userRole === 'settlement') {
       loadReceipts();
     }
-  }, [userRole, loadPendingReceipts, loadPayments, loadBalance, loadSuppliers, loadInboundOrders, loadReceipts]);
+  }, [userRole, loadPendingReceipts, loadPayments, loadBalance, loadSuppliers, loadInboundOrders, loadReceipts, loadCustomers, loadWithdrawals, loadTransfers]);
 
   // 初始化后加载台账（需要等日期设置完成）
   useEffect(() => {
@@ -260,6 +525,12 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
       loadPayments();
     } else if (activeTab === 'balance') {
       loadBalance();
+    } else if (activeTab === 'withdrawals') {
+      loadWithdrawals();
+      loadCustomers();
+    } else if (activeTab === 'transfers') {
+      loadTransfers();
+      loadCustomers();
     }
   }, [activeTab]);
 
@@ -420,16 +691,34 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
         {/* 标签页 */}
         <div className="bg-white rounded-lg shadow-sm mb-6">
           <div className="border-b border-gray-200">
-            <nav className="flex -mb-px">
+            <nav className="flex -mb-px flex-wrap">
               {userRole === 'material' && (
                 <>
                   {renderTabButton('ledger', '金料台账')}
                   {renderTabButton('receipts', '待确认收料', pendingReceipts.length)}
                   {renderTabButton('payments', '付料单')}
+                  {renderTabButton('withdrawals', '待发取料', withdrawals.filter(w => w.status === 'pending').length)}
+                  {renderTabButton('transfers', '待确认转料', transfers.filter(t => t.status === 'pending').length)}
                   {renderTabButton('balance', '金料库存')}
                 </>
               )}
-              {userRole === 'settlement' && renderTabButton('receipts', '收料单')}
+              {userRole === 'settlement' && (
+                <>
+                  {renderTabButton('receipts', '收料单')}
+                  {renderTabButton('withdrawals', '取料单')}
+                  {renderTabButton('transfers', '转料单')}
+                </>
+              )}
+              {userRole === 'manager' && (
+                <>
+                  {renderTabButton('ledger', '金料台账')}
+                  {renderTabButton('receipts', '收料单')}
+                  {renderTabButton('payments', '付料单')}
+                  {renderTabButton('withdrawals', '取料单')}
+                  {renderTabButton('transfers', '转料单')}
+                  {renderTabButton('balance', '金料库存')}
+                </>
+              )}
             </nav>
           </div>
         </div>
@@ -684,6 +973,356 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                   </button>
                   <button
                     onClick={createPayment}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                  >
+                    创建
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 取料单列表 */}
+        {activeTab === 'withdrawals' && (
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">客户取料单</h2>
+              {hasPermission(userRole, 'canCreateWithdrawal') && (
+                <button
+                  onClick={() => {
+                    setShowWithdrawalModal(true);
+                    loadCustomers();
+                  }}
+                  className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+                >
+                  + 创建取料单
+                </button>
+              )}
+            </div>
+            
+            {withdrawalsLoading ? renderLoading() : withdrawals.length === 0 ? renderEmpty('暂无取料单') : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">取料单号</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">客户</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">克重</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">取料方式</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">目的地</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">创建时间</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {withdrawals.map((w) => (
+                      <tr key={w.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-4 text-sm font-medium text-gray-900">{w.withdrawal_no}</td>
+                        <td className="px-4 py-4 text-sm text-gray-600">{w.customer_name}</td>
+                        <td className="px-4 py-4 text-sm text-right font-medium">{w.gold_weight.toFixed(2)}克</td>
+                        <td className="px-4 py-4 text-sm text-gray-600">
+                          {w.withdrawal_type === 'self' ? '自取' : '送货'}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-600">
+                          {w.destination_company || '-'}
+                        </td>
+                        <td className="px-4 py-4 text-sm">{renderStatusBadge(w.status)}</td>
+                        <td className="px-4 py-4 text-sm text-gray-600">
+                          {new Date(w.created_at).toLocaleString('zh-CN')}
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          {renderActionButtons([
+                            {
+                              label: '打印',
+                              onClick: () => printWithdrawal(w.id),
+                              color: 'blue'
+                            },
+                            w.status === 'pending' && hasPermission(userRole, 'canCompleteWithdrawal') && {
+                              label: '完成',
+                              onClick: () => completeWithdrawal(w.id),
+                              color: 'green'
+                            },
+                            w.status === 'pending' && {
+                              label: '取消',
+                              onClick: () => cancelWithdrawal(w.id),
+                              color: 'red'
+                            }
+                          ].filter(Boolean) as Array<{label: string; onClick: () => void; color: string}>)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 转料单列表 */}
+        {activeTab === 'transfers' && (
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">客户转料单</h2>
+              {hasPermission(userRole, 'canCreateTransfer') && (
+                <button
+                  onClick={() => {
+                    setShowTransferModal(true);
+                    loadCustomers();
+                  }}
+                  className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+                >
+                  + 创建转料单
+                </button>
+              )}
+            </div>
+            
+            {transfersLoading ? renderLoading() : transfers.length === 0 ? renderEmpty('暂无转料单') : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">转料单号</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">转出客户</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">转入客户</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">克重</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">创建时间</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {transfers.map((t) => (
+                      <tr key={t.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-4 text-sm font-medium text-gray-900">{t.transfer_no}</td>
+                        <td className="px-4 py-4 text-sm text-gray-600">{t.from_customer_name}</td>
+                        <td className="px-4 py-4 text-sm text-gray-600">{t.to_customer_name}</td>
+                        <td className="px-4 py-4 text-sm text-right font-medium">{t.gold_weight.toFixed(2)}克</td>
+                        <td className="px-4 py-4 text-sm">{renderStatusBadge(t.status)}</td>
+                        <td className="px-4 py-4 text-sm text-gray-600">
+                          {new Date(t.created_at).toLocaleString('zh-CN')}
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          {renderActionButtons([
+                            {
+                              label: '打印',
+                              onClick: () => printTransfer(t.id),
+                              color: 'blue'
+                            },
+                            t.status === 'pending' && hasPermission(userRole, 'canConfirmTransfer') && {
+                              label: '确认',
+                              onClick: () => confirmTransfer(t.id),
+                              color: 'green'
+                            },
+                            t.status === 'pending' && {
+                              label: '取消',
+                              onClick: () => cancelTransfer(t.id),
+                              color: 'red'
+                            }
+                          ].filter(Boolean) as Array<{label: string; onClick: () => void; color: string}>)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 创建取料单模态框 */}
+        {showWithdrawalModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">创建取料单</h3>
+                <button
+                  onClick={() => setShowWithdrawalModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">客户 *</label>
+                  <select
+                    value={withdrawalFormData.customer_id}
+                    onChange={(e) => setWithdrawalFormData({ ...withdrawalFormData, customer_id: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="">请选择客户</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">取料克重 *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={withdrawalFormData.gold_weight}
+                    onChange={(e) => setWithdrawalFormData({ ...withdrawalFormData, gold_weight: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    placeholder="请输入取料克重"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">取料方式</label>
+                  <select
+                    value={withdrawalFormData.withdrawal_type}
+                    onChange={(e) => setWithdrawalFormData({ ...withdrawalFormData, withdrawal_type: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="self">自取</option>
+                    <option value="deliver">送到其他公司</option>
+                  </select>
+                </div>
+                {withdrawalFormData.withdrawal_type === 'deliver' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">目的地公司</label>
+                      <input
+                        type="text"
+                        value={withdrawalFormData.destination_company}
+                        onChange={(e) => setWithdrawalFormData({ ...withdrawalFormData, destination_company: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-lg"
+                        placeholder="如：古唐、鑫韵"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">目的地地址</label>
+                      <input
+                        type="text"
+                        value={withdrawalFormData.destination_address}
+                        onChange={(e) => setWithdrawalFormData({ ...withdrawalFormData, destination_address: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-lg"
+                        placeholder="请输入目的地地址"
+                      />
+                    </div>
+                  </>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">授权取料人</label>
+                  <input
+                    type="text"
+                    value={withdrawalFormData.authorized_person}
+                    onChange={(e) => setWithdrawalFormData({ ...withdrawalFormData, authorized_person: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    placeholder="请输入取料人姓名"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">取料人电话</label>
+                  <input
+                    type="text"
+                    value={withdrawalFormData.authorized_phone}
+                    onChange={(e) => setWithdrawalFormData({ ...withdrawalFormData, authorized_phone: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    placeholder="请输入取料人电话"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+                  <textarea
+                    value={withdrawalFormData.remark}
+                    onChange={(e) => setWithdrawalFormData({ ...withdrawalFormData, remark: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    rows={3}
+                    placeholder="可选备注信息"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end pt-2">
+                  <button
+                    onClick={() => setShowWithdrawalModal(false)}
+                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={createWithdrawal}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                  >
+                    创建
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 创建转料单模态框 */}
+        {showTransferModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">创建转料单</h3>
+                <button
+                  onClick={() => setShowTransferModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">转出客户 *</label>
+                  <select
+                    value={transferFormData.from_customer_id}
+                    onChange={(e) => setTransferFormData({ ...transferFormData, from_customer_id: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="">请选择转出客户</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">转入客户 *</label>
+                  <select
+                    value={transferFormData.to_customer_id}
+                    onChange={(e) => setTransferFormData({ ...transferFormData, to_customer_id: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="">请选择转入客户</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">转料克重 *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={transferFormData.gold_weight}
+                    onChange={(e) => setTransferFormData({ ...transferFormData, gold_weight: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    placeholder="请输入转料克重"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+                  <textarea
+                    value={transferFormData.remark}
+                    onChange={(e) => setTransferFormData({ ...transferFormData, remark: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    rows={3}
+                    placeholder="可选备注信息"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end pt-2">
+                  <button
+                    onClick={() => setShowTransferModal(false)}
+                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={createTransfer}
                     className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
                   >
                     创建
