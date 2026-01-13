@@ -534,9 +534,13 @@ function App() {
                   if (line.startsWith('data: ')) {
                     try {
                       const jsonStr = line.slice(6)
-                      console.log('解析SSE JSON:', jsonStr.substring(0, 200)) // 只显示前200字符
+                      console.log('解析SSE JSON:', jsonStr) // 显示完整JSON
                       const data = JSON.parse(jsonStr)
                       console.log('收到SSE数据:', data) // 调试日志
+                      // 特别检查 all_products
+                      if (data.data?.all_products) {
+                        console.log('【重要】检测到 all_products:', data.data.all_products)
+                      }
                 
                 // 处理思考步骤
                 if (data.type === 'thinking') {
