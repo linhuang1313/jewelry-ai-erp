@@ -38,6 +38,39 @@ def get_next_fl_code_api(db: Session = Depends(get_db)):
     return {"code": code}
 
 
+@router.get("/batch-f-codes", response_model=dict)
+def get_batch_f_codes(count: int = 1, db: Session = Depends(get_db)):
+    """批量获取多个F编码（不创建，仅预览）"""
+    if count <= 0:
+        return {"codes": [], "count": 0}
+    if count > 500:
+        count = 500  # 限制最多500个
+    
+    # 查找当前最大的F编码
+    last_f_code = db.query(ProductCode).filter(
+        ProductCode.code_type == "f_single",
+        ProductCode.code.like("F%")
+    ).order_by(ProductCode.code.desc()).first()
+    
+    if last_f_code:
+        try:
+            start_num = int(last_f_code.code[1:]) + 1
+        except ValueError:
+            start_num = 1
+    else:
+        start_num = 1
+    
+    # 生成编码列表
+    codes = [f"F{start_num + i:08d}" for i in range(count)]
+    
+    return {
+        "codes": codes,
+        "count": len(codes),
+        "start": codes[0] if codes else None,
+        "end": codes[-1] if codes else None
+    }
+
+
 @router.get("/search", response_model=ProductCodeSearchResponse)
 def search_product_codes(
     keyword: Optional[str] = None,

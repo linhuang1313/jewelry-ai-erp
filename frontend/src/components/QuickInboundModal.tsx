@@ -50,6 +50,15 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchResults, setSearchResults] = useState<{rowId: string, results: ProductCode[]}[]>([]);
   const [batchAddCount, setBatchAddCount] = useState<string>('10'); // 批量添加行数
+  
+  // 珐琅产品批量生成状态
+  const [showEnamelGenerator, setShowEnamelGenerator] = useState(false);
+  const [enamelCodeType, setEnamelCodeType] = useState<'f' | 'fl'>('f'); // F码或FL码
+  const [enamelProductName, setEnamelProductName] = useState('');
+  const [enamelCount, setEnamelCount] = useState<string>('10');
+  const [enamelWeight, setEnamelWeight] = useState<string>('');
+  const [enamelLaborCost, setEnamelLaborCost] = useState<string>('');
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // 加载供应商列表
   useEffect(() => {
@@ -153,6 +162,87 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
     const newRows = Array.from({ length: count }, () => createEmptyRow());
     setRows(prev => [...prev, ...newRows]);
     toast.success(`已添加 ${count} 行`);
+  };
+
+  // 批量生成珐琅产品编码
+  const generateEnamelProducts = async () => {
+    const count = parseInt(enamelCount) || 0;
+    if (count <= 0) {
+      toast.error('请输入有效的数量');
+      return;
+    }
+    if (count > 500) {
+      toast.error('一次最多生成500个');
+      return;
+    }
+    if (!enamelProductName.trim()) {
+      toast.error('请输入商品名称');
+      return;
+    }
+    
+    setIsGenerating(true);
+    
+    try {
+      let codes: string[] = [];
+      
+      if (enamelCodeType === 'f') {
+        // F码：每件一个唯一编码
+        const response = await fetch(`${API_BASE_URL}/api/product-codes/batch-f-codes?count=${count}`);
+        if (response.ok) {
+          const data = await response.json();
+          codes = data.codes || [];
+        } else {
+          throw new Error('获取F编码失败');
+        }
+      } else {
+        // FL码：所有商品共用一个编码
+        const response = await fetch(`${API_BASE_URL}/api/product-codes/next-fl-code`);
+        if (response.ok) {
+          const data = await response.json();
+          codes = Array(count).fill(data.code);
+        } else {
+          throw new Error('获取FL编码失败');
+        }
+      }
+      
+      if (codes.length === 0) {
+        throw new Error('未能生成编码');
+      }
+      
+      // 创建新行
+      const newRows: InboundRow[] = codes.map((code) => ({
+        id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        productCode: code,
+        productName: enamelProductName,
+        weight: enamelWeight,
+        laborCost: enamelLaborCost,
+        pieceCount: '1', // 珐琅产品默认1件
+        pieceLaborCost: '',
+      }));
+      
+      // 添加到表格（替换空行或追加）
+      setRows(prev => {
+        // 如果当前只有一行且为空，则替换；否则追加
+        if (prev.length === 1 && !prev[0].productName && !prev[0].productCode) {
+          return newRows;
+        }
+        return [...prev, ...newRows];
+      });
+      
+      toast.success(`已生成 ${codes.length} 个${enamelCodeType === 'f' ? 'F' : 'FL'}编码商品`);
+      setShowEnamelGenerator(false);
+      
+      // 重置表单
+      setEnamelProductName('');
+      setEnamelCount('10');
+      setEnamelWeight('');
+      setEnamelLaborCost('');
+    } catch (error) {
+      console.error('生成珐琅编码失败:', error);
+      toast.error('生成编码失败，请重试');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   // 删除行
@@ -473,11 +563,141 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
               </button>
             </div>
             
+            {/* 分隔线 */}
+            <div className="h-6 w-px bg-gray-300"></div>
+            
+            {/* 珐琅产品批量生成按钮 */}
+            <button
+              onClick={() => setShowEnamelGenerator(!showEnamelGenerator)}
+              className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-colors ${
+                showEnamelGenerator 
+                  ? 'text-white bg-purple-500 hover:bg-purple-600' 
+                  : 'text-purple-600 hover:bg-purple-50 border border-purple-300'
+              }`}
+            >
+              <span>🎨</span>
+              珐琅编码批量生成
+            </button>
+            
             {/* 当前行数显示 */}
             <div className="ml-auto text-sm text-gray-500">
               当前共 {rows.length} 行
             </div>
           </div>
+          
+          {/* 珐琅产品批量生成面板 */}
+          {showEnamelGenerator && (
+            <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-xl">
+              <h4 className="text-sm font-semibold text-purple-800 mb-3 flex items-center gap-2">
+                🎨 珐琅产品批量生成
+              </h4>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                {/* 编码类型选择 */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">编码类型</label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setEnamelCodeType('f')}
+                      className={`flex-1 px-3 py-2 text-xs rounded-lg transition-colors ${
+                        enamelCodeType === 'f'
+                          ? 'bg-purple-500 text-white'
+                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      F码 (一码一件)
+                    </button>
+                    <button
+                      onClick={() => setEnamelCodeType('fl')}
+                      className={`flex-1 px-3 py-2 text-xs rounded-lg transition-colors ${
+                        enamelCodeType === 'fl'
+                          ? 'bg-purple-500 text-white'
+                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      FL码 (批量)
+                    </button>
+                  </div>
+                </div>
+                
+                {/* 商品名称 */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">商品名称 *</label>
+                  <input
+                    type="text"
+                    value={enamelProductName}
+                    onChange={(e) => setEnamelProductName(e.target.value)}
+                    placeholder="如：珐琅吊坠"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+                
+                {/* 数量 */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">数量 *</label>
+                  <input
+                    type="number"
+                    value={enamelCount}
+                    onChange={(e) => setEnamelCount(e.target.value)}
+                    min="1"
+                    max="500"
+                    placeholder="10"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+                
+                {/* 克重 */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">单件克重(g)</label>
+                  <input
+                    type="number"
+                    value={enamelWeight}
+                    onChange={(e) => setEnamelWeight(e.target.value)}
+                    min="0"
+                    step="0.01"
+                    placeholder="可选"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+                
+                {/* 工费 */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">克工费(元)</label>
+                  <input
+                    type="number"
+                    value={enamelLaborCost}
+                    onChange={(e) => setEnamelLaborCost(e.target.value)}
+                    min="0"
+                    step="0.01"
+                    placeholder="可选"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+              </div>
+              
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-xs text-gray-500">
+                  {enamelCodeType === 'f' 
+                    ? `将生成 ${enamelCount || 0} 个唯一F编码（F00000001, F00000002, ...），每件商品一个编码` 
+                    : `将生成 ${enamelCount || 0} 行，共用一个FL编码（适合同款批量产品）`}
+                </p>
+                <button
+                  onClick={generateEnamelProducts}
+                  disabled={isGenerating}
+                  className="px-4 py-2 text-sm text-white bg-purple-500 hover:bg-purple-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isGenerating ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      生成中...
+                    </>
+                  ) : (
+                    <>生成并填充到表格</>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 底部操作栏 */}
