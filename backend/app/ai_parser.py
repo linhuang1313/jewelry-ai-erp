@@ -138,6 +138,14 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
    - 如果用户说"工费8元，100克"，也是工费8元/克，重量100克
    - 如果用户说"第一行是...，第二行是..."，解析为多个商品
    - 如果多个商品共享同一供应商，每个商品都要包含supplier
+   
+   **多商品入库识别（非常重要）**：
+   - 当用户输入中包含多组"重量+工费"数据时，应识别为多个商品
+   - 例如："古法吊坠 100克 6元 250g 3.5元" → 两个商品：(100克,6元) 和 (250g,3.5元)
+   - 每组重量和工费必须正确配对，不要把第一个商品的工费应用到第二个商品
+   - 如果第二个商品没有明确名称，使用"商品"作为默认名称
+   - 逗号、顿号、数字序号(1. 2. 3.)都是商品分隔的标志
+   - 识别模式：商品名 + 重量 + 工费 → 一个商品；遇到新的重量+工费组合 → 新商品
 4. **订单号前缀识别**（非常重要）：
    - **RK开头** 的单号是入库单号，如 "RK1768047147249" → action: "查询入库单"，order_no: "RK1768047147249"
    - **XS开头** 的单号是销售单号，如 "XS20260111162534" → action: "查询销售单"，sales_order_no: "XS20260111162534"
@@ -173,7 +181,7 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
 
 只返回JSON，不要其他文字。
 
-示例1（入库）：
+示例1（单个商品入库）：
 用户输入："古法戒指 100克 工费8元 供应商是金源珠宝，帮我做个入库"
 {{
   "action": "入库",
@@ -182,6 +190,73 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
       "product_name": "古法戒指",
       "weight": 100,
       "labor_cost": 8,
+      "supplier": "金源珠宝"
+    }}
+  ]
+}}
+
+示例1b（多个商品入库，不同工费）：
+用户输入："古法吊坠 100克 工费6元 250g 3.5元 供应商是金源珠宝，帮我做个入库"
+解析说明：用户输入了两组数据（100克6元 和 250g3.5元），应识别为两个商品，第二个商品名称未指定时使用"商品"
+{{
+  "action": "入库",
+  "products": [
+    {{
+      "product_name": "古法吊坠",
+      "weight": 100,
+      "labor_cost": 6,
+      "supplier": "金源珠宝"
+    }},
+    {{
+      "product_name": "商品",
+      "weight": 250,
+      "labor_cost": 3.5,
+      "supplier": "金源珠宝"
+    }}
+  ]
+}}
+
+示例1c（多个商品入库，明确列出）：
+用户输入："帮我入库：1.古法手镯100克8元 2.精品戒指50克6元 3.3D吊坠30克12元，供应商都是鑫韵"
+{{
+  "action": "入库",
+  "products": [
+    {{
+      "product_name": "古法手镯",
+      "weight": 100,
+      "labor_cost": 8,
+      "supplier": "鑫韵"
+    }},
+    {{
+      "product_name": "精品戒指",
+      "weight": 50,
+      "labor_cost": 6,
+      "supplier": "鑫韵"
+    }},
+    {{
+      "product_name": "3D吊坠",
+      "weight": 30,
+      "labor_cost": 12,
+      "supplier": "鑫韵"
+    }}
+  ]
+}}
+
+示例1d（多个商品入库，逗号分隔）：
+用户输入："古法吊坠100克6元，古法手镯250克3.5元，供应商金源珠宝，入库"
+{{
+  "action": "入库",
+  "products": [
+    {{
+      "product_name": "古法吊坠",
+      "weight": 100,
+      "labor_cost": 6,
+      "supplier": "金源珠宝"
+    }},
+    {{
+      "product_name": "古法手镯",
+      "weight": 250,
+      "labor_cost": 3.5,
       "supplier": "金源珠宝"
     }}
   ]
