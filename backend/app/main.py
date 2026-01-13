@@ -859,15 +859,36 @@ async def handle_inbound(ai_response, db: Session) -> Dict[str, Any]:
     validated_products = []
     validation_errors = []
     
+    # 提取共享的供应商（从任何一个商品中提取）
+    shared_supplier = None
+    for product in ai_response.products:
+        if product.supplier:
+            shared_supplier = product.supplier
+            break
+    
     for idx, product in enumerate(ai_response.products):
+        # 如果当前商品没有供应商，使用共享供应商
+        product_supplier = product.supplier or shared_supplier
+        
         # 验证必填字段
-        if not product.product_name or not product.weight or product.labor_cost is None or not product.supplier:
+        if not product.product_name or not product.weight or product.labor_cost is None:
             validation_errors.append({
                 "index": idx + 1,
                 "message": f"商品信息不完整: {product.model_dump()}",
                 "product": product.model_dump()
             })
             continue
+        
+        if not product_supplier:
+            validation_errors.append({
+                "index": idx + 1,
+                "message": f"缺少供应商信息: {product.model_dump()}",
+                "product": product.model_dump()
+            })
+            continue
+        
+        # 更新商品的供应商字段（使用共享供应商）
+        product.supplier = product_supplier
         
         # 验证并转换数值类型
         try:
