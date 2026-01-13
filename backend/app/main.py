@@ -120,6 +120,30 @@ async def startup_event():
     init_db()
     logger.info("数据库初始化完成")
     
+    # 执行数据库迁移 - 添加缺失的列
+    from .database import SessionLocal, engine
+    from sqlalchemy import text
+    db = SessionLocal()
+    try:
+        # 检查并添加 product_code 列
+        result = db.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'inbound_details' AND column_name = 'product_code'
+        """))
+        if not result.fetchone():
+            db.execute(text("""
+                ALTER TABLE inbound_details 
+                ADD COLUMN product_code VARCHAR(20) NULL
+            """))
+            db.commit()
+            logger.info("已添加 product_code 列到 inbound_details 表")
+    except Exception as e:
+        logger.warning(f"迁移检查: {e}")
+        db.rollback()
+    finally:
+        db.close()
+    
     # 初始化预定义商品编码
     from .init_product_codes import init_product_codes
     from .database import SessionLocal
