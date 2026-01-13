@@ -624,10 +624,13 @@ function App() {
                     
                     // 检查是否是入库操作，如果是则创建待确认的卡片数据
                     let inboundCard = null
+                    let inboundCards = null  // 多商品入库时使用
                     console.log('检查入库数据:', {
                       success: data.data?.success,
                       pending: data.data?.pending,
                       hasCardData: !!data.data?.card_data,
+                      hasAllProducts: !!data.data?.all_products,
+                      allProductsCount: data.data?.all_products?.length,
                       hasOrder: !!data.data?.order,
                       hasDetail: !!data.data?.detail
                     })
@@ -635,27 +638,51 @@ function App() {
                     if (data.data?.success && data.data?.pending && data.data?.card_data) {
                       // 方案B：创建待确认的卡片（status: 'pending'）
                       try {
-                        const cardData = data.data.card_data
-                        console.log('收到待确认卡片数据:', cardData)
-                        // 使用 createNewCard 创建新卡片
-                        inboundCard = createNewCard({
-                          productName: cardData.product_name,
-                          goldWeight: cardData.weight,
-                          laborCostPerGram: cardData.labor_cost,
-                          totalCost: cardData.total_cost,
-                          supplier: {
-                            id: 0,
-                            name: cardData.supplier || '未知供应商',
-                          },
-                          status: 'pending', // 待确认状态 - 重要！
-                          source: 'api',
-                          createdAt: new Date(),
-                        })
-                        // 如果没有条码，暂时留空（入库后会生成）
-                        if (!inboundCard.barcode) {
-                          inboundCard.barcode = '' // 待确认时暂时没有条码
+                        // 检查是否有多个商品（all_products数组）
+                        const allProducts = data.data.all_products || [data.data.card_data]
+                        console.log('收到待确认商品数据，共', allProducts.length, '个商品:', allProducts)
+                        
+                        if (allProducts.length > 1) {
+                          // 多商品入库：创建多个卡片
+                          inboundCards = allProducts.map((cardData, index) => {
+                            const card = createNewCard({
+                              productName: cardData.product_name,
+                              goldWeight: cardData.weight,
+                              laborCostPerGram: cardData.labor_cost,
+                              totalCost: cardData.total_cost,
+                              supplier: {
+                                id: 0,
+                                name: cardData.supplier || '未知供应商',
+                              },
+                              status: 'pending',
+                              source: 'api',
+                              createdAt: new Date(),
+                            })
+                            card.barcode = ''
+                            return card
+                          })
+                          console.log('创建多商品待确认入库卡片，共', inboundCards.length, '张')
+                        } else {
+                          // 单商品入库：保持原逻辑
+                          const cardData = allProducts[0]
+                          inboundCard = createNewCard({
+                            productName: cardData.product_name,
+                            goldWeight: cardData.weight,
+                            laborCostPerGram: cardData.labor_cost,
+                            totalCost: cardData.total_cost,
+                            supplier: {
+                              id: 0,
+                              name: cardData.supplier || '未知供应商',
+                            },
+                            status: 'pending',
+                            source: 'api',
+                            createdAt: new Date(),
+                          })
+                          if (!inboundCard.barcode) {
+                            inboundCard.barcode = ''
+                          }
+                          console.log('创建单商品待确认入库卡片，状态:', inboundCard.status)
                         }
-                        console.log('创建待确认入库卡片，状态:', inboundCard.status, '完整卡片:', inboundCard)
                       } catch (error) {
                         console.error('创建入库卡片失败:', error)
                       }
@@ -696,8 +723,9 @@ function App() {
                       chartData: data.data.chart_data,
                       pieData: data.data.pie_data,
                       chartType: data.data.action,
-                      // 添加入库卡片数据
+                      // 添加入库卡片数据（单商品或多商品）
                       inboundCard: inboundCard,
+                      inboundCards: inboundCards,  // 多商品入库时的卡片数组
                     }])
                   } else {
                     console.warn('complete事件没有data字段')
@@ -2287,6 +2315,159 @@ function App() {
                               },
                             }}
                           />
+                        </div>
+                      </div>
+                    )}
+                    {/* 多商品入库卡片展示 */}
+                    {msg.inboundCards && msg.inboundCards.length > 0 && (
+                      <div className="flex justify-start mt-2">
+                        <div className="max-w-4xl w-full space-y-4">
+                          <div className="text-sm text-gray-600 mb-2 font-medium">
+                            共 {msg.inboundCards.length} 个商品待入库
+                          </div>
+                          {msg.inboundCards.map((card, cardIndex) => (
+                            <div key={card.id || cardIndex} className="border-l-4 border-amber-400 pl-3">
+                              <JewelryInboundCardComponent
+                                data={card}
+                                actions={{
+                                  onConfirm: async (cardToConfirm) => {
+                                    console.log('确认入库单个商品:', cardToConfirm)
+                                    try {
+                                      // 更新当前卡片状态为处理中
+                                      setMessages(prev => prev.map(m => {
+                                        if (m.id === msg.id && m.inboundCards) {
+                                          const updatedCards = m.inboundCards.map((c, i) => 
+                                            i === cardIndex ? updateCard(c, { status: 'processing' }) : c
+                                          )
+                                          return { ...m, inboundCards: updatedCards }
+                                        }
+                                        return m
+                                      }))
+                                      
+                                      // 调用入库API
+                                      const { confirmInbound } = await import('./services/inboundService')
+                                      const result = await confirmInbound(cardToConfirm, false)
+                                      
+                                      console.log('确认入库结果:', result)
+                                      
+                                      // 更新卡片状态
+                                      setMessages(prev => prev.map(m => {
+                                        if (m.id === msg.id && m.inboundCards) {
+                                          const updatedCards = m.inboundCards.map((c, i) => 
+                                            i === cardIndex ? updateCard(c, { 
+                                              status: 'confirmed',
+                                              orderNo: result.order?.order_no || c.orderNo,
+                                              orderId: result.order?.id || c.orderId,
+                                              barcode: result.order?.order_no || c.barcode || '',
+                                            }) : c
+                                          )
+                                          return { ...m, inboundCards: updatedCards }
+                                        }
+                                        return m
+                                      }))
+                                    } catch (error) {
+                                      console.error('确认入库失败:', error)
+                                      setMessages(prev => prev.map(m => {
+                                        if (m.id === msg.id && m.inboundCards) {
+                                          const updatedCards = m.inboundCards.map((c, i) => 
+                                            i === cardIndex ? updateCard(c, { 
+                                              status: 'error', 
+                                              errorMessage: error instanceof Error ? error.message : '入库失败'
+                                            }) : c
+                                          )
+                                          return { ...m, inboundCards: updatedCards }
+                                        }
+                                        return m
+                                      }))
+                                    }
+                                  },
+                                  onReportError: async (cardToReport, errorReason) => {
+                                    console.log('报告入库数据错误:', cardToReport, errorReason)
+                                    try {
+                                      await reportError(cardToReport, errorReason, false)
+                                      setMessages(prev => prev.map(m => {
+                                        if (m.id === msg.id && m.inboundCards) {
+                                          const updatedCards = m.inboundCards.map((c, i) => 
+                                            i === cardIndex ? updateCard(c, { 
+                                              status: 'error', 
+                                              errorMessage: errorReason || '数据报错已提交' 
+                                            }) : c
+                                          )
+                                          return { ...m, inboundCards: updatedCards }
+                                        }
+                                        return m
+                                      }))
+                                    } catch (error) {
+                                      console.error('报错提交失败:', error)
+                                    }
+                                  },
+                                }}
+                              />
+                            </div>
+                          ))}
+                          {/* 批量确认按钮 */}
+                          {msg.inboundCards.some(c => c.status === 'pending') && (
+                            <div className="flex gap-3 mt-4 pt-4 border-t border-gray-200">
+                              <button
+                                onClick={async () => {
+                                  console.log('批量确认入库')
+                                  const { confirmInbound } = await import('./services/inboundService')
+                                  
+                                  for (let i = 0; i < msg.inboundCards.length; i++) {
+                                    const card = msg.inboundCards[i]
+                                    if (card.status !== 'pending') continue
+                                    
+                                    try {
+                                      // 更新状态为处理中
+                                      setMessages(prev => prev.map(m => {
+                                        if (m.id === msg.id && m.inboundCards) {
+                                          const updatedCards = m.inboundCards.map((c, idx) => 
+                                            idx === i ? updateCard(c, { status: 'processing' }) : c
+                                          )
+                                          return { ...m, inboundCards: updatedCards }
+                                        }
+                                        return m
+                                      }))
+                                      
+                                      const result = await confirmInbound(card, false)
+                                      
+                                      // 更新状态为已确认
+                                      setMessages(prev => prev.map(m => {
+                                        if (m.id === msg.id && m.inboundCards) {
+                                          const updatedCards = m.inboundCards.map((c, idx) => 
+                                            idx === i ? updateCard(c, { 
+                                              status: 'confirmed',
+                                              orderNo: result.order?.order_no || c.orderNo,
+                                              orderId: result.order?.id || c.orderId,
+                                            }) : c
+                                          )
+                                          return { ...m, inboundCards: updatedCards }
+                                        }
+                                        return m
+                                      }))
+                                    } catch (error) {
+                                      console.error('批量入库失败:', error)
+                                      setMessages(prev => prev.map(m => {
+                                        if (m.id === msg.id && m.inboundCards) {
+                                          const updatedCards = m.inboundCards.map((c, idx) => 
+                                            idx === i ? updateCard(c, { 
+                                              status: 'error',
+                                              errorMessage: error instanceof Error ? error.message : '入库失败'
+                                            }) : c
+                                          )
+                                          return { ...m, inboundCards: updatedCards }
+                                        }
+                                        return m
+                                      }))
+                                    }
+                                  }
+                                }}
+                                className="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-medium hover:from-amber-600 hover:to-orange-600 transition-all shadow-md"
+                              >
+                                ✓ 全部确认入库
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
