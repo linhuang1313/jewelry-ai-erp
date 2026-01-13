@@ -183,7 +183,7 @@ async def create_return_order(
         # 处理图片
         images_json = json.dumps(data.images) if data.images else None
         
-        # 创建退货单
+        # 创建退货单 - 直接完成，无需审批
         return_order = ReturnOrder(
             return_no=return_no,
             return_type=data.return_type,
@@ -194,21 +194,36 @@ async def create_return_order(
             inbound_order_id=data.inbound_order_id,
             return_reason=data.return_reason,
             reason_detail=data.reason_detail,
-            status="pending",
+            status="completed",  # 直接完成
             created_by=created_by,
+            completed_by=created_by,  # 创建人即完成人
+            completed_at=now,  # 立即完成
             images=images_json,
             remark=data.remark
         )
         
         db.add(return_order)
+        
+        # 直接扣减库存
+        if data.from_location_id:
+            inventory.weight -= data.return_weight
+            logger.info(f"扣减库存: {data.product_name} 在位置 {location.name} 扣减 {data.return_weight}g，剩余 {inventory.weight}g")
+        
+        # 如果是退给供应商，更新供应商统计
+        if data.return_type == "to_supplier" and data.supplier_id:
+            supplier.total_supply_weight -= data.return_weight
+            if supplier.total_supply_count > 0:
+                supplier.total_supply_count -= 1
+            logger.info(f"更新供应商统计: {supplier.name} 供货重量减少 {data.return_weight}g")
+        
         db.commit()
         db.refresh(return_order)
         
-        logger.info(f"创建退货单成功: {return_no}, 类型: {data.return_type}, 商品: {data.product_name}, 克重: {data.return_weight}g")
+        logger.info(f"退货单创建并完成: {return_no}, 类型: {data.return_type}, 商品: {data.product_name}, 克重: {data.return_weight}g, 库存已扣减")
         
         return {
             "success": True,
-            "message": f"退货单 {return_no} 创建成功，等待审批",
+            "message": f"退货单 {return_no} 创建成功，库存已扣减 {data.return_weight}g",
             "return_order": build_return_response(return_order, db)
         }
     except Exception as e:
