@@ -489,11 +489,16 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
     setLedgerEndDate(endDate.toISOString().split('T')[0]);
     setLedgerStartDate(startDate.toISOString().split('T')[0]);
     
-    // 加载客户列表（结算和料部都需要）
-    if (userRole === 'material' || userRole === 'settlement' || userRole === 'manager') {
+    // 加载客户列表（结算和管理层需要）
+    if (userRole === 'settlement' || userRole === 'manager') {
       loadCustomers();
       loadWithdrawals();
       loadTransfers();
+    }
+    // 料部只需要加载取料单（用于待发取料）
+    if (userRole === 'material') {
+      loadCustomers();
+      loadWithdrawals();
     }
     
     // 根据角色加载数据
@@ -528,7 +533,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
     } else if (activeTab === 'withdrawals') {
       loadWithdrawals();
       loadCustomers();
-    } else if (activeTab === 'transfers') {
+    } else if (activeTab === 'transfers' && (userRole === 'settlement' || userRole === 'manager')) {
       loadTransfers();
       loadCustomers();
     }
@@ -698,7 +703,6 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                   {renderTabButton('receipts', '待确认收料', pendingReceipts.length)}
                   {renderTabButton('payments', '付料单')}
                   {renderTabButton('withdrawals', '待发取料', withdrawals.filter(w => w.status === 'pending').length)}
-                  {renderTabButton('transfers', '待确认转料', transfers.filter(t => t.status === 'pending').length)}
                   {renderTabButton('balance', '金料库存')}
                 </>
               )}
@@ -1109,18 +1113,8 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                               label: '打印',
                               onClick: () => printTransfer(t.id),
                               color: 'blue'
-                            },
-                            t.status === 'pending' && hasPermission(userRole, 'canConfirmTransfer') && {
-                              label: '确认',
-                              onClick: () => confirmTransfer(t.id),
-                              color: 'green'
-                            },
-                            t.status === 'pending' && {
-                              label: '取消',
-                              onClick: () => cancelTransfer(t.id),
-                              color: 'red'
                             }
-                          ].filter(Boolean) as Array<{label: string; onClick: () => void; color: string}>)}
+                          ])}
                         </td>
                       </tr>
                     ))}

@@ -1856,7 +1856,14 @@ async def create_customer_transfer(
     ).count()
     transfer_no = f"ZL{now.strftime('%Y%m%d')}{count + 1:03d}"
     
-    # 创建转料单
+    # 获取或创建转入客户存料记录
+    to_deposit = get_or_create_customer_deposit(
+        to_customer.id,
+        to_customer.name,
+        db
+    )
+    
+    # 创建转料单（直接完成，因为只是系统调换，不涉及实物）
     transfer = CustomerTransfer(
         transfer_no=transfer_no,
         from_customer_id=from_customer.id,
@@ -1864,15 +1871,60 @@ async def create_customer_transfer(
         to_customer_id=to_customer.id,
         to_customer_name=to_customer.name,
         gold_weight=data.gold_weight,
-        status="pending",
+        status="completed",  # 直接完成，不需要料部确认
         created_by=created_by,
+        confirmed_by=created_by,  # 创建人即确认人
+        confirmed_at=now,
         remark=data.remark
     )
     db.add(transfer)
+    db.flush()
+    
+    # 扣减转出客户存料
+    from_balance_before = from_deposit.current_balance
+    from_deposit.current_balance -= data.gold_weight
+    from_deposit.total_used += data.gold_weight
+    from_deposit.last_transaction_at = now
+    
+    # 增加转入客户存料
+    to_balance_before = to_deposit.current_balance
+    to_deposit.current_balance += data.gold_weight
+    to_deposit.total_deposited += data.gold_weight
+    to_deposit.last_transaction_at = now
+    
+    # 创建转出客户交易记录
+    from_transaction = CustomerGoldDepositTransaction(
+        customer_id=from_customer.id,
+        customer_name=from_customer.name,
+        transaction_type='use',
+        amount=data.gold_weight,
+        balance_before=from_balance_before,
+        balance_after=from_deposit.current_balance,
+        created_by=created_by,
+        remark=f"转料单：{transfer_no}，转出至：{to_customer.name}"
+    )
+    db.add(from_transaction)
+    
+    # 创建转入客户交易记录
+    to_transaction = CustomerGoldDepositTransaction(
+        customer_id=to_customer.id,
+        customer_name=to_customer.name,
+        transaction_type='deposit',
+        amount=data.gold_weight,
+        balance_before=to_balance_before,
+        balance_after=to_deposit.current_balance,
+        created_by=created_by,
+        remark=f"转料单：{transfer_no}，转入自：{from_customer.name}"
+    )
+    db.add(to_transaction)
+    
     db.commit()
     db.refresh(transfer)
     
-    logger.info(f"创建转料单: {transfer_no}, {from_customer.name} -> {to_customer.name}, 克重: {data.gold_weight}克")
+    logger.info(f"创建并完成转料单: {transfer_no}, "
+               f"{from_customer.name}({from_deposit.current_balance}克) -> "
+               f"{to_customer.name}({to_deposit.current_balance}克), "
+               f"克重: {data.gold_weight}克")
     
     return transfer
 
