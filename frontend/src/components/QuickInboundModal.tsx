@@ -63,7 +63,9 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       const response = await fetch(`${API_BASE_URL}/api/suppliers`);
       if (response.ok) {
         const data = await response.json();
-        setSuppliers(data.filter((s: Supplier & { status: string }) => s.status === 'active'));
+        // API 返回格式是 { success: true, suppliers: [...] }
+        const supplierList = data.suppliers || data || [];
+        setSuppliers(supplierList.filter((s: Supplier & { status: string }) => s.status === 'active'));
       }
     } catch (error) {
       console.error('加载供应商失败:', error);
@@ -75,7 +77,9 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       const response = await fetch(`${API_BASE_URL}/api/product-codes`);
       if (response.ok) {
         const data = await response.json();
-        setProductCodes(data);
+        // API 可能返回数组或 { codes: [...] } 格式
+        const codeList = Array.isArray(data) ? data : (data.codes || []);
+        setProductCodes(codeList);
       }
     } catch (error) {
       console.error('加载商品编码失败:', error);
