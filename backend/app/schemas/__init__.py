@@ -91,6 +91,7 @@ class AIResponse(BaseModel):
 
 class InboundOrderCreate(BaseModel):
     """创建入库单请求"""
+    product_code: Optional[str] = None  # 商品编码（JPJZ, F00000001等）
     product_name: str
     product_category: Optional[str] = None
     weight: float
@@ -98,6 +99,22 @@ class InboundOrderCreate(BaseModel):
     piece_count: Optional[int] = None  # 件数（可选）
     piece_labor_cost: Optional[float] = None  # 件工费（元/件，可选）
     supplier: Optional[str] = None
+
+
+class BatchInboundItem(BaseModel):
+    """批量入库单个商品项"""
+    product_code: Optional[str] = None  # 商品编码
+    product_name: str
+    weight: float
+    labor_cost: float  # 克工费（元/克）
+    piece_count: Optional[int] = None  # 件数（可选）
+    piece_labor_cost: Optional[float] = None  # 件工费（元/件，可选）
+
+
+class BatchInboundCreate(BaseModel):
+    """批量入库请求"""
+    supplier: str  # 供应商名称（所有商品共用）
+    items: List[BatchInboundItem]  # 商品列表
 
 
 class InboundOrderResponse(BaseModel):

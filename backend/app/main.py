@@ -29,7 +29,7 @@ from typing import List, Dict, Any, Optional
 
 from .database import get_db, init_db
 from .schemas import (
-    AIRequest, InboundOrderCreate,
+    AIRequest, InboundOrderCreate, BatchInboundCreate, BatchInboundItem,
     InboundOrderResponse, InboundDetailResponse, InventoryResponse,
     CustomerCreate, CustomerResponse,
     SupplierCreate, SupplierResponse,
@@ -1244,6 +1244,77 @@ async def create_inbound_order(card_data: InboundOrderCreate, db: Session = Depe
             "message": f"创建入库单失败: {str(e)}",
             "error": str(e)
         }
+
+
+@app.post("/api/inbound-orders/batch")
+async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Session = Depends(get_db)):
+    """批量创建入库单（快捷入库表格）"""
+    try:
+        if not batch_data.items:
+            return {
+                "success": False,
+                "message": "没有商品数据"
+            }
+        
+        results = []
+        success_count = 0
+        error_count = 0
+        
+        for idx, item in enumerate(batch_data.items):
+            try:
+                card_dict = {
+                    "product_code": item.product_code,
+                    "product_name": item.product_name,
+                    "weight": item.weight,
+                    "labor_cost": item.labor_cost,
+                    "piece_count": item.piece_count or 0,
+                    "piece_labor_cost": item.piece_labor_cost or 0.0,
+                    "supplier": batch_data.supplier
+                }
+                
+                result = await execute_inbound(card_dict, db)
+                
+                if result.get("success"):
+                    success_count += 1
+                    results.append({
+                        "index": idx + 1,
+                        "product_name": item.product_name,
+                        "success": True,
+                        "order_id": result.get("order_id"),
+                        "order_no": result.get("order_no")
+                    })
+                else:
+                    error_count += 1
+                    results.append({
+                        "index": idx + 1,
+                        "product_name": item.product_name,
+                        "success": False,
+                        "error": result.get("message", "入库失败")
+                    })
+            except Exception as e:
+                error_count += 1
+                results.append({
+                    "index": idx + 1,
+                    "product_name": item.product_name,
+                    "success": False,
+                    "error": str(e)
+                })
+        
+        return {
+            "success": success_count > 0,
+            "message": f"批量入库完成：成功 {success_count} 个，失败 {error_count} 个",
+            "success_count": success_count,
+            "error_count": error_count,
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"批量入库失败: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"批量入库失败: {str(e)}",
+            "error": str(e)
+        }
+
 
 @app.options("/api/inbound-orders/{order_id}/download")
 async def download_inbound_order_options(order_id: int):

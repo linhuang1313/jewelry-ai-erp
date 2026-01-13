@@ -15,6 +15,7 @@ import { SalespersonPage } from './components/SalespersonPage'
 import { CustomerPage } from './components/CustomerPage'
 import { QuickOrderModal } from './components/QuickOrderModal'
 import { QuickReturnModal } from './components/QuickReturnModal'
+import QuickInboundModal from './components/QuickInboundModal'
 import { SupplierPage } from './components/SupplierPage'
 import ReturnPage from './components/ReturnPage'
 import GoldMaterialPage from './components/GoldMaterialPage'
@@ -137,6 +138,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState('chat') // 'chat', 'finance', 'warehouse', 'settlement', 'analytics', 'export'
   const [showQuickOrderModal, setShowQuickOrderModal] = useState(false) // 快捷开单弹窗
   const [showQuickReturnModal, setShowQuickReturnModal] = useState(false) // 快捷退货弹窗
+  const [showQuickInboundModal, setShowQuickInboundModal] = useState(false) // 快捷入库弹窗
   const [showHistoryPanel, setShowHistoryPanel] = useState(false) // 历史回溯面板
   
   // 用户角色相关状态
@@ -1947,17 +1949,15 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 商品入库卡片 - 需要入库权限 */}
+                  {/* 快捷入库卡片 - 需要入库权限 */}
                   {hasPermission(userRole, 'canInbound') && (
                     <div 
-                      onClick={() => {
-                        setInput("古法黄金戒指 100克 工费6元 供应商是金源珠宝，帮我做个入库")
-                      }}
+                      onClick={() => setShowQuickInboundModal(true)}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
                       <div className="text-2xl mb-3">📦</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">商品入库</h3>
-                      <p className="text-sm text-gray-600">快速录入商品信息</p>
+                      <h3 className="font-semibold text-gray-900 mb-2">快捷入库</h3>
+                      <p className="text-sm text-gray-600">表格形式批量入库</p>
                     </div>
                   )}
                   
@@ -2965,6 +2965,18 @@ function App() {
           onClose={() => setShowQuickReturnModal(false)}
           onSuccess={() => {
             // 退货单创建成功后可以刷新数据
+          }}
+          userRole={userRole}
+        />
+      )}
+
+      {/* 快捷入库弹窗 - 需要入库权限 */}
+      {hasPermission(userRole, 'canInbound') && (
+        <QuickInboundModal
+          isOpen={showQuickInboundModal}
+          onClose={() => setShowQuickInboundModal(false)}
+          onSuccess={() => {
+            // 入库成功后可以刷新数据
           }}
           userRole={userRole}
         />
