@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { API_ENDPOINTS } from '../config';
+import { API_ENDPOINTS, API_BASE_URL } from '../config';
 import {
   X, Package, AlertCircle, Loader2, Printer, Download, CheckCircle
 } from 'lucide-react';
@@ -16,6 +16,12 @@ interface Location {
   code: string;
   name: string;
   location_type: string;
+}
+
+interface ProductCode {
+  code: string;
+  name: string;
+  code_type: string;
 }
 
 interface QuickReturnModalProps {
@@ -35,8 +41,10 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
 }) => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [productCodes, setProductCodes] = useState<ProductCode[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showProductDropdown, setShowProductDropdown] = useState(false);
   
   // 根据角色确定退货配置
   const getReturnConfig = () => {
@@ -78,13 +86,14 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
   // 创建成功后的退货单信息
   const [createdReturn, setCreatedReturn] = useState<any>(null);
 
-  // 加载供应商和位置列表
+  // 加载供应商、位置列表和商品编码
   useEffect(() => {
     if (isOpen) {
       if (returnConfig.needSupplier) {
         fetchSuppliers();
       }
       fetchLocations();
+      fetchProductCodes();
     }
   }, [isOpen]);
 
@@ -98,6 +107,21 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
     }
   }, [isOpen, locations, returnConfig.locationCode]);
 
+  // 点击外部关闭下拉框
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.product-dropdown-container')) {
+        setShowProductDropdown(false);
+      }
+    };
+    
+    if (showProductDropdown) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showProductDropdown]);
+
   const fetchSuppliers = async () => {
     try {
       const res = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/suppliers`);
@@ -107,6 +131,17 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
       }
     } catch (error) {
       console.error('获取供应商失败:', error);
+    }
+  };
+
+  const fetchProductCodes = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/product-codes`);
+      const data = await res.json();
+      const codeList = Array.isArray(data) ? data : (data.codes || []);
+      setProductCodes(codeList);
+    } catch (error) {
+      console.error('获取商品编码失败:', error);
     }
   };
 
@@ -325,19 +360,61 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
         {/* 表单内容 */}
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
           {/* 商品名称 */}
-          <div>
+          <div className="relative product-dropdown-container">
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               <Package className="w-4 h-4 inline mr-1" />
               商品名称 <span className="text-red-500">*</span>
             </label>
-            <input
-              type="text"
-              value={formData.product_name}
-              onChange={(e) => setFormData({ ...formData, product_name: e.target.value })}
-              placeholder="请输入商品名称"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
-                         focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={formData.product_name}
+                onChange={(e) => setFormData({ ...formData, product_name: e.target.value })}
+                onFocus={() => setShowProductDropdown(true)}
+                placeholder="输入或选择商品名称"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
+                           focus:ring-2 focus:ring-red-500 focus:border-transparent pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowProductDropdown(!showProductDropdown)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
+              >
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+            {/* 下拉选择框 */}
+            {showProductDropdown && (
+              <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-60 overflow-auto">
+                {(formData.product_name.trim() 
+                  ? productCodes.filter(pc => 
+                      pc.name.includes(formData.product_name) ||
+                      pc.code.toUpperCase().includes(formData.product_name.toUpperCase())
+                    )
+                  : productCodes
+                ).slice(0, 15).map((pc) => (
+                  <button
+                    key={pc.code}
+                    type="button"
+                    onClick={() => {
+                      setFormData({ ...formData, product_name: pc.name });
+                      setShowProductDropdown(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-red-50 flex items-center gap-2 border-b border-gray-50 last:border-b-0"
+                  >
+                    <span className="text-gray-700">{pc.name}</span>
+                    <span className="font-mono text-red-500 text-xs">({pc.code})</span>
+                  </button>
+                ))}
+                {productCodes.length === 0 && (
+                  <div className="px-4 py-4 text-center text-gray-400 text-sm">
+                    暂无商品编码
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 退货克重 */}
