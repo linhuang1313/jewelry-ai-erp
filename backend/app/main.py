@@ -534,8 +534,13 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     ctx.append_action(session_id, action_desc, result.get("message", "成功"), success=True)
                     
                     logger.info(f"[流式] {ai_response.action}操作完成，准备返回结果")
+                    logger.info(f"[流式] result 包含的字段: {list(result.keys()) if isinstance(result, dict) else type(result)}")
+                    if isinstance(result, dict) and 'all_products' in result:
+                        logger.info(f"[流式] all_products 数量: {len(result['all_products'])}")
+                        logger.info(f"[流式] all_products 内容: {result['all_products']}")
                     # 确保 result 可以被 JSON 序列化
                     result_json = json.dumps({'type': 'complete', 'data': result}, ensure_ascii=False, default=str)
+                    logger.info(f"[流式] 序列化后的JSON长度: {len(result_json)} 字符")
                     yield f"data: {result_json}\n\n"
                     logger.info("[流式] 已发送完成事件")
                     return
