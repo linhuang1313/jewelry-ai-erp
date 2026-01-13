@@ -50,6 +50,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchResults, setSearchResults] = useState<{rowId: string, results: ProductCode[]}[]>([]);
   const [batchAddCount, setBatchAddCount] = useState<string>('10'); // 批量添加行数
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null); // 当前打开的下拉框
   
   // 珐琅产品批量生成状态
   const [showEnamelGenerator, setShowEnamelGenerator] = useState(false);
@@ -67,6 +68,21 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       fetchProductCodes();
     }
   }, [isOpen]);
+
+  // 点击外部关闭下拉框
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.dropdown-container')) {
+        setOpenDropdownId(null);
+      }
+    };
+    
+    if (openDropdownId) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [openDropdownId]);
 
   const fetchSuppliers = async () => {
     try {
@@ -434,38 +450,109 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                   <td className="px-3 py-2 text-sm text-gray-500 text-center">
                     {index + 1}
                   </td>
-                  <td className="px-3 py-2 relative">
-                    <input
-                      type="text"
-                      value={row.productCode}
-                      onChange={(e) => updateRow(row.id, 'productCode', e.target.value)}
-                      placeholder="编码"
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                    />
-                    {/* 搜索结果下拉 */}
-                    {searchResults.find(r => r.rowId === row.id)?.results && (
-                      <div className="absolute z-10 w-64 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-auto">
-                        {searchResults.find(r => r.rowId === row.id)?.results.map((pc) => (
+                  <td className="px-3 py-2 relative dropdown-container">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={row.productCode}
+                        onChange={(e) => {
+                          updateRow(row.id, 'productCode', e.target.value);
+                          searchProductCode(row.id, e.target.value);
+                        }}
+                        onFocus={() => setOpenDropdownId(row.id)}
+                        placeholder="点击选择"
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500 cursor-pointer"
+                      />
+                      {/* 下拉箭头 */}
+                      <button
+                        onClick={() => setOpenDropdownId(openDropdownId === row.id ? null : row.id)}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
+                      >
+                        <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                    </div>
+                    {/* 下拉选择框 */}
+                    {openDropdownId === row.id && (
+                      <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-auto">
+                        {/* 搜索过滤后的结果 */}
+                        {(row.productCode.trim() 
+                          ? productCodes.filter(pc => 
+                              pc.code.toUpperCase().includes(row.productCode.toUpperCase()) ||
+                              pc.name.includes(row.productCode)
+                            )
+                          : productCodes
+                        ).slice(0, 20).map((pc) => (
                           <button
                             key={pc.code}
-                            onClick={() => selectProductCode(row.id, pc)}
-                            className="w-full px-3 py-2 text-left text-sm hover:bg-amber-50 flex items-center gap-2"
+                            onClick={() => {
+                              selectProductCode(row.id, pc);
+                              setOpenDropdownId(null);
+                            }}
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-amber-50 flex items-center gap-2 border-b border-gray-50 last:border-b-0"
                           >
-                            <span className="font-mono text-amber-600">{pc.code}</span>
-                            <span className="text-gray-600">{pc.name}</span>
+                            <span className="font-mono text-amber-600 font-medium min-w-[60px]">{pc.code}</span>
+                            <span className="text-gray-700 truncate">{pc.name}</span>
                           </button>
                         ))}
+                        {productCodes.length === 0 && (
+                          <div className="px-3 py-4 text-center text-gray-400 text-sm">
+                            暂无商品编码
+                          </div>
+                        )}
                       </div>
                     )}
                   </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="text"
-                      value={row.productName}
-                      onChange={(e) => updateRow(row.id, 'productName', e.target.value)}
-                      placeholder="商品名称"
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                    />
+                  <td className="px-3 py-2 relative dropdown-container">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={row.productName}
+                        onChange={(e) => updateRow(row.id, 'productName', e.target.value)}
+                        onFocus={() => setOpenDropdownId(`name-${row.id}`)}
+                        placeholder="点击选择"
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500 cursor-pointer"
+                      />
+                      {/* 下拉箭头 */}
+                      <button
+                        onClick={() => setOpenDropdownId(openDropdownId === `name-${row.id}` ? null : `name-${row.id}`)}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
+                      >
+                        <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                    </div>
+                    {/* 商品名称下拉选择框 */}
+                    {openDropdownId === `name-${row.id}` && (
+                      <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-auto min-w-[200px]">
+                        {(row.productName.trim() 
+                          ? productCodes.filter(pc => 
+                              pc.name.includes(row.productName) ||
+                              pc.code.toUpperCase().includes(row.productName.toUpperCase())
+                            )
+                          : productCodes
+                        ).slice(0, 20).map((pc) => (
+                          <button
+                            key={pc.code}
+                            onClick={() => {
+                              selectProductCode(row.id, pc);
+                              setOpenDropdownId(null);
+                            }}
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-amber-50 flex items-center gap-2 border-b border-gray-50 last:border-b-0"
+                          >
+                            <span className="text-gray-700">{pc.name}</span>
+                            <span className="font-mono text-amber-600 text-xs">({pc.code})</span>
+                          </button>
+                        ))}
+                        {productCodes.length === 0 && (
+                          <div className="px-3 py-4 text-center text-gray-400 text-sm">
+                            暂无商品编码
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <input
