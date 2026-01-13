@@ -9,6 +9,7 @@ from .document_generator import (
     get_status_label,
     STATUS_MAP,
 )
+from .pinyin_utils import to_pinyin_initials
 
 __all__ = [
     'PDFGenerator',
@@ -19,5 +20,6 @@ __all__ = [
     'get_current_time_str',
     'get_status_label',
     'STATUS_MAP',
+    'to_pinyin_initials',
 ]
 
