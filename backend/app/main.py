@@ -848,6 +848,11 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
 
 async def handle_inbound(ai_response, db: Session) -> Dict[str, Any]:
     """处理入库操作"""
+    logger.info(f"[入库] 开始处理入库，AI解析出 {len(ai_response.products) if ai_response.products else 0} 个商品")
+    if ai_response.products:
+        for i, p in enumerate(ai_response.products):
+            logger.info(f"[入库] AI解析商品{i+1}: name={p.product_name}, weight={p.weight}, labor_cost={p.labor_cost}, supplier={p.supplier}")
+    
     if not ai_response.products:
         return {
             "success": False,
@@ -924,6 +929,7 @@ async def handle_inbound(ai_response, db: Session) -> Dict[str, Any]:
             "weight": weight,
             "labor_cost": labor_cost
         })
+        logger.info(f"[入库] 添加商品 {idx+1}: {product.product_name}, 重量={weight}g, 工费={labor_cost}元/克")
     
     # 如果有验证错误，返回错误信息
     if validation_errors:
@@ -972,8 +978,19 @@ async def handle_inbound(ai_response, db: Session) -> Dict[str, Any]:
             }
         }
     else:
-        # 多个商品的情况，返回第一个商品作为主要卡片（后续可以扩展为显示多个卡片）
+        # 多个商品的情况，返回所有商品
         first_product = validated_products[0]
+        all_products_list = [
+            {
+                "product_name": p["product"].product_name,
+                "weight": p["weight"],
+                "labor_cost": p["labor_cost"],
+                "supplier": p["product"].supplier,
+                "total_cost": p["weight"] * p["labor_cost"]
+            }
+            for p in validated_products
+        ]
+        logger.info(f"[入库] 多商品入库，共{len(all_products_list)}个商品: {all_products_list}")
         return {
             "success": True,
             "message": f"请核对入库信息，共{len(validated_products)}个商品",
@@ -985,16 +1002,7 @@ async def handle_inbound(ai_response, db: Session) -> Dict[str, Any]:
                 "supplier": supplier_name,
                 "total_cost": first_product["weight"] * first_product["labor_cost"]
             },
-            "all_products": [
-                {
-                    "product_name": p["product"].product_name,
-                    "weight": p["weight"],
-                    "labor_cost": p["labor_cost"],
-                    "supplier": p["product"].supplier,
-                    "total_cost": p["weight"] * p["labor_cost"]
-                }
-                for p in validated_products
-            ]
+            "all_products": all_products_list
         }
 
 # ========== 以下查询和分析函数已被AI分析引擎替代，已删除 ==========

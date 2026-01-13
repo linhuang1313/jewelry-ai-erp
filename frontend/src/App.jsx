@@ -629,10 +629,13 @@ function App() {
                       success: data.data?.success,
                       pending: data.data?.pending,
                       hasCardData: !!data.data?.card_data,
+                      cardData: data.data?.card_data,
                       hasAllProducts: !!data.data?.all_products,
                       allProductsCount: data.data?.all_products?.length,
+                      allProducts: data.data?.all_products,
                       hasOrder: !!data.data?.order,
-                      hasDetail: !!data.data?.detail
+                      hasDetail: !!data.data?.detail,
+                      fullData: data.data
                     })
                     
                     if (data.data?.success && data.data?.pending && data.data?.card_data) {
