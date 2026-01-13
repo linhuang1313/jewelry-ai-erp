@@ -125,19 +125,26 @@ async def startup_event():
     from sqlalchemy import text
     db = SessionLocal()
     try:
-        # 检查并添加 product_code 列
-        result = db.execute(text("""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'inbound_details' AND column_name = 'product_code'
-        """))
-        if not result.fetchone():
-            db.execute(text("""
-                ALTER TABLE inbound_details 
-                ADD COLUMN product_code VARCHAR(20) NULL
+        # 需要添加的列列表
+        columns_to_add = [
+            ("product_code", "VARCHAR(20) NULL"),
+            ("piece_count", "INTEGER DEFAULT 0"),
+            ("piece_labor_cost", "FLOAT DEFAULT 0.0"),
+        ]
+        
+        for col_name, col_type in columns_to_add:
+            result = db.execute(text(f"""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'inbound_details' AND column_name = '{col_name}'
             """))
-            db.commit()
-            logger.info("已添加 product_code 列到 inbound_details 表")
+            if not result.fetchone():
+                db.execute(text(f"""
+                    ALTER TABLE inbound_details 
+                    ADD COLUMN {col_name} {col_type}
+                """))
+                db.commit()
+                logger.info(f"已添加 {col_name} 列到 inbound_details 表")
     except Exception as e:
         logger.warning(f"迁移检查: {e}")
         db.rollback()
