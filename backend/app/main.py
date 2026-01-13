@@ -1208,6 +1208,8 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
         return {
             "success": True,
             "message": f"入库成功: {product_name} {weight}克",
+            "order_id": order.id,
+            "order_no": order.order_no,
             "order": order_response,
             "detail": detail_response,
             "inventory": inventory_response
@@ -1300,9 +1302,15 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
                     "error": str(e)
                 })
         
+        # 如果有失败的，把错误信息也返回
+        error_details = [r for r in results if not r.get("success")]
+        error_message = ""
+        if error_details:
+            error_message = "；".join([f"{r['product_name']}: {r.get('error', '未知错误')}" for r in error_details[:3]])
+        
         return {
             "success": success_count > 0,
-            "message": f"批量入库完成：成功 {success_count} 个，失败 {error_count} 个",
+            "message": f"批量入库完成：成功 {success_count} 个，失败 {error_count} 个" + (f"。错误详情：{error_message}" if error_message else ""),
             "success_count": success_count,
             "error_count": error_count,
             "results": results
