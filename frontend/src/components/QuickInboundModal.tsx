@@ -49,6 +49,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
   const [productCodes, setProductCodes] = useState<ProductCode[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchResults, setSearchResults] = useState<{rowId: string, results: ProductCode[]}[]>([]);
+  const [batchAddCount, setBatchAddCount] = useState<string>('10'); // 批量添加行数
 
   // 加载供应商列表
   useEffect(() => {
@@ -136,6 +137,22 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
   // 添加新行
   const addRow = () => {
     setRows(prev => [...prev, createEmptyRow()]);
+  };
+
+  // 批量添加多行
+  const addMultipleRows = () => {
+    const count = parseInt(batchAddCount) || 0;
+    if (count <= 0) {
+      toast.error('请输入有效的行数');
+      return;
+    }
+    if (count > 500) {
+      toast.error('一次最多添加500行');
+      return;
+    }
+    const newRows = Array.from({ length: count }, () => createEmptyRow());
+    setRows(prev => [...prev, ...newRows]);
+    toast.success(`已添加 ${count} 行`);
   };
 
   // 删除行
@@ -422,14 +439,45 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
             </tbody>
           </table>
 
-          {/* 添加行按钮 */}
-          <button
-            onClick={addRow}
-            className="mt-4 flex items-center gap-2 px-4 py-2 text-sm text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            添加一行
-          </button>
+          {/* 添加行按钮区域 */}
+          <div className="mt-4 flex items-center gap-4 flex-wrap">
+            {/* 添加单行 */}
+            <button
+              onClick={addRow}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              添加一行
+            </button>
+            
+            {/* 分隔线 */}
+            <div className="h-6 w-px bg-gray-300"></div>
+            
+            {/* 批量添加 */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">批量添加：</span>
+              <input
+                type="number"
+                value={batchAddCount}
+                onChange={(e) => setBatchAddCount(e.target.value)}
+                min="1"
+                max="500"
+                className="w-20 px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+              />
+              <span className="text-sm text-gray-600">行</span>
+              <button
+                onClick={addMultipleRows}
+                className="px-3 py-1.5 text-sm text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition-colors"
+              >
+                确定
+              </button>
+            </div>
+            
+            {/* 当前行数显示 */}
+            <div className="ml-auto text-sm text-gray-500">
+              当前共 {rows.length} 行
+            </div>
+          </div>
         </div>
 
         {/* 底部操作栏 */}
