@@ -642,8 +642,13 @@ function App() {
                       // 方案B：创建待确认的卡片（status: 'pending'）
                       try {
                         // 检查是否有多个商品（all_products数组）
+                        console.log('【调试】data.data.all_products 原始值:', data.data.all_products)
+                        console.log('【调试】data.data.all_products 类型:', typeof data.data.all_products)
+                        console.log('【调试】data.data.all_products 是否为数组:', Array.isArray(data.data.all_products))
+                        
                         const allProducts = data.data.all_products || [data.data.card_data]
                         console.log('收到待确认商品数据，共', allProducts.length, '个商品:', allProducts)
+                        console.log('【调试】allProducts.length:', allProducts.length, '是否 > 1:', allProducts.length > 1)
                         
                         if (allProducts.length > 1) {
                           // 多商品入库：创建多个卡片
