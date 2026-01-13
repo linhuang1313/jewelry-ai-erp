@@ -629,18 +629,11 @@ function App() {
                     // 检查是否是入库操作，如果是则创建待确认的卡片数据
                     let inboundCard = null
                     let inboundCards = null  // 多商品入库时使用
-                    console.log('检查入库数据:', {
-                      success: data.data?.success,
-                      pending: data.data?.pending,
-                      hasCardData: !!data.data?.card_data,
-                      cardData: data.data?.card_data,
-                      hasAllProducts: !!data.data?.all_products,
-                      allProductsCount: data.data?.all_products?.length,
-                      allProducts: data.data?.all_products,
-                      hasOrder: !!data.data?.order,
-                      hasDetail: !!data.data?.detail,
-                      fullData: data.data
-                    })
+                    // 打印完整的 data.data 对象
+                    console.log('【入库调试】完整data.data:', JSON.stringify(data.data, null, 2))
+                    console.log('【入库调试】all_products 是否存在:', 'all_products' in (data.data || {}))
+                    console.log('【入库调试】all_products 值:', data.data?.all_products)
+                    console.log('【入库调试】all_products 长度:', data.data?.all_products?.length)
                     
                     if (data.data?.success && data.data?.pending && data.data?.card_data) {
                       // 方案B：创建待确认的卡片（status: 'pending'）
