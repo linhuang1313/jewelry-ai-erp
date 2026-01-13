@@ -68,9 +68,13 @@ export interface JewelryInboundCard {
   goldWeight: number;
   /** 克工费（元/克）（对应后端 labor_cost） */
   laborCostPerGram: number;
+  /** 件数（可选）（对应后端 piece_count） */
+  pieceCount?: number;
+  /** 件工费（元/件，可选）（对应后端 piece_labor_cost） */
+  pieceLaborCost?: number;
   /** 当日金价（元/克）（可选） */
   goldPrice?: number;
-  /** 总成本（元）= 金重 × 克工费（对应后端 total_cost） */
+  /** 总成本（元）= 金重 × 克工费 + 件数 × 件工费（对应后端 total_cost） */
   totalCost?: number;
   
   // 配石信息（可选）- 新功能，后端需要扩展
@@ -139,6 +143,8 @@ export interface InboundDetailResponse {
   product_category?: string | null;
   weight: number;
   labor_cost: number;
+  piece_count?: number | null;
+  piece_labor_cost?: number | null;
   supplier?: string | null;
   supplier_id?: number | null;
   total_cost: number;
@@ -167,6 +173,8 @@ export interface InboundOrderCreateRequest {
   product_category?: string;
   weight: number;
   labor_cost: number;
+  piece_count?: number;
+  piece_labor_cost?: number;
   supplier?: string;
   supplier_id?: number;
   barcode?: string;
@@ -193,6 +201,8 @@ export function convertInboundDetailToCard(
     productCategory: detail.product_category || undefined,
     goldWeight: detail.weight,
     laborCostPerGram: detail.labor_cost,
+    pieceCount: detail.piece_count || undefined,
+    pieceLaborCost: detail.piece_labor_cost || undefined,
     totalCost: detail.total_cost,
     gemstones: undefined, // 后端暂无配石字段，需要扩展
     supplier: supplier ? {
@@ -220,6 +230,8 @@ export function convertCardToInboundRequest(
     product_category: card.productCategory,
     weight: card.goldWeight,
     labor_cost: card.laborCostPerGram,
+    piece_count: card.pieceCount,
+    piece_labor_cost: card.pieceLaborCost,
     supplier_id: card.supplier.id > 0 ? card.supplier.id : undefined,
     supplier: card.supplier.id === 0 ? card.supplier.name : undefined,
     barcode: card.barcode || undefined,
@@ -241,18 +253,27 @@ export function generateTempCardId(): string {
 
 /**
  * 计算总成本
+ * 总成本 = 金重 × 克工费 + 件数 × 件工费
  */
 export function calculateTotalCost(
   goldWeight: number,
   laborCostPerGram: number,
-  goldPrice?: number
+  goldPrice?: number,
+  pieceCount?: number,
+  pieceLaborCost?: number
 ): number {
+  // 克工费
+  let gramCost = goldWeight * laborCostPerGram;
+  
+  // 件工费（可选）
+  const pieceCost = (pieceCount || 0) * (pieceLaborCost || 0);
+  
   if (goldPrice !== undefined) {
-    // 总成本 = 金重 × (金价 + 工费)
-    return goldWeight * (goldPrice + laborCostPerGram);
+    // 总成本 = 金重 × (金价 + 工费) + 件工费
+    gramCost = goldWeight * (goldPrice + laborCostPerGram);
   }
-  // 如果没有金价，只计算工费
-  return goldWeight * laborCostPerGram;
+  
+  return gramCost + pieceCost;
 }
 
 /**

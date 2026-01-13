@@ -46,10 +46,12 @@ class InboundDetail(Base):
     product_name = Column(String(200), nullable=False)
     product_category = Column(String(100))
     weight = Column(Float, nullable=False)
-    labor_cost = Column(Float, nullable=False)
+    labor_cost = Column(Float, nullable=False)  # 克工费（元/克）
+    piece_count = Column(Integer, nullable=True)  # 件数（可选）
+    piece_labor_cost = Column(Float, nullable=True)  # 件工费（元/件，可选）
     supplier = Column(String(100))  # 保留字符串字段（向后兼容）
     supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=True)  # 关联供应商表
-    total_cost = Column(Float, nullable=False)  # 总成本 = 工费（暂时简化）
+    total_cost = Column(Float, nullable=False)  # 总成本 = 克工费 + 件工费
     
     order = relationship("InboundOrder", backref="details")
 

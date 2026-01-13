@@ -654,6 +654,8 @@ function App() {
                             productName: cardData.product_name,
                             goldWeight: cardData.weight,
                             laborCostPerGram: cardData.labor_cost,
+                            pieceCount: cardData.piece_count,
+                            pieceLaborCost: cardData.piece_labor_cost,
                             totalCost: cardData.total_cost,
                             supplier: {
                               id: 0,

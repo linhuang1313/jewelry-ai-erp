@@ -28,11 +28,15 @@ export function createNewCard(
     productCategory: data.productCategory,
     goldWeight: data.goldWeight || 0,
     laborCostPerGram: data.laborCostPerGram || 0,
+    pieceCount: data.pieceCount,
+    pieceLaborCost: data.pieceLaborCost,
     goldPrice: data.goldPrice,
     totalCost: data.totalCost ?? calculateTotalCost(
       data.goldWeight || 0,
       data.laborCostPerGram || 0,
-      data.goldPrice
+      data.goldPrice,
+      data.pieceCount,
+      data.pieceLaborCost
     ),
     gemstones: data.gemstones || [],
     supplier: data.supplier || {
@@ -105,12 +109,16 @@ export function updateCard(
 ): JewelryInboundCard {
   const updated = { ...card, ...updates };
   
-  // 如果重量、工费或金价更新，重新计算总成本
-  if (updates.goldWeight !== undefined || updates.laborCostPerGram !== undefined || updates.goldPrice !== undefined) {
+  // 如果重量、工费、金价、件数或件工费更新，重新计算总成本
+  if (updates.goldWeight !== undefined || updates.laborCostPerGram !== undefined || 
+      updates.goldPrice !== undefined || updates.pieceCount !== undefined || 
+      updates.pieceLaborCost !== undefined) {
     updated.totalCost = calculateTotalCost(
       updated.goldWeight,
       updated.laborCostPerGram,
-      updated.goldPrice
+      updated.goldPrice,
+      updated.pieceCount,
+      updated.pieceLaborCost
     );
   }
 

@@ -939,12 +939,44 @@ async def handle_inbound(ai_response, db: Session) -> Dict[str, Any]:
             })
             continue
         
+        # 处理件数和件工费（可选字段）
+        piece_count = None
+        piece_labor_cost = None
+        if product.piece_count is not None:
+            try:
+                piece_count = int(product.piece_count)
+                if piece_count < 0:
+                    piece_count = None
+            except (ValueError, TypeError):
+                piece_count = None
+        
+        if product.piece_labor_cost is not None:
+            try:
+                piece_labor_cost = float(product.piece_labor_cost)
+                if piece_labor_cost < 0:
+                    piece_labor_cost = None
+            except (ValueError, TypeError):
+                piece_labor_cost = None
+        
+        # 计算总工费：克工费 + 件工费
+        gram_cost = weight * labor_cost
+        piece_cost = (piece_count or 0) * (piece_labor_cost or 0)
+        total_cost = gram_cost + piece_cost
+        
         validated_products.append({
             "product": product,
             "weight": weight,
-            "labor_cost": labor_cost
+            "labor_cost": labor_cost,
+            "piece_count": piece_count,
+            "piece_labor_cost": piece_labor_cost,
+            "total_cost": total_cost
         })
-        logger.info(f"[入库] 添加商品 {idx+1}: {product.product_name}, 重量={weight}g, 工费={labor_cost}元/克")
+        
+        log_msg = f"[入库] 添加商品 {idx+1}: {product.product_name}, 重量={weight}g, 克工费={labor_cost}元/克"
+        if piece_count and piece_labor_cost:
+            log_msg += f", 件数={piece_count}, 件工费={piece_labor_cost}元/件"
+        log_msg += f", 总工费={total_cost}元"
+        logger.info(log_msg)
     
     # 如果有验证错误，返回错误信息
     if validation_errors:
@@ -980,17 +1012,20 @@ async def handle_inbound(ai_response, db: Session) -> Dict[str, Any]:
     # 如果只有一个商品，返回单个商品格式
     if len(validated_products) == 1:
         product = validated_products[0]
+        card_data = {
+            "product_name": product["product"].product_name,
+            "weight": product["weight"],
+            "labor_cost": product["labor_cost"],
+            "piece_count": product.get("piece_count"),
+            "piece_labor_cost": product.get("piece_labor_cost"),
+            "supplier": supplier_name,
+            "total_cost": product["total_cost"]
+        }
         return {
             "success": True,
             "message": f"请核对入库信息: {product['product'].product_name} {product['weight']}克",
             "pending": True,  # 标记为待确认
-            "card_data": {
-                "product_name": product["product"].product_name,
-                "weight": product["weight"],
-                "labor_cost": product["labor_cost"],
-                "supplier": supplier_name,
-                "total_cost": product["weight"] * product["labor_cost"]
-            }
+            "card_data": card_data
         }
     else:
         # 多个商品的情况，返回所有商品
@@ -1000,8 +1035,10 @@ async def handle_inbound(ai_response, db: Session) -> Dict[str, Any]:
                 "product_name": p["product"].product_name,
                 "weight": p["weight"],
                 "labor_cost": p["labor_cost"],
+                "piece_count": p.get("piece_count"),
+                "piece_labor_cost": p.get("piece_labor_cost"),
                 "supplier": p["product"].supplier,
-                "total_cost": p["weight"] * p["labor_cost"]
+                "total_cost": p["total_cost"]
             }
             for p in validated_products
         ]
@@ -1014,8 +1051,10 @@ async def handle_inbound(ai_response, db: Session) -> Dict[str, Any]:
                 "product_name": first_product["product"].product_name,
                 "weight": first_product["weight"],
                 "labor_cost": first_product["labor_cost"],
+                "piece_count": first_product.get("piece_count"),
+                "piece_labor_cost": first_product.get("piece_labor_cost"),
                 "supplier": supplier_name,
-                "total_cost": first_product["weight"] * first_product["labor_cost"]
+                "total_cost": first_product["total_cost"]
             },
             "all_products": all_products_list
         }
@@ -1036,7 +1075,15 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
         product_name = card_data.get("product_name")
         weight = float(card_data.get("weight", 0))
         labor_cost = float(card_data.get("labor_cost", 0))
+        piece_count = card_data.get("piece_count")  # 件数（可选）
+        piece_labor_cost = card_data.get("piece_labor_cost")  # 件工费（可选）
         supplier_name = card_data.get("supplier")
+        
+        # 转换件数和件工费
+        if piece_count is not None:
+            piece_count = int(piece_count)
+        if piece_labor_cost is not None:
+            piece_labor_cost = float(piece_labor_cost)
         
         # 验证数据
         if not product_name or weight <= 0 or labor_cost < 0:
@@ -1077,8 +1124,10 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
             
             supplier_id = supplier_obj.id
         
-        # 计算总成本
-        total_cost = labor_cost * weight
+        # 计算总成本：克工费 + 件工费
+        gram_cost = labor_cost * weight
+        piece_cost = (piece_count or 0) * (piece_labor_cost or 0)
+        total_cost = gram_cost + piece_cost
         
         # 创建入库明细
         detail = InboundDetail(
@@ -1087,6 +1136,8 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
             product_category=card_data.get("product_category"),
             weight=weight,
             labor_cost=labor_cost,
+            piece_count=piece_count,
+            piece_labor_cost=piece_labor_cost,
             supplier=supplier_name,
             supplier_id=supplier_id,
             total_cost=total_cost

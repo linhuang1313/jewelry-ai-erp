@@ -87,8 +87,13 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
 - products: 商品列表（数组，仅当action为"入库"时需要），每个商品包含：
   - product_name: 商品名称（必填）
   - weight: 重量/金重（克，必须是数字，必填）
-  - labor_cost: 工费（元/克，必须是数字，必填）
+  - labor_cost: 克工费（元/克，必须是数字，必填）
+  - piece_count: 件数（整数，可选，如"10件"则为10）
+  - piece_labor_cost: 件工费（元/件，可选，如"件工费5元"则为5）
   - supplier: 供应商（必填）
+  
+  **总工费计算公式**：总工费 = 克重 × 克工费 + 件数 × 件工费
+  **示例**：100克 × 6元/克 + 10件 × 5元/件 = 600 + 50 = 650元
 
 - customer_name: 客户姓名（当action为"创建客户"、"创建销售单"、"查询客户"、"查询销售单"时需要）
 - supplier_name: 供应商名称（当action为"创建供应商"时需要）
@@ -138,6 +143,12 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
    - 如果用户说"工费8元，100克"，也是工费8元/克，重量100克
    - 如果用户说"第一行是...，第二行是..."，解析为多个商品
    - 如果多个商品共享同一供应商，每个商品都要包含supplier
+   
+   **件数和件工费识别（重要）**：
+   - "10件"、"5件"等 → piece_count: 10 或 5
+   - "件工费5元"、"件工5元"、"5元/件" → piece_labor_cost: 5
+   - 如果用户没有提到件数或件工费，这两个字段设为 null
+   - 示例："古法吊坠 10件 100克 工费6元 件工费5元" → piece_count: 10, piece_labor_cost: 5, weight: 100, labor_cost: 6
    
    **多商品入库识别（非常重要）**：
    - 当用户输入中包含多组"重量+工费"数据时，应识别为多个商品
@@ -192,6 +203,23 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
       "product_name": "古法戒指",
       "weight": 100,
       "labor_cost": 8,
+      "supplier": "金源珠宝"
+    }}
+  ]
+}}
+
+示例1a（带件数和件工费的入库）：
+用户输入："古法吊坠 10件 100克 工费6元 件工费5元 供应商是金源珠宝，帮我做个入库"
+解析说明：用户输入了件数(10件)和件工费(5元/件)，总工费 = 100克×6元 + 10件×5元 = 600+50 = 650元
+{{
+  "action": "入库",
+  "products": [
+    {{
+      "product_name": "古法吊坠",
+      "weight": 100,
+      "labor_cost": 6,
+      "piece_count": 10,
+      "piece_labor_cost": 5,
       "supplier": "金源珠宝"
     }}
   ]

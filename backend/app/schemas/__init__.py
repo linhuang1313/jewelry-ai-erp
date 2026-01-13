@@ -42,7 +42,9 @@ class ProductItem(BaseModel):
     product_code: Optional[str] = None  # 商品编码（JPJZ, F00000001等）
     product_name: str
     weight: float
-    labor_cost: float  # 每克工费
+    labor_cost: float  # 克工费（元/克）
+    piece_count: Optional[int] = None  # 件数（可选）
+    piece_labor_cost: Optional[float] = None  # 件工费（元/件，可选）
     supplier: Optional[str] = None
 
 
@@ -92,7 +94,9 @@ class InboundOrderCreate(BaseModel):
     product_name: str
     product_category: Optional[str] = None
     weight: float
-    labor_cost: float
+    labor_cost: float  # 克工费（元/克）
+    piece_count: Optional[int] = None  # 件数（可选）
+    piece_labor_cost: Optional[float] = None  # 件工费（元/件，可选）
     supplier: Optional[str] = None
 
 
@@ -115,9 +119,11 @@ class InboundDetailResponse(BaseModel):
     product_name: str
     product_category: Optional[str]
     weight: float
-    labor_cost: float
+    labor_cost: float  # 克工费（元/克）
+    piece_count: Optional[int] = None  # 件数
+    piece_labor_cost: Optional[float] = None  # 件工费（元/件）
     supplier: Optional[str]
-    total_cost: float
+    total_cost: float  # 总工费 = 克工费 + 件工费
 
 
 class InventoryResponse(BaseModel):

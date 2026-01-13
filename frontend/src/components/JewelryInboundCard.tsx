@@ -46,13 +46,19 @@ export const JewelryInboundCardComponent: React.FC<JewelryInboundCardProps> = ({
     }
   };
 
-  // 计算总工费
-  const totalLaborCost = data.goldWeight * data.laborCostPerGram;
+  // 计算克工费
+  const gramLaborCost = data.goldWeight * data.laborCostPerGram;
   
-  // 计算总成本（如果提供了金价，总成本 = 金重 × (金价 + 工费)；否则只计算工费）
+  // 计算件工费（如果有）
+  const pieceCost = (data.pieceCount || 0) * (data.pieceLaborCost || 0);
+  
+  // 计算总工费 = 克工费 + 件工费
+  const totalLaborCost = gramLaborCost + pieceCost;
+  
+  // 计算总成本（如果提供了金价，总成本 = 金重 × (金价 + 工费) + 件工费；否则只计算工费）
   const totalCost = data.totalCost ?? (
     data.goldPrice 
-      ? data.goldWeight * (data.goldPrice + data.laborCostPerGram)
+      ? data.goldWeight * (data.goldPrice + data.laborCostPerGram) + pieceCost
       : totalLaborCost
   );
 
@@ -143,6 +149,26 @@ export const JewelryInboundCardComponent: React.FC<JewelryInboundCardProps> = ({
               ¥{data.laborCostPerGram.toFixed(2)}/克
             </p>
           </div>
+
+          {/* 件数（如果有） */}
+          {data.pieceCount !== undefined && data.pieceCount > 0 && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">件数</p>
+              <p className="text-sm font-semibold text-gray-900">
+                {data.pieceCount} 件
+              </p>
+            </div>
+          )}
+
+          {/* 件工费（如果有） */}
+          {data.pieceLaborCost !== undefined && data.pieceLaborCost > 0 && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">件工费</p>
+              <p className="text-sm font-semibold text-gray-900">
+                ¥{data.pieceLaborCost.toFixed(2)}/件
+              </p>
+            </div>
+          )}
 
           {/* 当日金价（如果有） */}
           {data.goldPrice !== undefined && (
