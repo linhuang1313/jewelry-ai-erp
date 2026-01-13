@@ -328,3 +328,4 @@ class StatisticsResponse(BaseModel):
     data: Optional[FinanceStatistics] = None
     error: Optional[str] = None
 
+

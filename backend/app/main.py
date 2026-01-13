@@ -265,8 +265,8 @@ async def recognize_inbound_sheet(file: UploadFile = File(...)):
                 "recognized_text": ""
             }
         
-        # 读取上传的文件内容
-        content = await file.read()
+            # 读取上传的文件内容
+            content = await file.read()
         
         # 确定使用哪种 OCR
         ocr_method = "百度云 OCR" if BAIDU_OCR_ENABLED else "本地 PaddleOCR"
@@ -279,10 +279,10 @@ async def recognize_inbound_sheet(file: UploadFile = File(...)):
             else:
                 # 使用本地 PaddleOCR（需要临时文件）
                 with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1] if file.filename else '.jpg') as tmp_file:
-                    tmp_file.write(content)
-                    tmp_file_path = tmp_file.name
-                
-                try:
+            tmp_file.write(content)
+            tmp_file_path = tmp_file.name
+        
+        try:
                     recognized_text = local_extract_text(tmp_file_path)
                 finally:
                     # 清理临时文件
@@ -1159,29 +1159,29 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
         gram_cost = labor_cost * weight
         piece_cost = (piece_count or 0) * (piece_labor_cost or 0)
         total_cost = gram_cost + piece_cost
-        
-        # 创建入库明细
-        detail = InboundDetail(
-            order_id=order.id,
-            product_name=product_name,
+            
+            # 创建入库明细
+            detail = InboundDetail(
+                order_id=order.id,
+                product_name=product_name,
             product_category=card_data.get("product_category"),
-            weight=weight,
-            labor_cost=labor_cost,
+                weight=weight,
+                labor_cost=labor_cost,
             piece_count=piece_count,
             piece_labor_cost=piece_labor_cost,
             supplier=supplier_name,
             supplier_id=supplier_id,
-            total_cost=total_cost
-        )
-        db.add(detail)
-        
+                total_cost=total_cost
+            )
+            db.add(detail)
+            
         # 更新或创建库存（总库存表）
-        inventory = db.query(Inventory).filter(Inventory.product_name == product_name).first()
-        if inventory:
-            inventory.total_weight += weight
-        else:
-            inventory = Inventory(product_name=product_name, total_weight=weight)
-            db.add(inventory)
+            inventory = db.query(Inventory).filter(Inventory.product_name == product_name).first()
+            if inventory:
+                inventory.total_weight += weight
+            else:
+                inventory = Inventory(product_name=product_name, total_weight=weight)
+                db.add(inventory)
         
         # 更新分仓库存（默认入库到"商品部仓库"）
         default_location = db.query(Location).filter(Location.code == "warehouse").first()
@@ -1224,8 +1224,8 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
         
         # 刷新对象
         db.refresh(order)
-        db.refresh(detail)
-        db.refresh(inventory)
+            db.refresh(detail)
+            db.refresh(inventory)
         
         # 构建响应
         order_response = InboundOrderResponse.model_validate(order).model_dump(mode='json')
@@ -1236,12 +1236,12 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
         logger.info(f"返回的order响应包含字段: {list(order_response.keys())}")
         logger.info(f"返回的order.id值: {order_response.get('id')}")
         
-        return {
-            "success": True,
+            return {
+                "success": True,
             "message": f"入库成功: {product_name} {weight}克",
             "order_id": order.id,
             "order_no": order.order_no,
-            "order": order_response,
+                "order": order_response,
             "detail": detail_response,
             "inventory": inventory_response
         }
@@ -1316,7 +1316,7 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
                         "order_id": result.get("order_id"),
                         "order_no": result.get("order_no")
                     })
-                else:
+        else:
                     error_count += 1
                     results.append({
                         "index": idx + 1,
@@ -1745,8 +1745,8 @@ async def get_salespersons(db: Session = Depends(get_db)):
             Salesperson.status == "active"
         ).order_by(Salesperson.id).all()
         
-        return {
-            "success": True,
+            return {
+                "success": True,
             "salespersons": [SalespersonResponse.model_validate(s).model_dump(mode='json') for s in salespersons],
             "total": len(salespersons)
         }
@@ -1905,8 +1905,8 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
         # 验证商品明细数据
         for item in order_data.items:
             if item.weight <= 0:
-                return {
-                    "success": False,
+        return {
+            "success": False,
                     "message": f"商品 {item.product_name} 的重量必须大于0",
                     "validation_error": {
                         "product_name": item.product_name,
@@ -2104,9 +2104,9 @@ async def get_sales_orders(
             order_response = SalesOrderResponse.model_validate(order)
             order_response.details = [SalesDetailResponse.model_validate(d).model_dump(mode='json') for d in details]
             result.append(order_response.model_dump(mode='json'))
-        
-        return {
-            "success": True,
+    
+    return {
+        "success": True,
             "orders": result
         }
     except Exception as e:
@@ -2131,9 +2131,9 @@ async def get_sales_order(order_id: int, db: Session = Depends(get_db)):
         details = db.query(SalesDetail).filter(SalesDetail.order_id == order.id).all()
         order_response = SalesOrderResponse.model_validate(order)
         order_response.details = [SalesDetailResponse.model_validate(d).model_dump(mode='json') for d in details]
-        
-        return {
-            "success": True,
+    
+    return {
+        "success": True,
             "order": order_response.model_dump(mode='json')
         }
     except Exception as e:
@@ -2536,7 +2536,7 @@ async def get_analytics_overview(db: Session = Depends(get_db)):
         role_stats = db.query(
             ChatLog.user_role,
             func.count(ChatLog.id).label("count")
-        ).filter(
+    ).filter(
             ChatLog.message_type == "user"
         ).group_by(ChatLog.user_role).all()
         
@@ -2647,9 +2647,9 @@ async def get_role_analytics(role: str, db: Session = Depends(get_db)):
                     keyword_counts[keyword] = keyword_counts.get(keyword, 0) + 1
         
         hot_keywords = sorted(keyword_counts.items(), key=lambda x: x[1], reverse=True)[:5]
-        
-        return {
-            "success": True,
+    
+    return {
+        "success": True,
             "data": {
                 "role": role,
                 "total_chats": total_chats,
@@ -2685,7 +2685,7 @@ async def get_daily_analytics(days: int = 7, db: Session = Depends(get_db)):
             func.date(ChatLog.created_at).label("date"),
             ChatLog.user_role,
             func.count(ChatLog.id).label("count")
-        ).filter(
+    ).filter(
             ChatLog.message_type == "user",
             func.date(ChatLog.created_at) >= start_date
         ).group_by(
@@ -2897,9 +2897,9 @@ async def get_chat_history(
                 "response_time_ms": log.response_time_ms,
                 "created_at": log.created_at.isoformat() if log.created_at else None
             })
-        
-        return {
-            "success": True,
+    
+    return {
+        "success": True,
             "session_id": session_id,
             "messages": messages,
             "total": len(messages)
@@ -2937,9 +2937,9 @@ async def search_chat_logs(
         
         total = query.count()
         logs = query.offset(offset).limit(limit).all()
-        
-        return {
-            "success": True,
+    
+    return {
+        "success": True,
             "total": total,
             "logs": [
                 {
@@ -2986,8 +2986,8 @@ async def set_session_goal(session_id: str, goal: str, phases: List[str] = None)
     """设置会话目标和阶段"""
     try:
         context = ctx.update_session_goal(session_id, goal, phases)
-        return {
-            "success": True,
+    return {
+        "success": True,
             "message": f"目标已设置: {goal}",
             "context": context
         }

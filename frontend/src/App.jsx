@@ -2820,6 +2820,44 @@ function App() {
         <footer className="bg-white/80 backdrop-blur-xl border-t border-gray-200/60 px-6 py-5">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-end space-x-3">
+              {/* 快捷入库按钮 - 仅商品专员可见 */}
+              {userRole === 'product' && (
+                <button
+                  onClick={() => setShowQuickInboundModal(true)}
+                  disabled={loading || uploading}
+                  className={`
+                    px-3 py-3 rounded-2xl cursor-pointer transition-all duration-200
+                    h-[52px] flex items-center font-medium text-[14px]
+                    ${loading || uploading
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-orange-500 text-white hover:bg-orange-600 shadow-sm hover:shadow-md'
+                    }
+                  `}
+                  title="快捷入库"
+                >
+                  📦 入库
+                </button>
+              )}
+
+              {/* 快捷退货按钮 - 商品专员和柜台可见 */}
+              {(userRole === 'product' || userRole === 'counter') && (
+                <button
+                  onClick={() => setShowQuickReturnModal(true)}
+                  disabled={loading || uploading}
+                  className={`
+                    px-3 py-3 rounded-2xl cursor-pointer transition-all duration-200
+                    h-[52px] flex items-center font-medium text-[14px]
+                    ${loading || uploading
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-red-500 text-white hover:bg-red-600 shadow-sm hover:shadow-md'
+                    }
+                  `}
+                  title="快捷退货"
+                >
+                  ↩️ 退货
+                </button>
+              )}
+
               {/* 图片上传按钮 */}
               <input
                 ref={fileInputRef}
