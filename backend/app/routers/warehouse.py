@@ -488,3 +488,152 @@ async def init_default_locations(db: Session = Depends(get_db)):
     return {"message": "默认位置初始化成功", "locations": default_locations}
 
 
+# ============= 库存概览 API =============
+
+@router.get("/overview")
+async def get_inventory_overview(
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    获取库存概览数据（根据角色返回不同数据）
+    - 商品专员：商品部仓库库存 + 转出待接收 + 展厅退货中
+    - 柜台/结算：展厅库存 + 待接收 + 退货处理中
+    - 管理层：全部数据
+    """
+    from sqlalchemy import func
+    from ..models import ReturnOrder
+    
+    result = {
+        "warehouse": None,  # 商品部仓库
+        "showroom": None,   # 展厅
+        "transfers": {
+            "outgoing_pending": None,  # 转出待接收（商品部→展厅）
+            "incoming_pending": None,  # 待接收（商品部→展厅）
+            "return_to_warehouse": None,  # 展厅退回商品部
+            "return_to_showroom": None,   # 商品部退货信息（展厅可看）
+        }
+    }
+    
+    # 获取位置ID
+    warehouse_location = db.query(Location).filter(Location.code == "warehouse").first()
+    showroom_location = db.query(Location).filter(Location.code == "showroom").first()
+    
+    warehouse_id = warehouse_location.id if warehouse_location else None
+    showroom_id = showroom_location.id if showroom_location else None
+    
+    # 商品专员或管理层：可以看商品部仓库
+    if user_role in ["product", "manager"]:
+        if warehouse_id:
+            # 商品部仓库库存统计
+            warehouse_stats = db.query(
+                func.sum(LocationInventory.weight).label("total_weight"),
+                func.count(LocationInventory.id).label("product_count")
+            ).filter(
+                LocationInventory.location_id == warehouse_id,
+                LocationInventory.weight > 0
+            ).first()
+            
+            result["warehouse"] = {
+                "location_id": warehouse_id,
+                "location_name": warehouse_location.name if warehouse_location else "商品部仓库",
+                "total_weight": float(warehouse_stats.total_weight or 0),
+                "product_count": warehouse_stats.product_count or 0
+            }
+    
+    # 柜台、结算或管理层：可以看展厅
+    if user_role in ["counter", "settlement", "manager"]:
+        if showroom_id:
+            # 展厅库存统计
+            showroom_stats = db.query(
+                func.sum(LocationInventory.weight).label("total_weight"),
+                func.count(LocationInventory.id).label("product_count")
+            ).filter(
+                LocationInventory.location_id == showroom_id,
+                LocationInventory.weight > 0
+            ).first()
+            
+            result["showroom"] = {
+                "location_id": showroom_id,
+                "location_name": showroom_location.name if showroom_location else "展厅",
+                "total_weight": float(showroom_stats.total_weight or 0),
+                "product_count": showroom_stats.product_count or 0
+            }
+    
+    # 流转信息
+    if warehouse_id and showroom_id:
+        # 转出待接收（商品部→展厅，状态pending）- 商品专员和管理层可看
+        if user_role in ["product", "manager"]:
+            outgoing_pending = db.query(
+                func.sum(InventoryTransfer.weight).label("total_weight"),
+                func.count(InventoryTransfer.id).label("transfer_count")
+            ).filter(
+                InventoryTransfer.from_location_id == warehouse_id,
+                InventoryTransfer.to_location_id == showroom_id,
+                InventoryTransfer.status == "pending"
+            ).first()
+            
+            result["transfers"]["outgoing_pending"] = {
+                "total_weight": float(outgoing_pending.total_weight or 0),
+                "count": outgoing_pending.transfer_count or 0,
+                "description": "转出待接收（等待展厅接收）"
+            }
+        
+        # 待接收（商品部→展厅，状态pending）- 柜台、结算和管理层可看
+        if user_role in ["counter", "settlement", "manager"]:
+            incoming_pending = db.query(
+                func.sum(InventoryTransfer.weight).label("total_weight"),
+                func.count(InventoryTransfer.id).label("transfer_count")
+            ).filter(
+                InventoryTransfer.from_location_id == warehouse_id,
+                InventoryTransfer.to_location_id == showroom_id,
+                InventoryTransfer.status == "pending"
+            ).first()
+            
+            result["transfers"]["incoming_pending"] = {
+                "total_weight": float(incoming_pending.total_weight or 0),
+                "count": incoming_pending.transfer_count or 0,
+                "description": "待接收（商品部转来）"
+            }
+        
+        # 展厅退回商品部（退货类型to_warehouse，状态pending）- 商品专员和管理层可看
+        if user_role in ["product", "manager"]:
+            return_to_warehouse = db.query(
+                func.sum(ReturnOrder.return_weight).label("total_weight"),
+                func.count(ReturnOrder.id).label("return_count")
+            ).filter(
+                ReturnOrder.return_type == "to_warehouse",
+                ReturnOrder.from_location_id == showroom_id,
+                ReturnOrder.status == "pending"
+            ).first()
+            
+            result["transfers"]["return_to_warehouse"] = {
+                "total_weight": float(return_to_warehouse.total_weight or 0),
+                "count": return_to_warehouse.return_count or 0,
+                "description": "展厅退货中（等待确认）"
+            }
+        
+        # 展厅退货状态 - 柜台、结算和管理层可看
+        if user_role in ["counter", "settlement", "manager"]:
+            return_from_showroom = db.query(
+                func.sum(ReturnOrder.return_weight).label("total_weight"),
+                func.count(ReturnOrder.id).label("return_count")
+            ).filter(
+                ReturnOrder.return_type == "to_warehouse",
+                ReturnOrder.from_location_id == showroom_id,
+                ReturnOrder.status == "pending"
+            ).first()
+            
+            result["transfers"]["return_to_showroom"] = {
+                "total_weight": float(return_from_showroom.total_weight or 0),
+                "count": return_from_showroom.return_count or 0,
+                "description": "退货处理中（已退回商品部）"
+            }
+    
+    return {
+        "success": True,
+        "user_role": user_role,
+        "overview": result
+    }
+
+

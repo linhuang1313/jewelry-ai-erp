@@ -16,6 +16,7 @@ import { CustomerPage } from './components/CustomerPage'
 import { QuickOrderModal } from './components/QuickOrderModal'
 import { QuickReturnModal } from './components/QuickReturnModal'
 import QuickInboundModal from './components/QuickInboundModal'
+import InventoryOverview from './components/InventoryOverview'
 import { SupplierPage } from './components/SupplierPage'
 import ReturnPage from './components/ReturnPage'
 import GoldMaterialPage from './components/GoldMaterialPage'
@@ -1921,6 +1922,13 @@ function App() {
                   {userRole === 'sales' && '试试说："查询客户张三的购买记录"'}
                   {userRole === 'manager' && '试试说："查看今日销售数据汇总"'}
                 </p>
+                
+                {/* 库存概览 - 商品专员、柜台、结算、管理层可见 */}
+                {(userRole === 'product' || userRole === 'counter' || userRole === 'settlement' || userRole === 'manager') && (
+                  <div className="max-w-2xl mx-auto mb-6">
+                    <InventoryOverview userRole={userRole} />
+                  </div>
+                )}
                 
                 {/* 角色快捷操作卡片 - 使用权限控制 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
