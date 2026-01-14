@@ -49,6 +49,9 @@ from .routers.returns import router as returns_router
 from .routers.analytics import router as analytics_router
 from .routers.gold_material import router as gold_material_router
 from .routers.product_codes import router as product_codes_router
+from .routers.salespersons import router as salespersons_router
+from .routers.sales import router as sales_router
+from .routers.export import router as export_router
 from .ocr_parser import OCR_AVAILABLE
 
 # 百度云 OCR（云端可用）
@@ -95,6 +98,15 @@ app.include_router(gold_material_router)
 
 # 注册商品编码管理路由
 app.include_router(product_codes_router)
+
+# 注册业务员管理路由
+app.include_router(salespersons_router)
+
+# 注册销售单管理路由
+app.include_router(sales_router)
+
+# 注册数据导出路由
+app.include_router(export_router)
 
 # 配置CORS - 支持本地开发和云端部署
 # 允许的前端域名列表
