@@ -151,6 +151,15 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
   const [balance, setBalance] = useState<GoldBalance | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   
+  // 期初金料
+  const [initialBalance, setInitialBalance] = useState<{
+    has_initial: boolean;
+    initial: { transaction_no: string; gold_weight: number; remark: string; created_at: string } | null;
+  } | null>(null);
+  const [showInitialModal, setShowInitialModal] = useState(false);
+  const [initialFormData, setInitialFormData] = useState({ gold_weight: '', remark: '期初金料库存' });
+  const [initialSubmitting, setInitialSubmitting] = useState(false);
+  
   // 待确认收料单（料部）
   const [pendingReceipts, setPendingReceipts] = useState<GoldTransaction[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
@@ -253,6 +262,52 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
     }
     setBalanceLoading(false);
   }, [userRole]);
+  
+  // 加载期初金料
+  const loadInitialBalance = useCallback(async () => {
+    const params = buildQueryString({ user_role: userRole });
+    
+    const data = await apiGet<{
+      has_initial: boolean;
+      initial: { transaction_no: string; gold_weight: number; remark: string; created_at: string } | null;
+    }>(
+      `/api/gold-material/initial-balance?${params}`,
+      { showErrorToast: false }
+    );
+    
+    if (data) {
+      setInitialBalance(data);
+    }
+  }, [userRole]);
+  
+  // 设置期初金料
+  const submitInitialBalance = async () => {
+    if (!initialFormData.gold_weight || parseFloat(initialFormData.gold_weight) <= 0) {
+      toast.error('请输入有效的期初金料克重');
+      return;
+    }
+    
+    setInitialSubmitting(true);
+    const params = buildQueryString({
+      gold_weight: initialFormData.gold_weight,
+      remark: initialFormData.remark || '期初金料库存',
+      user_role: userRole
+    });
+    
+    const data = await apiPost<{ success: boolean; message: string }>(
+      `/api/gold-material/initial-balance?${params}`,
+      {},
+      { showSuccessToast: true, successMessage: '期初金料设置成功' }
+    );
+    
+    if (data?.success) {
+      setShowInitialModal(false);
+      setInitialFormData({ gold_weight: '', remark: '期初金料库存' });
+      loadInitialBalance();
+      loadBalance();
+    }
+    setInitialSubmitting(false);
+  };
 
   // 加载待确认收料单（料部）
   const loadPendingReceipts = useCallback(async () => {
@@ -530,6 +585,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
       loadPayments();
     } else if (activeTab === 'balance') {
       loadBalance();
+      loadInitialBalance();
     } else if (activeTab === 'withdrawals') {
       loadWithdrawals();
       loadCustomers();
@@ -885,13 +941,42 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
         )}
 
         {/* 金料库存 */}
-        {activeTab === 'balance' && userRole === 'material' && (
+        {activeTab === 'balance' && (userRole === 'material' || userRole === 'manager') && (
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-xl font-semibold mb-4">金料库存余额</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">金料库存余额</h2>
+              {(userRole === 'manager' || userRole === 'material') && !initialBalance?.has_initial && (
+                <button
+                  onClick={() => setShowInitialModal(true)}
+                  className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 flex items-center gap-2"
+                >
+                  <span>⚙️</span>
+                  <span>设置期初金料</span>
+                </button>
+              )}
+            </div>
+            
+            {/* 期初金料信息 */}
+            {initialBalance?.has_initial && initialBalance.initial && (
+              <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-center gap-2 text-amber-700 mb-2">
+                  <span>📋</span>
+                  <span className="font-medium">期初金料</span>
+                </div>
+                <div className="text-sm text-gray-600">
+                  <span className="font-semibold text-amber-600">{initialBalance.initial.gold_weight.toFixed(2)} 克</span>
+                  <span className="mx-2">|</span>
+                  <span>单号: {initialBalance.initial.transaction_no}</span>
+                  <span className="mx-2">|</span>
+                  <span>{initialBalance.initial.remark}</span>
+                </div>
+              </div>
+            )}
+            
             {balanceLoading ? renderLoading() : balance ? (
               <div className="grid grid-cols-3 gap-6">
                 <div className="bg-blue-50 rounded-lg p-6">
-                  <div className="text-sm text-gray-600 mb-2">累计收入</div>
+                  <div className="text-sm text-gray-600 mb-2">累计收入（含期初）</div>
                   <div className="text-2xl font-bold text-blue-600">{balance.total_income.toFixed(2)} 克</div>
                 </div>
                 <div className="bg-red-50 rounded-lg p-6">
@@ -904,6 +989,71 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                 </div>
               </div>
             ) : renderEmpty()}
+          </div>
+        )}
+        
+        {/* 设置期初金料弹窗 */}
+        {showInitialModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-semibold">设置期初金料</h3>
+                <button
+                  onClick={() => setShowInitialModal(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    期初金料克重 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={initialFormData.gold_weight}
+                    onChange={(e) => setInitialFormData({ ...initialFormData, gold_weight: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                    placeholder="请输入期初金料克重"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+                  <input
+                    type="text"
+                    value={initialFormData.remark}
+                    onChange={(e) => setInitialFormData({ ...initialFormData, remark: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                    placeholder="期初金料库存"
+                  />
+                </div>
+                
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+                  <strong>提示：</strong>期初金料只能设置一次，设置后不可修改。请确认克重无误后再提交。
+                </div>
+              </div>
+              
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => setShowInitialModal(false)}
+                  className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={submitInitialBalance}
+                  disabled={initialSubmitting || !initialFormData.gold_weight}
+                  className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  {initialSubmitting ? '提交中...' : '确认设置'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

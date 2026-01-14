@@ -684,6 +684,108 @@ async def get_gold_balance(
     )
 
 
+# ==================== 期初金料设置 ====================
+
+@router.post("/initial-balance")
+async def set_initial_gold_balance(
+    gold_weight: float = Query(..., description="期初金料克重"),
+    remark: str = Query(default="期初金料库存", description="备注"),
+    user_role: str = Query(default="material", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    设置期初金料余额（仅管理层或料部可操作）
+    这会创建一条特殊的收料记录，代表系统启用时的初始金料库存
+    """
+    # 权限检查 - 仅管理层和料部可以设置期初
+    if user_role not in ['manager', 'material']:
+        raise HTTPException(status_code=403, detail="仅管理层或料部可以设置期初金料")
+    
+    if gold_weight <= 0:
+        raise HTTPException(status_code=400, detail="期初金料克重必须大于0")
+    
+    # 检查是否已有期初记录
+    existing = db.query(GoldMaterialTransaction).filter(
+        GoldMaterialTransaction.transaction_no.like("QC%")
+    ).first()
+    
+    if existing:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"已存在期初金料记录（{existing.transaction_no}：{existing.gold_weight}克），如需修改请联系管理员删除后重新设置"
+        )
+    
+    # 生成期初单号（QC开头，代表"期初"）
+    now = china_now()
+    initial_no = f"QC{now.strftime('%Y%m%d')}001"
+    
+    # 创建期初金料记录（作为收料入账）
+    transaction = GoldMaterialTransaction(
+        transaction_no=initial_no,
+        transaction_type='income',
+        gold_weight=gold_weight,
+        status='confirmed',  # 期初直接确认
+        created_by=user_role,
+        confirmed_by=user_role,
+        confirmed_at=now,
+        remark=remark or "期初金料库存"
+    )
+    db.add(transaction)
+    db.commit()
+    db.refresh(transaction)
+    
+    logger.info(f"设置期初金料: {gold_weight}克, 单号: {initial_no}, 操作人: {user_role}")
+    
+    return {
+        "success": True,
+        "message": f"✅ 期初金料 {gold_weight}克 已成功设置",
+        "transaction": {
+            "transaction_no": initial_no,
+            "gold_weight": gold_weight,
+            "status": "confirmed",
+            "remark": remark or "期初金料库存",
+            "created_at": now.isoformat()
+        }
+    }
+
+
+@router.get("/initial-balance")
+async def get_initial_gold_balance(
+    user_role: str = Query(default="material", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """获取期初金料信息"""
+    # 权限检查
+    if not has_permission(user_role, 'can_view_gold_material'):
+        raise HTTPException(status_code=403, detail="权限不足")
+    
+    # 查询期初记录
+    initial = db.query(GoldMaterialTransaction).filter(
+        GoldMaterialTransaction.transaction_no.like("QC%")
+    ).first()
+    
+    if not initial:
+        return {
+            "success": True,
+            "has_initial": False,
+            "message": "尚未设置期初金料",
+            "initial": None
+        }
+    
+    return {
+        "success": True,
+        "has_initial": True,
+        "initial": {
+            "transaction_no": initial.transaction_no,
+            "gold_weight": initial.gold_weight,
+            "status": initial.status,
+            "remark": initial.remark,
+            "created_at": initial.created_at.isoformat() if initial.created_at else None,
+            "confirmed_at": initial.confirmed_at.isoformat() if initial.confirmed_at else None
+        }
+    }
+
+
 # ==================== 客户存料管理 ====================
 
 @router.get("/customers/{customer_id}/deposit")
