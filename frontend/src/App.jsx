@@ -2180,7 +2180,8 @@ function App() {
                         rounded-3xl px-5 py-4 shadow-sm border border-gray-200/60 bg-white
                       `}>
                         <div className="text-[15px] leading-relaxed whitespace-pre-wrap text-gray-800">
-                          {msg.content}
+                          {/* 隐藏内容中的特殊标记 */}
+                          {msg.content?.replace(/\n\n<!-- (RETURN_ORDER|INBOUND_ORDER):[^>]+ -->/g, '')}
                           {/* 流式生成时的闪烁光标 */}
                           {msg.isStreaming && (
                             <span className="inline-block w-0.5 h-4 bg-blue-500 ml-1 animate-pulse"></span>
@@ -2197,52 +2198,70 @@ function App() {
                     />
                   </div>
                 )}
-                        {/* 退货单操作按钮 */}
-                        {msg.returnOrder && msg.returnOrder.id && (
-                          <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
-                            <button
-                              onClick={() => window.open(`${API_BASE_URL}/api/returns/${msg.returnOrder.id}/download?format=html`, '_blank')}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                              </svg>
-                              打印
-                            </button>
-                            <button
-                              onClick={() => window.open(`${API_BASE_URL}/api/returns/${msg.returnOrder.id}/download?format=pdf`, '_blank')}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                              </svg>
-                              下载
-                            </button>
-                          </div>
-                        )}
-                        {/* 入库单操作按钮 */}
-                        {msg.inboundOrder && msg.inboundOrder.id && (
-                          <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
-                            <button
-                              onClick={() => window.open(`${API_BASE_URL}/api/inbound-orders/${msg.inboundOrder.id}/download?format=html`, '_blank')}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                              </svg>
-                              打印
-                            </button>
-                            <button
-                              onClick={() => window.open(`${API_BASE_URL}/api/inbound-orders/${msg.inboundOrder.id}/download?format=pdf`, '_blank')}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                              </svg>
-                              下载
-                            </button>
-                          </div>
-                        )}
+                        {/* 退货单操作按钮 - 支持从对象或从内容解析 */}
+                        {(() => {
+                          // 尝试从消息对象获取，或从内容中解析隐藏标记
+                          let returnId = msg.returnOrder?.id
+                          if (!returnId && msg.content) {
+                            const match = msg.content.match(/<!-- RETURN_ORDER:(\d+):/)
+                            if (match) returnId = parseInt(match[1])
+                          }
+                          if (!returnId) return null
+                          return (
+                            <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
+                              <button
+                                onClick={() => window.open(`${API_BASE_URL}/api/returns/${returnId}/download?format=html`, '_blank')}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                </svg>
+                                打印退货单
+                              </button>
+                              <button
+                                onClick={() => window.open(`${API_BASE_URL}/api/returns/${returnId}/download?format=pdf`, '_blank')}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                下载
+                              </button>
+                            </div>
+                          )
+                        })()}
+                        {/* 入库单操作按钮 - 支持从对象或从内容解析 */}
+                        {(() => {
+                          // 尝试从消息对象获取，或从内容中解析隐藏标记
+                          let inboundId = msg.inboundOrder?.id
+                          if (!inboundId && msg.content) {
+                            const match = msg.content.match(/<!-- INBOUND_ORDER:(\d+):/)
+                            if (match) inboundId = parseInt(match[1])
+                          }
+                          if (!inboundId) return null
+                          return (
+                            <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
+                              <button
+                                onClick={() => window.open(`${API_BASE_URL}/api/inbound-orders/${inboundId}/download?format=html`, '_blank')}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                </svg>
+                                打印入库单
+                              </button>
+                              <button
+                                onClick={() => window.open(`${API_BASE_URL}/api/inbound-orders/${inboundId}/download?format=pdf`, '_blank')}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                下载
+                              </button>
+                            </div>
+                          )
+                        })()}
               </div>
             </div>
             {/* 工费明细表格（单个商品查询） */}
@@ -3053,8 +3072,8 @@ function App() {
           isOpen={showQuickReturnModal}
           onClose={() => setShowQuickReturnModal(false)}
           onSuccess={async (result) => {
-            // 构建退货成功的消息内容
-            const returnMessage = `✅ **退货单创建成功**\n\n📋 单号：${result.return_no}\n📦 商品名称：${result.product_name}\n⚖️ 退货克重：${result.return_weight}克\n📝 退货原因：${result.return_reason}${result.supplier_name ? `\n🏭 供应商：${result.supplier_name}` : ''}${result.from_location_name ? `\n📍 发起位置：${result.from_location_name}` : ''}`
+            // 构建退货成功的消息内容（包含隐藏的ID标记，用于历史记录中显示打印按钮）
+            const returnMessage = `✅ **退货单创建成功**\n\n📋 单号：${result.return_no}\n📦 商品名称：${result.product_name}\n⚖️ 退货克重：${result.return_weight}克\n📝 退货原因：${result.return_reason}${result.supplier_name ? `\n🏭 供应商：${result.supplier_name}` : ''}${result.from_location_name ? `\n📍 发起位置：${result.from_location_name}` : ''}\n\n<!-- RETURN_ORDER:${result.return_id}:${result.return_no} -->`
             
             // 添加到聊天记录显示（包含退货单信息，用于下载/打印）
             setMessages(prev => [...prev, {
@@ -3066,7 +3085,7 @@ function App() {
               }
             }])
             
-            // 保存到后端聊天历史
+            // 保存到后端聊天历史（包含ID标记）
             try {
               await fetch(`${API_BASE_URL}/api/chat-logs/message?session_id=${encodeURIComponent(currentSessionId)}&message_type=assistant&content=${encodeURIComponent(returnMessage)}&user_role=${userRole}&intent=退货`, {
                 method: 'POST'
@@ -3085,10 +3104,10 @@ function App() {
           isOpen={showQuickInboundModal}
           onClose={() => setShowQuickInboundModal(false)}
           onSuccess={async (result) => {
-            // 构建入库成功的消息内容
+            // 构建入库成功的消息内容（包含隐藏的ID标记，用于历史记录中显示打印按钮）
             const productList = result.products.slice(0, 5).map(p => `  • ${p.name}：${p.weight}克`).join('\n')
             const moreProducts = result.products.length > 5 ? `\n  ... 等共 ${result.products.length} 件商品` : ''
-            const inboundMessage = `✅ **入库成功**${result.order_no ? `\n\n📋 单号：${result.order_no}` : ''}\n🏭 供应商：${result.supplier_name}\n📦 入库数量：${result.total_count} 件\n⚖️ 总克重：${result.total_weight.toFixed(2)}克\n\n📋 商品明细：\n${productList}${moreProducts}`
+            const inboundMessage = `✅ **入库成功**${result.order_no ? `\n\n📋 单号：${result.order_no}` : ''}\n🏭 供应商：${result.supplier_name}\n📦 入库数量：${result.total_count} 件\n⚖️ 总克重：${result.total_weight.toFixed(2)}克\n\n📋 商品明细：\n${productList}${moreProducts}${result.order_id ? `\n\n<!-- INBOUND_ORDER:${result.order_id}:${result.order_no} -->` : ''}`
             
             // 添加到聊天记录显示（包含入库单信息，用于下载/打印）
             setMessages(prev => [...prev, {
@@ -3100,7 +3119,7 @@ function App() {
               } : null
             }])
             
-            // 保存到后端聊天历史
+            // 保存到后端聊天历史（包含ID标记）
             try {
               await fetch(`${API_BASE_URL}/api/chat-logs/message?session_id=${encodeURIComponent(currentSessionId)}&message_type=assistant&content=${encodeURIComponent(inboundMessage)}&user_role=${userRole}&intent=入库`, {
                 method: 'POST'
