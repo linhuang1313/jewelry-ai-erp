@@ -302,6 +302,11 @@ class SettlementOrderResponse(BaseModel):
     material_amount: Optional[float]
     labor_amount: float
     total_amount: float
+    # 客户历史余额信息
+    previous_cash_debt: Optional[float] = 0.0  # 上次现金欠款（元）
+    previous_gold_debt: Optional[float] = 0.0  # 上次金料欠款（克）
+    gold_deposit_balance: Optional[float] = 0.0  # 存料余额（克）
+    cash_deposit_balance: Optional[float] = 0.0  # 存款余额（元）
     status: str
     created_by: Optional[str]
     confirmed_by: Optional[str]

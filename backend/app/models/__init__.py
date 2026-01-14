@@ -174,6 +174,12 @@ class SettlementOrder(Base):
     labor_amount = Column(Float, nullable=False)  # 工费金额
     total_amount = Column(Float, nullable=False)  # 应收总额 = 原料金额 + 工费金额
     
+    # 客户历史余额快照（创建结算单时记录）
+    previous_cash_debt = Column(Float, default=0.0)      # 上次现金欠款（元）
+    previous_gold_debt = Column(Float, default=0.0)      # 上次金料欠款（克）
+    gold_deposit_balance = Column(Float, default=0.0)    # 存料余额（克）
+    cash_deposit_balance = Column(Float, default=0.0)    # 存款余额（元）
+    
     # 状态和操作信息
     status = Column(String(20), default="pending")  # pending待结算 / confirmed已确认 / printed已打印
     created_by = Column(String(50))  # 创建人（柜台）

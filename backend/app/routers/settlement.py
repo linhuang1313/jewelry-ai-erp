@@ -140,6 +140,11 @@ async def get_settlement_orders(
             material_amount=order.material_amount,
             labor_amount=order.labor_amount,
             total_amount=order.total_amount,
+            # 客户历史余额信息
+            previous_cash_debt=order.previous_cash_debt or 0.0,
+            previous_gold_debt=order.previous_gold_debt or 0.0,
+            gold_deposit_balance=order.gold_deposit_balance or 0.0,
+            cash_deposit_balance=order.cash_deposit_balance or 0.0,
             status=order.status,
             created_by=order.created_by,
             confirmed_by=order.confirmed_by,
@@ -253,6 +258,42 @@ async def create_settlement_order(
     if deposit_used > 0:
         remark = f"使用存料抵扣：{deposit_used:.2f}克。" + remark
     
+    # ========== 查询客户历史余额信息 ==========
+    previous_cash_debt = 0.0  # 上次现金欠款
+    previous_gold_debt = 0.0  # 上次金料欠款
+    gold_deposit_balance = 0.0  # 存料余额
+    cash_deposit_balance = 0.0  # 存款余额
+    
+    if customer_id:
+        # 查询存料余额
+        customer_deposit = db.query(CustomerGoldDeposit).filter(
+            CustomerGoldDeposit.customer_id == customer_id
+        ).first()
+        if customer_deposit:
+            gold_deposit_balance = customer_deposit.current_balance or 0.0
+        
+        # 查询上次金料欠款（从客户往来账中获取最后一条记录）
+        last_transaction = db.query(CustomerTransaction).filter(
+            CustomerTransaction.customer_id == customer_id,
+            CustomerTransaction.status == "active"
+        ).order_by(CustomerTransaction.created_at.desc()).first()
+        if last_transaction:
+            previous_gold_debt = last_transaction.gold_due_after or 0.0
+        
+        # 查询现金欠款（从应收账款表获取）
+        from ..models.finance import AccountReceivable
+        try:
+            account_receivable = db.query(AccountReceivable).filter(
+                AccountReceivable.customer_id == customer_id
+            ).first()
+            if account_receivable:
+                previous_cash_debt = account_receivable.balance or 0.0
+        except Exception as e:
+            logger.warning(f"查询应收账款失败: {e}")
+    
+    logger.info(f"[结算单] 客户余额快照 - 现金欠款: {previous_cash_debt}, 金料欠款: {previous_gold_debt}, 存料: {gold_deposit_balance}")
+    # ========== 客户余额查询结束 ==========
+    
     # 创建结算单
     settlement = SettlementOrder(
         settlement_no=settlement_no,
@@ -264,6 +305,11 @@ async def create_settlement_order(
         material_amount=material_amount,
         labor_amount=labor_amount,
         total_amount=total_amount,
+        # 客户历史余额快照
+        previous_cash_debt=previous_cash_debt,
+        previous_gold_debt=previous_gold_debt,
+        gold_deposit_balance=gold_deposit_balance,
+        cash_deposit_balance=cash_deposit_balance,
         status="pending",
         created_by=created_by,
         remark=remark
@@ -331,6 +377,11 @@ async def create_settlement_order(
         material_amount=settlement.material_amount,
         labor_amount=settlement.labor_amount,
         total_amount=settlement.total_amount,
+        # 客户历史余额信息
+        previous_cash_debt=settlement.previous_cash_debt or 0.0,
+        previous_gold_debt=settlement.previous_gold_debt or 0.0,
+        gold_deposit_balance=settlement.gold_deposit_balance or 0.0,
+        cash_deposit_balance=settlement.cash_deposit_balance or 0.0,
         status=settlement.status,
         created_by=settlement.created_by,
         confirmed_by=settlement.confirmed_by,
@@ -385,6 +436,10 @@ async def confirm_settlement_order(
         material_amount=settlement.material_amount,
         labor_amount=settlement.labor_amount,
         total_amount=settlement.total_amount,
+        previous_cash_debt=settlement.previous_cash_debt or 0.0,
+        previous_gold_debt=settlement.previous_gold_debt or 0.0,
+        gold_deposit_balance=settlement.gold_deposit_balance or 0.0,
+        cash_deposit_balance=settlement.cash_deposit_balance or 0.0,
         status=settlement.status,
         created_by=settlement.created_by,
         confirmed_by=settlement.confirmed_by,
@@ -428,6 +483,10 @@ async def mark_settlement_printed(
         material_amount=settlement.material_amount,
         labor_amount=settlement.labor_amount,
         total_amount=settlement.total_amount,
+        previous_cash_debt=settlement.previous_cash_debt or 0.0,
+        previous_gold_debt=settlement.previous_gold_debt or 0.0,
+        gold_deposit_balance=settlement.gold_deposit_balance or 0.0,
+        cash_deposit_balance=settlement.cash_deposit_balance or 0.0,
         status=settlement.status,
         created_by=settlement.created_by,
         confirmed_by=settlement.confirmed_by,
@@ -523,6 +582,10 @@ async def get_settlement_order(
         material_amount=settlement.material_amount,
         labor_amount=settlement.labor_amount,
         total_amount=settlement.total_amount,
+        previous_cash_debt=settlement.previous_cash_debt or 0.0,
+        previous_gold_debt=settlement.previous_gold_debt or 0.0,
+        gold_deposit_balance=settlement.gold_deposit_balance or 0.0,
+        cash_deposit_balance=settlement.cash_deposit_balance or 0.0,
         status=settlement.status,
         created_by=settlement.created_by,
         confirmed_by=settlement.confirmed_by,

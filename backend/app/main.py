@@ -137,14 +137,14 @@ async def startup_event():
     from sqlalchemy import text
     db = SessionLocal()
     try:
-        # 需要添加的列列表
-        columns_to_add = [
+        # inbound_details 表的列
+        inbound_columns = [
             ("product_code", "VARCHAR(20) NULL"),
             ("piece_count", "INTEGER DEFAULT 0"),
             ("piece_labor_cost", "FLOAT DEFAULT 0.0"),
         ]
         
-        for col_name, col_type in columns_to_add:
+        for col_name, col_type in inbound_columns:
             result = db.execute(text(f"""
                 SELECT column_name 
                 FROM information_schema.columns 
@@ -157,6 +157,28 @@ async def startup_event():
                 """))
                 db.commit()
                 logger.info(f"已添加 {col_name} 列到 inbound_details 表")
+        
+        # settlement_orders 表的客户余额字段
+        settlement_columns = [
+            ("previous_cash_debt", "FLOAT DEFAULT 0.0"),
+            ("previous_gold_debt", "FLOAT DEFAULT 0.0"),
+            ("gold_deposit_balance", "FLOAT DEFAULT 0.0"),
+            ("cash_deposit_balance", "FLOAT DEFAULT 0.0"),
+        ]
+        
+        for col_name, col_type in settlement_columns:
+            result = db.execute(text(f"""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'settlement_orders' AND column_name = '{col_name}'
+            """))
+            if not result.fetchone():
+                db.execute(text(f"""
+                    ALTER TABLE settlement_orders 
+                    ADD COLUMN {col_name} {col_type}
+                """))
+                db.commit()
+                logger.info(f"已添加 {col_name} 列到 settlement_orders 表")
     except Exception as e:
         logger.warning(f"迁移检查: {e}")
         db.rollback()
