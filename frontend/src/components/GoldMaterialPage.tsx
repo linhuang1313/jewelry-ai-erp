@@ -784,7 +784,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
         </div>
 
         {/* 金料台账 */}
-        {activeTab === 'ledger' && userRole === 'material' && (
+        {activeTab === 'ledger' && (userRole === 'material' || userRole === 'manager') && (
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">每日金料进出台账</h2>
@@ -901,7 +901,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
         )}
 
         {/* 付料单列表 */}
-        {activeTab === 'payments' && userRole === 'material' && (
+        {activeTab === 'payments' && (userRole === 'material' || userRole === 'manager') && (
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">付料单列表</h2>
