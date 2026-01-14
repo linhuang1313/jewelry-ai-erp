@@ -82,15 +82,15 @@ export const ROLE_PERMISSIONS = {
     pages: ['chat', 'settlement', 'gold-material'],
   },
   
-  // 业务员
+  // 业务员 - 只能查询客户相关信息
   sales: {
+    // 操作权限全部关闭
     canInbound: false,
     canCreateSales: false,          // 不能开销售单（只有柜台可以）
     canCreateSettlement: false,
     canTransfer: false,
     canReceiveTransfer: false,
     canManageCustomers: false,      // 不能管理客户（不能创建/编辑/删除）
-    canViewCustomers: true,         // 可以查看客户（查询/往来账）
     canManageSuppliers: false,
     canManageSalespersons: false,
     canViewAnalytics: false,
@@ -99,6 +99,13 @@ export const ROLE_PERMISSIONS = {
     canReturnToSupplier: false,
     canReturnToWarehouse: false,
     canViewFinance: false,
+    
+    // 查询权限开启
+    canViewCustomers: true,              // 可以查看客户列表
+    canQueryCustomerSales: true,         // 可以查询客户销售记录
+    canQueryCustomerReturns: true,       // 可以查询客户退货记录
+    canQueryCustomerBalance: true,       // 可以查询客户欠款/存料余额
+    canQueryCustomerTransactions: true,  // 可以查询客户往来账目
     
     pages: ['chat', 'customer'],
   },

@@ -1861,7 +1861,7 @@ function App() {
                   {userRole === 'product' && '试试说："古法黄金戒指 100克 工费6元 供应商是金源珠宝，帮我做个入库"'}
                   {userRole === 'settlement' && '试试说："查看今天待结算的订单"'}
                   {userRole === 'finance' && '试试说："查看本月财务对账情况"'}
-                  {userRole === 'sales' && '试试说："查询客户张三的购买记录"'}
+                  {userRole === 'sales' && '试试说："帮我查询张三今天的销售情况" 或 "王五有多少欠款"'}
                   {userRole === 'manager' && '试试说："查看今日销售数据汇总"'}
                 </p>
                 
@@ -1966,8 +1966,14 @@ function App() {
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
                       <div className="text-2xl mb-3">👥</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">客户管理</h3>
-                      <p className="text-sm text-gray-600">管理客户信息</p>
+                      <h3 className="font-semibold text-gray-900 mb-2">
+                        {userRole === 'sales' ? '客户查询' : '客户管理'}
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        {userRole === 'sales' 
+                          ? '查询客户销售、退货、欠款、往来账目' 
+                          : '管理客户信息'}
+                      </p>
                     </div>
                   )}
                   

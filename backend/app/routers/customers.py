@@ -3,14 +3,18 @@
 """
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from datetime import datetime
 from ..timezone_utils import china_now
-from typing import Optional
+from typing import Optional, List, Dict, Any
 import logging
 
 from ..database import get_db
-from ..models import Customer, SalesOrder
+from ..models import (
+    Customer, SalesOrder, SalesOrderDetail, ReturnOrder,
+    AccountReceivable, CustomerTransaction, CustomerGoldDeposit,
+    CustomerGoldDepositTransaction
+)
 from ..schemas import CustomerCreate, CustomerResponse
 
 logger = logging.getLogger(__name__)
@@ -243,4 +247,173 @@ async def delete_customer(
         db.rollback()
         logger.error(f"删除客户失败: {e}", exc_info=True)
         return {"success": False, "message": str(e)}
+
+
+@router.get("/{customer_id}/detail")
+async def get_customer_detail(
+    customer_id: int,
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    获取客户详情（销售记录、退货记录、欠款/存料余额、往来账目）
+    业务员角色可以查看客户的完整往来信息
+    """
+    # 权限检查 - 需要查看客户或查询客户销售权限
+    from ..middleware.permissions import has_permission
+    can_view = (
+        has_permission(user_role, 'can_view_customers') or 
+        has_permission(user_role, 'can_manage_customers') or
+        has_permission(user_role, 'can_query_customer_sales')
+    )
+    if not can_view:
+        raise HTTPException(status_code=403, detail="权限不足：您没有查看客户详情的权限")
+    
+    try:
+        # 获取客户基本信息
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        if not customer:
+            return {"success": False, "message": "客户不存在"}
+        
+        # 获取销售记录
+        sales_orders = db.query(SalesOrder).filter(
+            SalesOrder.customer_name == customer.name,
+            SalesOrder.status != "已取消"
+        ).order_by(desc(SalesOrder.create_time)).limit(50).all()
+        
+        sales_list = []
+        for order in sales_orders:
+            # 获取销售单明细
+            details = db.query(SalesOrderDetail).filter(
+                SalesOrderDetail.order_id == order.id
+            ).all()
+            
+            for detail in details:
+                sales_list.append({
+                    "id": detail.id,
+                    "order_no": order.order_no,
+                    "product_name": detail.product_name,
+                    "weight": detail.weight,
+                    "labor_cost": detail.labor_cost,
+                    "total_amount": detail.total_price,
+                    "status": order.status,
+                    "created_at": order.create_time.isoformat() if order.create_time else None
+                })
+        
+        # 获取退货记录（客户相关的退货，通常是从展厅退回的）
+        # 注意：这里假设有客户相关的退货逻辑，如果没有则返回空列表
+        returns_list = []
+        try:
+            # 查询与客户关联的销售单的退货
+            for order in sales_orders:
+                related_returns = db.query(ReturnOrder).filter(
+                    ReturnOrder.remark.contains(order.order_no) if hasattr(ReturnOrder, 'remark') else False
+                ).all()
+                for ret in related_returns:
+                    returns_list.append({
+                        "id": ret.id,
+                        "return_no": ret.return_no,
+                        "product_name": ret.product_name,
+                        "return_weight": ret.return_weight,
+                        "return_reason": ret.return_reason or "未知",
+                        "status": ret.status,
+                        "created_at": ret.created_at.isoformat() if ret.created_at else None
+                    })
+        except Exception as e:
+            logger.warning(f"查询客户退货记录时出错: {e}")
+            returns_list = []
+        
+        # 获取欠款/存料余额
+        # 现金欠款 - 从应收账款表获取
+        cash_debt = 0.0
+        try:
+            latest_receivable = db.query(AccountReceivable).filter(
+                AccountReceivable.customer_id == customer_id
+            ).order_by(desc(AccountReceivable.created_at)).first()
+            if latest_receivable:
+                cash_debt = latest_receivable.closing_balance or 0.0
+        except Exception as e:
+            logger.warning(f"查询现金欠款时出错: {e}")
+        
+        # 金料欠款 - 从客户交易记录获取
+        gold_debt = 0.0
+        try:
+            latest_transaction = db.query(CustomerTransaction).filter(
+                CustomerTransaction.customer_id == customer_id
+            ).order_by(desc(CustomerTransaction.created_at)).first()
+            if latest_transaction:
+                gold_debt = latest_transaction.gold_due_after or 0.0
+        except Exception as e:
+            logger.warning(f"查询金料欠款时出错: {e}")
+        
+        # 存料余额
+        gold_deposit = 0.0
+        try:
+            deposit_record = db.query(CustomerGoldDeposit).filter(
+                CustomerGoldDeposit.customer_id == customer_id
+            ).first()
+            if deposit_record:
+                gold_deposit = deposit_record.current_balance or 0.0
+        except Exception as e:
+            logger.warning(f"查询存料余额时出错: {e}")
+        
+        balance = {
+            "cash_debt": cash_debt,
+            "gold_debt": gold_debt,
+            "gold_deposit": gold_deposit
+        }
+        
+        # 获取往来账目
+        transactions_list = []
+        
+        # 销售交易
+        for order in sales_orders[:20]:  # 限制数量
+            transactions_list.append({
+                "id": order.id,
+                "type": "sale",
+                "description": f"销售：{order.order_no}",
+                "amount": order.total_amount,
+                "gold_weight": None,
+                "created_at": order.create_time.isoformat() if order.create_time else None
+            })
+        
+        # 金料存取记录
+        try:
+            deposit_transactions = db.query(CustomerGoldDepositTransaction).filter(
+                CustomerGoldDepositTransaction.customer_id == customer_id
+            ).order_by(desc(CustomerGoldDepositTransaction.created_at)).limit(20).all()
+            
+            for tx in deposit_transactions:
+                tx_type = "gold_receipt" if tx.transaction_type == "deposit" else "gold_receipt"
+                amount_sign = 1 if tx.transaction_type == "deposit" else -1
+                transactions_list.append({
+                    "id": tx.id,
+                    "type": tx_type,
+                    "description": tx.remark or f"金料{tx.transaction_type}",
+                    "amount": None,
+                    "gold_weight": tx.amount * amount_sign if tx.amount else 0,
+                    "created_at": tx.created_at.isoformat() if tx.created_at else None
+                })
+        except Exception as e:
+            logger.warning(f"查询金料交易记录时出错: {e}")
+        
+        # 按时间排序
+        transactions_list.sort(key=lambda x: x["created_at"] or "", reverse=True)
+        
+        return {
+            "success": True,
+            "detail": {
+                "customer": CustomerResponse.model_validate(customer).model_dump(mode='json'),
+                "sales": sales_list,
+                "returns": returns_list,
+                "balance": balance,
+                "transactions": transactions_list[:30]  # 限制返回数量
+            }
+        }
+    except Exception as e:
+        logger.error(f"查询客户详情失败: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"查询客户详情失败: {str(e)}"
+        }
 

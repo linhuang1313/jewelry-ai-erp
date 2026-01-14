@@ -3,7 +3,8 @@ import { API_BASE_URL } from '../config';
 import { hasPermission } from '../config/permissions';
 import {
   Users, Plus, Trash2, Edit2, Check, X, RefreshCw, User,
-  MapPin, Search, UserPlus
+  MapPin, Search, UserPlus, Eye, ShoppingBag, RotateCcw, 
+  Wallet, FileText, ChevronRight, ArrowLeft
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -23,6 +24,50 @@ interface Customer {
   remark: string | null;
 }
 
+interface SalesRecord {
+  id: number;
+  order_no: string;
+  product_name: string;
+  weight: number;
+  labor_cost: number;
+  total_amount: number;
+  status: string;
+  created_at: string;
+}
+
+interface ReturnRecord {
+  id: number;
+  return_no: string;
+  product_name: string;
+  return_weight: number;
+  return_reason: string;
+  status: string;
+  created_at: string;
+}
+
+interface CustomerBalance {
+  cash_debt: number;       // 现金欠款
+  gold_debt: number;       // 金料欠款（克）
+  gold_deposit: number;    // 存料余额（克）
+}
+
+interface TransactionRecord {
+  id: number;
+  type: string;            // 'sale', 'return', 'payment', 'gold_receipt'
+  description: string;
+  amount: number | null;
+  gold_weight: number | null;
+  created_at: string;
+}
+
+interface CustomerDetail {
+  customer: Customer;
+  sales: SalesRecord[];
+  returns: ReturnRecord[];
+  balance: CustomerBalance;
+  transactions: TransactionRecord[];
+}
+
 interface CustomerPageProps {
   userRole?: string;
 }
@@ -33,12 +78,20 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
   const canEdit = hasPermission(userRole, 'canManageCustomers'); // 可以编辑客户
   const canAdd = hasPermission(userRole, 'canManageCustomers'); // 可以添加客户
   const canView = hasPermission(userRole, 'canViewCustomers') || hasPermission(userRole, 'canManageCustomers'); // 可以查看客户（查看权限或管理权限）
+  const canViewDetail = hasPermission(userRole, 'canQueryCustomerSales') || hasPermission(userRole, 'canViewCustomers'); // 可以查看客户详情
+  
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchName, setSearchName] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
+  
+  // 客户详情相关状态
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customerDetail, setCustomerDetail] = useState<CustomerDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailTab, setDetailTab] = useState<'sales' | 'returns' | 'balance' | 'transactions'>('sales');
 
   // 新客户表单
   const [newCustomer, setNewCustomer] = useState({
@@ -187,6 +240,260 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
   const cancelEdit = () => {
     setEditingId(null);
     setEditForm({ name: '', address: '', remark: '' });
+  };
+
+  // 获取客户详情
+  const fetchCustomerDetail = async (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setDetailLoading(true);
+    setDetailTab('sales');
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/customers/${customer.id}/detail?user_role=${encodeURIComponent(userRole)}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setCustomerDetail(data.detail);
+      } else {
+        toast.error(data.message || '获取客户详情失败');
+        setCustomerDetail({
+          customer,
+          sales: [],
+          returns: [],
+          balance: { cash_debt: 0, gold_debt: 0, gold_deposit: 0 },
+          transactions: []
+        });
+      }
+    } catch (error) {
+      toast.error('网络错误');
+      setCustomerDetail({
+        customer,
+        sales: [],
+        returns: [],
+        balance: { cash_debt: 0, gold_debt: 0, gold_deposit: 0 },
+        transactions: []
+      });
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  // 关闭详情弹窗
+  const closeDetail = () => {
+    setSelectedCustomer(null);
+    setCustomerDetail(null);
+  };
+
+  // 渲染客户详情弹窗
+  const renderDetailModal = () => {
+    if (!selectedCustomer) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          {/* 弹窗头部 */}
+          <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={closeDetail}
+                  className="p-2 hover:bg-white/50 rounded-lg transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5 text-gray-600" />
+                </button>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">{selectedCustomer.name}</h2>
+                  <p className="text-sm text-gray-500">{selectedCustomer.customer_no} · {selectedCustomer.customer_type}</p>
+                </div>
+              </div>
+              <button
+                onClick={closeDetail}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+          </div>
+
+          {/* Tab 切换 */}
+          <div className="px-6 py-3 border-b border-gray-200 bg-gray-50">
+            <div className="flex space-x-1">
+              {[
+                { key: 'sales', label: '销售记录', icon: ShoppingBag },
+                { key: 'returns', label: '退货记录', icon: RotateCcw },
+                { key: 'balance', label: '欠款/存料', icon: Wallet },
+                { key: 'transactions', label: '往来账目', icon: FileText },
+              ].map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => setDetailTab(key as typeof detailTab)}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all ${
+                    detailTab === key
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span className="text-sm font-medium">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 内容区域 */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {detailLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
+                <span className="ml-3 text-gray-500">加载中...</span>
+              </div>
+            ) : (
+              <>
+                {/* 销售记录 */}
+                {detailTab === 'sales' && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">销售记录</h3>
+                    {customerDetail?.sales && customerDetail.sales.length > 0 ? (
+                      <div className="space-y-3">
+                        {customerDetail.sales.map((sale) => (
+                          <div key={sale.id} className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-medium text-gray-900">{sale.product_name}</p>
+                                <p className="text-sm text-gray-500">
+                                  {sale.order_no} · {new Date(sale.created_at).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-semibold text-green-600">¥{sale.total_amount.toFixed(2)}</p>
+                                <p className="text-sm text-gray-500">{sale.weight}g · 工费¥{sale.labor_cost}/g</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-gray-500">
+                        <ShoppingBag className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                        <p>暂无销售记录</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 退货记录 */}
+                {detailTab === 'returns' && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">退货记录</h3>
+                    {customerDetail?.returns && customerDetail.returns.length > 0 ? (
+                      <div className="space-y-3">
+                        {customerDetail.returns.map((ret) => (
+                          <div key={ret.id} className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-medium text-gray-900">{ret.product_name}</p>
+                                <p className="text-sm text-gray-500">
+                                  {ret.return_no} · {new Date(ret.created_at).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-semibold text-orange-600">{ret.return_weight}g</p>
+                                <p className="text-sm text-gray-500">{ret.return_reason}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-gray-500">
+                        <RotateCcw className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                        <p>暂无退货记录</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 欠款/存料 */}
+                {detailTab === 'balance' && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">账户余额</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="p-6 bg-red-50 rounded-xl border border-red-200">
+                        <p className="text-sm text-red-600 mb-1">现金欠款</p>
+                        <p className="text-2xl font-bold text-red-700">
+                          ¥{(customerDetail?.balance?.cash_debt || 0).toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="p-6 bg-orange-50 rounded-xl border border-orange-200">
+                        <p className="text-sm text-orange-600 mb-1">金料欠款</p>
+                        <p className="text-2xl font-bold text-orange-700">
+                          {(customerDetail?.balance?.gold_debt || 0).toFixed(2)}克
+                        </p>
+                      </div>
+                      <div className="p-6 bg-green-50 rounded-xl border border-green-200">
+                        <p className="text-sm text-green-600 mb-1">存料余额</p>
+                        <p className="text-2xl font-bold text-green-700">
+                          {(customerDetail?.balance?.gold_deposit || 0).toFixed(2)}克
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 往来账目 */}
+                {detailTab === 'transactions' && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">往来账目</h3>
+                    {customerDetail?.transactions && customerDetail.transactions.length > 0 ? (
+                      <div className="space-y-3">
+                        {customerDetail.transactions.map((tx) => (
+                          <div key={tx.id} className="p-4 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <div className={`p-2 rounded-lg ${
+                                tx.type === 'sale' ? 'bg-green-100' :
+                                tx.type === 'return' ? 'bg-orange-100' :
+                                tx.type === 'payment' ? 'bg-blue-100' :
+                                'bg-yellow-100'
+                              }`}>
+                                {tx.type === 'sale' && <ShoppingBag className="w-4 h-4 text-green-600" />}
+                                {tx.type === 'return' && <RotateCcw className="w-4 h-4 text-orange-600" />}
+                                {tx.type === 'payment' && <Wallet className="w-4 h-4 text-blue-600" />}
+                                {tx.type === 'gold_receipt' && <FileText className="w-4 h-4 text-yellow-600" />}
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900">{tx.description}</p>
+                                <p className="text-sm text-gray-500">{new Date(tx.created_at).toLocaleString()}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              {tx.amount !== null && (
+                                <p className={`font-semibold ${tx.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {tx.amount >= 0 ? '+' : ''}¥{tx.amount.toFixed(2)}
+                                </p>
+                              )}
+                              {tx.gold_weight !== null && (
+                                <p className={`text-sm ${tx.gold_weight >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {tx.gold_weight >= 0 ? '+' : ''}{tx.gold_weight.toFixed(2)}g
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-gray-500">
+                        <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                        <p>暂无往来账目</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -447,6 +754,16 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                           </>
                         ) : (
                           <>
+                            {/* 查看详情按钮 - 所有可查看客户的角色都可以点击 */}
+                            {canViewDetail && (
+                              <button
+                                onClick={() => fetchCustomerDetail(customer)}
+                                className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 transition-colors"
+                                title="查看详情"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            )}
                             {canEdit && (
                               <button
                                 onClick={() => startEdit(customer)}
@@ -480,9 +797,15 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
       {/* 提示信息 */}
       <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
         <p className="text-sm text-blue-800">
-          💡 <strong>提示：</strong>客户信息用于开销售单时自动匹配。删除客户不会影响历史销售单记录。
+          💡 <strong>提示：</strong>
+          {userRole === 'sales' 
+            ? '您可以点击"查看详情"按钮查询客户的销售、退货、欠款和往来账目信息。'
+            : '客户信息用于开销售单时自动匹配。删除客户不会影响历史销售单记录。'}
         </p>
       </div>
+
+      {/* 客户详情弹窗 */}
+      {renderDetailModal()}
     </div>
   );
 };

@@ -76,15 +76,15 @@ ROLE_PERMISSIONS = {
         'can_confirm_transfer': False,     # 不能确认转料（料部职责）
     },
     
-    # 业务员
+    # 业务员 - 只能查询客户相关信息
     'sales': {
+        # 操作权限全部关闭
         'can_inbound': False,
         'can_create_sales': False,         # 不能开销售单
         'can_create_settlement': False,
         'can_transfer': False,
         'can_receive_transfer': False,
         'can_manage_customers': False,     # 不能管理客户（不能创建/编辑/删除）
-        'can_view_customers': True,        # 可以查看客户（查询/往来账）
         'can_manage_suppliers': False,
         'can_manage_salespersons': False,
         'can_view_analytics': False,
@@ -93,6 +93,12 @@ ROLE_PERMISSIONS = {
         'can_return_to_supplier': False,
         'can_return_to_warehouse': False,
         'can_view_finance': False,
+        # 查询权限开启
+        'can_view_customers': True,              # 可以查看客户列表
+        'can_query_customer_sales': True,        # 可以查询客户销售记录
+        'can_query_customer_returns': True,      # 可以查询客户退货记录
+        'can_query_customer_balance': True,      # 可以查询客户欠款/存料余额
+        'can_query_customer_transactions': True, # 可以查询客户往来账目
     },
     
     # 财务

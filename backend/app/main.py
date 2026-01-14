@@ -376,6 +376,18 @@ async def chat(request: AIRequest, db: Session = Depends(get_db)):
         ai_response = parse_user_message(request.message)
         logger.info(f"AI解析结果: action={ai_response.action}, products={ai_response.products}")
         
+        # ========== 业务员角色限制：只能进行查询操作 ==========
+        user_role = request.user_role or 'sales'
+        if user_role == 'sales':
+            # 业务员只能执行查询相关操作
+            allowed_actions = ["查询", "查询库存", "查询销售", "查询客户", "查询供应商", 
+                              "查询入库", "分析", "统计", "生成图表", "对话"]
+            if ai_response.action not in allowed_actions:
+                return {
+                    "success": False,
+                    "message": "⚠️ 您是业务员角色，只能查询客户相关信息（销售、退货、欠款、往来账目）。\n\n如需执行入库、开单、退货等操作，请联系相应岗位人员。"
+                }
+        
         # ========== 写操作：先检查权限，再执行 ==========
         from .middleware.permissions import check_action_permission
         
@@ -564,6 +576,20 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             
             yield f"data: {json.dumps({'type': 'thinking', 'step': '意图解析', 'message': f'已识别意图：{ai_response.action}', 'progress': 20, 'status': 'complete'}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0.05)
+            
+            # ========== 业务员角色限制：只能进行查询操作 ==========
+            user_role = request.user_role or 'sales'
+            if user_role == 'sales':
+                # 业务员只能执行查询相关操作
+                allowed_actions = ["查询", "查询库存", "查询销售", "查询客户", "查询供应商", 
+                                  "查询入库", "分析", "统计", "生成图表", "对话"]
+                if ai_response.action not in allowed_actions:
+                    logger.warning(f"[流式] 业务员尝试执行非查询操作: {ai_response.action}")
+                    yield f"data: {json.dumps({'type': 'thinking', 'step': '权限检查', 'message': '权限验证失败', 'progress': 25, 'status': 'error'}, ensure_ascii=False)}\n\n"
+                    await asyncio.sleep(0.1)
+                    error_msg = "⚠️ 您是业务员角色，只能查询客户相关信息（销售、退货、欠款、往来账目）。\n\n如需执行入库、开单、退货等操作，请联系相应岗位人员。"
+                    yield f"data: {json.dumps({'type': 'complete', 'data': {'success': False, 'message': error_msg}}, ensure_ascii=False)}\n\n"
+                    return
             
             # ========== 写操作：先检查权限，再执行 ==========
             if ai_response.action in ["入库", "创建客户", "创建供应商", "创建销售单", "创建转移单"]:
