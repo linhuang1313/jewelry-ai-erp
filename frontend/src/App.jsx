@@ -2197,6 +2197,52 @@ function App() {
                     />
                   </div>
                 )}
+                        {/* 退货单操作按钮 */}
+                        {msg.returnOrder && msg.returnOrder.id && (
+                          <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
+                            <button
+                              onClick={() => window.open(`${API_BASE_URL}/api/returns/${msg.returnOrder.id}/download?format=html`, '_blank')}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                              </svg>
+                              打印
+                            </button>
+                            <button
+                              onClick={() => window.open(`${API_BASE_URL}/api/returns/${msg.returnOrder.id}/download?format=pdf`, '_blank')}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              下载
+                            </button>
+                          </div>
+                        )}
+                        {/* 入库单操作按钮 */}
+                        {msg.inboundOrder && msg.inboundOrder.id && (
+                          <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
+                            <button
+                              onClick={() => window.open(`${API_BASE_URL}/api/inbound-orders/${msg.inboundOrder.id}/download?format=html`, '_blank')}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                              </svg>
+                              打印
+                            </button>
+                            <button
+                              onClick={() => window.open(`${API_BASE_URL}/api/inbound-orders/${msg.inboundOrder.id}/download?format=pdf`, '_blank')}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              下载
+                            </button>
+                          </div>
+                        )}
               </div>
             </div>
             {/* 工费明细表格（单个商品查询） */}
@@ -2995,24 +3041,8 @@ function App() {
         <QuickOrderModal
           isOpen={showQuickOrderModal}
           onClose={() => setShowQuickOrderModal(false)}
-          onSuccess={async (result) => {
-            // 构建销售单成功的消息内容
-            const orderMessage = `✅ **销售单创建成功**\n\n📋 单号：${result.order_no}\n👤 客户：${result.customer_name}\n🧑‍💼 业务员：${result.salesperson}\n📦 商品数量：${result.items_count} 件\n⚖️ 总克重：${result.total_weight.toFixed(2)}克\n💰 总工费：¥${result.total_labor_cost.toFixed(2)}`
-            
-            // 添加到聊天记录显示
-            setMessages(prev => [...prev, {
-              type: 'system',
-              content: orderMessage
-            }])
-            
-            // 保存到后端聊天历史
-            try {
-              await fetch(`${API_BASE_URL}/api/chat-logs/message?session_id=${encodeURIComponent(currentSessionId)}&message_type=assistant&content=${encodeURIComponent(orderMessage)}&user_role=${userRole}&intent=创建销售单`, {
-                method: 'POST'
-              })
-            } catch (error) {
-              console.error('保存销售单记录到聊天历史失败:', error)
-            }
+          onSuccess={() => {
+            // 开单成功后可以刷新数据或显示提示
           }}
         />
       )}
@@ -3026,10 +3056,14 @@ function App() {
             // 构建退货成功的消息内容
             const returnMessage = `✅ **退货单创建成功**\n\n📋 单号：${result.return_no}\n📦 商品名称：${result.product_name}\n⚖️ 退货克重：${result.return_weight}克\n📝 退货原因：${result.return_reason}${result.supplier_name ? `\n🏭 供应商：${result.supplier_name}` : ''}${result.from_location_name ? `\n📍 发起位置：${result.from_location_name}` : ''}`
             
-            // 添加到聊天记录显示
+            // 添加到聊天记录显示（包含退货单信息，用于下载/打印）
             setMessages(prev => [...prev, {
               type: 'system',
-              content: returnMessage
+              content: returnMessage,
+              returnOrder: {
+                id: result.return_id,
+                return_no: result.return_no
+              }
             }])
             
             // 保存到后端聊天历史
@@ -3054,12 +3088,16 @@ function App() {
             // 构建入库成功的消息内容
             const productList = result.products.slice(0, 5).map(p => `  • ${p.name}：${p.weight}克`).join('\n')
             const moreProducts = result.products.length > 5 ? `\n  ... 等共 ${result.products.length} 件商品` : ''
-            const inboundMessage = `✅ **入库成功**\n\n🏭 供应商：${result.supplier_name}\n📦 入库数量：${result.total_count} 件\n⚖️ 总克重：${result.total_weight.toFixed(2)}克\n\n📋 商品明细：\n${productList}${moreProducts}`
+            const inboundMessage = `✅ **入库成功**${result.order_no ? `\n\n📋 单号：${result.order_no}` : ''}\n🏭 供应商：${result.supplier_name}\n📦 入库数量：${result.total_count} 件\n⚖️ 总克重：${result.total_weight.toFixed(2)}克\n\n📋 商品明细：\n${productList}${moreProducts}`
             
-            // 添加到聊天记录显示
+            // 添加到聊天记录显示（包含入库单信息，用于下载/打印）
             setMessages(prev => [...prev, {
               type: 'system',
-              content: inboundMessage
+              content: inboundMessage,
+              inboundOrder: result.order_id ? {
+                id: result.order_id,
+                order_no: result.order_no
+              } : null
             }])
             
             // 保存到后端聊天历史

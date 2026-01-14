@@ -25,6 +25,7 @@ interface ProductCode {
 }
 
 interface ReturnResult {
+  return_id: number;
   return_no: string;
   product_name: string;
   return_weight: number;
@@ -219,6 +220,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
         
         // 调用成功回调，传递退货详情
         onSuccess?.({
+          return_id: data.return_order?.id,
           return_no: data.return_order?.return_no || '',
           product_name: formData.product_name.trim(),
           return_weight: parseFloat(formData.return_weight),

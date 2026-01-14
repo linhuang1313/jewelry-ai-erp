@@ -26,6 +26,8 @@ interface ProductCode {
 }
 
 interface InboundResult {
+  order_id?: number;
+  order_no?: string;
   total_count: number;
   total_weight: number;
   supplier_name: string;
@@ -350,8 +352,11 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
         // 找到供应商名称
         const supplierObj = suppliers.find(s => s.id === parseInt(selectedSupplier));
         
-        // 调用成功回调，传递入库详情
+        // 调用成功回调，传递入库详情（包含第一个订单的ID用于下载）
+        const firstOrder = result.orders?.[0];
         onSuccess?.({
+          order_id: firstOrder?.id,
+          order_no: firstOrder?.order_no,
           total_count: validRows.length,
           total_weight: validRows.reduce((sum, row) => sum + parseFloat(row.weight || '0'), 0),
           supplier_name: supplierObj?.name || '',
