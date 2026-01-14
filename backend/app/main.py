@@ -811,6 +811,7 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 if order:
                     details = db.query(InboundDetail).filter(InboundDetail.order_id == order.id).all()
                     data['inbound_orders'] = [{
+                        'order_id': order.id,  # 添加 order_id 用于下载和打印
                         'order_no': order.order_no,
                         'create_time': str(order.create_time) if order.create_time else None,
                         'status': order.status,
@@ -819,6 +820,8 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                                 'product_name': d.product_name,
                                 'weight': d.weight,
                                 'labor_cost': d.labor_cost,
+                                'piece_count': d.piece_count if hasattr(d, 'piece_count') and d.piece_count else None,  # 添加件数
+                                'piece_labor_cost': d.piece_labor_cost if hasattr(d, 'piece_labor_cost') and d.piece_labor_cost else None,  # 添加件工费
                                 'supplier': d.supplier,
                                 'total_cost': d.total_cost
                             }

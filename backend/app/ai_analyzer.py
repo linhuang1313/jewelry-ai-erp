@@ -214,24 +214,35 @@ class AIAnalyzer:
             
             if target_order:
                 text += f"=== 入库单详情（入库单号：{order_no}）===\n"
+                text += f"入库单ID：{target_order.get('order_id', 'N/A')}（用于下载和打印）\n"
                 text += f"入库单号：{target_order['order_no']}\n"
                 text += f"创建时间：{target_order.get('create_time', 'N/A')}\n"
                 text += f"状态：{target_order.get('status', 'N/A')}\n"
                 text += f"商品明细：\n"
                 total_weight = 0
                 total_cost = 0
+                total_piece_count = 0
                 for idx, detail in enumerate(target_order.get('details', []), 1):
                     text += f"  {idx}. {detail['product_name']}：\n"
                     text += f"     - 重量：{detail['weight']}克\n"
-                    text += f"     - 工费：{detail['labor_cost']}元/克\n"
-                    text += f"     - 总成本：{detail['total_cost']:.2f}元\n"
+                    text += f"     - 克工费：{detail['labor_cost']}元/克\n"
+                    # 显示件数和件工费（如果有）
+                    if detail.get('piece_count') and detail.get('piece_count') > 0:
+                        text += f"     - 件数：{detail['piece_count']}件\n"
+                        if detail.get('piece_labor_cost'):
+                            text += f"     - 件工费：{detail['piece_labor_cost']}元/件\n"
+                        total_piece_count += detail['piece_count']
+                    # 必须显示供应商名称
                     if detail.get('supplier'):
                         text += f"     - 供应商：{detail['supplier']}\n"
+                    text += f"     - 总成本：{detail['total_cost']:.2f}元\n"
                     total_weight += detail['weight']
                     total_cost += detail['total_cost']
                     text += "\n"
                 text += f"总计：\n"
                 text += f"  - 总重量：{total_weight:.2f}克\n"
+                if total_piece_count > 0:
+                    text += f"  - 总件数：{total_piece_count}件\n"
                 text += f"  - 总成本：{total_cost:.2f}元\n\n"
             else:
                 text += f"=== 注意：未找到入库单号 {order_no} ===\n\n"
@@ -290,10 +301,19 @@ class AIAnalyzer:
 
 请基于这些数据，详细回答用户关于入库单 {order_no} 的问题。要求：
 
-1. **详细展示**：完整展示该入库单的所有信息（入库单号、创建时间、状态、商品明细、供应商、总重量、总成本等）
-2. **格式清晰**：使用清晰的格式，便于阅读
-3. **数据准确**：确保所有数据准确无误
-4. **友好提示**：如果入库单不存在，友好地告知用户
+1. **详细展示**：完整展示该入库单的所有信息，包括：
+   - 入库单号、创建时间、状态
+   - 每个商品的详细信息：商品名称、重量(克)、克工费(元/克)、件数（如果有）、件工费（如果有）、供应商名称、总成本
+   - 总重量、总成本
+2. **格式清晰**：使用清晰的格式，便于阅读，每个商品一行，格式如下：
+   • [商品名称]：[重量]克，克工费¥[克工费]/g，[如果有件数则显示：件数[件数]件，件工费¥[件工费]/件]，供应商：[供应商名称]，总成本¥[总成本]
+3. **数据完整**：必须显示供应商名称，如果商品有件数和件工费，必须显示出来
+4. **数据准确**：确保所有数据准确无误
+5. **友好提示**：如果入库单不存在，友好地告知用户
+
+**重要**：在回答的最后，必须添加一行隐藏标记（用于前端显示下载和打印按钮）：
+如果入库单存在，添加：<!-- INBOUND_ORDER:[order_id]:[order_no] -->
+其中 [order_id] 是入库单的ID（从数据中的 order_id 字段获取），[order_no] 是入库单号。
 
 请用自然、专业的语言回答，直接展示入库单的详细信息。"""
         elif is_specific_sales_query:
