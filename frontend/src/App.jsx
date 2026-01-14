@@ -587,6 +587,28 @@ function App() {
                   contentMessageId = Date.now()
                   // 处理入库等操作的响应
                   if (data.data) {
+                    // ========== 智能表单弹出：当信息不完整时自动弹出表单 ==========
+                    if (data.data.need_form) {
+                      console.log('检测到need_form标志，弹出对应表单:', data.data.action)
+                      
+                      // 根据操作类型弹出对应的表单
+                      if (data.data.action === '退货') {
+                        setShowQuickReturnModal(true)
+                      } else if (data.data.action === '入库') {
+                        setShowQuickInboundModal(true)
+                      } else if (data.data.action === '创建销售单') {
+                        setShowQuickOrderModal(true)
+                      }
+                      
+                      // 添加提示消息
+                      setMessages(prev => [...prev, { 
+                        type: 'system', 
+                        content: data.data.message || '📝 请在弹出的表格中填写完整信息',
+                        id: contentMessageId
+                      }])
+                      return  // 不再继续处理
+                    }
+                    
                     let messageContent = ''
                     if (data.data.message) {
                       messageContent = data.data.message

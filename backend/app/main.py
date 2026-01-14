@@ -1041,8 +1041,10 @@ async def handle_inbound(ai_response, db: Session) -> Dict[str, Any]:
     if not ai_response.products:
         return {
             "success": False,
-            "message": "未找到商品信息，请提供商品名称、重量、工费和供应商",
-            "parsed": ai_response.model_dump()
+            "action": "入库",
+            "need_form": True,  # 告诉前端需要弹出表单
+            "message": "📝 请在弹出的表格中填写入库信息",
+            "hint": "请提供商品名称、重量、工费和供应商"
         }
     
     # 先验证所有商品，确保数据完整性
@@ -2673,19 +2675,14 @@ async def handle_return(ai_response, db: Session, user_role: str) -> Dict[str, A
                 "message": "权限不足：您没有【退货给商品部】的权限"
             }
         
-        # 验证必填信息
-        if not product_name:
+        # 验证必填信息 - 如果信息不完整，触发前端弹出表单
+        if not product_name or not weight or weight <= 0:
             return {
                 "success": False,
-                "message": "请提供要退货的商品名称",
-                "hint": "例如：退货古法戒指10克给金源珠宝"
-            }
-        
-        if not weight or weight <= 0:
-            return {
-                "success": False,
-                "message": "请提供要退货的克重",
-                "hint": "例如：退货古法戒指10克给金源珠宝"
+                "action": "退货",
+                "need_form": True,  # 告诉前端需要弹出表单
+                "message": "📝 请在弹出的表格中填写退货信息",
+                "hint": "请提供商品名称、重量和供应商"
             }
         
         # 根据用户角色确定发起位置
