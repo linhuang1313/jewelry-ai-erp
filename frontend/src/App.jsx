@@ -3105,11 +3105,11 @@ function App() {
           onClose={() => setShowQuickInboundModal(false)}
           onSuccess={async (result) => {
             // 构建入库成功的消息内容（包含隐藏的ID标记，用于历史记录中显示打印按钮）
-            const productList = result.products.slice(0, 5).map(p => `  • ${p.name}：${p.weight}克`).join('\n')
+            const productList = result.products.slice(0, 5).map(p => `  • ${p.name}：${p.weight}克 (工费¥${p.labor_cost}/g)`).join('\n')
             const moreProducts = result.products.length > 5 ? `\n  ... 等共 ${result.products.length} 件商品` : ''
             // 只在有多件商品时显示件数，单件只显示克重
             const countInfo = result.total_count > 1 ? `\n📦 入库数量：${result.total_count} 件` : ''
-            const inboundMessage = `✅ **入库成功**${result.order_no ? `\n\n📋 单号：${result.order_no}` : ''}\n🏭 供应商：${result.supplier_name}${countInfo}\n⚖️ 总克重：${result.total_weight.toFixed(2)}克\n\n📋 商品明细：\n${productList}${moreProducts}${result.order_id ? `\n\n<!-- INBOUND_ORDER:${result.order_id}:${result.order_no} -->` : ''}`
+            const inboundMessage = `✅ **入库成功**${result.order_no ? `\n\n📋 单号：${result.order_no}` : ''}\n🏭 供应商：${result.supplier_name || '未指定'}${countInfo}\n⚖️ 总克重：${result.total_weight.toFixed(2)}克\n💰 总工费：¥${result.total_labor_cost.toFixed(2)}\n\n📋 商品明细：\n${productList}${moreProducts}${result.order_id ? `\n\n<!-- INBOUND_ORDER:${result.order_id}:${result.order_no} -->` : ''}`
             
             // 添加到聊天记录显示（包含入库单信息，用于下载/打印）
             setMessages(prev => [...prev, {

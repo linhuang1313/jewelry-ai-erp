@@ -30,8 +30,9 @@ interface InboundResult {
   order_no?: string;
   total_count: number;
   total_weight: number;
+  total_labor_cost: number;
   supplier_name: string;
-  products: { name: string; weight: string }[];
+  products: { name: string; weight: string; labor_cost: string }[];
 }
 
 interface QuickInboundModalProps {
@@ -326,8 +327,10 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       );
       
       // 使用批量入库 API
+      // 注意：后端期望供应商名称，不是ID
+      const supplierObj = suppliers.find(s => s.id === parseInt(selectedSupplier));
       const batchData = {
-        supplier: selectedSupplier,
+        supplier: supplierObj?.name || '',  // 传递供应商名称
         items: validRows.map(row => ({
           product_code: row.productCode || undefined,
           product_name: row.productName,
@@ -349,20 +352,28 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       if (result.success) {
         toast.success(result.message);
         
-        // 找到供应商名称
-        const supplierObj = suppliers.find(s => s.id === parseInt(selectedSupplier));
-        
         // 调用成功回调，传递入库详情（包含第一个订单的ID用于下载）
         // 注意：后端返回的是 results 数组，每个元素包含 order_id 和 order_no
         const successfulOrders = result.results?.filter((r: any) => r.success) || [];
         const firstOrder = successfulOrders[0];
+        
+        // 计算总工费
+        const totalLaborCost = validRows.reduce((sum, row) => {
+          const weight = parseFloat(row.weight || '0');
+          const laborCost = parseFloat(row.laborCost || '0');
+          const pieceCount = parseInt(row.pieceCount || '0');
+          const pieceLaborCost = parseFloat(row.pieceLaborCost || '0');
+          return sum + (weight * laborCost) + (pieceCount * pieceLaborCost);
+        }, 0);
+        
         onSuccess?.({
           order_id: firstOrder?.order_id,
           order_no: firstOrder?.order_no,
           total_count: validRows.length,
           total_weight: validRows.reduce((sum, row) => sum + parseFloat(row.weight || '0'), 0),
+          total_labor_cost: totalLaborCost,
           supplier_name: supplierObj?.name || '',
-          products: validRows.map(row => ({ name: row.productName, weight: row.weight }))
+          products: validRows.map(row => ({ name: row.productName, weight: row.weight, labor_cost: row.laborCost }))
         });
         
         // 重置表单
