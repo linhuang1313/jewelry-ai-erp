@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { hasPermission } from '../config/permissions';
+import { API_BASE_URL } from '../config';
 
 interface ProductCode {
   id: number;
@@ -19,7 +20,7 @@ interface ProductCodePageProps {
   userRole: string;
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE = API_BASE_URL;
 
 const ProductCodePage: React.FC<ProductCodePageProps> = ({ userRole }) => {
   const [activeTab, setActiveTab] = useState<'predefined' | 'f_single' | 'fl_batch'>('predefined');
