@@ -857,7 +857,18 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             inventory_count = len(data.get("inventory", []))
             suppliers_count = len(data.get("suppliers", []))
             customers_count = len(data.get("customers", []))
-            message_text = f'数据收集完成：{inventory_count}种商品，{suppliers_count}个供应商，{customers_count}个客户'
+            
+            # 根据角色显示不同的数据收集信息
+            if user_role == 'sales':
+                # 业务员只显示商品和客户数量（不显示供应商）
+                message_text = f'数据收集完成：{inventory_count}种商品，{customers_count}个客户'
+            elif user_role in ['counter', 'settlement']:
+                # 柜台/结算员显示商品和客户数量
+                message_text = f'数据收集完成：{inventory_count}种商品，{customers_count}个客户'
+            else:
+                # 商品专员/管理层显示全部信息
+                message_text = f'数据收集完成：{inventory_count}种商品，{suppliers_count}个供应商，{customers_count}个客户'
+            
             yield f"data: {json.dumps({'type': 'thinking', 'step': '数据收集', 'message': message_text, 'progress': 70, 'status': 'complete'}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0.05)
             
