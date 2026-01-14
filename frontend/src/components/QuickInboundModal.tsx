@@ -32,7 +32,7 @@ interface InboundResult {
   total_weight: number;
   total_labor_cost: number;
   supplier_name: string;
-  products: { name: string; weight: string; labor_cost: string }[];
+  products: { name: string; weight: string; labor_cost: string; piece_count?: string; piece_labor_cost?: string }[];
 }
 
 interface QuickInboundModalProps {
@@ -372,7 +372,13 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
           total_weight: validRows.reduce((sum, row) => sum + parseFloat(row.weight || '0'), 0),
           total_labor_cost: totalLaborCost,
           supplier_name: selectedSupplier,  // 直接使用选中的供应商名称
-          products: validRows.map(row => ({ name: row.productName, weight: row.weight, labor_cost: row.laborCost }))
+          products: validRows.map(row => ({ 
+            name: row.productName, 
+            weight: row.weight, 
+            labor_cost: row.laborCost,
+            piece_count: row.pieceCount,
+            piece_labor_cost: row.pieceLaborCost
+          }))
         });
         
         // 重置表单

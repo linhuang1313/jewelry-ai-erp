@@ -1614,14 +1614,16 @@ async def download_inbound_order(
                 
                 # 表格标题（始终使用中文）
                 if chinese_font:
-                    p.setFont(chinese_font, 11)
+                    p.setFont(chinese_font, 9)
                 else:
-                    p.setFont("Helvetica-Bold", 11)
+                    p.setFont("Helvetica-Bold", 9)
                 p.drawString(50, y, "商品名称")
-                p.drawString(200, y, "重量(克)")
-                p.drawString(280, y, "工费(元/克)")
-                p.drawString(360, y, "总成本(元)")
-                p.drawString(450, y, "供应商")
+                p.drawString(160, y, "重量(克)")
+                p.drawString(220, y, "克工费")
+                p.drawString(270, y, "件数")
+                p.drawString(310, y, "件工费")
+                p.drawString(360, y, "总成本")
+                p.drawString(420, y, "供应商")
                 y -= 25
                 
                 # 分隔线
@@ -1631,6 +1633,7 @@ async def download_inbound_order(
                 # 商品明细
                 total_cost = 0
                 total_weight = 0
+                total_piece_count = 0
                 page_height = 100
                 
                 for idx, detail in enumerate(details):
@@ -1639,42 +1642,53 @@ async def download_inbound_order(
                         y = height - 50
                         # 重新绘制表头（始终使用中文）
                         if chinese_font:
-                            p.setFont(chinese_font, 11)
+                            p.setFont(chinese_font, 9)
                         else:
-                            p.setFont("Helvetica-Bold", 11)
+                            p.setFont("Helvetica-Bold", 9)
                         p.drawString(50, y, "商品名称")
-                        p.drawString(200, y, "重量(克)")
-                        p.drawString(280, y, "工费(元/克)")
-                        p.drawString(360, y, "总成本(元)")
-                        p.drawString(450, y, "供应商")
+                        p.drawString(160, y, "重量(克)")
+                        p.drawString(220, y, "克工费")
+                        p.drawString(270, y, "件数")
+                        p.drawString(310, y, "件工费")
+                        p.drawString(360, y, "总成本")
+                        p.drawString(420, y, "供应商")
                         y -= 25
                         p.line(50, y, width - 50, y)
                         y -= 15
                     
                     # 商品信息（处理长文本）
-                    product_name = detail.product_name[:20] if len(detail.product_name) > 20 else detail.product_name
-                    supplier_name = (detail.supplier or "-")[:15] if detail.supplier else "-"
+                    product_name = detail.product_name[:15] if len(detail.product_name) > 15 else detail.product_name
+                    supplier_name = (detail.supplier or "-")[:10] if detail.supplier else "-"
+                    piece_count = getattr(detail, 'piece_count', None) or 0
+                    piece_labor_cost = getattr(detail, 'piece_labor_cost', None) or 0
+                    piece_count_str = str(piece_count) if piece_count > 0 else "-"
+                    piece_labor_cost_str = f"{piece_labor_cost:.2f}" if piece_count > 0 else "-"
                     
                     # 使用中文字体绘制商品名称和供应商（如果可用）
                     if chinese_font:
-                        p.setFont(chinese_font, 10)
+                        p.setFont(chinese_font, 9)
                         p.drawString(50, y, product_name)
-                        p.setFont("Helvetica", 10)  # 数字使用Helvetica
-                        p.drawString(200, y, f"{detail.weight:.2f}")
-                        p.drawString(280, y, f"{detail.labor_cost:.2f}")
+                        p.setFont("Helvetica", 9)  # 数字使用Helvetica
+                        p.drawString(160, y, f"{detail.weight:.2f}")
+                        p.drawString(220, y, f"{detail.labor_cost:.2f}")
+                        p.drawString(270, y, piece_count_str)
+                        p.drawString(310, y, piece_labor_cost_str)
                         p.drawString(360, y, f"{detail.total_cost:.2f}")
-                        p.setFont(chinese_font, 10)
-                        p.drawString(450, y, supplier_name)
+                        p.setFont(chinese_font, 9)
+                        p.drawString(420, y, supplier_name)
                     else:
-                        p.setFont("Helvetica", 10)
+                        p.setFont("Helvetica", 9)
                         p.drawString(50, y, product_name)
-                        p.drawString(200, y, f"{detail.weight:.2f}")
-                        p.drawString(280, y, f"{detail.labor_cost:.2f}")
+                        p.drawString(160, y, f"{detail.weight:.2f}")
+                        p.drawString(220, y, f"{detail.labor_cost:.2f}")
+                        p.drawString(270, y, piece_count_str)
+                        p.drawString(310, y, piece_labor_cost_str)
                         p.drawString(360, y, f"{detail.total_cost:.2f}")
-                        p.drawString(450, y, supplier_name)
+                        p.drawString(420, y, supplier_name)
                     
                     total_cost += detail.total_cost
                     total_weight += detail.weight
+                    total_piece_count += piece_count
                     y -= 20
                 
                 # 总计（始终使用中文）
@@ -1687,6 +1701,9 @@ async def download_inbound_order(
                     p.setFont("Helvetica-Bold", 12)
                 p.drawString(50, y, f"总重量：{total_weight:.2f} 克")
                 y -= 25
+                if total_piece_count > 0:
+                    p.drawString(50, y, f"总件数：{total_piece_count} 件")
+                    y -= 25
                 p.drawString(50, y, f"总成本：¥{total_cost:.2f}")
                 
                 p.save()
@@ -1840,11 +1857,13 @@ async def download_inbound_order(
     <table>
         <thead>
             <tr>
-                <th style="width: 30%;">商品名称</th>
-                <th style="width: 15%;">重量(克)</th>
-                <th style="width: 15%;">工费(元/克)</th>
-                <th style="width: 20%;">总成本(元)</th>
-                <th style="width: 20%;">供应商</th>
+                <th style="width: 22%;">商品名称</th>
+                <th style="width: 10%;">重量(克)</th>
+                <th style="width: 10%;">克工费</th>
+                <th style="width: 8%;">件数</th>
+                <th style="width: 10%;">件工费</th>
+                <th style="width: 15%;">总成本(元)</th>
+                <th style="width: 15%;">供应商</th>
             </tr>
         </thead>
         <tbody>
@@ -1852,24 +1871,37 @@ async def download_inbound_order(
             
             total_cost = 0
             total_weight = 0
+            total_piece_count = 0
             for detail in details:
+                piece_count = getattr(detail, 'piece_count', None) or 0
+                piece_labor_cost = getattr(detail, 'piece_labor_cost', None) or 0
+                piece_count_str = str(piece_count) if piece_count > 0 else '-'
+                piece_labor_cost_str = f"{piece_labor_cost:.2f}" if piece_count > 0 else '-'
+                
                 html_content += f"""
             <tr>
                 <td>{detail.product_name}</td>
                 <td>{detail.weight:.2f}</td>
                 <td>{detail.labor_cost:.2f}</td>
+                <td>{piece_count_str}</td>
+                <td>{piece_labor_cost_str}</td>
                 <td>{detail.total_cost:.2f}</td>
                 <td>{detail.supplier or '-'}</td>
             </tr>
 """
                 total_cost += detail.total_cost
                 total_weight += detail.weight
+                total_piece_count += piece_count
+            
+            # 生成件数汇总行（如果有件数）
+            piece_count_summary = f"<div class='total-item'>总件数：<strong>{total_piece_count}</strong> 件</div>" if total_piece_count > 0 else ""
             
             html_content += f"""
         </tbody>
     </table>
     <div class="total">
         <div class="total-item">总重量：<strong>{total_weight:.2f}</strong> 克</div>
+        {piece_count_summary}
         <div class="total-item total-amount">总成本：¥<strong>{total_cost:.2f}</strong></div>
     </div>
 </body>

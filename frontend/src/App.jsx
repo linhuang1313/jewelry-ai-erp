@@ -3105,7 +3105,13 @@ function App() {
           onClose={() => setShowQuickInboundModal(false)}
           onSuccess={async (result) => {
             // 构建入库成功的消息内容（包含隐藏的ID标记，用于历史记录中显示打印按钮）
-            const productList = result.products.slice(0, 5).map(p => `  • ${p.name}：${p.weight}克 (工费¥${p.labor_cost}/g)`).join('\n')
+            const productList = result.products.slice(0, 5).map(p => {
+              let info = `  • ${p.name}：${p.weight}克 (工费¥${p.labor_cost}/g)`
+              if (p.piece_count && parseInt(p.piece_count) > 0) {
+                info += ` [${p.piece_count}件, 件工费¥${p.piece_labor_cost || 0}]`
+              }
+              return info
+            }).join('\n')
             const moreProducts = result.products.length > 5 ? `\n  ... 等共 ${result.products.length} 件商品` : ''
             // 只在有多件商品时显示件数，单件只显示克重
             const countInfo = result.total_count > 1 ? `\n📦 入库数量：${result.total_count} 件` : ''
