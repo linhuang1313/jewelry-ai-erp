@@ -22,19 +22,10 @@ import { SupplierPage } from './components/SupplierPage'
 import ReturnPage from './components/ReturnPage'
 import GoldMaterialPage from './components/GoldMaterialPage'
 import ProductCodePage from './components/ProductCodePage'
-import { DollarSign, ArrowLeft, ChevronDown, User, Briefcase, Package, Crown, BarChart3, Download, Calculator, Warehouse, Store, Users, UserPlus, FileText, History, Building2, RotateCcw, Scale } from 'lucide-react'
+import LineNumberedTextarea from './components/LineNumberedTextarea'
+import { USER_ROLES } from './constants/roles'
+import { DollarSign, ArrowLeft, ChevronDown, BarChart3, Download, Warehouse, Users, UserPlus, FileText, History, Building2, RotateCcw } from 'lucide-react'
 import { ChatHistoryPanel } from './components/ChatHistoryPanel'
-
-// 用户角色配置
-const USER_ROLES = [
-  { id: 'counter', name: '柜台', icon: Store, color: 'text-pink-600', bg: 'bg-pink-50' },
-  { id: 'sales', name: '业务员', icon: User, color: 'text-blue-600', bg: 'bg-blue-50' },
-  { id: 'product', name: '商品专员', icon: Package, color: 'text-orange-600', bg: 'bg-orange-50' },
-  { id: 'settlement', name: '结算专员', icon: Calculator, color: 'text-cyan-600', bg: 'bg-cyan-50' },
-  { id: 'material', name: '料部', icon: Scale, color: 'text-yellow-600', bg: 'bg-yellow-50' },
-  { id: 'finance', name: '财务', icon: Briefcase, color: 'text-green-600', bg: 'bg-green-50' },
-  { id: 'manager', name: '管理层', icon: Crown, color: 'text-purple-600', bg: 'bg-purple-50' },
-]
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -61,56 +52,6 @@ ChartJS.register(
   Tooltip,
   Legend
 )
-
-// 带行号的文本编辑器组件（支持ref转发）
-const LineNumberedTextarea = React.forwardRef(({ value, onChange, placeholder, className = '' }, ref) => {
-  const textareaRef = useRef(null)
-  const lineNumbersRef = useRef(null)
-  
-  // 将ref转发到textarea
-  React.useImperativeHandle(ref, () => textareaRef.current)
-  
-  // 计算行数
-  const lineCount = value.split('\n').length
-  
-  // 同步滚动
-  const handleScroll = () => {
-    if (lineNumbersRef.current && textareaRef.current) {
-      lineNumbersRef.current.scrollTop = textareaRef.current.scrollTop
-    }
-  }
-  
-  return (
-    <div className="flex border border-gray-300 rounded-lg overflow-hidden bg-white">
-      {/* 行号区域 */}
-      <div 
-        ref={lineNumbersRef}
-        className="flex-shrink-0 w-12 bg-gray-50 border-r border-gray-300 py-3 px-2 text-right text-xs text-gray-400 font-mono overflow-hidden"
-        style={{ 
-          lineHeight: '1.5rem',
-          userSelect: 'none'
-        }}
-      >
-        {Array.from({ length: lineCount }, (_, i) => (
-          <div key={i} style={{ height: '1.5rem' }}>
-            {i + 1}
-          </div>
-        ))}
-      </div>
-      
-      {/* 文本编辑区域 */}
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={onChange}
-        onScroll={handleScroll}
-        placeholder={placeholder}
-        className={`flex-1 p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono text-sm leading-6 ${className}`}
-        style={{ fontSize: '14px' }}
-      />
-    </div>
-  )
-})
 
 function App() {
   const [messages, setMessages] = useState([])
