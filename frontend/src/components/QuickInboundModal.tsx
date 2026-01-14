@@ -327,10 +327,9 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       );
       
       // 使用批量入库 API
-      // 注意：后端期望供应商名称，不是ID
-      const supplierObj = suppliers.find(s => s.id === parseInt(selectedSupplier));
+      // 注意：selectedSupplier 已经是供应商名称了（select 的 value 是 supplier.name）
       const batchData = {
-        supplier: supplierObj?.name || '',  // 传递供应商名称
+        supplier: selectedSupplier,  // 直接使用选中的供应商名称
         items: validRows.map(row => ({
           product_code: row.productCode || undefined,
           product_name: row.productName,
@@ -372,7 +371,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
           total_count: validRows.length,
           total_weight: validRows.reduce((sum, row) => sum + parseFloat(row.weight || '0'), 0),
           total_labor_cost: totalLaborCost,
-          supplier_name: supplierObj?.name || '',
+          supplier_name: selectedSupplier,  // 直接使用选中的供应商名称
           products: validRows.map(row => ({ name: row.productName, weight: row.weight, labor_cost: row.laborCost }))
         });
         
