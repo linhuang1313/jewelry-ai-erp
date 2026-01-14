@@ -70,6 +70,19 @@ function App() {
   // 历史对话记录相关状态
   const [conversationHistory, setConversationHistory] = useState([]) // 历史对话列表
   const [currentConversationId, setCurrentConversationId] = useState(null) // 当前对话ID
+  
+  // 后端会话ID（用于聊天记录持久化）
+  const [currentSessionId, setCurrentSessionId] = useState(() => {
+    // 生成或恢复 session_id
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('current_session_id')
+      if (saved) return saved
+      const newId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      localStorage.setItem('current_session_id', newId)
+      return newId
+    }
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  })
   // 侧边栏开关（桌面端默认打开，移动端默认关闭）
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -302,6 +315,10 @@ function App() {
         setCurrentConversationId(conversationId)
         setConversationTitle(title)
         
+        // 设置后端 session_id，确保后续消息继续使用相同的会话
+        setCurrentSessionId(conversationId)
+        localStorage.setItem('current_session_id', conversationId)
+        
         // 只在移动端关闭侧边栏，桌面端保持打开
         if (window.innerWidth < 1024) {
           setSidebarOpen(false)
@@ -349,6 +366,12 @@ function App() {
     setMessages([])
     setCurrentConversationId(null)
     setConversationTitle('新对话')
+    
+    // 生成新的后端 session_id
+    const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    setCurrentSessionId(newSessionId)
+    localStorage.setItem('current_session_id', newSessionId)
+    
     // 只在移动端关闭侧边栏，桌面端保持打开
     if (window.innerWidth < 1024) {
       setSidebarOpen(false)
@@ -412,7 +435,11 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: userMessage, user_role: userRole }),
+        body: JSON.stringify({ 
+          message: userMessage, 
+          user_role: userRole,
+          session_id: currentSessionId  // 传递会话ID，确保同一对话的消息关联在一起
+        }),
       })
 
       console.log('收到响应，状态码:', response.status)
@@ -2990,6 +3017,12 @@ function App() {
               timestamp: msg.created_at
             }))
             setMessages(formattedMessages)
+            
+            // 设置当前 session_id，确保后续消息继续使用相同的会话
+            setCurrentSessionId(sessionId)
+            localStorage.setItem('current_session_id', sessionId)
+            setCurrentConversationId(sessionId)
+            
             setShowHistoryPanel(false)
           }
         }}
