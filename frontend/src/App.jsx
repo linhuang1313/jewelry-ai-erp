@@ -301,7 +301,7 @@ function App() {
       if (data.success && data.messages) {
         // 将后端消息格式转换为前端消息格式
         const messages = data.messages.map(msg => ({
-          type: msg.message_type === 'user' ? 'user' : 'assistant',
+          type: msg.message_type === 'user' ? 'user' : 'system',  // assistant 消息显示为 system 类型
           content: msg.content || '',
           id: msg.id
         }))
@@ -3012,7 +3012,7 @@ function App() {
           // 加载历史对话到当前聊天
           if (messages && messages.length > 0) {
             const formattedMessages = messages.map(msg => ({
-              role: msg.message_type === 'user' ? 'user' : 'assistant',
+              type: msg.message_type === 'user' ? 'user' : 'system',  // 使用 type 和 system（与渲染逻辑一致）
               content: msg.content,
               timestamp: msg.created_at
             }))
