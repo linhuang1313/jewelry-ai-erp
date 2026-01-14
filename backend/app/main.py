@@ -1245,6 +1245,7 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
     """执行实际的入库操作（从卡片数据）"""
     try:
         product_name = card_data.get("product_name")
+        product_code = card_data.get("product_code")  # 商品编码
         weight = float(card_data.get("weight", 0))
         labor_cost = float(card_data.get("labor_cost", 0))
         piece_count = card_data.get("piece_count")  # 件数（可选）
@@ -1256,6 +1257,24 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
             piece_count = int(piece_count)
         if piece_labor_cost is not None:
             piece_labor_cost = float(piece_labor_cost)
+        
+        # ========== 商品编码与名称关联处理 ==========
+        # 如果提供了商品编码，查询对应的商品名称
+        if product_code:
+            from .models import ProductCode as ProductCodeModel
+            code_record = db.query(ProductCodeModel).filter(ProductCodeModel.code == product_code).first()
+            if code_record and code_record.name:
+                # 使用商品编码对应的名称作为库存标识
+                product_name = code_record.name
+        
+        # 如果product_name看起来像是商品编码（全大写或纯数字），尝试查找对应名称
+        if product_name and (product_name.isupper() or product_name.replace(' ', '').isalnum()):
+            from .models import ProductCode as ProductCodeModel
+            code_record = db.query(ProductCodeModel).filter(ProductCodeModel.code == product_name).first()
+            if code_record and code_record.name:
+                # 找到了对应的商品名称，使用它
+                product_code = product_name  # 保存原始编码
+                product_name = code_record.name
         
         # 验证数据
         if not product_name or weight <= 0 or labor_cost < 0:
@@ -3750,4 +3769,87 @@ async def get_export_stats(db: Session = Depends(get_db)):
         }
     except Exception as e:
         logger.error(f"获取导出统计失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
+
+
+# ==================== 库存维护API ====================
+
+@app.post("/api/inventory/merge-duplicates")
+async def merge_duplicate_inventory(db: Session = Depends(get_db)):
+    """
+    合并重复的库存商品（商品编码与商品名称分开存储的情况）
+    例如：将 "3DDZ" 的库存合并到 "足金3D硬金吊坠"
+    """
+    try:
+        from .models import ProductCode as ProductCodeModel
+        
+        merged_count = 0
+        merge_details = []
+        
+        # 获取所有商品编码及其对应的名称
+        product_codes = db.query(ProductCodeModel).filter(
+            ProductCodeModel.name.isnot(None),
+            ProductCodeModel.name != ""
+        ).all()
+        
+        for pc in product_codes:
+            code = pc.code  # 如 "3DDZ"
+            name = pc.name  # 如 "足金3D硬金吊坠"
+            
+            # 检查是否有以编码为名称的库存记录
+            code_inventory = db.query(Inventory).filter(Inventory.product_name == code).first()
+            if not code_inventory:
+                continue
+            
+            # 检查是否有以名称为名称的库存记录
+            name_inventory = db.query(Inventory).filter(Inventory.product_name == name).first()
+            
+            # 合并总库存
+            if name_inventory:
+                # 将编码库存合并到名称库存
+                name_inventory.total_weight += code_inventory.total_weight
+                db.delete(code_inventory)
+            else:
+                # 将编码库存重命名为名称
+                code_inventory.product_name = name
+            
+            # 合并分仓库存 (LocationInventory)
+            code_location_inventories = db.query(LocationInventory).filter(
+                LocationInventory.product_name == code
+            ).all()
+            
+            for cli in code_location_inventories:
+                # 检查该位置是否已有名称库存
+                name_location_inventory = db.query(LocationInventory).filter(
+                    LocationInventory.product_name == name,
+                    LocationInventory.location_id == cli.location_id
+                ).first()
+                
+                if name_location_inventory:
+                    # 合并库存
+                    name_location_inventory.weight += cli.weight
+                    db.delete(cli)
+                else:
+                    # 重命名
+                    cli.product_name = name
+            
+            merged_count += 1
+            merge_details.append({
+                "code": code,
+                "name": name,
+                "merged_weight": code_inventory.total_weight if code_inventory else 0
+            })
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": f"成功合并 {merged_count} 个重复商品",
+            "merged_count": merged_count,
+            "details": merge_details
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"合并重复库存失败: {e}", exc_info=True)
         return {"success": False, "message": str(e)}
