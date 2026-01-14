@@ -10,7 +10,7 @@ import json
 import logging
 
 from ..database import get_db
-from ..timezone_utils import china_now
+from ..timezone_utils import china_now, to_china_time
 from ..models import ReturnOrder, Location, Supplier, InboundOrder, LocationInventory
 from ..schemas import (
     ReturnOrderCreate, 
@@ -50,6 +50,15 @@ def build_return_response(return_order: ReturnOrder, db: Session) -> dict:
         if inbound:
             inbound_order_no = inbound.order_no
     
+    # 转换时间为中国时区（数据库存储的是 UTC 时间，需要加 8 小时）
+    def format_time_china(dt):
+        if dt is None:
+            return None
+        # 数据库存储的是 UTC 时间（无时区），需要加 8 小时转换为中国时间
+        from datetime import timedelta
+        china_dt = dt + timedelta(hours=8)
+        return china_dt.isoformat()
+    
     return {
         "id": return_order.id,
         "return_no": return_order.return_no,
@@ -66,12 +75,12 @@ def build_return_response(return_order: ReturnOrder, db: Session) -> dict:
         "reason_detail": return_order.reason_detail,
         "status": return_order.status,
         "created_by": return_order.created_by,
-        "created_at": return_order.created_at.isoformat() if return_order.created_at else None,
+        "created_at": format_time_china(return_order.created_at),
         "approved_by": return_order.approved_by,
-        "approved_at": return_order.approved_at.isoformat() if return_order.approved_at else None,
+        "approved_at": format_time_china(return_order.approved_at),
         "reject_reason": return_order.reject_reason,
         "completed_by": return_order.completed_by,
-        "completed_at": return_order.completed_at.isoformat() if return_order.completed_at else None,
+        "completed_at": format_time_china(return_order.completed_at),
         "images": return_order.images,
         "remark": return_order.remark
     }
