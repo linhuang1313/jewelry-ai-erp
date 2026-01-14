@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { API_ENDPOINTS } from '../config'
-import { History, Search, Calendar, RefreshCw, ChevronRight, MessageSquare, Clock, User, X } from 'lucide-react'
+import { History, Search, Calendar, RefreshCw, ChevronRight, MessageSquare, Clock, User, X, Edit2, Pin, Trash2, Check, MoreVertical } from 'lucide-react'
 
 /**
  * 聊天历史回溯面板组件
@@ -15,6 +15,11 @@ export function ChatHistoryPanel({ isOpen, onClose, onLoadSession, userRole }) {
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
   const [activeTab, setActiveTab] = useState('sessions') // 'sessions' | 'search'
+  
+  // 重命名相关状态
+  const [editingSessionId, setEditingSessionId] = useState(null)
+  const [editingName, setEditingName] = useState('')
+  const [showMenuId, setShowMenuId] = useState(null)
 
   // 角色名称映射
   const roleNames = {
@@ -84,6 +89,108 @@ export function ChatHistoryPanel({ isOpen, onClose, onLoadSession, userRole }) {
       onLoadSession(sessionId, sessionMessages)
     }
   }
+
+  // 开始编辑会话名称
+  const startEditing = (e, session) => {
+    e.stopPropagation()
+    setEditingSessionId(session.session_id)
+    setEditingName(session.custom_name || session.summary || '')
+    setShowMenuId(null)
+  }
+
+  // 保存会话名称
+  const saveSessionName = async (e, sessionId) => {
+    e.stopPropagation()
+    try {
+      const response = await fetch(
+        `${API_ENDPOINTS.API_BASE_URL}/api/chat-sessions/${sessionId}/rename?name=${encodeURIComponent(editingName)}`,
+        { method: 'PUT' }
+      )
+      const data = await response.json()
+      if (data.success) {
+        // 更新本地状态
+        setSessions(prev => prev.map(s => 
+          s.session_id === sessionId 
+            ? { ...s, custom_name: editingName.trim() || null }
+            : s
+        ))
+      }
+    } catch (error) {
+      console.error('重命名失败:', error)
+    } finally {
+      setEditingSessionId(null)
+      setEditingName('')
+    }
+  }
+
+  // 取消编辑
+  const cancelEditing = (e) => {
+    e.stopPropagation()
+    setEditingSessionId(null)
+    setEditingName('')
+  }
+
+  // 切换置顶状态
+  const togglePin = async (e, session) => {
+    e.stopPropagation()
+    setShowMenuId(null)
+    try {
+      const newPinned = !session.is_pinned
+      const response = await fetch(
+        `${API_ENDPOINTS.API_BASE_URL}/api/chat-sessions/${session.session_id}/pin?pinned=${newPinned}`,
+        { method: 'PUT' }
+      )
+      const data = await response.json()
+      if (data.success) {
+        // 重新获取会话列表（因为排序会变化）
+        fetchSessions()
+      }
+    } catch (error) {
+      console.error('置顶操作失败:', error)
+    }
+  }
+
+  // 删除会话
+  const deleteSession = async (e, sessionId) => {
+    e.stopPropagation()
+    setShowMenuId(null)
+    if (!window.confirm('确定要删除这个对话记录吗？此操作不可撤销。')) {
+      return
+    }
+    try {
+      const response = await fetch(
+        `${API_ENDPOINTS.API_BASE_URL}/api/chat-sessions/${sessionId}`,
+        { method: 'DELETE' }
+      )
+      const data = await response.json()
+      if (data.success) {
+        setSessions(prev => prev.filter(s => s.session_id !== sessionId))
+        if (selectedSession === sessionId) {
+          setSelectedSession(null)
+          setSessionMessages([])
+        }
+      }
+    } catch (error) {
+      console.error('删除失败:', error)
+    }
+  }
+
+  // 切换菜单显示
+  const toggleMenu = (e, sessionId) => {
+    e.stopPropagation()
+    setShowMenuId(showMenuId === sessionId ? null : sessionId)
+  }
+
+  // 点击外部关闭菜单
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowMenuId(null)
+    }
+    if (showMenuId) {
+      document.addEventListener('click', handleClickOutside)
+      return () => document.removeEventListener('click', handleClickOutside)
+    }
+  }, [showMenuId])
 
   // 格式化时间 - 修复时区问题（后端存储的是UTC，需要加8小时转换为中国时间）
   const formatTime = (isoString) => {
@@ -217,17 +324,56 @@ export function ChatHistoryPanel({ isOpen, onClose, onLoadSession, userRole }) {
                         <div
                           key={session.session_id}
                           onClick={() => fetchSessionMessages(session.session_id)}
-                          className={`p-3 rounded-xl cursor-pointer transition-all group ${
+                          className={`p-3 rounded-xl cursor-pointer transition-all group relative ${
                             selectedSession === session.session_id
                               ? 'bg-blue-50 border border-blue-200'
                               : 'bg-gray-50 hover:bg-gray-100 border border-transparent'
                           }`}
                         >
+                          {/* 置顶标识 */}
+                          {session.is_pinned ? (
+                            <div className="absolute -top-1 -left-1">
+                              <Pin className="w-4 h-4 text-amber-500 fill-amber-500" />
+                            </div>
+                          ) : null}
+                          
                           <div className="flex items-start justify-between">
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900 truncate">
-                                {session.summary || '无标题对话'}
-                              </p>
+                              {/* 会话名称 - 支持编辑 */}
+                              {editingSessionId === session.session_id ? (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={editingName}
+                                    onChange={(e) => setEditingName(e.target.value)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') saveSessionName(e, session.session_id)
+                                      if (e.key === 'Escape') cancelEditing(e)
+                                    }}
+                                    className="flex-1 px-2 py-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    placeholder="输入会话名称..."
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={(e) => saveSessionName(e, session.session_id)}
+                                    className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={cancelEditing}
+                                    className="p-1 text-gray-400 hover:bg-gray-100 rounded"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                  {session.custom_name || session.summary || '无标题对话'}
+                                </p>
+                              )}
+                              
                               <div className="flex items-center mt-1.5 space-x-3 text-xs text-gray-500">
                                 <span className="flex items-center">
                                   <Clock className="w-3 h-3 mr-1" />
@@ -250,9 +396,51 @@ export function ChatHistoryPanel({ isOpen, onClose, onLoadSession, userRole }) {
                                 </span>
                               )}
                             </div>
-                            <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${
-                              selectedSession === session.session_id ? 'rotate-90' : ''
-                            }`} />
+                            
+                            {/* 操作按钮 */}
+                            <div className="flex items-center gap-1">
+                              {/* 更多操作菜单 */}
+                              <div className="relative">
+                                <button
+                                  onClick={(e) => toggleMenu(e, session.session_id)}
+                                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <MoreVertical className="w-4 h-4" />
+                                </button>
+                                
+                                {/* 下拉菜单 */}
+                                {showMenuId === session.session_id && (
+                                  <div className="absolute right-0 top-8 w-36 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-50">
+                                    <button
+                                      onClick={(e) => startEditing(e, session)}
+                                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                    >
+                                      <Edit2 className="w-4 h-4" />
+                                      重命名
+                                    </button>
+                                    <button
+                                      onClick={(e) => togglePin(e, session)}
+                                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                    >
+                                      <Pin className={`w-4 h-4 ${session.is_pinned ? 'fill-amber-500 text-amber-500' : ''}`} />
+                                      {session.is_pinned ? '取消置顶' : '置顶'}
+                                    </button>
+                                    <div className="border-t border-gray-100 my-1"></div>
+                                    <button
+                                      onClick={(e) => deleteSession(e, session.session_id)}
+                                      className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                      删除
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${
+                                selectedSession === session.session_id ? 'rotate-90' : ''
+                              }`} />
+                            </div>
                           </div>
                         </div>
                       ))}

@@ -3319,20 +3319,145 @@ async def get_chat_sessions(
             if first_msg and first_msg.content:
                 summary = first_msg.content[:60] + "..." if len(first_msg.content) > 60 else first_msg.content
             
+            # 查询会话的自定义名称
+            from .models import ChatSessionMeta
+            session_meta = db.query(ChatSessionMeta).filter(
+                ChatSessionMeta.session_id == session.session_id
+            ).first()
+            
+            custom_name = session_meta.custom_name if session_meta else None
+            is_pinned = session_meta.is_pinned if session_meta else 0
+            
             result.append({
                 "session_id": session.session_id,
                 "start_time": session.start_time.isoformat() if session.start_time else None,
                 "end_time": session.end_time.isoformat() if session.end_time else None,
                 "message_count": session.message_count,
                 "summary": summary,
+                "custom_name": custom_name,  # 用户自定义名称
+                "is_pinned": is_pinned,  # 是否置顶
                 "last_intent": last_msg.intent if last_msg else None,
                 "user_role": last_msg.user_role if last_msg else None
             })
+        
+        # 按置顶状态排序（置顶的在前）
+        result.sort(key=lambda x: (-x.get('is_pinned', 0), x.get('start_time', '') or ''), reverse=False)
+        result.sort(key=lambda x: -x.get('is_pinned', 0))
         
         return {"success": True, "sessions": result, "total": len(result)}
     except Exception as e:
         logger.error(f"获取会话列表失败: {e}", exc_info=True)
         return {"success": False, "message": str(e), "sessions": []}
+
+
+@app.put("/api/chat-sessions/{session_id}/rename")
+async def rename_chat_session(
+    session_id: str,
+    name: str = Query(..., description="新的会话名称"),
+    db: Session = Depends(get_db)
+):
+    """重命名对话会话"""
+    try:
+        from .models import ChatSessionMeta
+        
+        # 查找或创建会话元数据
+        session_meta = db.query(ChatSessionMeta).filter(
+            ChatSessionMeta.session_id == session_id
+        ).first()
+        
+        if session_meta:
+            # 更新现有记录
+            session_meta.custom_name = name.strip() if name.strip() else None
+        else:
+            # 创建新记录
+            session_meta = ChatSessionMeta(
+                session_id=session_id,
+                custom_name=name.strip() if name.strip() else None
+            )
+            db.add(session_meta)
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "会话重命名成功",
+            "session_id": session_id,
+            "custom_name": session_meta.custom_name
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"重命名会话失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
+
+
+@app.put("/api/chat-sessions/{session_id}/pin")
+async def toggle_pin_chat_session(
+    session_id: str,
+    pinned: bool = Query(..., description="是否置顶"),
+    db: Session = Depends(get_db)
+):
+    """置顶/取消置顶对话会话"""
+    try:
+        from .models import ChatSessionMeta
+        
+        # 查找或创建会话元数据
+        session_meta = db.query(ChatSessionMeta).filter(
+            ChatSessionMeta.session_id == session_id
+        ).first()
+        
+        if session_meta:
+            session_meta.is_pinned = 1 if pinned else 0
+        else:
+            session_meta = ChatSessionMeta(
+                session_id=session_id,
+                is_pinned=1 if pinned else 0
+            )
+            db.add(session_meta)
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "置顶已" + ("设置" if pinned else "取消"),
+            "session_id": session_id,
+            "is_pinned": session_meta.is_pinned
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"置顶会话失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
+
+
+@app.delete("/api/chat-sessions/{session_id}")
+async def delete_chat_session(
+    session_id: str,
+    db: Session = Depends(get_db)
+):
+    """删除对话会话"""
+    try:
+        from .models import ChatSessionMeta
+        
+        # 删除会话的所有消息
+        deleted_logs = db.query(ChatLog).filter(
+            ChatLog.session_id == session_id
+        ).delete()
+        
+        # 删除会话元数据
+        db.query(ChatSessionMeta).filter(
+            ChatSessionMeta.session_id == session_id
+        ).delete()
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": f"会话已删除，共删除 {deleted_logs} 条消息",
+            "session_id": session_id
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"删除会话失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
 
 
 @app.get("/api/chat-history/{session_id}")

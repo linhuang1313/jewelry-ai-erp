@@ -218,6 +218,19 @@ class ChatLog(Base):
     created_at = Column(DateTime, server_default=func.now(), index=True)  # 创建时间
 
 
+class ChatSessionMeta(Base):
+    """对话会话元数据表 - 存储会话的自定义名称等信息"""
+    __tablename__ = "chat_session_meta"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String(50), unique=True, index=True, nullable=False)  # 会话ID
+    custom_name = Column(String(200), nullable=True)  # 用户自定义的会话名称
+    is_pinned = Column(Integer, default=0)  # 是否置顶
+    is_archived = Column(Integer, default=0)  # 是否归档
+    created_at = Column(DateTime, server_default=func.now())  # 创建时间
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())  # 更新时间
+
+
 # ============= 仓库/位置管理模型 =============
 
 class Location(Base):
