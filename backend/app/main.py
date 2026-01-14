@@ -36,7 +36,7 @@ from .schemas import (
     SalesOrderCreate, SalesOrderResponse, SalesDetailResponse, SalesDetailItem,
     SalespersonCreate, SalespersonResponse
 )
-from .models import InboundOrder, InboundDetail, Inventory, Customer, SalesOrder, SalesDetail, Supplier, ChatLog, Location, LocationInventory, Salesperson
+from .models import InboundOrder, InboundDetail, Inventory, Customer, SalesOrder, SalesDetail, Supplier, ChatLog, Location, LocationInventory, Salesperson, ReturnOrder
 from .ai_parser import parse_user_message
 from .utils import to_pinyin_initials
 from . import context_manager as ctx
@@ -382,6 +382,9 @@ async def chat(request: AIRequest, db: Session = Depends(get_db)):
             if not has_perm:
                 return {"success": False, "message": perm_error}
             return await handle_create_transfer(ai_response, db)
+        elif ai_response.action == "退货":
+            # 退货操作：商品专员退给供应商，或柜台退给商品部
+            return await handle_return(ai_response, db, request.user_role or 'product')
         
         # ========== 查询和分析操作：使用AI分析引擎 ==========
         else:
@@ -570,6 +573,8 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         result = await handle_create_sales_order(ai_response, db)
                     elif ai_response.action == "创建转移单":
                         result = await handle_create_transfer(ai_response, db)
+                    elif ai_response.action == "退货":
+                        result = await handle_return(ai_response, db, request.user_role or 'product')
                     
                     # 【上下文工程】记录成功操作（Append-Only）
                     action_desc = f"{ai_response.action}"
@@ -2511,6 +2516,184 @@ async def handle_create_transfer(ai_response, db: Session) -> Dict[str, Any]:
         return {
             "success": False,
             "message": f"创建转移单失败: {str(e)}"
+        }
+
+
+async def handle_return(ai_response, db: Session, user_role: str) -> Dict[str, Any]:
+    """处理退货操作（商品专员退给供应商，或柜台退给商品部）"""
+    try:
+        from .middleware.permissions import has_permission
+        
+        # 从AI响应中提取退货信息
+        product_name = ai_response.product_name
+        weight = ai_response.weight
+        supplier_name = ai_response.supplier  # 供应商名称（退给供应商时需要）
+        
+        # 确定退货类型
+        # 商品专员默认退给供应商，柜台默认退给商品部
+        if user_role == 'product':
+            return_type = "to_supplier"
+        elif user_role == 'counter':
+            return_type = "to_warehouse"
+        else:
+            # 根据AI解析结果判断
+            if supplier_name:
+                return_type = "to_supplier"
+            else:
+                return_type = "to_warehouse"
+        
+        # 权限检查
+        if return_type == "to_supplier" and not has_permission(user_role, 'can_return_to_supplier'):
+            return {
+                "success": False,
+                "message": "权限不足：您没有【退货给供应商】的权限"
+            }
+        if return_type == "to_warehouse" and not has_permission(user_role, 'can_return_to_warehouse'):
+            return {
+                "success": False,
+                "message": "权限不足：您没有【退货给商品部】的权限"
+            }
+        
+        # 验证必填信息
+        if not product_name:
+            return {
+                "success": False,
+                "message": "请提供要退货的商品名称",
+                "hint": "例如：退货古法戒指10克给金源珠宝"
+            }
+        
+        if not weight or weight <= 0:
+            return {
+                "success": False,
+                "message": "请提供要退货的克重",
+                "hint": "例如：退货古法戒指10克给金源珠宝"
+            }
+        
+        # 根据用户角色确定发起位置
+        if user_role == 'product':
+            # 商品专员从仓库发起
+            from_location = db.query(Location).filter(Location.code == "warehouse").first()
+        elif user_role == 'counter':
+            # 柜台从展厅发起
+            from_location = db.query(Location).filter(Location.code == "showroom").first()
+        else:
+            # 默认从仓库发起
+            from_location = db.query(Location).filter(Location.code == "warehouse").first()
+        
+        if not from_location:
+            return {
+                "success": False,
+                "message": "未找到发起位置，请联系管理员初始化位置信息"
+            }
+        
+        # 检查库存
+        inventory = db.query(LocationInventory).filter(
+            LocationInventory.location_id == from_location.id,
+            LocationInventory.product_name == product_name
+        ).first()
+        
+        if not inventory or inventory.weight < weight:
+            available = inventory.weight if inventory else 0
+            return {
+                "success": False,
+                "message": f"库存不足：{from_location.name} 的 {product_name} 仅有 {available}g，无法退货 {weight}g"
+            }
+        
+        # 退给供应商时需要找到供应商
+        supplier_id = None
+        if return_type == "to_supplier":
+            if not supplier_name:
+                return {
+                    "success": False,
+                    "message": "退给供应商时请提供供应商名称",
+                    "hint": "例如：退货古法戒指10克给金源珠宝"
+                }
+            
+            # 查找供应商
+            supplier = db.query(Supplier).filter(
+                Supplier.name.contains(supplier_name),
+                Supplier.status == "active"
+            ).first()
+            
+            if not supplier:
+                return {
+                    "success": False,
+                    "message": f"未找到供应商：{supplier_name}，请先创建供应商或检查名称"
+                }
+            supplier_id = supplier.id
+        
+        # 生成退货单号
+        now = china_now()
+        count = db.query(ReturnOrder).filter(
+            ReturnOrder.return_no.like(f"TH{now.strftime('%Y%m%d')}%")
+        ).count()
+        return_no = f"TH{now.strftime('%Y%m%d')}{count + 1:03d}"
+        
+        # 创建退货单（直接完成，无需审批）
+        return_order = ReturnOrder(
+            return_no=return_no,
+            return_type=return_type,
+            product_name=product_name,
+            return_weight=weight,
+            from_location_id=from_location.id,
+            supplier_id=supplier_id,
+            return_reason="其他",  # 默认原因
+            status="completed",
+            created_by=user_role,
+            completed_by=user_role,
+            completed_at=now
+        )
+        db.add(return_order)
+        
+        # 扣减库存
+        inventory.weight -= weight
+        
+        # 更新总库存
+        from .models import Inventory
+        total_inventory = db.query(Inventory).filter(Inventory.product_name == product_name).first()
+        if total_inventory:
+            total_inventory.total_weight -= weight
+        
+        # 如果是退给供应商，更新供应商统计
+        if return_type == "to_supplier" and supplier_id:
+            supplier.total_supply_weight -= weight
+            if supplier.total_supply_count > 0:
+                supplier.total_supply_count -= 1
+        
+        db.commit()
+        
+        # 构建返回消息
+        if return_type == "to_supplier":
+            message = f"✅ 退货成功！\n\n" \
+                     f"📋 退货单号：{return_no}\n" \
+                     f"📦 商品：{product_name}\n" \
+                     f"⚖️ 退货克重：{weight}g\n" \
+                     f"🏭 退给供应商：{supplier_name}\n" \
+                     f"📍 从：{from_location.name}\n" \
+                     f"✅ 库存已扣减"
+        else:
+            message = f"✅ 退货成功！\n\n" \
+                     f"📋 退货单号：{return_no}\n" \
+                     f"📦 商品：{product_name}\n" \
+                     f"⚖️ 退货克重：{weight}g\n" \
+                     f"📍 从：{from_location.name} 退回商品部\n" \
+                     f"✅ 库存已扣减"
+        
+        logger.info(f"[退货] 退货成功: {return_no}, {product_name} {weight}g")
+        
+        return {
+            "success": True,
+            "message": message,
+            "return_no": return_no,
+            "action": "退货"
+        }
+        
+    except Exception as e:
+        logger.error(f"处理退货失败: {e}", exc_info=True)
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"退货失败: {str(e)}"
         }
 
 
