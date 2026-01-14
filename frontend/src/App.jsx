@@ -1836,7 +1836,7 @@ function App() {
               )}
             </div>
           </div>
-        </header>
+      </header>
 
         {/* 主内容区域 - 根据 currentPage 切换 */}
         {currentPage === 'chat' && (
@@ -1844,14 +1844,14 @@ function App() {
             {/* 对话区域 - 苹果风格 */}
             <div className="flex-1 overflow-y-auto px-6 py-8">
           <div className="max-w-4xl mx-auto space-y-6">
-            {messages.length === 0 && (
+        {messages.length === 0 && (
               <div className="text-center pt-20">
                 <div className="inline-block p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-3xl mb-6">
                   <svg className="w-16 h-16 text-[#007aff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} 
                           d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                   </svg>
-                </div>
+            </div>
                 <h2 className="text-[32px] font-semibold text-gray-900 mb-3 tracking-tight">
                   开始新的对话
                 </h2>
@@ -1869,9 +1869,9 @@ function App() {
                 {(userRole === 'product' || userRole === 'counter' || userRole === 'settlement' || userRole === 'manager') && (
                   <div className="max-w-2xl mx-auto mb-6">
                     <InventoryOverview userRole={userRole} />
-                  </div>
-                )}
-                
+          </div>
+        )}
+
                 {/* 角色快捷操作卡片 - 使用权限控制 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
                   
@@ -2137,53 +2137,53 @@ function App() {
                             <span className="inline-block w-0.5 h-4 bg-blue-500 ml-1 animate-pulse"></span>
                           )}
                         </div>
-                        {/* 如果有图片，显示预览 */}
-                        {msg.image && (
+                {/* 如果有图片，显示预览 */}
+                {msg.image && (
                           <div className="mt-3">
-                            <img 
-                              src={msg.image} 
-                              alt="上传的入库单" 
+                    <img 
+                      src={msg.image} 
+                      alt="上传的入库单" 
                               className="max-w-full h-auto rounded-2xl border border-gray-200/60"
-                              style={{ maxHeight: '300px' }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    {/* 工费明细表格（单个商品查询） */}
-                    {msg.laborCostDetails && msg.laborCostDetails.length > 0 && (
+                      style={{ maxHeight: '300px' }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+            {/* 工费明细表格（单个商品查询） */}
+            {msg.laborCostDetails && msg.laborCostDetails.length > 0 && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-4xl w-full bg-white rounded-2xl shadow-sm border border-gray-200/60 p-6">
-                          <h3 className="text-lg font-semibold mb-2">工费明细表</h3>
-                          <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                              <thead className="bg-gray-50">
-                                <tr>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">序号</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">工费（元/克）</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">重量（克）</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">总工费（元）</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">入库单号</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">入库时间</th>
-                                </tr>
-                              </thead>
-                              <tbody className="bg-white divide-y divide-gray-200">
-                                {msg.laborCostDetails.map((detail, index) => (
-                                  <tr key={index}>
-                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{index + 1}</td>
-                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 font-semibold">{detail.labor_cost.toFixed(2)}</td>
-                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 font-medium">{detail.weight.toFixed(2)}</td>
-                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 font-semibold">{detail.total_cost.toFixed(2)}</td>
-                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{detail.order_no}</td>
-                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{new Date(detail.create_time).toLocaleString('zh-CN')}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                  <h3 className="text-lg font-semibold mb-2">工费明细表</h3>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">序号</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">工费（元/克）</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">重量（克）</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">总工费（元）</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">入库单号</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">入库时间</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {msg.laborCostDetails.map((detail, index) => (
+                          <tr key={index}>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{index + 1}</td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 font-semibold">{detail.labor_cost.toFixed(2)}</td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 font-medium">{detail.weight.toFixed(2)}</td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 font-semibold">{detail.total_cost.toFixed(2)}</td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{detail.order_no}</td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{new Date(detail.create_time).toLocaleString('zh-CN')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
                     {/* 入库核对卡片展示 */}
                     {msg.inboundCard && (
                       <div className="flex justify-start mt-2">
@@ -2534,8 +2534,8 @@ function App() {
                         </div>
                       </div>
                     )}
-                    {/* 图表展示 */}
-                    {msg.chartData && (
+            {/* 图表展示 */}
+            {msg.chartData && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-5xl w-full bg-white rounded-2xl shadow-sm border border-gray-200/60 p-6">
                           {/* 图表网格布局 */}
@@ -2561,14 +2561,14 @@ function App() {
                                   }} 
                                 />
                               ) : (
-                                <Bar 
-                                  data={msg.chartData} 
-                                  options={{
-                                    responsive: true,
-                                    plugins: {
+                  <Bar 
+                    data={msg.chartData} 
+                    options={{
+                      responsive: true,
+                      plugins: {
                                       legend: { position: 'top' },
-                                      title: {
-                                        display: true,
+                        title: {
+                          display: true,
                                         text: (() => {
                                           if (msg.chartType === '供应商分析' || msg.chartType === '生成图表') {
                                             return '供应商对比分析（柱状图）'
@@ -2578,33 +2578,33 @@ function App() {
                                           return '数据统计图表'
                                         })(),
                                         font: { size: 14, weight: 'bold' }
-                                      },
-                                    },
-                                    scales: {
-                                      y: {
-                                        beginAtZero: true,
+                        },
+                      },
+                      scales: {
+                        y: {
+                          beginAtZero: true,
                                         title: { display: true, text: '重量（克）' }
-                                      },
-                                      x: {
+                        },
+                        x: {
                                         title: { display: true, text: '商品名称' }
-                                      }
-                                    }
-                                  }} 
-                                />
+                        }
+                      }
+                    }} 
+                  />
                               )}
                             </div>
-                            
+                  
                             {/* 环形图（替代饼图，更现代） */}
-                            {msg.pieData && (
+                  {msg.pieData && (
                               <div className="bg-gray-50 rounded-xl p-4">
                                 <Doughnut 
-                                  data={msg.pieData} 
-                                  options={{
-                                    responsive: true,
-                                    plugins: {
+                        data={msg.pieData} 
+                        options={{
+                          responsive: true,
+                          plugins: {
                                       legend: { position: 'right' },
-                                      title: {
-                                        display: true,
+                            title: {
+                              display: true,
                                         text: (() => {
                                           if (msg.chartType === '供应商分析' || msg.chartType === '生成图表') {
                                             return '🍩 供应商占比分布'
@@ -2615,14 +2615,14 @@ function App() {
                                       },
                                     },
                                     cutout: '50%',
-                                  }} 
-                                />
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                        }} 
+                      />
+                    </div>
+                  )}
                       </div>
-                    )}
+                </div>
+              </div>
+            )}
                   </React.Fragment>
                 )
               }
@@ -2630,21 +2630,21 @@ function App() {
               return null
             })}
 
-            {(loading || uploading) && (
-              <div className="flex justify-start">
+        {(loading || uploading) && (
+          <div className="flex justify-start">
                 <div className="bg-white rounded-3xl px-5 py-4 shadow-sm border border-gray-200/60">
-                  <div className="flex space-x-2">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                  </div>
-                </div>
+              <div className="flex space-x-2">
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
               </div>
-            )}
-
-            <div ref={messagesEndRef} />
+            </div>
           </div>
-        </div>
+        )}
+
+        <div ref={messagesEndRef} />
+          </div>
+      </div>
 
       {/* OCR识别编辑对话框 */}
       {showOCRModal && (
@@ -2805,18 +2805,18 @@ function App() {
                 </button>
               )}
 
-              {/* 图片上传按钮 */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-                id="image-upload"
-                disabled={loading || uploading}
-              />
-              <label
-                htmlFor="image-upload"
+          {/* 图片上传按钮 */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageUpload}
+            className="hidden"
+            id="image-upload"
+            disabled={loading || uploading}
+          />
+          <label
+            htmlFor="image-upload"
                 className={`
                   px-4 py-3 rounded-2xl cursor-pointer transition-all duration-200
                   h-[52px] flex items-center font-medium text-[15px]
@@ -2827,36 +2827,36 @@ function App() {
                 `}
               >
                 {uploading ? '📷 识别中...' : '📷'}
-              </label>
+          </label>
 
               <div className="flex-1 relative">
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      sendMessage()
-                    }
-                  }}
-                  placeholder="输入您的指令...（Shift+Enter换行）"
-                  rows={1}
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                sendMessage()
+              }
+            }}
+            placeholder="输入您的指令...（Shift+Enter换行）"
+            rows={1}
                   className="w-full px-5 py-4 border-2 border-gray-200 rounded-2xl 
                              focus:outline-none focus:border-[#007aff] focus:ring-4 focus:ring-blue-500/10
                              resize-none min-h-[52px] max-h-[200px] overflow-y-auto
                              text-[15px] bg-white transition-all duration-200"
-                  disabled={loading || uploading}
-                  onInput={(e) => {
-                    const target = e.target
-                    target.style.height = 'auto'
-                    target.style.height = Math.min(target.scrollHeight, 200) + 'px'
-                  }}
-                />
+            disabled={loading || uploading}
+            onInput={(e) => {
+              const target = e.target
+              target.style.height = 'auto'
+              target.style.height = Math.min(target.scrollHeight, 200) + 'px'
+            }}
+          />
               </div>
               
-              <button
-                onClick={sendMessage}
-                disabled={loading || uploading || !input.trim()}
+          <button
+            onClick={sendMessage}
+            disabled={loading || uploading || !input.trim()}
                 className={`
                   px-6 py-3 rounded-2xl font-medium text-[15px] h-[52px]
                   transition-all duration-200 shadow-sm hover:shadow-md
@@ -2865,12 +2865,12 @@ function App() {
                     : 'bg-[#007aff] text-white hover:bg-[#0051d5]'
                   }
                 `}
-              >
-                发送
-              </button>
+          >
+            发送
+          </button>
             </div>
-          </div>
-        </footer>
+        </div>
+      </footer>
           </>
         )}
 

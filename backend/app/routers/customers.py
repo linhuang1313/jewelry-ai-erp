@@ -11,7 +11,7 @@ import logging
 
 from ..database import get_db
 from ..models import (
-    Customer, SalesOrder, SalesOrderDetail, ReturnOrder,
+    Customer, SalesOrder, SalesDetail, ReturnOrder,
     AccountReceivable, CustomerTransaction, CustomerGoldDeposit,
     CustomerGoldDepositTransaction
 )
@@ -284,8 +284,8 @@ async def get_customer_detail(
         sales_list = []
         for order in sales_orders:
             # 获取销售单明细
-            details = db.query(SalesOrderDetail).filter(
-                SalesOrderDetail.order_id == order.id
+            details = db.query(SalesDetail).filter(
+                SalesDetail.order_id == order.id
             ).all()
             
             for detail in details:
@@ -295,7 +295,7 @@ async def get_customer_detail(
                     "product_name": detail.product_name,
                     "weight": detail.weight,
                     "labor_cost": detail.labor_cost,
-                    "total_amount": detail.total_price,
+                    "total_amount": detail.total_labor_cost,  # 使用 total_labor_cost 字段
                     "status": order.status,
                     "created_at": order.create_time.isoformat() if order.create_time else None
                 })
