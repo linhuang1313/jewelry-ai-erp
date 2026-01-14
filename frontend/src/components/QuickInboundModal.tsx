@@ -365,19 +365,20 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
           return sum + (weight * laborCost) + (pieceCount * pieceLaborCost);
         }, 0);
         
+        // 使用 batchData.items 来构建 products，确保使用发送到后端的确切数据
         onSuccess?.({
           order_id: firstOrder?.order_id,
           order_no: firstOrder?.order_no,
-          total_count: validRows.length,
-          total_weight: validRows.reduce((sum, row) => sum + parseFloat(row.weight || '0'), 0),
+          total_count: batchData.items.length,
+          total_weight: batchData.items.reduce((sum, item) => sum + item.weight, 0),
           total_labor_cost: totalLaborCost,
-          supplier_name: selectedSupplier,  // 直接使用选中的供应商名称
-          products: validRows.map(row => ({ 
-            name: row.productName, 
-            weight: row.weight, 
-            labor_cost: row.laborCost,
-            piece_count: row.pieceCount,
-            piece_labor_cost: row.pieceLaborCost
+          supplier_name: batchData.supplier,
+          products: batchData.items.map(item => ({ 
+            name: item.product_name, 
+            weight: String(item.weight), 
+            labor_cost: String(item.labor_cost),
+            piece_count: item.piece_count ? String(item.piece_count) : '',
+            piece_labor_cost: item.piece_labor_cost ? String(item.piece_labor_cost) : ''
           }))
         });
         

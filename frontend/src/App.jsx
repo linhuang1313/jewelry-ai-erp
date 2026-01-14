@@ -3105,9 +3105,7 @@ function App() {
           onClose={() => setShowQuickInboundModal(false)}
           onSuccess={async (result) => {
             // 构建入库成功的消息内容（包含隐藏的ID标记，用于历史记录中显示打印按钮）
-            console.log('入库成功结果:', JSON.stringify(result, null, 2))
             const productList = result.products.slice(0, 5).map(p => {
-              console.log('商品详情:', p)
               let info = `  • ${p.name}：${p.weight}克 (工费¥${p.labor_cost}/g)`
               const pieceCount = parseInt(p.piece_count) || 0
               const pieceLaborCost = parseFloat(p.piece_labor_cost) || 0
