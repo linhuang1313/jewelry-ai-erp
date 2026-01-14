@@ -24,7 +24,7 @@ import GoldMaterialPage from './components/GoldMaterialPage'
 import ProductCodePage from './components/ProductCodePage'
 import LineNumberedTextarea from './components/LineNumberedTextarea'
 import { USER_ROLES } from './constants/roles'
-import { DollarSign, ArrowLeft, ChevronDown, BarChart3, Download, Warehouse, Users, UserPlus, FileText, History, Building2, RotateCcw, Package, Calculator } from 'lucide-react'
+import { DollarSign, ArrowLeft, ChevronDown, BarChart3, Download, Warehouse, Users, UserPlus, FileText, History, Building2, RotateCcw, Package, Calculator, Scale } from 'lucide-react'
 import { ChatHistoryPanel } from './components/ChatHistoryPanel'
 import {
   Chart as ChartJS,
