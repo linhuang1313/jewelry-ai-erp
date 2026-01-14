@@ -396,3 +396,4 @@ export const InventoryAnalysisTab: React.FC = () => {
 
 export default InventoryAnalysisTab;
 
+

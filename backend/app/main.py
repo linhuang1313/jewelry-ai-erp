@@ -151,6 +151,14 @@ async def startup_event():
     finally:
         db.close()
     
+    # 确保 product_codes 表存在
+    from sqlalchemy import inspect
+    from .models import ProductCode
+    inspector = inspect(engine)
+    if 'product_codes' not in inspector.get_table_names():
+        ProductCode.__table__.create(bind=engine)
+        logger.info("已创建 product_codes 表")
+    
     # 初始化预定义商品编码
     from .init_product_codes import init_product_codes
     from .database import SessionLocal

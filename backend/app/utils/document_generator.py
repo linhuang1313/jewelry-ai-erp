@@ -280,3 +280,4 @@ def build_gold_transaction_fields(
     
     return fields
 
+

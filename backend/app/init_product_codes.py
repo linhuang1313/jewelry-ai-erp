@@ -125,3 +125,4 @@ def get_next_fl_code(db: Session) -> str:
     # 格式化为4位数字
     return f"FL{next_num:04d}"
 
+

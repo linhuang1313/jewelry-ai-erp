@@ -1071,3 +1071,4 @@ async def update_alert_settings(
         logger.error(f"更新预警设置失败: {e}", exc_info=True)
         return {"success": False, "message": str(e)}
 
+
