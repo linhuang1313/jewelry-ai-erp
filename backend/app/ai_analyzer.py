@@ -504,11 +504,68 @@ class AIAnalyzer:
         # 格式化数据
         data_text = self.format_data_for_ai(data)
         
+        # 检查是否是查询入库单（RK开头）或查询销售单（XS开头）
+        order_no = data.get("context", {}).get("order_no")
+        sales_order_no = data.get("context", {}).get("sales_order_no")
+        is_specific_inbound_query = intent == "查询入库单" and order_no
+        is_specific_sales_query = intent == "查询销售单" and sales_order_no
+        
         # 主动检测是否需要详细分析（不依赖AI判断）
         analysis_keywords = ['分析', '详细', '报告', '建议', '对比', '趋势', '为什么', '怎么样', '评估', '深度', '全面']
         needs_analysis = any(kw in user_message for kw in analysis_keywords)
         
-        if needs_analysis:
+        if is_specific_inbound_query:
+            # 查询特定入库单的提示词（流式版本）
+            prompt = f"""你是一个专业的珠宝ERP系统AI分析专家。用户要查询特定入库单的详细信息。
+
+**用户问题：** {user_message}
+**用户意图：** {intent}
+**入库单号：** {order_no}
+
+以下是系统数据库中的相关数据：
+
+{data_text}
+
+请基于这些数据，详细回答用户关于入库单 {order_no} 的问题。要求：
+
+1. **详细展示**：完整展示该入库单的所有信息，包括：
+   - 入库单号、创建时间、状态
+   - 每个商品的详细信息：商品名称、重量(克)、克工费(元/克)、件数（如果有）、件工费（如果有）、供应商名称（必须显示）、总成本
+   - 总重量、总件数（如果有）、总成本
+2. **格式清晰**：使用清晰的格式，便于阅读，每个商品一行，格式如下：
+   • [商品名称]：[重量]克，克工费¥[克工费]/g，[如果有件数则显示：件数[件数]件，件工费¥[件工费]/件]，供应商：[供应商名称]，总成本¥[总成本]
+3. **数据完整**：必须显示供应商名称和克工费，如果商品有件数和件工费，必须显示出来
+4. **数据准确**：确保所有数据准确无误
+5. **友好提示**：如果入库单不存在，友好地告知用户
+
+**重要**：在回答的最后，必须添加一行隐藏标记（用于前端显示下载和打印按钮）：
+如果入库单存在，添加：<!-- INBOUND_ORDER:[order_id]:[order_no] -->
+其中 [order_id] 是入库单的ID（从数据中的 order_id 字段获取），[order_no] 是入库单号。
+
+请用自然、专业的语言回答，直接展示入库单的详细信息。"""
+            system_prompt = "你是珠宝ERP系统AI助手，请专业、准确地回答用户问题。对于入库单查询，必须显示完整的商品信息，包括供应商名称、克工费、件数和件工费（如果有）。"
+        elif is_specific_sales_query:
+            # 查询特定销售单的提示词（流式版本）
+            prompt = f"""你是一个专业的珠宝ERP系统AI分析专家。用户要查询特定销售单的详细信息。
+
+**用户问题：** {user_message}
+**用户意图：** {intent}
+**销售单号：** {sales_order_no}
+
+以下是系统数据库中的相关数据：
+
+{data_text}
+
+请基于这些数据，详细回答用户关于销售单 {sales_order_no} 的问题。要求：
+
+1. **详细展示**：完整展示该销售单的所有信息（销售单号、客户名、业务员、销售日期、商品明细、总重量、总工费、状态等）
+2. **格式清晰**：使用清晰的格式，便于阅读
+3. **数据准确**：确保所有数据准确无误
+4. **友好提示**：如果销售单不存在，友好地告知用户
+
+请用自然、专业的语言回答，直接展示销售单的详细信息。注意：销售单号以XS开头，不要与入库单（RK开头）混淆。"""
+            system_prompt = "你是珠宝ERP系统AI助手，请专业、准确地回答用户问题。"
+        elif needs_analysis:
             # 用户明确要求分析，强制给出详细回答
             prompt = f"""**用户问题：** {user_message}
 **用户意图：** {intent}

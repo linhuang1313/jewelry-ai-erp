@@ -981,6 +981,80 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 if chart_data_result:
                     logger.info(f"[流式] 已生成图表数据：柱状图={bool(chart_data_result.get('chart_data'))}, 饼图={bool(chart_data_result.get('pie_data'))}")
             
+            # ========== 入库单查询后处理：确保包含完整信息和隐藏标记 ==========
+            supplement_text = ""
+            if ai_response.action == "查询入库单" and ai_response.order_no:
+                inbound_orders = data.get('inbound_orders', [])
+                target_order = None
+                for order in inbound_orders:
+                    if order.get('order_no') == ai_response.order_no:
+                        target_order = order
+                        break
+                
+                if target_order:
+                    # 检查响应中是否包含隐藏标记
+                    has_marker = '<!-- INBOUND_ORDER:' in full_response
+                    order_id = target_order.get('order_id')
+                    
+                    # 检查响应中是否包含供应商和克工费信息
+                    details = target_order.get('details', [])
+                    if details:
+                        # 检查第一个商品的供应商和克工费是否在响应中
+                        first_detail = details[0]
+                        supplier = first_detail.get('supplier', '')
+                        labor_cost = first_detail.get('labor_cost', 0)
+                        
+                        # 如果响应中没有供应商名称或克工费，补充详细信息
+                        needs_supplement = (supplier and supplier not in full_response) or (labor_cost > 0 and f"{labor_cost}" not in full_response and "克工费" not in full_response)
+                        
+                        if needs_supplement or not has_marker:
+                            # 构建补充信息
+                            supplement_text = "\n\n**📋 入库单明细：**\n"
+                            total_weight = 0
+                            total_cost = 0
+                            total_piece_count = 0
+                            
+                            for idx, detail in enumerate(details, 1):
+                                product_name = detail.get('product_name', '')
+                                weight = detail.get('weight', 0)
+                                labor_cost_item = detail.get('labor_cost', 0)
+                                piece_count = detail.get('piece_count')
+                                piece_labor_cost = detail.get('piece_labor_cost')
+                                supplier_item = detail.get('supplier', '')
+                                total_cost_item = detail.get('total_cost', 0)
+                                
+                                supplement_text += f"{idx}. **{product_name}**\n"
+                                supplement_text += f"   ⚖️ 重量：{weight}克\n"
+                                supplement_text += f"   💰 克工费：¥{labor_cost_item}/g\n"
+                                if piece_count and piece_count > 0:
+                                    supplement_text += f"   📦 件数：{piece_count}件\n"
+                                    if piece_labor_cost:
+                                        supplement_text += f"   💵 件工费：¥{piece_labor_cost}/件\n"
+                                    total_piece_count += piece_count
+                                if supplier_item:
+                                    supplement_text += f"   🏭 供应商：{supplier_item}\n"
+                                supplement_text += f"   💸 总成本：¥{total_cost_item:.2f}\n\n"
+                                
+                                total_weight += weight
+                                total_cost += total_cost_item
+                            
+                            supplement_text += f"**📊 总计：**\n"
+                            supplement_text += f"- 总重量：{total_weight:.2f}克\n"
+                            if total_piece_count > 0:
+                                supplement_text += f"- 总件数：{total_piece_count}件\n"
+                            supplement_text += f"- 总成本：¥{total_cost:.2f}\n"
+                            
+                            # 发送补充信息作为额外的content chunk
+                            if supplement_text:
+                                yield f"data: {json.dumps({'type': 'content', 'chunk': supplement_text}, ensure_ascii=False)}\n\n"
+                                full_response += supplement_text
+                            
+                            # 添加隐藏标记（如果还没有）
+                            if not has_marker and order_id:
+                                marker = f"\n\n<!-- INBOUND_ORDER:{order_id}:{ai_response.order_no} -->"
+                                yield f"data: {json.dumps({'type': 'content', 'chunk': marker}, ensure_ascii=False)}\n\n"
+                                full_response += marker
+            
             # ========== 最终完成 ==========
             yield f"data: {json.dumps({'type': 'complete', 'data': {'success': True, 'message': full_response, 'raw_data': data, 'action': ai_response.action, 'chart_data': chart_data_result.get('chart_data'), 'pie_data': chart_data_result.get('pie_data')}, 'progress': 100}, ensure_ascii=False)}\n\n"
             
