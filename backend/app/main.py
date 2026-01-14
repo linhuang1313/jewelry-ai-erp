@@ -983,11 +983,32 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             
             # ========== 入库单查询后处理：确保包含完整信息和隐藏标记 ==========
             supplement_text = ""
-            if ai_response.action == "查询入库单" and ai_response.order_no:
+            order_no_from_response = ai_response.order_no if hasattr(ai_response, 'order_no') else None
+            logger.info(f"[流式后处理] action={ai_response.action}, order_no={order_no_from_response}")
+            
+            # 检查是否是入库单查询（通过 action 或消息内容判断）
+            is_inbound_query = (
+                ai_response.action == "查询入库单" or 
+                (order_no_from_response and order_no_from_response.startswith('RK')) or
+                ('RK' in request.message and '入库单' in request.message)
+            )
+            
+            if is_inbound_query:
                 inbound_orders = data.get('inbound_orders', [])
                 target_order = None
+                
+                # 尝试从消息中提取入库单号（如果 order_no 为空）
+                query_order_no = order_no_from_response
+                if not query_order_no:
+                    import re
+                    match = re.search(r'(RK[A-Z0-9]+)', request.message)
+                    if match:
+                        query_order_no = match.group(1)
+                        logger.info(f"[流式后处理] 从消息中提取入库单号: {query_order_no}")
+                
+                # 查找目标入库单
                 for order in inbound_orders:
-                    if order.get('order_no') == ai_response.order_no:
+                    if order.get('order_no') == query_order_no:
                         target_order = order
                         break
                 
@@ -1004,8 +1025,9 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         supplier = first_detail.get('supplier', '')
                         labor_cost = first_detail.get('labor_cost', 0)
                         
-                        # 如果响应中没有供应商名称或克工费，补充详细信息
-                        needs_supplement = (supplier and supplier not in full_response) or (labor_cost > 0 and f"{labor_cost}" not in full_response and "克工费" not in full_response)
+                        # 总是补充详细信息，确保用户能看到完整的入库单明细
+                        # 原因：AI 可能只返回简短回复，缺少供应商和克工费
+                        needs_supplement = True  # 强制补充详细信息
                         
                         if needs_supplement or not has_marker:
                             # 构建补充信息
@@ -1051,7 +1073,7 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                             
                             # 添加隐藏标记（如果还没有）
                             if not has_marker and order_id:
-                                marker = f"\n\n<!-- INBOUND_ORDER:{order_id}:{ai_response.order_no} -->"
+                                marker = f"\n\n<!-- INBOUND_ORDER:{order_id}:{query_order_no} -->"
                                 yield f"data: {json.dumps({'type': 'content', 'chunk': marker}, ensure_ascii=False)}\n\n"
                                 full_response += marker
             
