@@ -3853,3 +3853,63 @@ async def merge_duplicate_inventory(db: Session = Depends(get_db)):
         db.rollback()
         logger.error(f"合并重复库存失败: {e}", exc_info=True)
         return {"success": False, "message": str(e)}
+
+
+@app.post("/api/inventory/merge-manual")
+async def merge_inventory_manual(
+    source_name: str = Query(..., description="要合并的源商品名称（将被删除）"),
+    target_name: str = Query(..., description="目标商品名称（将保留）"),
+    db: Session = Depends(get_db)
+):
+    """
+    手动合并两个商品库存
+    将 source_name 的库存合并到 target_name，然后删除 source_name
+    """
+    try:
+        # 查找源商品
+        source_inventory = db.query(Inventory).filter(Inventory.product_name == source_name).first()
+        if not source_inventory:
+            return {"success": False, "message": f"未找到源商品：{source_name}"}
+        
+        # 查找目标商品
+        target_inventory = db.query(Inventory).filter(Inventory.product_name == target_name).first()
+        
+        source_weight = source_inventory.total_weight
+        
+        # 合并总库存
+        if target_inventory:
+            target_inventory.total_weight += source_weight
+            db.delete(source_inventory)
+        else:
+            # 目标不存在，直接重命名
+            source_inventory.product_name = target_name
+        
+        # 合并分仓库存
+        source_location_inventories = db.query(LocationInventory).filter(
+            LocationInventory.product_name == source_name
+        ).all()
+        
+        for sli in source_location_inventories:
+            target_li = db.query(LocationInventory).filter(
+                LocationInventory.product_name == target_name,
+                LocationInventory.location_id == sli.location_id
+            ).first()
+            
+            if target_li:
+                target_li.weight += sli.weight
+                db.delete(sli)
+            else:
+                sli.product_name = target_name
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": f"成功将 {source_name} ({source_weight}g) 合并到 {target_name}",
+            "merged_weight": source_weight
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"手动合并库存失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
