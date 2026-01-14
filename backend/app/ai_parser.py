@@ -156,8 +156,8 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
    - 常见供应商命名规则：包含"珠宝"、"金"、"首饰"、"饰品"、"工厂"、"贸易"等词汇的通常是供应商
    - 即使不带"供应商"三个字，也要智能识别
    - 输入格式举例：
-     * "{供应商名} {商品名/编码} {重量} {工费} 入库"
-     * "{供应商名} 入库 {商品名} {重量} {工费}"
+     * "[供应商名] [商品名/编码] [重量] [工费] 入库"
+     * "[供应商名] 入库 [商品名] [重量] [工费]"
    - 示例解析：
      * "测试珠宝 3DDZ 入库100克 工费10元/g" → supplier: "测试珠宝", product_name: "3DDZ", weight: 100, labor_cost: 10
      * "金源珠宝 古法戒指 50克 8元 入库" → supplier: "金源珠宝", product_name: "古法戒指", weight: 50, labor_cost: 8
