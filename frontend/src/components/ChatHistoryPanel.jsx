@@ -85,10 +85,16 @@ export function ChatHistoryPanel({ isOpen, onClose, onLoadSession, userRole }) {
     }
   }
 
-  // 格式化时间
+  // 格式化时间 - 修复时区问题（后端存储的是UTC，需要加8小时转换为中国时间）
   const formatTime = (isoString) => {
     if (!isoString) return ''
-    const date = new Date(isoString)
+    let date = new Date(isoString)
+    
+    // 如果时间字符串没有时区信息，假设是UTC时间，需要加8小时转换为中国时间
+    if (!isoString.includes('+') && !isoString.includes('Z')) {
+      date = new Date(date.getTime() + 8 * 60 * 60 * 1000)
+    }
+    
     const now = new Date()
     const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24))
     
