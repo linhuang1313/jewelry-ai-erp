@@ -587,6 +587,22 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     await asyncio.sleep(0.1)
                     error_msg = "⚠️ 您是业务员角色，只能查询客户相关信息（销售、退货、欠款、往来账目）。\n\n如需执行入库、开单、退货等操作，请联系相应岗位人员。"
                     yield f"data: {json.dumps({'type': 'complete', 'data': {'success': False, 'message': error_msg}}, ensure_ascii=False)}\n\n"
+                    
+                    # 记录业务员权限限制的回复到日志
+                    end_time = datetime.now()
+                    response_time_ms = int((end_time - start_time).total_seconds() * 1000)
+                    log_chat_message(
+                        db=db,
+                        session_id=session_id,
+                        user_role=request.user_role,
+                        message_type="assistant",
+                        content=error_msg[:5000],
+                        intent=ai_response.action,
+                        response_time_ms=response_time_ms,
+                        is_successful=False,
+                        error_message="业务员权限限制"
+                    )
+                    
                     return
             
             # ========== 写操作：先检查权限，再执行 ==========
@@ -603,6 +619,22 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     yield f"data: {json.dumps({'type': 'thinking', 'step': '权限检查', 'message': '权限验证失败', 'progress': 25, 'status': 'error'}, ensure_ascii=False)}\n\n"
                     await asyncio.sleep(0.1)
                     yield f"data: {json.dumps({'type': 'complete', 'data': {'success': False, 'message': perm_error}}, ensure_ascii=False)}\n\n"
+                    
+                    # 记录权限不足的回复到日志
+                    end_time = datetime.now()
+                    response_time_ms = int((end_time - start_time).total_seconds() * 1000)
+                    log_chat_message(
+                        db=db,
+                        session_id=session_id,
+                        user_role=request.user_role,
+                        message_type="assistant",
+                        content=perm_error[:5000] if perm_error else "权限不足",
+                        intent=ai_response.action,
+                        response_time_ms=response_time_ms,
+                        is_successful=False,
+                        error_message="权限不足"
+                    )
+                    
                     return
                 
                 yield f"data: {json.dumps({'type': 'thinking', 'step': '执行操作', 'message': f'正在执行{ai_response.action}操作...', 'progress': 30}, ensure_ascii=False)}\n\n"
@@ -650,6 +682,21 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     logger.info(f"[流式] 序列化后的JSON长度: {len(result_json)} 字符")
                     yield f"data: {result_json}\n\n"
                     logger.info("[流式] 已发送完成事件")
+                    
+                    # 记录 AI 回复到日志（操作类消息）
+                    end_time = datetime.now()
+                    response_time_ms = int((end_time - start_time).total_seconds() * 1000)
+                    log_chat_message(
+                        db=db,
+                        session_id=session_id,
+                        user_role=request.user_role,
+                        message_type="assistant",
+                        content=result.get("message", "操作完成")[:5000] if isinstance(result, dict) else "操作完成",
+                        intent=ai_response.action,
+                        response_time_ms=response_time_ms,
+                        is_successful=result.get("success", True) if isinstance(result, dict) else True
+                    )
+                    
                     return
                 except Exception as op_error:
                     logger.error(f"[流式] 执行{ai_response.action}操作时出错: {op_error}", exc_info=True)
@@ -661,6 +708,21 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         error_type=f"{ai_response.action}失败",
                         error_detail=str(op_error),
                         context_info=request.message
+                    )
+                    
+                    # 记录错误回复到日志
+                    end_time = datetime.now()
+                    response_time_ms = int((end_time - start_time).total_seconds() * 1000)
+                    log_chat_message(
+                        db=db,
+                        session_id=session_id,
+                        user_role=request.user_role,
+                        message_type="assistant",
+                        content=error_msg[:5000],
+                        intent=ai_response.action,
+                        response_time_ms=response_time_ms,
+                        is_successful=False,
+                        error_message=str(op_error)
                     )
                     
                     yield f"data: {json.dumps({'type': 'error', 'message': error_msg}, ensure_ascii=False)}\n\n"
