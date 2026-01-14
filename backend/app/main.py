@@ -3223,6 +3223,33 @@ async def get_chat_history(
         return {"success": False, "message": str(e), "messages": []}
 
 
+@app.post("/api/chat-logs/message")
+async def save_chat_message(
+    session_id: str,
+    message_type: str,  # 'user' or 'assistant'
+    content: str,
+    user_role: str = 'sales',
+    intent: str = None,
+    db: Session = Depends(get_db)
+):
+    """保存单条聊天消息到历史记录 - 用于快捷操作后记录操作日志"""
+    try:
+        log_chat_message(
+            db=db,
+            session_id=session_id,
+            user_role=user_role,
+            message_type=message_type,
+            content=content[:10000] if content else "",
+            intent=intent,
+            response_time_ms=None,
+            is_successful=True
+        )
+        return {"success": True, "message": "消息保存成功"}
+    except Exception as e:
+        logger.error(f"保存消息失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
+
+
 @app.get("/api/chat-logs/search")
 async def search_chat_logs(
     keyword: str = None,

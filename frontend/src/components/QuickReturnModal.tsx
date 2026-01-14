@@ -24,10 +24,19 @@ interface ProductCode {
   code_type: string;
 }
 
+interface ReturnResult {
+  return_no: string;
+  product_name: string;
+  return_weight: number;
+  return_reason: string;
+  supplier_name?: string;
+  from_location_name?: string;
+}
+
 interface QuickReturnModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (result: ReturnResult) => void;
   userRole?: string;
 }
 
@@ -204,7 +213,19 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
       if (data.success) {
         toast.success(`退货单创建成功！单号：${data.return_order?.return_no || ''}`);
         setCreatedReturn(data.return_order);
-        onSuccess?.();
+        
+        // 找到供应商名称
+        const selectedSupplierObj = suppliers.find(s => s.id === parseInt(formData.supplier_id));
+        
+        // 调用成功回调，传递退货详情
+        onSuccess?.({
+          return_no: data.return_order?.return_no || '',
+          product_name: formData.product_name.trim(),
+          return_weight: parseFloat(formData.return_weight),
+          return_reason: formData.return_reason,
+          supplier_name: selectedSupplierObj?.name,
+          from_location_name: returnConfig.locationName
+        });
       } else {
         toast.error(data.message || '创建失败');
       }

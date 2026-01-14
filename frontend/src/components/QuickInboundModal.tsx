@@ -25,10 +25,17 @@ interface ProductCode {
   code_type: string;
 }
 
+interface InboundResult {
+  total_count: number;
+  total_weight: number;
+  supplier_name: string;
+  products: { name: string; weight: string }[];
+}
+
 interface QuickInboundModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (result: InboundResult) => void;
   userRole: string;
 }
 
@@ -340,11 +347,21 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       if (result.success) {
         toast.success(result.message);
         
+        // 找到供应商名称
+        const supplierObj = suppliers.find(s => s.id === parseInt(selectedSupplier));
+        
+        // 调用成功回调，传递入库详情
+        onSuccess?.({
+          total_count: validRows.length,
+          total_weight: validRows.reduce((sum, row) => sum + parseFloat(row.weight || '0'), 0),
+          supplier_name: supplierObj?.name || '',
+          products: validRows.map(row => ({ name: row.productName, weight: row.weight }))
+        });
+        
         // 重置表单
         setRows([createEmptyRow()]);
         setSelectedSupplier('');
         
-        onSuccess?.();
         onClose();
       } else {
         toast.error(result.message || '入库失败，请检查数据');

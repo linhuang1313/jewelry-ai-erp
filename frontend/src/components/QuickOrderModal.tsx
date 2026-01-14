@@ -24,10 +24,19 @@ interface OrderItem {
   labor_cost: string;
 }
 
+interface OrderResult {
+  order_no: string;
+  customer_name: string;
+  salesperson: string;
+  total_weight: number;
+  total_labor_cost: number;
+  items_count: number;
+}
+
 interface QuickOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (result: OrderResult) => void;
 }
 
 // 常用商品模板
@@ -233,7 +242,17 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
       const data = await response.json();
       if (data.success) {
         toast.success(`销售单创建成功！单号：${data.order?.order_no || ''}`);
-        onSuccess?.();
+        
+        // 调用成功回调，传递销售单详情
+        onSuccess?.({
+          order_no: data.order?.order_no || '',
+          customer_name: selectedCustomer?.name || customerSearch.trim(),
+          salesperson: selectedSalesperson,
+          total_weight: validItems.reduce((sum, item) => sum + parseFloat(item.weight), 0),
+          total_labor_cost: validItems.reduce((sum, item) => sum + parseFloat(item.weight) * parseFloat(item.labor_cost), 0),
+          items_count: validItems.length
+        });
+        
         onClose();
       } else {
         toast.error(data.message || '创建失败');

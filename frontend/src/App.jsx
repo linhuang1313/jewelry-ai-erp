@@ -2995,8 +2995,24 @@ function App() {
         <QuickOrderModal
           isOpen={showQuickOrderModal}
           onClose={() => setShowQuickOrderModal(false)}
-          onSuccess={() => {
-            // 开单成功后可以刷新数据或显示提示
+          onSuccess={async (result) => {
+            // 构建销售单成功的消息内容
+            const orderMessage = `✅ **销售单创建成功**\n\n📋 单号：${result.order_no}\n👤 客户：${result.customer_name}\n🧑‍💼 业务员：${result.salesperson}\n📦 商品数量：${result.items_count} 件\n⚖️ 总克重：${result.total_weight.toFixed(2)}克\n💰 总工费：¥${result.total_labor_cost.toFixed(2)}`
+            
+            // 添加到聊天记录显示
+            setMessages(prev => [...prev, {
+              type: 'system',
+              content: orderMessage
+            }])
+            
+            // 保存到后端聊天历史
+            try {
+              await fetch(`${API_BASE_URL}/api/chat-logs/message?session_id=${encodeURIComponent(currentSessionId)}&message_type=assistant&content=${encodeURIComponent(orderMessage)}&user_role=${userRole}&intent=创建销售单`, {
+                method: 'POST'
+              })
+            } catch (error) {
+              console.error('保存销售单记录到聊天历史失败:', error)
+            }
           }}
         />
       )}
@@ -3006,8 +3022,24 @@ function App() {
         <QuickReturnModal
           isOpen={showQuickReturnModal}
           onClose={() => setShowQuickReturnModal(false)}
-          onSuccess={() => {
-            // 退货单创建成功后可以刷新数据
+          onSuccess={async (result) => {
+            // 构建退货成功的消息内容
+            const returnMessage = `✅ **退货单创建成功**\n\n📋 单号：${result.return_no}\n📦 商品名称：${result.product_name}\n⚖️ 退货克重：${result.return_weight}克\n📝 退货原因：${result.return_reason}${result.supplier_name ? `\n🏭 供应商：${result.supplier_name}` : ''}${result.from_location_name ? `\n📍 发起位置：${result.from_location_name}` : ''}`
+            
+            // 添加到聊天记录显示
+            setMessages(prev => [...prev, {
+              type: 'system',
+              content: returnMessage
+            }])
+            
+            // 保存到后端聊天历史
+            try {
+              await fetch(`${API_BASE_URL}/api/chat-logs/message?session_id=${encodeURIComponent(currentSessionId)}&message_type=assistant&content=${encodeURIComponent(returnMessage)}&user_role=${userRole}&intent=退货`, {
+                method: 'POST'
+              })
+            } catch (error) {
+              console.error('保存退货记录到聊天历史失败:', error)
+            }
           }}
           userRole={userRole}
         />
@@ -3018,8 +3050,26 @@ function App() {
         <QuickInboundModal
           isOpen={showQuickInboundModal}
           onClose={() => setShowQuickInboundModal(false)}
-          onSuccess={() => {
-            // 入库成功后可以刷新数据
+          onSuccess={async (result) => {
+            // 构建入库成功的消息内容
+            const productList = result.products.slice(0, 5).map(p => `  • ${p.name}：${p.weight}克`).join('\n')
+            const moreProducts = result.products.length > 5 ? `\n  ... 等共 ${result.products.length} 件商品` : ''
+            const inboundMessage = `✅ **入库成功**\n\n🏭 供应商：${result.supplier_name}\n📦 入库数量：${result.total_count} 件\n⚖️ 总克重：${result.total_weight.toFixed(2)}克\n\n📋 商品明细：\n${productList}${moreProducts}`
+            
+            // 添加到聊天记录显示
+            setMessages(prev => [...prev, {
+              type: 'system',
+              content: inboundMessage
+            }])
+            
+            // 保存到后端聊天历史
+            try {
+              await fetch(`${API_BASE_URL}/api/chat-logs/message?session_id=${encodeURIComponent(currentSessionId)}&message_type=assistant&content=${encodeURIComponent(inboundMessage)}&user_role=${userRole}&intent=入库`, {
+                method: 'POST'
+              })
+            } catch (error) {
+              console.error('保存入库记录到聊天历史失败:', error)
+            }
           }}
           userRole={userRole}
         />
