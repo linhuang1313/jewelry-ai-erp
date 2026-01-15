@@ -193,6 +193,11 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
     e.preventDefault();
     if (!selectedSalesOrder) return;
 
+    // 调试日志
+    console.log('[结算单] 开始创建，支付方式:', createForm.payment_method);
+    console.log('[结算单] 表单数据:', createForm);
+    console.log('[结算单] 已确认少付:', confirmedUnderpay);
+
     const data: any = {
       sales_order_id: selectedSalesOrder.id,
       payment_method: createForm.payment_method,
@@ -214,6 +219,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
       data.physical_gold_weight = parseFloat(createForm.physical_gold_weight);
     } else if (createForm.payment_method === 'mixed') {
       // 混合支付验证
+      console.log('[混合支付] 开始验证');
       if (!createForm.gold_price) {
         toast.error('混合支付需要填写当日金价');
         return;
@@ -227,8 +233,13 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
       const totalInput = goldWeight + cashWeight;
       const difference = totalInput - selectedSalesOrder.total_weight;
       
+      console.log('[混合支付] 结料:', goldWeight, '结价:', cashWeight, '总计:', totalInput);
+      console.log('[混合支付] 应付:', selectedSalesOrder.total_weight, '差额:', difference);
+      console.log('[混合支付] 已确认少付:', confirmedUnderpay);
+      
       // 少付时需要确认
       if (difference < -0.01 && !confirmedUnderpay) {
+        console.log('[混合支付] 触发少付确认对话框');
         setUnderpayData({
           totalInput,
           totalWeight: selectedSalesOrder.total_weight,
@@ -238,6 +249,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
         return;
       }
       
+      console.log('[混合支付] 验证通过，准备发送请求');
       data.gold_price = parseFloat(createForm.gold_price);
       data.gold_payment_weight = goldWeight;
       data.cash_payment_weight = cashWeight;
@@ -275,6 +287,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
   
   // 确认少付后继续创建
   const handleConfirmUnderpay = (e: React.FormEvent) => {
+    console.log('[少付确认] 用户点击确认继续');
     setShowUnderpayConfirm(false);
     handleCreateSettlement(e, true);
   };
