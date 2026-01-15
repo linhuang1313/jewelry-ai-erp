@@ -476,10 +476,24 @@ async def batch_import_customers(
                             })
                 wb.close()
             except Exception as e:
-                return {
-                    "success": False,
-                    "message": f"Excel 文件解析失败: {str(e)}"
-                }
+                error_msg = str(e).lower()
+                # 检测是否是 .xls 格式导致的错误
+                if "zip file" in error_msg or "not a zip file" in error_msg or file_extension == 'xls':
+                    return {
+                        "success": False,
+                        "message": "❌ 文件格式不支持：检测到旧版 Excel 格式 (.xls)\n\n" +
+                                  "💡 解决方案：\n" +
+                                  "1. 打开您的 Excel 文件\n" +
+                                  "2. 点击"文件" -> "另存为"\n" +
+                                  "3. 在"保存类型"中选择"Excel 工作簿 (*.xlsx)" 或 "CSV UTF-8 (逗号分隔) (*.csv)"\n" +
+                                  "4. 保存后重新上传\n\n" +
+                                  "或者直接使用 CSV 格式，更简单快捷！"
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "message": f"Excel 文件解析失败: {str(e)[:200]}\n\n提示：请确保文件格式正确，或尝试转换为 CSV 格式上传"
+                    }
         
         elif file_extension == 'csv':
             # CSV 文件处理
