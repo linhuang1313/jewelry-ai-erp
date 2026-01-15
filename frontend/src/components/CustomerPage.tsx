@@ -4,7 +4,7 @@ import { hasPermission } from '../config/permissions';
 import {
   Users, Plus, Trash2, Edit2, Check, X, RefreshCw, User,
   MapPin, Search, UserPlus, Eye, ShoppingBag, RotateCcw, 
-  Wallet, FileText, ChevronRight, ArrowLeft
+  Wallet, FileText, ChevronRight, ArrowLeft, Upload
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -86,6 +86,12 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
+  
+  // 批量导入相关状态
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<any>(null);
   
   // 客户详情相关状态
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -282,6 +288,52 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
   const closeDetail = () => {
     setSelectedCustomer(null);
     setCustomerDetail(null);
+  };
+
+  // 批量导入客户
+  const handleBatchImport = async () => {
+    if (!importFile) {
+      toast.error('请选择文件');
+      return;
+    }
+
+    setImporting(true);
+    setImportResult(null);
+    
+    const formData = new FormData();
+    formData.append('file', importFile);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/customers/batch-import?user_role=${encodeURIComponent(userRole)}`,
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+
+      const result = await response.json();
+      setImportResult(result);
+
+      if (result.success) {
+        toast.success(result.message || `成功导入 ${result.created} 个客户`);
+        // 刷新客户列表
+        fetchCustomers();
+        // 3秒后自动关闭
+        setTimeout(() => {
+          setShowImportModal(false);
+          setImportFile(null);
+          setImportResult(null);
+        }, 3000);
+      } else {
+        toast.error(result.message || '导入失败');
+      }
+    } catch (error) {
+      console.error('导入失败:', error);
+      toast.error('导入失败，请检查文件格式和网络连接');
+    } finally {
+      setImporting(false);
+    }
   };
 
   // 渲染客户详情弹窗
@@ -511,14 +563,24 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
         </div>
         <div className="flex items-center space-x-3">
           {canAdd && (
-            <button
-              onClick={() => setShowAddForm(!showAddForm)}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl
-                         hover:bg-blue-700 transition-all"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>新增客户</span>
-            </button>
+            <>
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-xl
+                           hover:bg-green-700 transition-all"
+              >
+                <Upload className="w-4 h-4" />
+                <span>批量导入</span>
+              </button>
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl
+                           hover:bg-blue-700 transition-all"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>新增客户</span>
+              </button>
+            </>
           )}
           <button
             onClick={fetchCustomers}
@@ -806,6 +868,130 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
 
       {/* 客户详情弹窗 */}
       {renderDetailModal()}
+
+      {/* 批量导入模态框 */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                  <FileText className="w-6 h-6 text-blue-600" />
+                  批量导入客户
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportFile(null);
+                    setImportResult(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  disabled={importing}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  选择文件（支持 Excel、CSV、TXT）
+                </label>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv,.txt"
+                  onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                  className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={importing}
+                />
+                <div className="mt-3 text-xs text-gray-500 space-y-1">
+                  <p>• <strong>Excel/CSV 格式：</strong>第一列为姓名，其他列可选（电话、微信、地址、类型、备注）</p>
+                  <p>• <strong>TXT 格式：</strong>每行一个姓名</p>
+                  <p>• <strong>支持2000+条数据批量导入</strong></p>
+                </div>
+              </div>
+
+              {importResult && (
+                <div className={`mb-6 p-4 rounded-lg border ${
+                  importResult.success 
+                    ? 'bg-green-50 border-green-200' 
+                    : 'bg-red-50 border-red-200'
+                }`}>
+                  <div className="flex items-start gap-3">
+                    {importResult.success ? (
+                      <Check className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                    ) : (
+                      <X className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+                    )}
+                    <div className="flex-1">
+                      <p className={`font-medium ${importResult.success ? 'text-green-800' : 'text-red-800'}`}>
+                        {importResult.message}
+                      </p>
+                      {importResult.results && (
+                        <div className="mt-3 text-sm space-y-2">
+                          <div className="flex gap-4">
+                            <span className="text-gray-700">
+                              <strong>总计：</strong>{importResult.results.total} 条
+                            </span>
+                            <span className="text-green-600">
+                              <strong>成功：</strong>{importResult.results.created} 条
+                            </span>
+                            <span className="text-yellow-600">
+                              <strong>跳过：</strong>{importResult.results.skipped} 条
+                            </span>
+                            {importResult.results.errors?.length > 0 && (
+                              <span className="text-red-600">
+                                <strong>失败：</strong>{importResult.results.errors.length} 条
+                              </span>
+                            )}
+                          </div>
+                          {importResult.results.elapsed_time && (
+                            <p className="text-gray-500 text-xs">
+                              耗时：{importResult.results.elapsed_time.toFixed(2)} 秒
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleBatchImport}
+                  disabled={!importFile || importing}
+                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 
+                             disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors 
+                             flex items-center justify-center gap-2"
+                >
+                  {importing ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>导入中...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      <span>开始导入</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportFile(null);
+                    setImportResult(null);
+                  }}
+                  className="px-4 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                  disabled={importing}
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
