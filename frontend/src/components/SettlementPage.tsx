@@ -371,9 +371,9 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      {/* 少付确认对话框 */}
+      {/* 少付确认对话框 - z-index 要高于其他弹窗 */}
       {showUnderpayConfirm && underpayData && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
             <div className="flex items-center space-x-3 mb-4">
               <div className="p-3 bg-orange-100 rounded-full">
