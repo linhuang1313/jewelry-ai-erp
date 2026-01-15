@@ -278,9 +278,12 @@ class SalesOrderResponse(BaseModel):
 class SettlementOrderCreate(BaseModel):
     """创建结算单"""
     sales_order_id: int  # 关联的销售单ID
-    payment_method: str  # 'cash_price' 结价支付 / 'physical_gold' 结料（实物抵扣）
-    gold_price: Optional[float] = None  # 当日金价（结价时必填）
+    payment_method: str  # 'cash_price' 结价 / 'physical_gold' 结料 / 'mixed' 混合支付
+    gold_price: Optional[float] = None  # 当日金价（结价或混合支付时必填）
     use_deposit: Optional[float] = None  # 使用存料抵扣的重量（克，结料时可选）
+    # 混合支付专用参数
+    gold_payment_weight: Optional[float] = None  # 混合支付：结料部分的克重
+    cash_payment_weight: Optional[float] = None  # 混合支付：结价部分的克重
     remark: Optional[str] = None
 
 
@@ -302,6 +305,9 @@ class SettlementOrderResponse(BaseModel):
     material_amount: Optional[float]
     labor_amount: float
     total_amount: float
+    # 混合支付专用字段
+    gold_payment_weight: Optional[float] = None  # 混合支付：结料部分的克重
+    cash_payment_weight: Optional[float] = None  # 混合支付：结价部分的克重
     # 客户历史余额信息
     previous_cash_debt: Optional[float] = 0.0  # 上次现金欠款（元）
     previous_gold_debt: Optional[float] = 0.0  # 上次金料欠款（克）
@@ -316,7 +322,7 @@ class SettlementOrderResponse(BaseModel):
     created_at: datetime
     # 关联的销售单信息
     sales_order: Optional[SalesOrderResponse] = None
-    # 金料收取信息（仅结料时有值）
+    # 金料收取信息（仅结料或混合支付时有值）
     gold_received: Optional[float] = None  # 已收金料总重量
     gold_remaining_due: Optional[float] = None  # 剩余欠款金料
     deposit_used: Optional[float] = None  # 使用存料抵扣的重量

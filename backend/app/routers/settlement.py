@@ -142,6 +142,9 @@ async def get_settlement_orders(
             material_amount=order.material_amount,
             labor_amount=order.labor_amount,
             total_amount=order.total_amount,
+            # 混合支付专用字段
+            gold_payment_weight=order.gold_payment_weight,
+            cash_payment_weight=order.cash_payment_weight,
             # 客户历史余额信息
             previous_cash_debt=order.previous_cash_debt or 0.0,
             previous_gold_debt=order.previous_gold_debt or 0.0,
@@ -241,8 +244,33 @@ async def create_settlement_order(
         
         # physical_gold_weight 存储客户实际需要支付的金料重量
         # 如果使用了存料抵扣，这个值会小于销售总重量
+    elif data.payment_method == "mixed":
+        # ==================== 混合支付 ====================
+        # 验证必填参数
+        if not data.gold_price or data.gold_price <= 0:
+            raise HTTPException(status_code=400, detail="混合支付需要填写当日金价")
+        if not data.gold_payment_weight or data.gold_payment_weight <= 0:
+            raise HTTPException(status_code=400, detail="混合支付需要填写结料部分的克重")
+        if not data.cash_payment_weight or data.cash_payment_weight <= 0:
+            raise HTTPException(status_code=400, detail="混合支付需要填写结价部分的克重")
+        
+        # 验证克重总和等于销售总重量（允许0.01克的误差）
+        total_input = data.gold_payment_weight + data.cash_payment_weight
+        if abs(total_input - sales_order.total_weight) > 0.01:
+            raise HTTPException(
+                status_code=400,
+                detail=f"结料克重({data.gold_payment_weight:.2f}) + 结价克重({data.cash_payment_weight:.2f}) = {total_input:.2f}克，必须等于销售总重量({sales_order.total_weight:.2f}克)"
+            )
+        
+        # 计算金额：结价部分按金价换算成现金
+        material_amount = data.gold_price * data.cash_payment_weight
+        # 客户需要支付的金料 = 结料部分的克重
+        actual_gold_due = data.gold_payment_weight
+        
+        logger.info(f"混合支付: 结料{data.gold_payment_weight}克 + 结价{data.cash_payment_weight}克×{data.gold_price}元/克 = 料费¥{material_amount}")
+        # ==================== 混合支付结束 ====================
     else:
-        raise HTTPException(status_code=400, detail="无效的支付方式")
+        raise HTTPException(status_code=400, detail="无效的支付方式，请选择：cash_price(结价)、physical_gold(结料)或 mixed(混合支付)")
     
     # 生成结算单号
     now = china_now()
@@ -297,12 +325,23 @@ async def create_settlement_order(
     # ========== 客户余额查询结束 ==========
     
     # 创建结算单
+    # 确定客户需支付的金料重量
+    if data.payment_method == "physical_gold":
+        physical_gold_weight = actual_gold_due
+    elif data.payment_method == "mixed":
+        physical_gold_weight = actual_gold_due  # 混合支付时，结料部分的克重
+    else:
+        physical_gold_weight = None
+    
     settlement = SettlementOrder(
         settlement_no=settlement_no,
         sales_order_id=data.sales_order_id,
         payment_method=data.payment_method,
         gold_price=data.gold_price,
-        physical_gold_weight=actual_gold_due if data.payment_method == "physical_gold" else None,  # 实际需支付金料
+        physical_gold_weight=physical_gold_weight,  # 客户实际需支付的金料重量
+        # 混合支付专用字段
+        gold_payment_weight=data.gold_payment_weight if data.payment_method == "mixed" else None,
+        cash_payment_weight=data.cash_payment_weight if data.payment_method == "mixed" else None,
         total_weight=sales_order.total_weight,
         material_amount=material_amount,
         labor_amount=labor_amount,
@@ -379,6 +418,9 @@ async def create_settlement_order(
         material_amount=settlement.material_amount,
         labor_amount=settlement.labor_amount,
         total_amount=settlement.total_amount,
+        # 混合支付专用字段
+        gold_payment_weight=settlement.gold_payment_weight,
+        cash_payment_weight=settlement.cash_payment_weight,
         # 客户历史余额信息
         previous_cash_debt=settlement.previous_cash_debt or 0.0,
         previous_gold_debt=settlement.previous_gold_debt or 0.0,
@@ -393,7 +435,7 @@ async def create_settlement_order(
         created_at=settlement.created_at,
         sales_order=None,
         gold_received=0.0,
-        gold_remaining_due=actual_gold_due if data.payment_method == "physical_gold" else None,
+        gold_remaining_due=actual_gold_due if data.payment_method in ["physical_gold", "mixed"] else None,
         deposit_used=deposit_used if deposit_used > 0 else None
     )
 
@@ -438,6 +480,9 @@ async def confirm_settlement_order(
         material_amount=settlement.material_amount,
         labor_amount=settlement.labor_amount,
         total_amount=settlement.total_amount,
+        # 混合支付专用字段
+        gold_payment_weight=settlement.gold_payment_weight,
+        cash_payment_weight=settlement.cash_payment_weight,
         previous_cash_debt=settlement.previous_cash_debt or 0.0,
         previous_gold_debt=settlement.previous_gold_debt or 0.0,
         gold_deposit_balance=settlement.gold_deposit_balance or 0.0,
@@ -485,6 +530,9 @@ async def mark_settlement_printed(
         material_amount=settlement.material_amount,
         labor_amount=settlement.labor_amount,
         total_amount=settlement.total_amount,
+        # 混合支付专用字段
+        gold_payment_weight=settlement.gold_payment_weight,
+        cash_payment_weight=settlement.cash_payment_weight,
         previous_cash_debt=settlement.previous_cash_debt or 0.0,
         previous_gold_debt=settlement.previous_gold_debt or 0.0,
         gold_deposit_balance=settlement.gold_deposit_balance or 0.0,
@@ -567,7 +615,8 @@ async def get_settlement_order(
     gold_remaining_due = None
     deposit_used = None
     
-    if settlement.payment_method == "physical_gold":
+    # 结料或混合支付时，计算金料收取信息
+    if settlement.payment_method in ["physical_gold", "mixed"]:
         gold_received = calculate_gold_received(settlement.id, db)
         gold_due = settlement.physical_gold_weight or 0.0
         gold_remaining_due = max(0.0, gold_due - gold_received)
@@ -584,6 +633,9 @@ async def get_settlement_order(
         material_amount=settlement.material_amount,
         labor_amount=settlement.labor_amount,
         total_amount=settlement.total_amount,
+        # 混合支付专用字段
+        gold_payment_weight=settlement.gold_payment_weight,
+        cash_payment_weight=settlement.cash_payment_weight,
         previous_cash_debt=settlement.previous_cash_debt or 0.0,
         previous_gold_debt=settlement.previous_gold_debt or 0.0,
         gold_deposit_balance=settlement.gold_deposit_balance or 0.0,
@@ -652,7 +704,12 @@ async def download_settlement_order(
             confirmed_at_str = "未确认"
         
         # 支付方式转换
-        payment_method_str = "结价" if settlement.payment_method == "cash_price" else "结料"
+        if settlement.payment_method == "cash_price":
+            payment_method_str = "结价"
+        elif settlement.payment_method == "mixed":
+            payment_method_str = "混合支付（部分结料+部分结价）"
+        else:
+            payment_method_str = "结料"
         
         # 状态转换
         status_map = {
@@ -731,13 +788,29 @@ async def download_settlement_order(
                 y -= 25
                 p.drawString(50, y, f"工费合计：¥{settlement.labor_amount:.2f}")
                 y -= 25
-                if settlement.payment_method == "cash_price" and settlement.gold_price:
+                
+                # 混合支付详情
+                if settlement.payment_method == "mixed":
+                    if settlement.gold_payment_weight:
+                        p.drawString(50, y, f"结料克重：{settlement.gold_payment_weight:.2f} 克")
+                        y -= 25
+                    if settlement.cash_payment_weight and settlement.gold_price:
+                        p.drawString(50, y, f"结价克重：{settlement.cash_payment_weight:.2f} 克 × ¥{settlement.gold_price:.2f}/克")
+                        y -= 25
+                        p.drawString(50, y, f"结价部分料费：¥{settlement.material_amount:.2f}")
+                        y -= 25
+                elif settlement.payment_method == "cash_price" and settlement.gold_price:
                     p.drawString(50, y, f"金价：¥{settlement.gold_price:.2f}/克")
                     y -= 25
                     p.drawString(50, y, f"料费合计：¥{settlement.material_amount:.2f}")
                     y -= 25
-                p.drawString(50, y, f"总金额：¥{settlement.total_amount:.2f}")
-                y -= 40
+                
+                p.drawString(50, y, f"应收现金：¥{settlement.total_amount:.2f}")
+                y -= 25
+                if settlement.payment_method in ["physical_gold", "mixed"] and settlement.physical_gold_weight:
+                    p.drawString(50, y, f"应收金料：{settlement.physical_gold_weight:.2f} 克")
+                    y -= 25
+                y -= 15
                 
                 # 客户历史余额
                 if settlement.previous_cash_debt or settlement.previous_gold_debt or settlement.gold_deposit_balance:
@@ -911,12 +984,15 @@ async def download_settlement_order(
                 <span>工费合计</span>
                 <span>¥{settlement.labor_amount:.2f}</span>
             </div>
-            {f'<div class="summary-row"><span>金价</span><span>¥{settlement.gold_price:.2f}/克</span></div>' if settlement.payment_method == "cash_price" and settlement.gold_price else ''}
+            {f'<div class="summary-row"><span>金价</span><span>¥{settlement.gold_price:.2f}/克</span></div>' if settlement.payment_method in ["cash_price", "mixed"] and settlement.gold_price else ''}
+            {f'''<div class="summary-row"><span>结料克重</span><span>{settlement.gold_payment_weight:.2f} 克</span></div>
+            <div class="summary-row"><span>结价克重</span><span>{settlement.cash_payment_weight:.2f} 克</span></div>''' if settlement.payment_method == "mixed" and settlement.gold_payment_weight else ''}
             {f'<div class="summary-row"><span>料费合计</span><span>¥{settlement.material_amount:.2f}</span></div>' if settlement.material_amount else ''}
             <div class="summary-row total">
-                <span>总金额</span>
+                <span>应收现金</span>
                 <span>¥{settlement.total_amount:.2f}</span>
             </div>
+            {f'<div class="summary-row total" style="color: #f39c12;"><span>应收金料</span><span>{settlement.physical_gold_weight:.2f} 克</span></div>' if settlement.payment_method in ["physical_gold", "mixed"] and settlement.physical_gold_weight else ''}
         </div>
         {balance_info_html}
         {f'<div class="remark"><strong>备注：</strong>{settlement.remark}</div>' if settlement.remark else ''}

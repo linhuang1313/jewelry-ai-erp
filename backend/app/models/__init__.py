@@ -164,9 +164,13 @@ class SettlementOrder(Base):
     sales_order_id = Column(Integer, ForeignKey("sales_orders.id"), nullable=False)  # 关联销售单
     
     # 原料支付方式
-    payment_method = Column(String(20), nullable=False)  # 'cash_price' 结价支付 / 'physical_gold' 实物抵扣
-    gold_price = Column(Float, nullable=True)  # 当日金价（元/克），结价支付时必填
-    physical_gold_weight = Column(Float, nullable=True)  # 客户提供的黄金重量（克），实物抵扣时必填
+    payment_method = Column(String(20), nullable=False)  # 'cash_price' 结价 / 'physical_gold' 结料 / 'mixed' 混合支付
+    gold_price = Column(Float, nullable=True)  # 当日金价（元/克），结价或混合支付时必填
+    physical_gold_weight = Column(Float, nullable=True)  # 客户需支付的黄金重量（克），结料或混合支付时使用
+    
+    # 混合支付专用字段
+    gold_payment_weight = Column(Float, nullable=True)  # 混合支付：结料部分的克重
+    cash_payment_weight = Column(Float, nullable=True)  # 混合支付：结价部分的克重
     
     # 金额计算
     total_weight = Column(Float, nullable=False)  # 商品总克重

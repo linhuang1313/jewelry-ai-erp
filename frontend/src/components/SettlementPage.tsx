@@ -37,6 +37,9 @@ interface SettlementOrder {
   payment_method: string;
   gold_price: number | null;
   physical_gold_weight: number | null;
+  // 混合支付专用字段
+  gold_payment_weight: number | null;  // 结料部分克重
+  cash_payment_weight: number | null;  // 结价部分克重
   total_weight: number;
   material_amount: number | null;
   labor_amount: number;
@@ -132,6 +135,9 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
     payment_method: 'cash_price',
     gold_price: '',
     physical_gold_weight: '',
+    // 混合支付专用字段
+    gold_payment_weight: '',  // 结料部分克重
+    cash_payment_weight: '',  // 结价部分克重
     remark: ''
   });
 
@@ -188,12 +194,34 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
         return;
       }
       data.gold_price = parseFloat(createForm.gold_price);
-    } else {
+    } else if (createForm.payment_method === 'physical_gold') {
       if (!createForm.physical_gold_weight) {
         toast.error('请输入客户提供的黄金重量');
         return;
       }
       data.physical_gold_weight = parseFloat(createForm.physical_gold_weight);
+    } else if (createForm.payment_method === 'mixed') {
+      // 混合支付验证
+      if (!createForm.gold_price) {
+        toast.error('混合支付需要填写当日金价');
+        return;
+      }
+      if (!createForm.gold_payment_weight || !createForm.cash_payment_weight) {
+        toast.error('请填写结料克重和结价克重');
+        return;
+      }
+      const goldWeight = parseFloat(createForm.gold_payment_weight);
+      const cashWeight = parseFloat(createForm.cash_payment_weight);
+      const totalInput = goldWeight + cashWeight;
+      
+      if (Math.abs(totalInput - selectedSalesOrder.total_weight) > 0.01) {
+        toast.error(`结料克重(${goldWeight}) + 结价克重(${cashWeight}) = ${totalInput.toFixed(2)}克，必须等于销售总重量(${selectedSalesOrder.total_weight}克)`);
+        return;
+      }
+      
+      data.gold_price = parseFloat(createForm.gold_price);
+      data.gold_payment_weight = goldWeight;
+      data.cash_payment_weight = cashWeight;
     }
 
     try {
@@ -207,7 +235,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
         toast.success('结算单创建成功');
         setShowCreateForm(false);
         setSelectedSalesOrder(null);
-        setCreateForm({ payment_method: 'cash_price', gold_price: '', physical_gold_weight: '', remark: '' });
+        setCreateForm({ payment_method: 'cash_price', gold_price: '', physical_gold_weight: '', gold_payment_weight: '', cash_payment_weight: '', remark: '' });
         loadPendingSales();
         loadSettlements();
       } else {
@@ -442,8 +470,10 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm text-gray-500">
                         {settlement.payment_method === 'cash_price' 
-                          ? `结价支付 (¥${settlement.gold_price}/g)`
-                          : `实物抵扣 (${settlement.physical_gold_weight}g)`
+                          ? `结价 (¥${settlement.gold_price}/g)`
+                          : settlement.payment_method === 'mixed'
+                            ? `混合支付 (结料${settlement.gold_payment_weight || 0}g + 结价${settlement.cash_payment_weight || 0}g)`
+                            : `结料 (${settlement.physical_gold_weight}g)`
                         }
                       </span>
                       <span className="font-bold text-lg text-cyan-600">
@@ -558,13 +588,27 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                       />
                       <span className="flex items-center">
                         <Package className="w-4 h-4 mr-1 text-yellow-500" />
-                        实物抵扣
+                        结料
+                      </span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="payment_method"
+                        value="mixed"
+                        checked={createForm.payment_method === 'mixed'}
+                        onChange={(e) => setCreateForm({ ...createForm, payment_method: e.target.value })}
+                        className="mr-2"
+                      />
+                      <span className="flex items-center">
+                        <DollarSign className="w-4 h-4 mr-1 text-purple-500" />
+                        混合支付
                       </span>
                     </label>
                   </div>
                 </div>
 
-                {createForm.payment_method === 'cash_price' ? (
+                {createForm.payment_method === 'cash_price' && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">当日金价 (元/克)</label>
                     <input
@@ -582,7 +626,9 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                       </p>
                     )}
                   </div>
-                ) : (
+                )}
+
+                {createForm.payment_method === 'physical_gold' && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">客户提供黄金重量 (克)</label>
                     <input
@@ -594,6 +640,93 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                       placeholder="例如: 50.00"
                       required
                     />
+                  </div>
+                )}
+
+                {/* 混合支付专用表单 */}
+                {createForm.payment_method === 'mixed' && (
+                  <div className="space-y-4 bg-purple-50 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-purple-800">混合支付设置</h4>
+                    <p className="text-xs text-purple-600">
+                      商品总重量：{selectedSalesOrder.total_weight} 克，请分配结料和结价的克重
+                    </p>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">当日金价 (元/克)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={createForm.gold_price}
+                        onChange={(e) => setCreateForm({ ...createForm, gold_price: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        placeholder="例如: 580.00"
+                        required
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          💰 结料克重 (客户支付金料)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={createForm.gold_payment_weight}
+                          onChange={(e) => setCreateForm({ ...createForm, gold_payment_weight: e.target.value })}
+                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                          placeholder="例如: 10.00"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          💵 结价克重 (按金价换算现金)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={createForm.cash_payment_weight}
+                          onChange={(e) => setCreateForm({ ...createForm, cash_payment_weight: e.target.value })}
+                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                          placeholder="例如: 10.00"
+                          required
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* 克重校验提示 */}
+                    {(createForm.gold_payment_weight || createForm.cash_payment_weight) && (
+                      <div className={`text-sm p-2 rounded ${
+                        Math.abs((parseFloat(createForm.gold_payment_weight || '0') + parseFloat(createForm.cash_payment_weight || '0')) - selectedSalesOrder.total_weight) <= 0.01
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        结料 {parseFloat(createForm.gold_payment_weight || '0').toFixed(2)} 克 + 
+                        结价 {parseFloat(createForm.cash_payment_weight || '0').toFixed(2)} 克 = 
+                        {(parseFloat(createForm.gold_payment_weight || '0') + parseFloat(createForm.cash_payment_weight || '0')).toFixed(2)} 克
+                        {Math.abs((parseFloat(createForm.gold_payment_weight || '0') + parseFloat(createForm.cash_payment_weight || '0')) - selectedSalesOrder.total_weight) <= 0.01
+                          ? ' ✓'
+                          : ` (应等于 ${selectedSalesOrder.total_weight} 克)`
+                        }
+                      </div>
+                    )}
+                    
+                    {/* 混合支付金额预览 */}
+                    {createForm.gold_price && createForm.cash_payment_weight && (
+                      <div className="bg-white rounded-lg p-3 border border-purple-200">
+                        <div className="text-sm space-y-1">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">结价部分料费</span>
+                            <span>¥{(parseFloat(createForm.gold_price) * parseFloat(createForm.cash_payment_weight || '0')).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between text-purple-600 font-medium">
+                            <span>应收金料</span>
+                            <span>{parseFloat(createForm.gold_payment_weight || '0').toFixed(2)} 克</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -618,20 +751,39 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                         <span>¥{(parseFloat(createForm.gold_price) * selectedSalesOrder.total_weight).toFixed(2)}</span>
                       </div>
                     )}
+                    {createForm.payment_method === 'mixed' && createForm.gold_price && createForm.cash_payment_weight && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">结价部分料费</span>
+                        <span>¥{(parseFloat(createForm.gold_price) * parseFloat(createForm.cash_payment_weight || '0')).toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-gray-600">工费</span>
                       <span>¥{selectedSalesOrder.total_labor_cost.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between font-bold text-lg border-t border-cyan-200 pt-2 mt-2">
-                      <span>应收总计</span>
+                      <span>应收现金</span>
                       <span className="text-cyan-600">
                         ¥{(
                           (createForm.payment_method === 'cash_price' && createForm.gold_price
                             ? parseFloat(createForm.gold_price) * selectedSalesOrder.total_weight
-                            : 0) + selectedSalesOrder.total_labor_cost
+                            : createForm.payment_method === 'mixed' && createForm.gold_price && createForm.cash_payment_weight
+                              ? parseFloat(createForm.gold_price) * parseFloat(createForm.cash_payment_weight || '0')
+                              : 0) + selectedSalesOrder.total_labor_cost
                         ).toFixed(2)}
                       </span>
                     </div>
+                    {(createForm.payment_method === 'physical_gold' || createForm.payment_method === 'mixed') && (
+                      <div className="flex justify-between font-bold text-lg text-yellow-600">
+                        <span>应收金料</span>
+                        <span>
+                          {createForm.payment_method === 'physical_gold' 
+                            ? `${selectedSalesOrder.total_weight.toFixed(2)} 克`
+                            : `${parseFloat(createForm.gold_payment_weight || '0').toFixed(2)} 克`
+                          }
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -670,8 +822,10 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                   <span className="text-sm text-gray-500">支付方式</span>
                   <span>
                     {confirmingSettlement.payment_method === 'cash_price' 
-                      ? `结价支付 (¥${confirmingSettlement.gold_price}/g)`
-                      : `实物抵扣 (${confirmingSettlement.physical_gold_weight}g)`
+                      ? `结价 (¥${confirmingSettlement.gold_price}/g)`
+                      : confirmingSettlement.payment_method === 'mixed'
+                        ? `混合支付 (结料${confirmingSettlement.gold_payment_weight || 0}g + 结价${confirmingSettlement.cash_payment_weight || 0}g)`
+                        : `结料 (${confirmingSettlement.physical_gold_weight}g)`
                     }
                   </span>
                 </div>

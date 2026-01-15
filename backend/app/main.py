@@ -155,12 +155,15 @@ async def startup_event():
                 db.commit()
                 logger.info(f"已添加 {col_name} 列到 inbound_details 表")
         
-        # settlement_orders 表的客户余额字段
+        # settlement_orders 表的客户余额字段和混合支付字段
         settlement_columns = [
             ("previous_cash_debt", "FLOAT DEFAULT 0.0"),
             ("previous_gold_debt", "FLOAT DEFAULT 0.0"),
             ("gold_deposit_balance", "FLOAT DEFAULT 0.0"),
             ("cash_deposit_balance", "FLOAT DEFAULT 0.0"),
+            # 混合支付专用字段
+            ("gold_payment_weight", "FLOAT NULL"),
+            ("cash_payment_weight", "FLOAT NULL"),
         ]
         
         for col_name, col_type in settlement_columns:
