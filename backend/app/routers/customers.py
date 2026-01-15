@@ -1133,8 +1133,7 @@ async def chat_debt_query(
             gold_transactions = []
             try:
                 tx_query = db.query(CustomerTransaction).filter(
-                    CustomerTransaction.customer_id == customer_id,
-                    CustomerTransaction.status == "active"
+                    CustomerTransaction.customer_id == customer_id
                 )
                 
                 if start_date:
