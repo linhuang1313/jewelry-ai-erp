@@ -38,13 +38,21 @@ interface InventoryError {
   reserved_weight?: number;
 }
 
+interface OrderResultItem {
+  product_name: string;
+  weight: number;
+  labor_cost: number;
+}
+
 interface OrderResult {
+  order_id: number;
   order_no: string;
   customer_name: string;
   salesperson: string;
   total_weight: number;
   total_labor_cost: number;
   items_count: number;
+  items: OrderResultItem[];
 }
 
 interface QuickOrderModalProps {
@@ -285,14 +293,20 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
       if (data.success) {
         toast.success(`销售单创建成功！单号：${data.order?.order_no || ''}`);
         
-        // 调用成功回调，传递销售单详情
+        // 调用成功回调，传递完整销售单详情（包含 order_id 和商品明细）
         onSuccess?.({
+          order_id: data.order?.id,
           order_no: data.order?.order_no || '',
           customer_name: selectedCustomer?.name || customerSearch.trim(),
           salesperson: selectedSalesperson,
-          total_weight: validItems.reduce((sum, item) => sum + parseFloat(item.weight), 0),
-          total_labor_cost: validItems.reduce((sum, item) => sum + parseFloat(item.weight) * parseFloat(item.labor_cost), 0),
-          items_count: validItems.length
+          total_weight: validItems.reduce((sum, item) => sum + item.weight, 0),
+          total_labor_cost: validItems.reduce((sum, item) => sum + item.weight * item.labor_cost, 0),
+          items_count: validItems.length,
+          items: validItems.map(item => ({
+            product_name: item.product_name,
+            weight: item.weight,
+            labor_cost: item.labor_cost
+          }))
         });
         
         onClose();

@@ -2181,7 +2181,7 @@ function App() {
                       `}>
                         <div className="text-[15px] leading-relaxed whitespace-pre-wrap text-gray-800">
                           {/* 隐藏内容中的特殊标记 */}
-                          {msg.content?.replace(/\n\n<!-- (RETURN_ORDER|INBOUND_ORDER):[^>]+ -->/g, '')}
+                          {msg.content?.replace(/\n\n<!-- (RETURN_ORDER|INBOUND_ORDER|SALES_ORDER):[^>]+ -->/g, '')}
                           {/* 流式生成时的闪烁光标 */}
                           {msg.isStreaming && (
                             <span className="inline-block w-0.5 h-4 bg-blue-500 ml-1 animate-pulse"></span>
@@ -2252,6 +2252,38 @@ function App() {
                               </button>
                               <button
                                 onClick={() => window.open(`${API_BASE_URL}/api/inbound-orders/${inboundId}/download?format=pdf`, '_blank')}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                下载
+                              </button>
+                            </div>
+                          )
+                        })()}
+                        {/* 销售单操作按钮 - 支持从对象或从内容解析 */}
+                        {(() => {
+                          // 尝试从消息对象获取，或从内容中解析隐藏标记
+                          let salesId = msg.salesOrderId
+                          if (!salesId && msg.content) {
+                            const match = msg.content.match(/<!-- SALES_ORDER:(\d+):/)
+                            if (match) salesId = parseInt(match[1])
+                          }
+                          if (!salesId) return null
+                          return (
+                            <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
+                              <button
+                                onClick={() => window.open(`${API_BASE_URL}/api/sales/orders/${salesId}/download?format=html`, '_blank')}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                </svg>
+                                打印销售单
+                              </button>
+                              <button
+                                onClick={() => window.open(`${API_BASE_URL}/api/sales/orders/${salesId}/download?format=pdf`, '_blank')}
                                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3079,8 +3111,47 @@ function App() {
         <QuickOrderModal
           isOpen={showQuickOrderModal}
           onClose={() => setShowQuickOrderModal(false)}
-          onSuccess={() => {
-            // 开单成功后可以刷新数据或显示提示
+          onSuccess={(result) => {
+            // 开单成功后在聊天框显示销售单明细
+            const itemsList = result.items.map((item, idx) => 
+              `${idx + 1}. ${item.product_name}：${item.weight}克 × ¥${item.labor_cost}/克 = ¥${(item.weight * item.labor_cost).toFixed(2)}`
+            ).join('\n')
+            
+            const salesMessage = `✅ **销售单创建成功**
+
+📋 **销售单号**：${result.order_no}
+👤 **客户**：${result.customer_name}
+🧑‍💼 **业务员**：${result.salesperson}
+
+📦 **商品明细**：
+${itemsList}
+
+📊 **汇总**：
+- 总克重：${result.total_weight.toFixed(2)}克
+- 总工费：¥${result.total_labor_cost.toFixed(2)}
+
+<!-- SALES_ORDER:${result.order_id}:${result.order_no} -->`
+
+            setMessages(prev => [...prev, {
+              type: 'system',
+              content: salesMessage,
+              salesOrderId: result.order_id,
+              salesOrderNo: result.order_no
+            }])
+            
+            // 保存到聊天历史
+            if (currentSessionId) {
+              fetch(`${API_BASE_URL}/api/chat-logs/message`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  session_id: currentSessionId,
+                  message_type: 'assistant',
+                  content: salesMessage,
+                  user_role: userRole
+                })
+              }).catch(err => console.error('保存销售单消息失败:', err))
+            }
           }}
         />
       )}
