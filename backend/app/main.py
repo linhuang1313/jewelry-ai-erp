@@ -74,12 +74,14 @@ app = FastAPI(title="AI-ERP珠宝入库BETA测试")
 
 # ========== 配置CORS（必须在路由注册之前）==========
 # 配置CORS - 支持所有来源（包括 Vercel 和 Railway）
+# 注意：allow_credentials=True 时不能使用 allow_origins=["*"]
+# 所以这里使用 allow_credentials=False
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # 允许所有域名
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
-    allow_headers=["*"],
+    allow_credentials=False,  # 设为 False 才能使用 allow_origins=["*"]
+    allow_methods=["*"],  # 允许所有方法
+    allow_headers=["*"],  # 允许所有头
     expose_headers=["*"],
     max_age=3600,  # 预检请求缓存时间
 )
