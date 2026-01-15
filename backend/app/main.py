@@ -3993,6 +3993,165 @@ async def export_suppliers(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/export/customer-transactions/{customer_id}")
+async def export_customer_transactions(
+    customer_id: int,
+    db: Session = Depends(get_db)
+):
+    """导出客户账务明细为 Excel（包含销售记录和往来明细）"""
+    try:
+        # 获取客户信息
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        if not customer:
+            raise HTTPException(status_code=404, detail="客户不存在")
+        
+        wb = Workbook()
+        
+        # ========== Sheet 1: 销售记录 ==========
+        ws1 = wb.active
+        ws1.title = "销售记录"
+        
+        headers1 = ["销售单号", "销售日期", "商品名称", "重量(克)", "工费(元/克)", "总工费(元)", "业务员", "状态"]
+        ws1.append(headers1)
+        style_header(ws1)
+        
+        # 查询该客户的销售记录
+        sales_orders = db.query(SalesOrder).filter(
+            SalesOrder.customer_name == customer.name,
+            SalesOrder.status != "已取消"
+        ).order_by(SalesOrder.order_date.desc()).all()
+        
+        total_sales_weight = 0
+        total_sales_amount = 0
+        
+        for order in sales_orders:
+            details = db.query(SalesDetail).filter(SalesDetail.order_id == order.id).all()
+            for detail in details:
+                ws1.append([
+                    order.order_no,
+                    order.order_date.strftime("%Y-%m-%d") if order.order_date else "",
+                    detail.product_name,
+                    detail.weight,
+                    detail.labor_cost,
+                    detail.total_labor_cost,
+                    order.salesperson or "",
+                    order.status
+                ])
+                total_sales_weight += detail.weight or 0
+                total_sales_amount += detail.total_labor_cost or 0
+        
+        # 添加汇总行
+        ws1.append([])
+        ws1.append(["汇总", "", "", f"{total_sales_weight:.2f}", "", f"{total_sales_amount:.2f}", "", ""])
+        
+        auto_column_width(ws1)
+        
+        # ========== Sheet 2: 往来账目明细 ==========
+        ws2 = wb.create_sheet(title="往来账目")
+        
+        headers2 = ["交易日期", "交易类型", "金额(元)", "金料重量(克)", "欠料余额(克)", "备注"]
+        ws2.append(headers2)
+        style_header(ws2)
+        
+        # 查询往来账记录
+        from .models import CustomerTransaction, CustomerGoldDepositTransaction, AccountReceivable
+        
+        transactions = db.query(CustomerTransaction).filter(
+            CustomerTransaction.customer_id == customer_id
+        ).order_by(CustomerTransaction.created_at.desc()).all()
+        
+        type_labels = {
+            "sales": "销售",
+            "settlement": "结算",
+            "gold_receipt": "收料",
+            "payment": "付款"
+        }
+        
+        for tx in transactions:
+            ws2.append([
+                tx.created_at.strftime("%Y-%m-%d %H:%M") if tx.created_at else "",
+                type_labels.get(tx.transaction_type, tx.transaction_type),
+                tx.amount or 0,
+                tx.gold_weight or 0,
+                tx.gold_due_after or 0,
+                tx.remark or ""
+            ])
+        
+        auto_column_width(ws2)
+        
+        # ========== Sheet 3: 存料记录 ==========
+        ws3 = wb.create_sheet(title="存料记录")
+        
+        headers3 = ["交易日期", "交易类型", "金额(克)", "交易前余额(克)", "交易后余额(克)", "备注"]
+        ws3.append(headers3)
+        style_header(ws3)
+        
+        deposit_txs = db.query(CustomerGoldDepositTransaction).filter(
+            CustomerGoldDepositTransaction.customer_id == customer_id
+        ).order_by(CustomerGoldDepositTransaction.created_at.desc()).all()
+        
+        deposit_type_labels = {
+            "deposit": "存入",
+            "use": "使用",
+            "refund": "退还"
+        }
+        
+        for tx in deposit_txs:
+            ws3.append([
+                tx.created_at.strftime("%Y-%m-%d %H:%M") if tx.created_at else "",
+                deposit_type_labels.get(tx.transaction_type, tx.transaction_type),
+                tx.amount or 0,
+                tx.balance_before or 0,
+                tx.balance_after or 0,
+                tx.remark or ""
+            ])
+        
+        auto_column_width(ws3)
+        
+        # ========== Sheet 4: 应收账款 ==========
+        ws4 = wb.create_sheet(title="应收账款")
+        
+        headers4 = ["销售单ID", "应收总额(元)", "已收金额(元)", "未收金额(元)", "账期开始", "到期日", "状态"]
+        ws4.append(headers4)
+        style_header(ws4)
+        
+        receivables = db.query(AccountReceivable).filter(
+            AccountReceivable.customer_id == customer_id
+        ).order_by(AccountReceivable.credit_start_date.desc()).all()
+        
+        status_labels = {
+            "unpaid": "未付",
+            "paid": "已付",
+            "overdue": "逾期",
+            "cancelled": "已取消"
+        }
+        
+        for r in receivables:
+            ws4.append([
+                r.sales_order_id,
+                r.total_amount or 0,
+                r.received_amount or 0,
+                r.unpaid_amount or 0,
+                r.credit_start_date.strftime("%Y-%m-%d") if r.credit_start_date else "",
+                r.due_date.strftime("%Y-%m-%d") if r.due_date else "",
+                status_labels.get(r.status, r.status)
+            ])
+        
+        auto_column_width(ws4)
+        
+        # 生成文件名
+        safe_name = customer.name.replace("/", "_").replace("\\", "_")[:20]
+        filename = f"{safe_name}_账务明细_{datetime.now().strftime('%Y%m%d')}.xlsx"
+        
+        return create_excel_response(wb, filename)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"导出客户账务失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/export/all")
 async def export_all_data(db: Session = Depends(get_db)):
     """一键导出全部数据为 ZIP 包"""

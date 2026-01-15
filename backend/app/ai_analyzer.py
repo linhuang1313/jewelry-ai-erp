@@ -340,6 +340,7 @@ class AIAnalyzer:
             if debt_data.get("success"):
                 customer = debt_data.get("customer", {})
                 text += f"\n=== 客户账务详情 ===\n"
+                text += f"客户ID：{customer.get('id', 'N/A')}\n"
                 text += f"客户：{customer.get('name', 'N/A')}（{customer.get('customer_no', 'N/A')}）\n"
                 text += f"电话：{customer.get('phone', 'N/A')}\n"
                 
@@ -479,6 +480,10 @@ class AIAnalyzer:
 4. **友好提示**：
    - 如果客户没有欠款，可以说"账务良好，无欠款"
    - 如果找不到客户，友好提示并建议检查客户名称
+
+**重要**：在回答的最后，必须添加一行隐藏标记（用于前端显示下载账务明细按钮）：
+如果找到了客户，添加：<!-- CUSTOMER_DEBT:[customer_id]:[customer_name] -->
+其中 [customer_id] 是客户ID（从数据中获取），[customer_name] 是客户名称。
 
 请用自然、专业且友好的语言回答，使用表情符号增强可读性：💰现金、⚖️金料、📦存料。"""
         else:
@@ -740,6 +745,10 @@ class AIAnalyzer:
 4. **友好提示**：
    - 如果客户没有欠款，可以说"账务良好，无欠款"
    - 如果找不到客户，友好提示并建议检查客户名称
+
+**重要**：在回答的最后，必须添加一行隐藏标记（用于前端显示下载账务明细按钮）：
+如果找到了客户，添加：<!-- CUSTOMER_DEBT:[customer_id]:[customer_name] -->
+其中 [customer_id] 是客户ID（从数据中获取），[customer_name] 是客户名称。
 
 请用自然、专业且友好的语言回答，使用表情符号增强可读性：💰现金、⚖️金料、📦存料。"""
             system_prompt = "你是珠宝ERP系统AI助手，专门帮助用户查询客户账务信息。请以友好、清晰的方式回答。"
