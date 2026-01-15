@@ -10,7 +10,7 @@ from typing import Optional
 import logging
 
 from ..database import get_db
-from ..models import SalesOrder, SalesDetail, Customer, Inventory
+from ..models import SalesOrder, SalesDetail, Customer, Inventory, ProductCode
 from ..schemas import SalesOrderCreate, SalesOrderResponse, SalesDetailResponse
 
 logger = logging.getLogger(__name__)
@@ -53,6 +53,19 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
                     }
                 }
         # ==================== 数据验证结束 ====================
+        
+        # ==================== 商品编码转换 ====================
+        # 如果输入的是商品编码，自动转换为商品名称
+        for item in order_data.items:
+            product_name = item.product_name
+            # 检查是否是商品编码（全大写或包含数字）
+            if product_name and (product_name.isupper() or any(c.isdigit() for c in product_name)):
+                code_record = db.query(ProductCode).filter(ProductCode.code == product_name).first()
+                if code_record and code_record.name:
+                    # 找到了对应的商品名称，更新 item
+                    logger.info(f"商品编码转换: {product_name} -> {code_record.name}")
+                    item.product_name = code_record.name
+        # ==================== 商品编码转换结束 ====================
         
         # ==================== 库存检查 ====================
         # 在创建客户之前先检查库存，避免创建了客户但销售单创建失败
