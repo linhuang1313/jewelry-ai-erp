@@ -72,6 +72,18 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI-ERP珠宝入库BETA测试")
 
+# ========== 配置CORS（必须在路由注册之前）==========
+# 配置CORS - 支持所有来源（包括 Vercel 和 Railway）
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 允许所有域名
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,  # 预检请求缓存时间
+)
+
 # 注册财务对账路由
 app.include_router(finance_router)
 
@@ -108,23 +120,6 @@ app.include_router(sales_router)
 # 注册数据导出路由
 app.include_router(export_router)
 
-# 配置CORS - 支持本地开发和云端部署
-# 允许的前端域名列表
-ALLOWED_ORIGINS = [
-    "http://localhost:5173",           # 本地开发
-    "http://localhost:3000",           # 备用本地端口
-    "https://*.vercel.app",            # Vercel 部署
-    "https://*.railway.app",           # Railway 部署
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # 允许所有域名（适用于演示项目）
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
 
 # 初始化数据库
 @app.on_event("startup")
