@@ -481,13 +481,15 @@ async def batch_import_customers(
                 if "zip file" in error_msg or "not a zip file" in error_msg or file_extension == 'xls':
                     return {
                         "success": False,
-                        "message": "❌ 文件格式不支持：检测到旧版 Excel 格式 (.xls)\n\n" +
-                                  "💡 解决方案：\n" +
-                                  "1. 打开您的 Excel 文件\n" +
-                                  "2. 点击"文件" -> "另存为"\n" +
-                                  "3. 在"保存类型"中选择"Excel 工作簿 (*.xlsx)" 或 "CSV UTF-8 (逗号分隔) (*.csv)"\n" +
-                                  "4. 保存后重新上传\n\n" +
-                                  "或者直接使用 CSV 格式，更简单快捷！"
+                        "message": (
+                            "❌ 文件格式不支持：检测到旧版 Excel 格式 (.xls)\n\n"
+                            "💡 解决方案：\n"
+                            "1. 打开您的 Excel 文件\n"
+                            "2. 点击"文件" -> "另存为"\n"
+                            "3. 在"保存类型"中选择"Excel 工作簿 (*.xlsx)" 或 "CSV UTF-8 (逗号分隔) (*.csv)"\n"
+                            "4. 保存后重新上传\n\n"
+                            "或者直接使用 CSV 格式，更简单快捷！"
+                        )
                     }
                 else:
                     return {
