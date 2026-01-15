@@ -2900,6 +2900,25 @@ function App() {
                 </button>
               )}
 
+              {/* 快速开单按钮 - 柜台和结算可见 */}
+              {(userRole === 'counter' || userRole === 'settlement') && (
+                <button
+                  onClick={() => setShowQuickOrderModal(true)}
+                  disabled={loading || uploading}
+                  className={`
+                    px-3 py-3 rounded-2xl cursor-pointer transition-all duration-200
+                    h-[52px] flex items-center font-medium text-[14px]
+                    ${loading || uploading
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm hover:shadow-md'
+                    }
+                  `}
+                  title="快速开单"
+                >
+                  📝 开单
+                </button>
+              )}
+
               {/* 快捷退货按钮 - 商品专员和柜台可见 */}
               {(userRole === 'product' || userRole === 'counter') && (
                 <button
