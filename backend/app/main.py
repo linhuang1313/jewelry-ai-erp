@@ -3295,16 +3295,20 @@ import zipfile
 
 def create_excel_response(wb: Workbook, filename: str):
     """创建 Excel 文件响应"""
+    import urllib.parse
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
+    
+    # 使用 RFC 5987 规范对中文文件名进行 URL 编码
+    encoded_filename = urllib.parse.quote(filename)
     
     from fastapi.responses import Response
     return Response(
         content=output.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
-            "Content-Disposition": f"attachment; filename={filename}",
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
             "Access-Control-Allow-Origin": "*",
         }
     )
