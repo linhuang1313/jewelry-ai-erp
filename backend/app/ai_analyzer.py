@@ -233,9 +233,10 @@ class AIAnalyzer:
         text += f"- 入库单数量：{stats.get('total_inbound_orders', 0)}个\n"
         text += f"- 销售单数量：{stats.get('total_sales_orders', 0)}个\n\n"
         
-        # 库存详情
+        # 库存详情（显示仓位名称）
+        inventory_location = data.get("inventory_location", "全部仓位")
         if data.get("inventory"):
-            text += f"=== 库存详情（共{len(data['inventory'])}种商品）===\n"
+            text += f"=== {inventory_location}库存详情（共{len(data['inventory'])}种商品）===\n"
             for idx, inv in enumerate(data["inventory"], 1):
                 text += f"{idx}. {inv['product_name']}：{inv['total_weight']}克"
                 if inv.get('last_update'):
@@ -673,9 +674,12 @@ class AIAnalyzer:
 - 只给数字和关键信息
 - 不要分析、不要建议、不要表格
 - 直接回答问题
+- **重要**：回答库存问题时，必须使用系统数据中标注的"库存位置"，不要随便说"总库存"
 
 示例：
-- 问"库存多少" → 答"目前总库存710克，包含2种商品（古法黄金戒指700克、古法黄金手镯10克）。"
+- 如果库存位置是"商品部仓库" → 答"商品部库存710克，包含2种商品。"
+- 如果库存位置是"展厅" → 答"展厅库存710克，包含2种商品。"
+- 如果库存位置是"全部仓位（总库存）" → 答"目前总库存710克，包含2种商品。"
 - 问"有几个供应商" → 答"目前有3个供应商：金源珠宝、梵贝琳工厂、XX珠宝。"
 
 现在请简短回答："""
