@@ -179,6 +179,26 @@ async def startup_event():
                 """))
                 db.commit()
                 logger.info(f"已添加 {col_name} 列到 settlement_orders 表")
+        
+        # sales_details 表的件数和件工费字段
+        sales_detail_columns = [
+            ("piece_count", "INTEGER NULL"),
+            ("piece_labor_cost", "FLOAT NULL"),
+        ]
+        
+        for col_name, col_type in sales_detail_columns:
+            result = db.execute(text(f"""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'sales_details' AND column_name = '{col_name}'
+            """))
+            if not result.fetchone():
+                db.execute(text(f"""
+                    ALTER TABLE sales_details 
+                    ADD COLUMN {col_name} {col_type}
+                """))
+                db.commit()
+                logger.info(f"已添加 {col_name} 列到 sales_details 表")
     except Exception as e:
         logger.warning(f"迁移检查: {e}")
         db.rollback()
