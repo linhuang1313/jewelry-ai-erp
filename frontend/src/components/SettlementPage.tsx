@@ -96,7 +96,30 @@ const TabButton: React.FC<{
   </button>
 );
 
-export const SettlementPage: React.FC = () => {
+// 结算单确认后的回调数据
+interface SettlementConfirmedData {
+  settlement_id: number;
+  settlement_no: string;
+  customer_name: string;
+  salesperson: string;
+  payment_method: string;
+  total_weight: number;
+  labor_amount: number;
+  material_amount: number;
+  total_amount: number;
+  details: Array<{
+    product_name: string;
+    weight: number;
+    labor_cost: number;
+    total_labor_cost: number;
+  }>;
+}
+
+interface SettlementPageProps {
+  onSettlementConfirmed?: (data: SettlementConfirmedData) => void;
+}
+
+export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConfirmed }) => {
   const [activeTab, setActiveTab] = useState<'pending' | 'confirmed' | 'all'>('pending');
   const [pendingSales, setPendingSales] = useState<SalesOrder[]>([]);
   const [settlements, setSettlements] = useState<SettlementOrder[]>([]);
@@ -208,7 +231,30 @@ export const SettlementPage: React.FC = () => {
       });
 
       if (response.ok) {
+        const result = await response.json();
         toast.success('结算单已确认');
+        
+        // 调用回调，将结算单信息传递给父组件（用于在聊天框显示）
+        if (onSettlementConfirmed && confirmingSettlement) {
+          onSettlementConfirmed({
+            settlement_id: confirmingSettlement.id,
+            settlement_no: confirmingSettlement.settlement_no,
+            customer_name: confirmingSettlement.sales_order?.customer_name || '未知',
+            salesperson: confirmingSettlement.sales_order?.salesperson || '未知',
+            payment_method: confirmingSettlement.payment_method,
+            total_weight: confirmingSettlement.total_weight,
+            labor_amount: confirmingSettlement.labor_amount,
+            material_amount: confirmingSettlement.material_amount,
+            total_amount: confirmingSettlement.total_amount,
+            details: confirmingSettlement.sales_order?.details?.map(d => ({
+              product_name: d.product_name,
+              weight: d.weight,
+              labor_cost: d.labor_cost,
+              total_labor_cost: d.total_labor_cost
+            })) || []
+          });
+        }
+        
         setConfirmingSettlement(null);
         loadSettlements();
       } else {

@@ -2,14 +2,16 @@
 结算单管理 API 路由
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse, HTMLResponse, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime
 import logging
+import io
 
 from ..database import get_db
-from ..timezone_utils import china_now
+from ..timezone_utils import china_now, to_china_time, format_china_time
 from ..models import (
     SettlementOrder, 
     SalesOrder, 
@@ -599,4 +601,341 @@ async def get_settlement_order(
         deposit_used=deposit_used
     )
 
+
+# ============= 结算单下载/打印 =============
+
+@router.options("/orders/{settlement_id}/download")
+async def download_settlement_order_options(settlement_id: int):
+    """处理CORS预检请求"""
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+
+
+@router.get("/orders/{settlement_id}/download")
+async def download_settlement_order(
+    settlement_id: int,
+    format: str = Query("pdf", pattern="^(pdf|html)$"),
+    db: Session = Depends(get_db)
+):
+    """下载或打印结算单（支持PDF和HTML格式）"""
+    try:
+        logger.info(f"下载结算单请求: settlement_id={settlement_id}, format={format}")
+        
+        # 查询结算单
+        settlement = db.query(SettlementOrder).filter(SettlementOrder.id == settlement_id).first()
+        if not settlement:
+            raise HTTPException(status_code=404, detail="结算单不存在")
+        
+        # 查询关联的销售单
+        sales_order = db.query(SalesOrder).filter(SalesOrder.id == settlement.sales_order_id).first()
+        details = db.query(SalesDetail).filter(SalesDetail.order_id == settlement.sales_order_id).all() if sales_order else []
+        
+        logger.info(f"找到结算单: settlement_no={settlement.settlement_no}, 明细数={len(details)}")
+        
+        # 时间格式化
+        if settlement.created_at:
+            china_time = to_china_time(settlement.created_at)
+            created_at_str = format_china_time(china_time, '%Y-%m-%d %H:%M:%S')
+        else:
+            created_at_str = "未知"
+        
+        if settlement.confirmed_at:
+            confirmed_china_time = to_china_time(settlement.confirmed_at)
+            confirmed_at_str = format_china_time(confirmed_china_time, '%Y-%m-%d %H:%M:%S')
+        else:
+            confirmed_at_str = "未确认"
+        
+        # 支付方式转换
+        payment_method_str = "结价" if settlement.payment_method == "cash_price" else "结料"
+        
+        # 状态转换
+        status_map = {
+            "pending": "待确认",
+            "confirmed": "已确认",
+            "printed": "已打印"
+        }
+        status_str = status_map.get(settlement.status, settlement.status)
+        
+        if format == "pdf":
+            try:
+                from reportlab.lib.pagesizes import A4
+                from reportlab.pdfgen import canvas
+                from reportlab.pdfbase import pdfmetrics
+                from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+                
+                buffer = io.BytesIO()
+                p = canvas.Canvas(buffer, pagesize=A4)
+                width, height = A4
+                
+                # 使用 CID 字体
+                try:
+                    pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+                    chinese_font = 'STSong-Light'
+                except Exception as cid_error:
+                    logger.warning(f"注册CID字体失败: {cid_error}")
+                    chinese_font = None
+                
+                # 标题
+                if chinese_font:
+                    p.setFont(chinese_font, 18)
+                else:
+                    p.setFont("Helvetica-Bold", 18)
+                p.drawString(50, height - 50, "结算单")
+                
+                # 基本信息
+                font_size = 12
+                y = height - 100
+                if chinese_font:
+                    p.setFont(chinese_font, font_size)
+                else:
+                    p.setFont("Helvetica", font_size)
+                
+                p.drawString(50, y, f"结算单号：{settlement.settlement_no}")
+                y -= 25
+                p.drawString(50, y, f"创建时间：{created_at_str}")
+                y -= 25
+                p.drawString(50, y, f"客户名称：{sales_order.customer_name if sales_order else '未知'}")
+                y -= 25
+                p.drawString(50, y, f"业务员：{sales_order.salesperson if sales_order else '未知'}")
+                y -= 25
+                p.drawString(50, y, f"支付方式：{payment_method_str}")
+                y -= 25
+                p.drawString(50, y, f"状态：{status_str}")
+                y -= 40
+                
+                # 商品明细表头
+                p.drawString(50, y, "商品明细：")
+                y -= 25
+                p.drawString(50, y, f"{'序号':<6}{'商品名称':<20}{'克重(g)':<12}{'工费/克':<12}{'总工费':<12}")
+                y -= 20
+                p.line(50, y, width - 50, y)
+                y -= 15
+                
+                # 商品明细行
+                for idx, detail in enumerate(details, 1):
+                    p.drawString(50, y, f"{idx:<6}{detail.product_name[:15]:<20}{detail.weight:<12.2f}{detail.labor_cost:<12.2f}{detail.total_labor_cost:<12.2f}")
+                    y -= 20
+                
+                y -= 10
+                p.line(50, y, width - 50, y)
+                y -= 25
+                
+                # 汇总
+                p.drawString(50, y, f"总克重：{settlement.total_weight:.2f} 克")
+                y -= 25
+                p.drawString(50, y, f"工费合计：¥{settlement.labor_amount:.2f}")
+                y -= 25
+                if settlement.payment_method == "cash_price" and settlement.gold_price:
+                    p.drawString(50, y, f"金价：¥{settlement.gold_price:.2f}/克")
+                    y -= 25
+                    p.drawString(50, y, f"料费合计：¥{settlement.material_amount:.2f}")
+                    y -= 25
+                p.drawString(50, y, f"总金额：¥{settlement.total_amount:.2f}")
+                y -= 40
+                
+                # 客户历史余额
+                if settlement.previous_cash_debt or settlement.previous_gold_debt or settlement.gold_deposit_balance:
+                    p.drawString(50, y, "客户余额信息：")
+                    y -= 25
+                    if settlement.previous_cash_debt:
+                        p.drawString(50, y, f"上次现金欠款：¥{settlement.previous_cash_debt:.2f}")
+                        y -= 20
+                    if settlement.previous_gold_debt:
+                        p.drawString(50, y, f"上次金料欠款：{settlement.previous_gold_debt:.2f}克")
+                        y -= 20
+                    if settlement.gold_deposit_balance:
+                        p.drawString(50, y, f"存料余额：{settlement.gold_deposit_balance:.2f}克")
+                        y -= 20
+                    y -= 20
+                
+                # 备注
+                if settlement.remark:
+                    p.drawString(50, y, f"备注：{settlement.remark}")
+                
+                p.showPage()
+                p.save()
+                buffer.seek(0)
+                
+                filename = f"settlement_{settlement.settlement_no}.pdf"
+                return StreamingResponse(
+                    buffer,
+                    media_type="application/pdf",
+                    headers={
+                        "Content-Disposition": f'attachment; filename="{filename}"',
+                        "Access-Control-Allow-Origin": "*",
+                    }
+                )
+            except Exception as pdf_error:
+                logger.error(f"生成结算单PDF失败: {pdf_error}", exc_info=True)
+                raise HTTPException(status_code=500, detail=f"生成PDF失败: {str(pdf_error)}")
+        
+        elif format == "html":
+            # HTML 打印格式
+            customer_name = sales_order.customer_name if sales_order else "未知"
+            salesperson = sales_order.salesperson if sales_order else "未知"
+            
+            # 客户余额信息HTML
+            balance_info_html = ""
+            if settlement.previous_cash_debt or settlement.previous_gold_debt or settlement.gold_deposit_balance:
+                balance_items = []
+                if settlement.previous_cash_debt:
+                    balance_items.append(f'<div class="balance-item"><label>上次现金欠款</label><span>¥{settlement.previous_cash_debt:.2f}</span></div>')
+                if settlement.previous_gold_debt:
+                    balance_items.append(f'<div class="balance-item"><label>上次金料欠款</label><span>{settlement.previous_gold_debt:.2f}克</span></div>')
+                if settlement.gold_deposit_balance:
+                    balance_items.append(f'<div class="balance-item"><label>存料余额</label><span>{settlement.gold_deposit_balance:.2f}克</span></div>')
+                
+                balance_info_html = f'''
+                <div class="balance-section">
+                    <h3>客户余额信息</h3>
+                    <div class="balance-grid">
+                        {"".join(balance_items)}
+                    </div>
+                </div>
+                '''
+            
+            html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>结算单 - {settlement.settlement_no}</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: 'Microsoft YaHei', SimSun, sans-serif; padding: 20px; background: #f5f5f5; }}
+        .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+        .header {{ text-align: center; border-bottom: 2px solid #333; padding-bottom: 15px; margin-bottom: 20px; }}
+        .header h1 {{ font-size: 24px; margin-bottom: 5px; }}
+        .header .order-no {{ color: #666; font-size: 14px; }}
+        .info-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }}
+        .info-item {{ padding: 8px 0; }}
+        .info-item label {{ color: #666; font-size: 12px; display: block; }}
+        .info-item span {{ font-size: 14px; font-weight: 500; }}
+        .details-table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+        .details-table th, .details-table td {{ border: 1px solid #ddd; padding: 10px; text-align: left; }}
+        .details-table th {{ background: #f8f8f8; font-weight: 500; }}
+        .details-table td.number {{ text-align: right; }}
+        .summary {{ background: #f9f9f9; padding: 15px; border-radius: 6px; margin-top: 20px; }}
+        .summary-row {{ display: flex; justify-content: space-between; margin: 5px 0; }}
+        .summary-row.total {{ font-size: 16px; font-weight: bold; color: #e74c3c; border-top: 1px solid #ddd; padding-top: 10px; margin-top: 10px; }}
+        .balance-section {{ background: #e8f4fd; padding: 15px; border-radius: 6px; margin-top: 20px; }}
+        .balance-section h3 {{ font-size: 14px; color: #2980b9; margin-bottom: 10px; }}
+        .balance-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }}
+        .balance-item {{ text-align: center; }}
+        .balance-item label {{ color: #666; font-size: 12px; display: block; }}
+        .balance-item span {{ font-size: 14px; font-weight: 500; }}
+        .remark {{ margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 6px; }}
+        .status-badge {{ display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }}
+        .status-confirmed {{ background: #d4edda; color: #155724; }}
+        .status-pending {{ background: #fff3cd; color: #856404; }}
+        .status-printed {{ background: #cce5ff; color: #004085; }}
+        .print-btn {{ display: block; margin: 30px auto 0; padding: 12px 40px; background: #3498db; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; }}
+        .print-btn:hover {{ background: #2980b9; }}
+        @media print {{
+            body {{ background: white; padding: 0; }}
+            .container {{ box-shadow: none; max-width: 100%; }}
+            .print-btn {{ display: none; }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>结算单</h1>
+            <div class="order-no">单号：{settlement.settlement_no}</div>
+        </div>
+        <div class="info-grid">
+            <div class="info-item">
+                <label>创建时间</label>
+                <span>{created_at_str}</span>
+            </div>
+            <div class="info-item">
+                <label>确认时间</label>
+                <span>{confirmed_at_str}</span>
+            </div>
+            <div class="info-item">
+                <label>客户名称</label>
+                <span>{customer_name}</span>
+            </div>
+            <div class="info-item">
+                <label>业务员</label>
+                <span>{salesperson}</span>
+            </div>
+            <div class="info-item">
+                <label>支付方式</label>
+                <span>{payment_method_str}</span>
+            </div>
+            <div class="info-item">
+                <label>状态</label>
+                <span class="status-badge status-{settlement.status}">{status_str}</span>
+            </div>
+        </div>
+        <table class="details-table">
+            <thead>
+                <tr>
+                    <th>序号</th>
+                    <th>商品名称</th>
+                    <th>克重(g)</th>
+                    <th>工费(元/克)</th>
+                    <th>总工费(元)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {"".join(f'''
+                <tr>
+                    <td>{idx}</td>
+                    <td>{detail.product_name}</td>
+                    <td class="number">{detail.weight:.2f}</td>
+                    <td class="number">{detail.labor_cost:.2f}</td>
+                    <td class="number">{detail.total_labor_cost:.2f}</td>
+                </tr>
+                ''' for idx, detail in enumerate(details, 1))}
+            </tbody>
+        </table>
+        <div class="summary">
+            <div class="summary-row">
+                <span>商品数量</span>
+                <span>{len(details)} 件</span>
+            </div>
+            <div class="summary-row">
+                <span>总克重</span>
+                <span>{settlement.total_weight:.2f} 克</span>
+            </div>
+            <div class="summary-row">
+                <span>工费合计</span>
+                <span>¥{settlement.labor_amount:.2f}</span>
+            </div>
+            {f'<div class="summary-row"><span>金价</span><span>¥{settlement.gold_price:.2f}/克</span></div>' if settlement.payment_method == "cash_price" and settlement.gold_price else ''}
+            {f'<div class="summary-row"><span>料费合计</span><span>¥{settlement.material_amount:.2f}</span></div>' if settlement.material_amount else ''}
+            <div class="summary-row total">
+                <span>总金额</span>
+                <span>¥{settlement.total_amount:.2f}</span>
+            </div>
+        </div>
+        {balance_info_html}
+        {f'<div class="remark"><strong>备注：</strong>{settlement.remark}</div>' if settlement.remark else ''}
+        <button class="print-btn" onclick="window.print()">打印结算单</button>
+    </div>
+</body>
+</html>
+"""
+            return HTMLResponse(
+                content=html_content,
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
+        
+        else:
+            raise HTTPException(status_code=400, detail="不支持的格式，请使用 pdf 或 html")
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"生成结算单失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"生成结算单失败: {str(e)}")
 

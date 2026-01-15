@@ -2181,7 +2181,7 @@ function App() {
                       `}>
                         <div className="text-[15px] leading-relaxed whitespace-pre-wrap text-gray-800">
                           {/* 隐藏内容中的特殊标记 */}
-                          {msg.content?.replace(/\n\n<!-- (RETURN_ORDER|INBOUND_ORDER|SALES_ORDER):[^>]+ -->/g, '')}
+                          {msg.content?.replace(/\n\n<!-- (RETURN_ORDER|INBOUND_ORDER|SALES_ORDER|SETTLEMENT_ORDER):[^>]+ -->/g, '')}
                           {/* 流式生成时的闪烁光标 */}
                           {msg.isStreaming && (
                             <span className="inline-block w-0.5 h-4 bg-blue-500 ml-1 animate-pulse"></span>
@@ -2284,6 +2284,38 @@ function App() {
                               </button>
                               <button
                                 onClick={() => window.open(`${API_BASE_URL}/api/sales/orders/${salesId}/download?format=pdf`, '_blank')}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                下载
+                              </button>
+                            </div>
+                          )
+                        })()}
+                        {/* 结算单操作按钮 - 支持从对象或从内容解析 */}
+                        {(() => {
+                          // 尝试从消息对象获取，或从内容中解析隐藏标记
+                          let settlementId = msg.settlementOrderId
+                          if (!settlementId && msg.content) {
+                            const match = msg.content.match(/<!-- SETTLEMENT_ORDER:(\d+):/)
+                            if (match) settlementId = parseInt(match[1])
+                          }
+                          if (!settlementId) return null
+                          return (
+                            <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
+                              <button
+                                onClick={() => window.open(`${API_BASE_URL}/api/settlement/orders/${settlementId}/download?format=html`, '_blank')}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-cyan-50 text-cyan-600 rounded-lg hover:bg-cyan-100 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                </svg>
+                                打印结算单
+                              </button>
+                              <button
+                                onClick={() => window.open(`${API_BASE_URL}/api/settlement/orders/${settlementId}/download?format=pdf`, '_blank')}
                                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2932,8 +2964,8 @@ function App() {
                 </button>
               )}
 
-              {/* 快速开单按钮 - 柜台和结算可见 */}
-              {(userRole === 'counter' || userRole === 'settlement') && (
+              {/* 快速开单按钮 - 仅柜台可见（结算专员不需要） */}
+              {userRole === 'counter' && (
                 <button
                   onClick={() => setShowQuickOrderModal(true)}
                   disabled={loading || uploading}
@@ -3053,7 +3085,58 @@ function App() {
 
         {currentPage === 'settlement' && (
           <div className="flex-1 overflow-y-auto">
-            <SettlementPage />
+            <SettlementPage 
+              onSettlementConfirmed={(data) => {
+                // 结算单确认后，在聊天框显示明细
+                const itemsList = data.details.map((item, idx) => 
+                  `${idx + 1}. ${item.product_name}：${item.weight}克 × ¥${item.labor_cost}/克 = ¥${item.total_labor_cost.toFixed(2)}`
+                ).join('\n')
+                
+                const paymentMethodStr = data.payment_method === 'cash_price' ? '结价' : '结料'
+                
+                const settlementMessage = `✅ **结算单确认成功**
+
+📋 **结算单号**：${data.settlement_no}
+👤 **客户**：${data.customer_name}
+🧑‍💼 **业务员**：${data.salesperson}
+💳 **支付方式**：${paymentMethodStr}
+
+📦 **商品明细**：
+${itemsList}
+
+📊 **汇总**：
+- 总克重：${data.total_weight.toFixed(2)}克
+- 工费合计：¥${data.labor_amount.toFixed(2)}
+${data.material_amount > 0 ? `- 料费合计：¥${data.material_amount.toFixed(2)}` : ''}
+- **应收总计：¥${data.total_amount.toFixed(2)}**
+
+<!-- SETTLEMENT_ORDER:${data.settlement_id}:${data.settlement_no} -->`
+
+                setMessages(prev => [...prev, {
+                  type: 'system',
+                  content: settlementMessage,
+                  settlementOrderId: data.settlement_id,
+                  settlementOrderNo: data.settlement_no
+                }])
+                
+                // 保存到聊天历史
+                if (currentSessionId) {
+                  fetch(`${API_BASE_URL}/api/chat-logs/message`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      session_id: currentSessionId,
+                      message_type: 'assistant',
+                      content: settlementMessage,
+                      user_role: userRole
+                    })
+                  }).catch(err => console.error('保存结算单消息失败:', err))
+                }
+                
+                // 切换回聊天页面
+                setCurrentPage('chat')
+              }}
+            />
           </div>
         )}
 
@@ -3106,8 +3189,8 @@ function App() {
         )}
       </div>
 
-      {/* 快捷开单弹窗 - 仅柜台和结算专员可用 */}
-      {(userRole === 'counter' || userRole === 'settlement') && (
+      {/* 快捷开单弹窗 - 仅柜台可用（结算专员不需要） */}
+      {userRole === 'counter' && (
         <QuickOrderModal
           isOpen={showQuickOrderModal}
           onClose={() => setShowQuickOrderModal(false)}
