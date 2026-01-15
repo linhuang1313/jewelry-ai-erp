@@ -84,13 +84,24 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [inventoryErrors, setInventoryErrors] = useState<InventoryError[]>([]);
 
-  // 获取库存商品列表
+  // 获取库存商品列表（展厅库存）
   const fetchInventory = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/inventory/overview?user_role=counter`);
-      const data = await response.json();
-      if (data.success && data.location_inventory) {
-        setInventoryItems(data.location_inventory);
+      // 先获取展厅位置ID
+      const locResponse = await fetch(`${API_BASE_URL}/api/warehouse/locations`);
+      const locData = await locResponse.json();
+      const showroomLocation = locData.find((loc: any) => loc.code === 'showroom');
+      
+      if (showroomLocation) {
+        // 获取展厅库存
+        const invResponse = await fetch(`${API_BASE_URL}/api/warehouse/inventory?location_id=${showroomLocation.id}`);
+        const invData = await invResponse.json();
+        // 转换为需要的格式
+        const items = invData.map((item: any) => ({
+          product_name: item.product_name,
+          total_weight: item.weight
+        }));
+        setInventoryItems(items);
       }
     } catch (error) {
       console.error('获取库存列表失败', error);
@@ -442,23 +453,28 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
             </div>
 
             {/* 商品列表 */}
+            {/* 商品选择列表 - 使用 datalist 实现可选可输入 */}
+            <datalist id="product-list">
+              {inventoryItems.map((inv) => (
+                <option key={inv.product_name} value={inv.product_name}>
+                  {inv.product_name} ({inv.total_weight.toFixed(1)}克)
+                </option>
+              ))}
+            </datalist>
+
             <div className="space-y-2">
               {items.map((item, index) => (
                 <div key={item.id} className="flex items-center space-x-2 bg-gray-50 p-3 rounded-xl">
                   <span className="text-xs text-gray-400 w-6">{index + 1}.</span>
-                  <select
+                  <input
+                    type="text"
+                    list="product-list"
                     value={item.product_name}
                     onChange={(e) => updateItem(item.id, 'product_name', e.target.value)}
+                    placeholder="选择或输入商品名..."
                     className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none 
                                focus:ring-2 focus:ring-emerald-500 text-sm bg-white"
-                  >
-                    <option value="">选择商品...</option>
-                    {inventoryItems.map((inv) => (
-                      <option key={inv.product_name} value={inv.product_name}>
-                        {inv.product_name} ({inv.total_weight.toFixed(1)}克)
-                      </option>
-                    ))}
-                  </select>
+                  />
                   <div className="flex items-center">
                     <input
                       type="number"
