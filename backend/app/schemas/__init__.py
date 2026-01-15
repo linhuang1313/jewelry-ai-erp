@@ -232,6 +232,8 @@ class SalesDetailItem(BaseModel):
     product_name: str
     weight: float  # 克重
     labor_cost: float  # 工费（元/克）
+    piece_count: Optional[int] = None  # 件数（可选）
+    piece_labor_cost: Optional[float] = None  # 件工费（元/件，可选）
 
 
 class SalesOrderCreate(BaseModel):
@@ -252,6 +254,8 @@ class SalesDetailResponse(BaseModel):
     product_name: str
     weight: float
     labor_cost: float
+    piece_count: Optional[int] = None  # 件数（可选）
+    piece_labor_cost: Optional[float] = None  # 件工费（元/件，可选）
     total_labor_cost: float
 
 

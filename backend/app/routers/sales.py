@@ -143,7 +143,13 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
                 customer_id = customer.id
         
         # 计算总工费和总克重
-        total_labor_cost = sum(item.labor_cost * item.weight for item in order_data.items)
+        # 总工费 = (克重 × 克工费) + (件数 × 件工费)
+        def calc_item_total(item):
+            gram_cost = item.labor_cost * item.weight
+            piece_cost = (item.piece_count or 0) * (item.piece_labor_cost or 0)
+            return gram_cost + piece_cost
+        
+        total_labor_cost = sum(calc_item_total(item) for item in order_data.items)
         total_weight = sum(item.weight for item in order_data.items)
         
         # 生成销售单号（使用中国时间）
@@ -168,12 +174,19 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
         # 创建销售明细
         details = []
         for item in order_data.items:
+            # 计算单项总工费：(克重 × 克工费) + (件数 × 件工费)
+            gram_cost = item.labor_cost * item.weight
+            piece_cost = (item.piece_count or 0) * (item.piece_labor_cost or 0)
+            item_total_cost = gram_cost + piece_cost
+            
             detail = SalesDetail(
                 order_id=sales_order.id,
                 product_name=item.product_name,
                 weight=item.weight,
                 labor_cost=item.labor_cost,
-                total_labor_cost=item.labor_cost * item.weight
+                piece_count=item.piece_count,
+                piece_labor_cost=item.piece_labor_cost,
+                total_labor_cost=item_total_cost
             )
             db.add(detail)
             details.append(detail)

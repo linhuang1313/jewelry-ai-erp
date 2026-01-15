@@ -22,6 +22,8 @@ interface OrderItem {
   product_name: string;
   weight: string;
   labor_cost: string;
+  piece_count: string;
+  piece_labor_cost: string;
 }
 
 interface InventoryItem {
@@ -42,6 +44,8 @@ interface OrderResultItem {
   product_name: string;
   weight: number;
   labor_cost: number;
+  piece_count?: number;
+  piece_labor_cost?: number;
 }
 
 interface OrderResult {
@@ -83,7 +87,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   const [selectedSalesperson, setSelectedSalesperson] = useState('');
   const [suggestedSalesperson, setSuggestedSalesperson] = useState('');
   const [items, setItems] = useState<OrderItem[]>([
-    { id: '1', product_name: '', weight: '', labor_cost: '' }
+    { id: '1', product_name: '', weight: '', labor_cost: '', piece_count: '', piece_labor_cost: '' }
   ]);
   const [remark, setRemark] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -176,7 +180,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
       setCustomerSearch('');
       setSelectedSalesperson('');
       setSuggestedSalesperson('');
-      setItems([{ id: '1', product_name: '', weight: '', labor_cost: '' }]);
+      setItems([{ id: '1', product_name: '', weight: '', labor_cost: '', piece_count: '', piece_labor_cost: '' }]);
       setRemark('');
       setInventoryErrors([]);
     }
@@ -208,7 +212,9 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
       id: Date.now().toString(), 
       product_name: '', 
       weight: '', 
-      labor_cost: '' 
+      labor_cost: '',
+      piece_count: '',
+      piece_labor_cost: ''
     }]);
   };
 
@@ -237,7 +243,9 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
         id: Date.now().toString(),
         product_name: template.name,
         weight: '',
-        labor_cost: template.labor_cost
+        labor_cost: template.labor_cost,
+        piece_count: '',
+        piece_labor_cost: ''
       }]);
     }
   };
@@ -274,7 +282,9 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
         .map(item => ({
           product_name: item.product_name.trim(),
           weight: parseFloat(item.weight),
-          labor_cost: parseFloat(item.labor_cost)
+          labor_cost: parseFloat(item.labor_cost),
+          piece_count: item.piece_count ? parseInt(item.piece_count) : null,
+          piece_labor_cost: item.piece_labor_cost ? parseFloat(item.piece_labor_cost) : null
         }));
 
       const response = await fetch(`${API_BASE_URL}/api/sales/orders`, {
@@ -294,18 +304,27 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
         toast.success(`销售单创建成功！单号：${data.order?.order_no || ''}`);
         
         // 调用成功回调，传递完整销售单详情（包含 order_id 和商品明细）
+        // 计算总工费：(克重 × 克工费) + (件数 × 件工费)
+        const calcTotalCost = (item: typeof validItems[0]) => {
+          const gramCost = item.weight * item.labor_cost;
+          const pieceCost = (item.piece_count || 0) * (item.piece_labor_cost || 0);
+          return gramCost + pieceCost;
+        };
+        
         onSuccess?.({
           order_id: data.order?.id,
           order_no: data.order?.order_no || '',
           customer_name: selectedCustomer?.name || customerSearch.trim(),
           salesperson: selectedSalesperson,
           total_weight: validItems.reduce((sum, item) => sum + item.weight, 0),
-          total_labor_cost: validItems.reduce((sum, item) => sum + item.weight * item.labor_cost, 0),
+          total_labor_cost: validItems.reduce((sum, item) => sum + calcTotalCost(item), 0),
           items_count: validItems.length,
           items: validItems.map(item => ({
             product_name: item.product_name,
             weight: item.weight,
-            labor_cost: item.labor_cost
+            labor_cost: item.labor_cost,
+            piece_count: item.piece_count || undefined,
+            piece_labor_cost: item.piece_labor_cost || undefined
           }))
         });
         
@@ -478,7 +497,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
 
             <div className="space-y-2">
               {items.map((item, index) => (
-                <div key={item.id} className="flex items-center space-x-2 bg-gray-50 p-3 rounded-xl">
+                <div key={item.id} className="flex items-center space-x-2 bg-gray-50 p-3 rounded-xl flex-wrap">
                   <span className="text-xs text-gray-400 w-6">{index + 1}.</span>
                   <input
                     type="text"
@@ -486,7 +505,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                     value={item.product_name}
                     onChange={(e) => updateItem(item.id, 'product_name', e.target.value)}
                     placeholder="选择或输入商品名..."
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none 
+                    className="flex-1 min-w-[120px] px-3 py-2 border border-gray-200 rounded-lg focus:outline-none 
                                focus:ring-2 focus:ring-emerald-500 text-sm bg-white"
                   />
                   <div className="flex items-center">
@@ -495,7 +514,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                       value={item.weight}
                       onChange={(e) => updateItem(item.id, 'weight', e.target.value)}
                       placeholder="克重"
-                      className="w-20 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none 
+                      className="w-16 px-2 py-2 border border-gray-200 rounded-lg focus:outline-none 
                                  focus:ring-2 focus:ring-emerald-500 text-sm text-center"
                     />
                     <span className="text-xs text-gray-400 ml-1">克</span>
@@ -506,7 +525,29 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                       value={item.labor_cost}
                       onChange={(e) => updateItem(item.id, 'labor_cost', e.target.value)}
                       placeholder="工费"
-                      className="w-20 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none 
+                      className="w-16 px-2 py-2 border border-gray-200 rounded-lg focus:outline-none 
+                                 focus:ring-2 focus:ring-emerald-500 text-sm text-center"
+                    />
+                    <span className="text-xs text-gray-400 ml-1">元</span>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="number"
+                      value={item.piece_count}
+                      onChange={(e) => updateItem(item.id, 'piece_count', e.target.value)}
+                      placeholder="件数"
+                      className="w-14 px-2 py-2 border border-gray-200 rounded-lg focus:outline-none 
+                                 focus:ring-2 focus:ring-emerald-500 text-sm text-center"
+                    />
+                    <span className="text-xs text-gray-400 ml-1">件</span>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="number"
+                      value={item.piece_labor_cost}
+                      onChange={(e) => updateItem(item.id, 'piece_labor_cost', e.target.value)}
+                      placeholder="件工费"
+                      className="w-16 px-2 py-2 border border-gray-200 rounded-lg focus:outline-none 
                                  focus:ring-2 focus:ring-emerald-500 text-sm text-center"
                     />
                     <span className="text-xs text-gray-400 ml-1">元</span>

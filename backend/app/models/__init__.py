@@ -149,7 +149,9 @@ class SalesDetail(Base):
     product_name = Column(String(200), nullable=False)  # 商品名称
     weight = Column(Float, nullable=False)  # 克重
     labor_cost = Column(Float, nullable=False)  # 工费（元/克）
-    total_labor_cost = Column(Float, nullable=False)  # 总工费 = 工费 * 克重
+    piece_count = Column(Integer, nullable=True)  # 件数（可选）
+    piece_labor_cost = Column(Float, nullable=True)  # 件工费（元/件，可选）
+    total_labor_cost = Column(Float, nullable=False)  # 总工费 = (克重 * 克工费) + (件数 * 件工费)
     inventory_id = Column(Integer, ForeignKey("inventory.id"), nullable=True)  # 关联库存（可选）
 
 
