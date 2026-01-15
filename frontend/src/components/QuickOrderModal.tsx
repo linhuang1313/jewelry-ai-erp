@@ -24,6 +24,20 @@ interface OrderItem {
   labor_cost: string;
 }
 
+interface InventoryItem {
+  product_name: string;
+  total_weight: number;
+}
+
+interface InventoryError {
+  product_name: string;
+  error: string;
+  required_weight: number;
+  available_weight: number;
+  total_weight?: number;
+  reserved_weight?: number;
+}
+
 interface OrderResult {
   order_no: string;
   customer_name: string;
@@ -67,6 +81,21 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [inventoryErrors, setInventoryErrors] = useState<InventoryError[]>([]);
+
+  // 获取库存商品列表
+  const fetchInventory = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/inventory/overview?user_role=counter`);
+      const data = await response.json();
+      if (data.success && data.location_inventory) {
+        setInventoryItems(data.location_inventory);
+      }
+    } catch (error) {
+      console.error('获取库存列表失败', error);
+    }
+  };
 
   // 获取客户列表
   const fetchCustomers = async (search?: string) => {
@@ -122,6 +151,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
     if (isOpen) {
       fetchCustomers();
       fetchSalespersons();
+      fetchInventory();
       // 重置表单
       setSelectedCustomer(null);
       setCustomerSearch('');
@@ -129,6 +159,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
       setSuggestedSalesperson('');
       setItems([{ id: '1', product_name: '', weight: '', labor_cost: '' }]);
       setRemark('');
+      setInventoryErrors([]);
     }
   }, [isOpen]);
 
@@ -255,7 +286,17 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
         
         onClose();
       } else {
-        toast.error(data.message || '创建失败');
+        // 检查是否有库存错误详情
+        if (data.inventory_errors && data.inventory_errors.length > 0) {
+          setInventoryErrors(data.inventory_errors);
+          // 构建详细错误信息
+          const errorDetails = data.inventory_errors.map((err: InventoryError) => 
+            `${err.product_name}: ${err.error}（需要${err.required_weight}克，可用${err.available_weight}克）`
+          ).join('\n');
+          toast.error(`库存检查失败:\n${errorDetails}`, { duration: 5000 });
+        } else {
+          toast.error(data.message || '创建失败');
+        }
       }
     } catch (error) {
       toast.error('网络错误，请重试');
@@ -405,14 +446,19 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
               {items.map((item, index) => (
                 <div key={item.id} className="flex items-center space-x-2 bg-gray-50 p-3 rounded-xl">
                   <span className="text-xs text-gray-400 w-6">{index + 1}.</span>
-                  <input
-                    type="text"
+                  <select
                     value={item.product_name}
                     onChange={(e) => updateItem(item.id, 'product_name', e.target.value)}
-                    placeholder="商品名"
                     className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none 
-                               focus:ring-2 focus:ring-emerald-500 text-sm"
-                  />
+                               focus:ring-2 focus:ring-emerald-500 text-sm bg-white"
+                  >
+                    <option value="">选择商品...</option>
+                    {inventoryItems.map((inv) => (
+                      <option key={inv.product_name} value={inv.product_name}>
+                        {inv.product_name} ({inv.total_weight.toFixed(1)}克)
+                      </option>
+                    ))}
+                  </select>
                   <div className="flex items-center">
                     <input
                       type="number"
@@ -470,6 +516,30 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                          focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
           </div>
+
+          {/* 库存错误提示 */}
+          {inventoryErrors.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+              <div className="flex items-center space-x-2 text-red-700 font-medium mb-2">
+                <AlertCircle className="w-5 h-5" />
+                <span>库存检查失败</span>
+              </div>
+              <div className="space-y-2">
+                {inventoryErrors.map((err, idx) => (
+                  <div key={idx} className="text-sm text-red-600 bg-white rounded-lg p-3 border border-red-100">
+                    <div className="font-medium">{err.product_name}</div>
+                    <div className="text-red-500 mt-1">
+                      {err.error}：需要 <span className="font-semibold">{err.required_weight}</span> 克，
+                      可用 <span className="font-semibold">{err.available_weight}</span> 克
+                      {err.reserved_weight !== undefined && err.reserved_weight > 0 && (
+                        <span className="text-gray-500">（已预留 {err.reserved_weight} 克）</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 底部按钮 */}
