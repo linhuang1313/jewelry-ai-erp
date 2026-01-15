@@ -334,6 +334,55 @@ class AIAnalyzer:
                     text += f"   ... 还有{len(order['details']) - 3}个商品\n"
                 text += "\n"
         
+        # 客户账务数据（聊天查询用）
+        if data.get("customer_debt"):
+            debt_data = data["customer_debt"]
+            if debt_data.get("success"):
+                customer = debt_data.get("customer", {})
+                text += f"\n=== 客户账务详情 ===\n"
+                text += f"客户：{customer.get('name', 'N/A')}（{customer.get('customer_no', 'N/A')}）\n"
+                text += f"电话：{customer.get('phone', 'N/A')}\n"
+                
+                # 查询时间范围
+                period = debt_data.get("query_period", {})
+                if period.get("start") or period.get("end"):
+                    text += f"查询时间范围：{period.get('start', '起始')} 至 {period.get('end', '至今')}\n"
+                
+                text += "\n--- 账务汇总 ---\n"
+                
+                # 现金欠款
+                if "cash_debt" in debt_data:
+                    text += f"💰 现金欠款：¥{debt_data['cash_debt']:.2f}\n"
+                    cash_txs = debt_data.get("cash_transactions", [])
+                    if cash_txs:
+                        text += f"   最近应收账款记录：\n"
+                        for tx in cash_txs[:5]:
+                            text += f"   • {tx.get('created_at', 'N/A')[:10]}：应收¥{tx.get('total_amount', 0):.2f}，已收¥{tx.get('received_amount', 0):.2f}，未收¥{tx.get('unpaid_amount', 0):.2f}\n"
+                
+                # 金料欠款
+                if "gold_debt" in debt_data:
+                    text += f"⚖️ 金料欠款：{debt_data['gold_debt']:.2f}克\n"
+                    gold_txs = debt_data.get("gold_transactions", [])
+                    if gold_txs:
+                        text += f"   最近金料交易记录：\n"
+                        for tx in gold_txs[:5]:
+                            text += f"   • {tx.get('created_at', 'N/A')[:10]}：{tx.get('type_label', tx.get('type', 'N/A'))}，金料{tx.get('gold_weight', 0):.2f}克，欠款变化{tx.get('gold_due_before', 0):.2f}→{tx.get('gold_due_after', 0):.2f}克\n"
+                
+                # 存料余额
+                if "gold_deposit" in debt_data:
+                    text += f"📦 存料余额：{debt_data['gold_deposit']:.2f}克\n"
+                    deposit_txs = debt_data.get("deposit_transactions", [])
+                    if deposit_txs:
+                        text += f"   最近存料记录：\n"
+                        for tx in deposit_txs[:5]:
+                            text += f"   • {tx.get('created_at', 'N/A')[:10]}：{tx.get('type_label', tx.get('type', 'N/A'))} {tx.get('amount', 0):.2f}克，余额{tx.get('balance_before', 0):.2f}→{tx.get('balance_after', 0):.2f}克\n"
+                
+                text += "\n"
+            else:
+                text += f"\n=== 客户账务查询 ===\n"
+                text += f"查询失败：{debt_data.get('message', '未知错误')}\n"
+                text += f"搜索的客户名称：{debt_data.get('customer_name', 'N/A')}\n\n"
+        
         return text
     
     def analyze(self, user_message: str, intent: str, data: Dict[str, Any]) -> str:
@@ -400,6 +449,38 @@ class AIAnalyzer:
 4. **友好提示**：如果销售单不存在，友好地告知用户
 
 请用自然、专业的语言回答，直接展示销售单的详细信息。注意：销售单号以XS开头，不要与入库单（RK开头）混淆。"""
+        elif intent == "查询客户账务":
+            # 查询客户账务的提示词
+            customer_debt = data.get("customer_debt", {})
+            customer_name = customer_debt.get("customer", {}).get("name", "未知客户")
+            
+            prompt = f"""你是一个专业的珠宝ERP系统AI分析专家。用户要查询客户的账务情况（欠款、欠料、存料等）。
+
+**用户问题：** {user_message}
+**用户意图：** {intent}
+**查询客户：** {customer_name}
+
+以下是系统数据库中查询到的客户账务数据：
+
+{data_text}
+
+请基于这些数据，用清晰友好的方式回答用户关于客户账务的问题。要求：
+
+1. **账务汇总**：首先展示汇总信息
+   - 现金欠款（如果有）：¥金额
+   - 金料欠款（如果有）：重量克
+   - 存料余额（如果有）：重量克
+
+2. **交易明细**：如果有交易记录，按时间顺序列出最近的几条
+   - 日期、类型、金额/重量变化
+
+3. **时间范围**：如果用户指定了时间范围，明确说明查询的时间段
+
+4. **友好提示**：
+   - 如果客户没有欠款，可以说"账务良好，无欠款"
+   - 如果找不到客户，友好提示并建议检查客户名称
+
+请用自然、专业且友好的语言回答，使用表情符号增强可读性：💰现金、⚖️金料、📦存料。"""
         else:
             # 主动检测是否需要详细分析（不依赖AI判断）
             analysis_keywords = ['分析', '详细', '报告', '建议', '对比', '趋势', '为什么', '怎么样', '评估', '深度', '全面']
@@ -629,6 +710,39 @@ class AIAnalyzer:
 
 请用自然、专业的语言回答，直接展示销售单的详细信息。注意：销售单号以XS开头，不要与入库单（RK开头）混淆。"""
             system_prompt = "你是珠宝ERP系统AI助手，请专业、准确地回答用户问题。"
+        elif intent == "查询客户账务":
+            # 查询客户账务的提示词（流式版本）
+            customer_debt = data.get("customer_debt", {})
+            customer_name = customer_debt.get("customer", {}).get("name", "未知客户")
+            
+            prompt = f"""你是一个专业的珠宝ERP系统AI分析专家。用户要查询客户的账务情况（欠款、欠料、存料等）。
+
+**用户问题：** {user_message}
+**用户意图：** {intent}
+**查询客户：** {customer_name}
+
+以下是系统数据库中查询到的客户账务数据：
+
+{data_text}
+
+请基于这些数据，用清晰友好的方式回答用户关于客户账务的问题。要求：
+
+1. **账务汇总**：首先展示汇总信息
+   - 现金欠款（如果有）：¥金额
+   - 金料欠款（如果有）：重量克
+   - 存料余额（如果有）：重量克
+
+2. **交易明细**：如果有交易记录，按时间顺序列出最近的几条
+   - 日期、类型、金额/重量变化
+
+3. **时间范围**：如果用户指定了时间范围，明确说明查询的时间段
+
+4. **友好提示**：
+   - 如果客户没有欠款，可以说"账务良好，无欠款"
+   - 如果找不到客户，友好提示并建议检查客户名称
+
+请用自然、专业且友好的语言回答，使用表情符号增强可读性：💰现金、⚖️金料、📦存料。"""
+            system_prompt = "你是珠宝ERP系统AI助手，专门帮助用户查询客户账务信息。请以友好、清晰的方式回答。"
         elif needs_analysis:
             # 用户明确要求分析，强制给出详细回答
             prompt = f"""**用户问题：** {user_message}

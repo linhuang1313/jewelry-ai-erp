@@ -58,7 +58,8 @@ export const ROLE_PERMISSIONS = {
     canTransfer: false,
     canReceiveTransfer: false,
     canManageCustomers: false,
-    canViewCustomers: false,        // 不能查看客户
+    canViewCustomers: true,         // 可以查看客户（查询欠款）
+    canQueryCustomerSales: true,    // 可以查询客户销售记录
     canManageSuppliers: false,
     canManageSalespersons: false,
     canViewAnalytics: false,
@@ -79,7 +80,7 @@ export const ROLE_PERMISSIONS = {
     canCreateTransfer: true,        // 可以创建转料单
     canConfirmTransfer: false,      // 不能确认转料（料部职责）
     
-    pages: ['chat', 'settlement', 'gold-material'],
+    pages: ['chat', 'settlement', 'gold-material', 'customer'],
   },
   
   // 业务员 - 只能查询客户相关信息

@@ -85,6 +85,11 @@ class AIResponse(BaseModel):
     transfer_weight: Optional[float] = None  # 要转移的重量（克）
     from_location: Optional[str] = None  # 发出位置（默认：商品部仓库）
     to_location: Optional[str] = None  # 目标位置（如：展厅）
+    # 客户账务查询相关字段
+    debt_customer_name: Optional[str] = None  # 要查询账务的客户名称
+    debt_query_type: Optional[str] = None  # 查询类型：all/cash_debt/gold_debt/gold_deposit
+    date_start: Optional[str] = None  # 开始日期（YYYY-MM-DD）
+    date_end: Optional[str] = None  # 结束日期（YYYY-MM-DD）
 
 
 # ============= 入库相关 Schema =============

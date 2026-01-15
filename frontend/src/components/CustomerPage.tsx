@@ -4,7 +4,8 @@ import { hasPermission } from '../config/permissions';
 import {
   Users, Plus, Trash2, Edit2, Check, X, RefreshCw, User,
   MapPin, Search, UserPlus, Eye, ShoppingBag, RotateCcw, 
-  Wallet, FileText, ChevronRight, ArrowLeft, Upload
+  Wallet, FileText, ChevronRight, ArrowLeft, Upload, 
+  CreditCard, TrendingDown, ArrowUpDown, Clock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -68,6 +69,40 @@ interface CustomerDetail {
   transactions: TransactionRecord[];
 }
 
+// 欠款汇总数据类型
+interface DebtSummaryItem {
+  customer_id: number;
+  customer_no: string;
+  customer_name: string;
+  phone: string | null;
+  cash_debt: number;
+  gold_debt: number;
+  gold_deposit: number;
+  last_transaction_date: string | null;
+}
+
+interface DebtSummary {
+  total_cash_debt: number;
+  total_gold_debt: number;
+  customer_count: number;
+}
+
+// 欠款历史交易记录
+interface DebtTransaction {
+  id: string;
+  type: string;
+  type_label: string;
+  order_no: string;
+  description: string;
+  cash_amount: number;
+  gold_amount: number;
+  gold_debt_before?: number;
+  gold_debt_after?: number;
+  status: string;
+  created_at: string | null;
+  operator: string | null;
+}
+
 interface CustomerPageProps {
   userRole?: string;
 }
@@ -79,6 +114,9 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
   const canAdd = hasPermission(userRole, 'canManageCustomers'); // 可以添加客户
   const canView = hasPermission(userRole, 'canViewCustomers') || hasPermission(userRole, 'canManageCustomers'); // 可以查看客户（查看权限或管理权限）
   const canViewDetail = hasPermission(userRole, 'canQueryCustomerSales') || hasPermission(userRole, 'canViewCustomers'); // 可以查看客户详情
+  
+  // 主页面 Tab 切换
+  const [mainTab, setMainTab] = useState<'list' | 'debt'>('list');
   
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,6 +136,20 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
   const [customerDetail, setCustomerDetail] = useState<CustomerDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailTab, setDetailTab] = useState<'sales' | 'returns' | 'balance' | 'transactions'>('sales');
+  
+  // 欠款查询相关状态
+  const [debtList, setDebtList] = useState<DebtSummaryItem[]>([]);
+  const [debtSummary, setDebtSummary] = useState<DebtSummary>({ total_cash_debt: 0, total_gold_debt: 0, customer_count: 0 });
+  const [debtLoading, setDebtLoading] = useState(false);
+  const [debtSearch, setDebtSearch] = useState('');
+  const [debtSortBy, setDebtSortBy] = useState<'cash_debt' | 'gold_debt' | 'name'>('cash_debt');
+  const [debtSortOrder, setDebtSortOrder] = useState<'asc' | 'desc'>('desc');
+  
+  // 欠款历史弹窗
+  const [selectedDebtCustomer, setSelectedDebtCustomer] = useState<DebtSummaryItem | null>(null);
+  const [debtHistory, setDebtHistory] = useState<DebtTransaction[]>([]);
+  const [debtHistoryLoading, setDebtHistoryLoading] = useState(false);
+  const [customerCurrentBalance, setCustomerCurrentBalance] = useState<CustomerBalance | null>(null);
 
   // 新客户表单
   const [newCustomer, setNewCustomer] = useState({
@@ -289,6 +341,85 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
     setSelectedCustomer(null);
     setCustomerDetail(null);
   };
+
+  // ============= 欠款查询相关函数 =============
+  
+  // 获取欠款汇总列表
+  const fetchDebtSummary = async () => {
+    setDebtLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (debtSearch) params.append('search', debtSearch);
+      params.append('sort_by', debtSortBy);
+      params.append('sort_order', debtSortOrder);
+      params.append('hide_zero', 'true');
+      params.append('user_role', userRole);
+      
+      const response = await fetch(`${API_BASE_URL}/api/customers/debt-summary?${params.toString()}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setDebtList(data.items || []);
+        setDebtSummary(data.summary || { total_cash_debt: 0, total_gold_debt: 0, customer_count: 0 });
+      } else {
+        toast.error(data.message || '获取欠款列表失败');
+      }
+    } catch (error) {
+      toast.error('网络错误，请检查后端服务');
+    } finally {
+      setDebtLoading(false);
+    }
+  };
+  
+  // 获取客户欠款历史
+  const fetchDebtHistory = async (customer: DebtSummaryItem) => {
+    setSelectedDebtCustomer(customer);
+    setDebtHistoryLoading(true);
+    
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/customers/${customer.customer_id}/debt-history?user_role=${encodeURIComponent(userRole)}`
+      );
+      const data = await response.json();
+      
+      if (data.success) {
+        setDebtHistory(data.transactions || []);
+        setCustomerCurrentBalance(data.current_balance || null);
+      } else {
+        toast.error(data.message || '获取欠款历史失败');
+        setDebtHistory([]);
+      }
+    } catch (error) {
+      toast.error('网络错误');
+      setDebtHistory([]);
+    } finally {
+      setDebtHistoryLoading(false);
+    }
+  };
+  
+  // 关闭欠款历史弹窗
+  const closeDebtHistory = () => {
+    setSelectedDebtCustomer(null);
+    setDebtHistory([]);
+    setCustomerCurrentBalance(null);
+  };
+  
+  // 切换排序
+  const toggleDebtSort = (field: 'cash_debt' | 'gold_debt' | 'name') => {
+    if (debtSortBy === field) {
+      setDebtSortOrder(debtSortOrder === 'desc' ? 'asc' : 'desc');
+    } else {
+      setDebtSortBy(field);
+      setDebtSortOrder('desc');
+    }
+  };
+  
+  // 切换到欠款查询 Tab 时自动加载数据
+  useEffect(() => {
+    if (mainTab === 'debt') {
+      fetchDebtSummary();
+    }
+  }, [mainTab, debtSortBy, debtSortOrder]);
 
   // 批量导入客户
   const handleBatchImport = async () => {
@@ -557,12 +688,12 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
             <Users className="w-6 h-6 text-blue-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">客户名单管理</h1>
-            <p className="text-sm text-gray-500">管理系统中的客户信息</p>
+            <h1 className="text-2xl font-bold text-gray-900">客户管理</h1>
+            <p className="text-sm text-gray-500">管理客户信息和欠款查询</p>
           </div>
         </div>
         <div className="flex items-center space-x-3">
-          {canAdd && (
+          {mainTab === 'list' && canAdd && (
             <>
               <button
                 onClick={() => setShowImportModal(true)}
@@ -583,15 +714,50 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
             </>
           )}
           <button
-            onClick={fetchCustomers}
+            onClick={mainTab === 'list' ? fetchCustomers : fetchDebtSummary}
             className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl
                        hover:bg-gray-200 transition-all"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${(loading || debtLoading) ? 'animate-spin' : ''}`} />
             <span>刷新</span>
           </button>
         </div>
       </div>
+      
+      {/* 主 Tab 切换 */}
+      <div className="flex space-x-2 mb-6">
+        <button
+          onClick={() => setMainTab('list')}
+          className={`flex items-center space-x-2 px-5 py-3 rounded-xl font-medium transition-all ${
+            mainTab === 'list'
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>客户列表</span>
+        </button>
+        <button
+          onClick={() => setMainTab('debt')}
+          className={`flex items-center space-x-2 px-5 py-3 rounded-xl font-medium transition-all ${
+            mainTab === 'debt'
+              ? 'bg-orange-600 text-white shadow-md'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          <CreditCard className="w-4 h-4" />
+          <span>欠款查询</span>
+          {debtSummary.customer_count > 0 && mainTab !== 'debt' && (
+            <span className="ml-1 px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
+              {debtSummary.customer_count}
+            </span>
+          )}
+        </button>
+      </div>
+      
+      {/* ============= 客户列表 Tab ============= */}
+      {mainTab === 'list' && (
+        <>
 
       {/* 搜索栏 */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 mb-6">
@@ -868,6 +1034,343 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
 
       {/* 客户详情弹窗 */}
       {renderDetailModal()}
+      </>
+      )}
+      
+      {/* ============= 欠款查询 Tab ============= */}
+      {mainTab === 'debt' && (
+        <>
+          {/* 欠款汇总统计卡片 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-2xl p-5 border border-red-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-red-600 font-medium">现金欠款总计</p>
+                  <p className="text-2xl font-bold text-red-700 mt-1">
+                    ¥{debtSummary.total_cash_debt.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="p-3 bg-red-200/50 rounded-xl">
+                  <Wallet className="w-6 h-6 text-red-600" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl p-5 border border-orange-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-orange-600 font-medium">金料欠款总计</p>
+                  <p className="text-2xl font-bold text-orange-700 mt-1">
+                    {debtSummary.total_gold_debt.toFixed(2)} 克
+                  </p>
+                </div>
+                <div className="p-3 bg-orange-200/50 rounded-xl">
+                  <TrendingDown className="w-6 h-6 text-orange-600" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-5 border border-blue-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-blue-600 font-medium">欠款客户数</p>
+                  <p className="text-2xl font-bold text-blue-700 mt-1">
+                    {debtSummary.customer_count} 人
+                  </p>
+                </div>
+                <div className="p-3 bg-blue-200/50 rounded-xl">
+                  <Users className="w-6 h-6 text-blue-600" />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* 搜索和排序 */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 mb-6">
+            <div className="flex items-center space-x-4">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={debtSearch}
+                  onChange={(e) => setDebtSearch(e.target.value)}
+                  placeholder="搜索客户名称..."
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
+                             focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  onKeyPress={(e) => e.key === 'Enter' && fetchDebtSummary()}
+                />
+              </div>
+              <button
+                onClick={fetchDebtSummary}
+                className="px-6 py-2.5 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-all"
+              >
+                搜索
+              </button>
+              {debtSearch && (
+                <button
+                  onClick={() => { setDebtSearch(''); fetchDebtSummary(); }}
+                  className="px-4 py-2.5 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-all"
+                >
+                  清除
+                </button>
+              )}
+            </div>
+          </div>
+          
+          {/* 欠款客户列表 */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <h2 className="text-lg font-semibold text-gray-800">
+                欠款客户列表 ({debtList.length}人)
+              </h2>
+            </div>
+            
+            {debtLoading ? (
+              <div className="p-12 text-center text-gray-500">
+                <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin text-orange-500" />
+                <p>加载中...</p>
+              </div>
+            ) : debtList.length === 0 ? (
+              <div className="p-12 text-center text-gray-500">
+                <CreditCard className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                <p>暂无欠款客户</p>
+                <p className="text-sm mt-2">所有客户账款已结清 🎉</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        <button
+                          onClick={() => toggleDebtSort('name')}
+                          className="flex items-center space-x-1 hover:text-gray-700"
+                        >
+                          <span>客户名称</span>
+                          {debtSortBy === 'name' && (
+                            <ArrowUpDown className="w-3 h-3" />
+                          )}
+                        </button>
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">电话</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        <button
+                          onClick={() => toggleDebtSort('cash_debt')}
+                          className="flex items-center space-x-1 hover:text-gray-700"
+                        >
+                          <span>现金欠款</span>
+                          {debtSortBy === 'cash_debt' && (
+                            <ArrowUpDown className="w-3 h-3" />
+                          )}
+                        </button>
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        <button
+                          onClick={() => toggleDebtSort('gold_debt')}
+                          className="flex items-center space-x-1 hover:text-gray-700"
+                        >
+                          <span>金料欠款</span>
+                          {debtSortBy === 'gold_debt' && (
+                            <ArrowUpDown className="w-3 h-3" />
+                          )}
+                        </button>
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">存料余额</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">最后交易</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {debtList.map((item) => (
+                      <tr key={item.customer_id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <span className="font-medium text-gray-900">{item.customer_name}</span>
+                          <span className="text-xs text-gray-400 ml-2">{item.customer_no}</span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {item.phone || '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          {item.cash_debt > 0 ? (
+                            <span className="font-semibold text-red-600">¥{item.cash_debt.toFixed(2)}</span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {item.gold_debt > 0 ? (
+                            <span className="font-semibold text-orange-600">{item.gold_debt.toFixed(2)}克</span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {item.gold_deposit > 0 ? (
+                            <span className="font-semibold text-green-600">{item.gold_deposit.toFixed(2)}克</span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {item.last_transaction_date || '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => fetchDebtHistory(item)}
+                            className="flex items-center space-x-1 px-3 py-1.5 bg-orange-100 text-orange-700 
+                                       rounded-lg hover:bg-orange-200 transition-colors text-sm"
+                          >
+                            <Eye className="w-4 h-4" />
+                            <span>查看明细</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          
+          {/* 提示信息 */}
+          <div className="mt-6 p-4 bg-orange-50 rounded-xl border border-orange-100">
+            <p className="text-sm text-orange-800">
+              💡 <strong>提示：</strong>
+              点击"查看明细"可查看客户的完整交易历史和欠款变化记录。点击表头可按该列排序。
+            </p>
+          </div>
+        </>
+      )}
+      
+      {/* ============= 欠款历史弹窗 ============= */}
+      {selectedDebtCustomer && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* 弹窗头部 */}
+            <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-red-50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={closeDebtHistory}
+                    className="p-2 hover:bg-white/50 rounded-lg transition-colors"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-gray-600" />
+                  </button>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">{selectedDebtCustomer.customer_name}</h2>
+                    <p className="text-sm text-gray-500">{selectedDebtCustomer.customer_no} · 欠款明细</p>
+                  </div>
+                </div>
+                <button
+                  onClick={closeDebtHistory}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+            </div>
+            
+            {/* 当前余额概览 */}
+            {customerCurrentBalance && (
+              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500 mb-1">现金欠款</p>
+                    <p className="text-lg font-bold text-red-600">
+                      ¥{customerCurrentBalance.cash_debt.toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500 mb-1">金料欠款</p>
+                    <p className="text-lg font-bold text-orange-600">
+                      {customerCurrentBalance.gold_debt.toFixed(2)}克
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500 mb-1">存料余额</p>
+                    <p className="text-lg font-bold text-green-600">
+                      {customerCurrentBalance.gold_deposit.toFixed(2)}克
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* 交易历史列表 */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {debtHistoryLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <RefreshCw className="w-8 h-8 animate-spin text-orange-500" />
+                  <span className="ml-3 text-gray-500">加载中...</span>
+                </div>
+              ) : debtHistory.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                  <p>暂无交易记录</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {debtHistory.map((tx) => (
+                    <div key={tx.id} className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className={`p-2 rounded-lg ${
+                            tx.type === 'sale' ? 'bg-green-100' :
+                            tx.type === 'settlement' ? 'bg-blue-100' :
+                            tx.type === 'payment' ? 'bg-purple-100' :
+                            tx.type === 'gold_deposit' ? 'bg-yellow-100' :
+                            'bg-gray-100'
+                          }`}>
+                            {tx.type === 'sale' && <ShoppingBag className="w-4 h-4 text-green-600" />}
+                            {tx.type === 'settlement' && <FileText className="w-4 h-4 text-blue-600" />}
+                            {tx.type === 'payment' && <Wallet className="w-4 h-4 text-purple-600" />}
+                            {tx.type === 'gold_deposit' && <TrendingDown className="w-4 h-4 text-yellow-600" />}
+                            {tx.type === 'transaction' && <Clock className="w-4 h-4 text-gray-600" />}
+                          </div>
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className={`px-2 py-0.5 text-xs rounded-full ${
+                                tx.type === 'sale' ? 'bg-green-100 text-green-700' :
+                                tx.type === 'settlement' ? 'bg-blue-100 text-blue-700' :
+                                tx.type === 'payment' ? 'bg-purple-100 text-purple-700' :
+                                tx.type === 'gold_deposit' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {tx.type_label}
+                              </span>
+                              <span className="text-xs text-gray-400">{tx.order_no}</span>
+                            </div>
+                            <p className="font-medium text-gray-900 mt-1">{tx.description}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {tx.created_at ? new Date(tx.created_at).toLocaleString() : '-'}
+                              {tx.operator && <span className="ml-2">· 操作人：{tx.operator}</span>}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          {tx.cash_amount !== 0 && (
+                            <p className={`font-semibold ${tx.cash_amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {tx.cash_amount > 0 ? '+' : ''}¥{tx.cash_amount.toFixed(2)}
+                            </p>
+                          )}
+                          {tx.gold_amount !== 0 && (
+                            <p className={`text-sm ${tx.gold_amount > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                              {tx.gold_amount > 0 ? '+' : ''}{tx.gold_amount.toFixed(2)}克
+                            </p>
+                          )}
+                          {tx.gold_debt_after !== undefined && (
+                            <p className="text-xs text-gray-400 mt-1">
+                              欠料余额：{tx.gold_debt_after.toFixed(2)}克
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 批量导入模态框 */}
       {showImportModal && (

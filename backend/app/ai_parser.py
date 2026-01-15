@@ -64,6 +64,7 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
 10. **销售管理**：创建/查询销售单
 11. **库存转移**：将商品从一个位置转移到另一个位置（如从仓库转到展厅）
 12. **退货操作**：用户要进行退货（退给供应商或退回商品部）
+13. **查询客户账务**：查询客户的欠款、欠料、存料等财务信息（如"张老板的欠款情况"、"1月份的欠料"）
 
 **关键词优先级识别（非常重要）**：
 - "退"、"退货"、"退给"、"退回"、"退库"、"我要退" → 优先识别为"退货"操作，而不是入库！
@@ -87,6 +88,7 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
   - "查询销售单"：用户要查询销售单信息，销售单号以XS开头（如"查询销售单"、"XS20260111162534"、"查询销售单XS20260111162534"、"最近的销售单"、"张三的销售单"等）
   - "创建转移单"：用户要将商品从一个位置转移到另一个位置（如"帮我转移到展厅"、"把XXX从仓库转到展厅"、"转移100克到展厅"等）
   - "退货"：用户要进行退货操作（如"退货给金源珠宝"、"退给供应商"、"10克古法戒指退给金源珠宝"、"退回商品部"、"我要退库"、"退库10克古法戒指给金源珠宝"等）
+  - "查询客户账务"：用户要查询客户的欠款、欠料、存料等财务信息（如"张老板的欠款情况"、"王总1月份的欠料"、"李老板1月1号到1月20号的账务"、"刘老板的存料余额"等）
   - "其他"：无法识别的意图
 
 **关于"退货"和"入库"的区分（极其重要）**：
@@ -130,6 +132,15 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
 - from_location: 发出位置（当action为"创建转移单"时可选，默认为"商品部仓库"）
 - to_location: 目标位置（当action为"创建转移单"时需要，如"展厅"）
 
+- debt_customer_name: 要查询账务的客户名称（当action为"查询客户账务"时必填，如"张老板"、"王总"等）
+- debt_query_type: 查询类型（当action为"查询客户账务"时可选，默认"all"）
+  - "all": 查询所有账务信息（欠款、欠料、存料）
+  - "cash_debt": 只查询现金欠款
+  - "gold_debt": 只查询金料欠款/欠料
+  - "gold_deposit": 只查询存料余额
+- date_start: 开始日期（当action为"查询客户账务"时可选，格式YYYY-MM-DD，如用户说"1月份"则为"2026-01-01"）
+- date_end: 结束日期（当action为"查询客户账务"时可选，格式YYYY-MM-DD，如用户说"1月份"则为"2026-01-31"）
+
 重要提示：
 1. **意图识别要灵活**：
    - "帮我入库"、"做个入库"、"入库"、"帮我做个入库" → action: "入库"
@@ -148,6 +159,7 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
    - "查询销售单"、"销售单列表"、"最近的销售单" → action: "查询销售单"
    - "转移到展厅"、"帮我转移到展厅"、"这个100克帮我转到展厅"、"把刚才的商品转到展厅"、"从仓库转到展厅" → action: "创建转移单"
    - "我要退库"、"退库"、"退给供应商"、"退货给金源珠宝"、"退库10克古法戒指给金源珠宝" → action: "退货"
+   - "张老板的欠款"、"王总欠了多少"、"李老板的存料"、"刘老板1月份欠料情况"、"客户欠款查询"、"查一下张三的账务" → action: "查询客户账务"
 
 2. **入库操作必填字段**（仅当action为"入库"时）：
    - product_name（商品名称）
@@ -640,6 +652,66 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
   "product_name": "古法手镯",
   "weight": 50,
   "to_location": "商品部仓库",
+  "products": null
+}}
+
+示例29（查询客户账务 - 基本查询）：
+用户输入："张老板的欠款情况"
+说明：用户要查询张老板的账务信息，识别客户名称
+{{
+  "action": "查询客户账务",
+  "debt_customer_name": "张老板",
+  "debt_query_type": "all",
+  "date_start": null,
+  "date_end": null,
+  "products": null
+}}
+
+示例30（查询客户账务 - 指定月份）：
+用户输入："王总1月份的欠料"
+说明：用户要查询王总1月份的欠料情况，需要计算1月份的日期范围
+{{
+  "action": "查询客户账务",
+  "debt_customer_name": "王总",
+  "debt_query_type": "gold_debt",
+  "date_start": "2026-01-01",
+  "date_end": "2026-01-31",
+  "products": null
+}}
+
+示例31（查询客户账务 - 指定日期范围）：
+用户输入："李老板1月1号到1月20号的账务情况"
+说明：用户明确指定了日期范围
+{{
+  "action": "查询客户账务",
+  "debt_customer_name": "李老板",
+  "debt_query_type": "all",
+  "date_start": "2026-01-01",
+  "date_end": "2026-01-20",
+  "products": null
+}}
+
+示例32（查询客户账务 - 查询存料）：
+用户输入："查一下刘老板的存料余额"
+说明：用户要查询客户的存料余额
+{{
+  "action": "查询客户账务",
+  "debt_customer_name": "刘老板",
+  "debt_query_type": "gold_deposit",
+  "date_start": null,
+  "date_end": null,
+  "products": null
+}}
+
+示例33（查询客户账务 - 查询欠款）：
+用户输入："陈总欠了多少钱"
+说明：用户要查询客户的现金欠款
+{{
+  "action": "查询客户账务",
+  "debt_customer_name": "陈总",
+  "debt_query_type": "cash_debt",
+  "date_start": null,
+  "date_end": null,
   "products": null
 }}
 """

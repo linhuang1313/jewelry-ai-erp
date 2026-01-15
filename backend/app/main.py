@@ -678,6 +678,9 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         result = await handle_create_transfer(ai_response, db)
                     elif ai_response.action == "退货":
                         result = await handle_return(ai_response, db, request.user_role or 'product')
+                    elif ai_response.action == "查询客户账务":
+                        # 特殊处理：查询客户账务，需要走AI分析流程
+                        pass  # 继续执行后续的AI分析流程
                     
                     # 【上下文工程】记录成功操作（Append-Only）
                     action_desc = f"{ai_response.action}"
@@ -877,6 +880,25 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 }
                 for c in customers
             ]
+            
+            # 如果是查询客户账务，收集账务数据
+            if ai_response.action == "查询客户账务":
+                debt_customer_name = getattr(ai_response, 'debt_customer_name', None)
+                if debt_customer_name:
+                    yield f"data: {json.dumps({'type': 'thinking', 'step': '数据收集', 'message': f'正在查询 {debt_customer_name} 的账务信息...', 'progress': 60}, ensure_ascii=False)}\n\n"
+                    await asyncio.sleep(0.05)
+                    
+                    # 调用聊天查询API
+                    from .routers.customers import chat_debt_query
+                    debt_result = await chat_debt_query(
+                        customer_name=debt_customer_name,
+                        query_type=getattr(ai_response, 'debt_query_type', 'all') or 'all',
+                        date_start=getattr(ai_response, 'date_start', None),
+                        date_end=getattr(ai_response, 'date_end', None),
+                        db=db
+                    )
+                    data['customer_debt'] = debt_result
+                    logger.info(f"[流式] 已收集客户账务数据: {debt_customer_name}")
             
             yield f"data: {json.dumps({'type': 'thinking', 'step': '数据收集', 'message': '正在收集订单数据...', 'progress': 65}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0.05)
