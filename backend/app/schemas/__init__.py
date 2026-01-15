@@ -289,6 +289,8 @@ class SettlementOrderCreate(BaseModel):
     gold_payment_weight: Optional[float] = None  # 混合支付：结料部分的克重
     cash_payment_weight: Optional[float] = None  # 混合支付：结价部分的克重
     remark: Optional[str] = None
+    # 灵活支付参数
+    confirmed_underpay: bool = False  # 是否已确认少付（前端弹窗确认后设为True）
 
 
 class SettlementOrderConfirm(BaseModel):
@@ -317,6 +319,9 @@ class SettlementOrderResponse(BaseModel):
     previous_gold_debt: Optional[float] = 0.0  # 上次金料欠款（克）
     gold_deposit_balance: Optional[float] = 0.0  # 存料余额（克）
     cash_deposit_balance: Optional[float] = 0.0  # 存款余额（元）
+    # 灵活支付状态
+    payment_difference: Optional[float] = 0.0  # 支付差额（正=多付，负=少付）
+    payment_status: Optional[str] = 'full'  # 支付状态: full/overpaid/underpaid
     status: str
     created_by: Optional[str]
     confirmed_by: Optional[str]

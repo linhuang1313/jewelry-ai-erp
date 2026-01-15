@@ -164,6 +164,9 @@ async def startup_event():
             # 混合支付专用字段
             ("gold_payment_weight", "FLOAT NULL"),
             ("cash_payment_weight", "FLOAT NULL"),
+            # 灵活支付字段
+            ("payment_difference", "FLOAT DEFAULT 0.0"),
+            ("payment_status", "VARCHAR(20) DEFAULT 'full'"),
         ]
         
         for col_name, col_type in settlement_columns:

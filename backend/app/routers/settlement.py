@@ -249,25 +249,28 @@ async def create_settlement_order(
         # 验证必填参数
         if not data.gold_price or data.gold_price <= 0:
             raise HTTPException(status_code=400, detail="混合支付需要填写当日金价")
-        if not data.gold_payment_weight or data.gold_payment_weight <= 0:
+        if data.gold_payment_weight is None or data.gold_payment_weight < 0:
             raise HTTPException(status_code=400, detail="混合支付需要填写结料部分的克重")
-        if not data.cash_payment_weight or data.cash_payment_weight <= 0:
+        if data.cash_payment_weight is None or data.cash_payment_weight < 0:
             raise HTTPException(status_code=400, detail="混合支付需要填写结价部分的克重")
         
-        # 验证克重总和等于销售总重量（允许0.01克的误差）
-        total_input = data.gold_payment_weight + data.cash_payment_weight
-        if abs(total_input - sales_order.total_weight) > 0.01:
+        # 计算支付差额（支付克重 - 应付克重）
+        total_input = (data.gold_payment_weight or 0) + (data.cash_payment_weight or 0)
+        weight_difference = total_input - sales_order.total_weight
+        
+        # 灵活支付：少付时需要前端确认
+        if weight_difference < -0.01 and not data.confirmed_underpay:
             raise HTTPException(
                 status_code=400,
-                detail=f"结料克重({data.gold_payment_weight:.2f}) + 结价克重({data.cash_payment_weight:.2f}) = {total_input:.2f}克，必须等于销售总重量({sales_order.total_weight:.2f}克)"
+                detail=f"支付不足：支付克重({total_input:.2f}克) 小于 应付克重({sales_order.total_weight:.2f}克)，差额{abs(weight_difference):.2f}克。请确认后重试。"
             )
         
         # 计算金额：结价部分按金价换算成现金
-        material_amount = data.gold_price * data.cash_payment_weight
+        material_amount = data.gold_price * (data.cash_payment_weight or 0)
         # 客户需要支付的金料 = 结料部分的克重
-        actual_gold_due = data.gold_payment_weight
+        actual_gold_due = data.gold_payment_weight or 0
         
-        logger.info(f"混合支付: 结料{data.gold_payment_weight}克 + 结价{data.cash_payment_weight}克×{data.gold_price}元/克 = 料费¥{material_amount}")
+        logger.info(f"混合支付: 结料{data.gold_payment_weight}克 + 结价{data.cash_payment_weight}克×{data.gold_price}元/克 = 料费¥{material_amount}, 差额={weight_difference:.2f}克")
         # ==================== 混合支付结束 ====================
     else:
         raise HTTPException(status_code=400, detail="无效的支付方式，请选择：cash_price(结价)、physical_gold(结料)或 mixed(混合支付)")
@@ -333,6 +336,31 @@ async def create_settlement_order(
     else:
         physical_gold_weight = None
     
+    # ========== 计算支付差额和状态 ==========
+    payment_difference = 0.0
+    payment_status = "full"
+    
+    if data.payment_method == "mixed":
+        # 混合支付：基于克重计算差额
+        total_input = (data.gold_payment_weight or 0) + (data.cash_payment_weight or 0)
+        payment_difference = total_input - sales_order.total_weight
+    elif data.payment_method == "physical_gold":
+        # 结料支付：基于金料重量计算差额
+        if data.physical_gold_weight:
+            payment_difference = data.physical_gold_weight - sales_order.total_weight
+    # 结价支付暂不支持差额（需要额外参数）
+    
+    # 设置支付状态
+    if payment_difference > 0.01:
+        payment_status = "overpaid"  # 多付
+    elif payment_difference < -0.01:
+        payment_status = "underpaid"  # 少付
+    else:
+        payment_status = "full"  # 全额
+    
+    logger.info(f"[结算单] 支付差额: {payment_difference:.2f}克, 状态: {payment_status}")
+    # ========== 支付差额计算结束 ==========
+    
     settlement = SettlementOrder(
         settlement_no=settlement_no,
         sales_order_id=data.sales_order_id,
@@ -351,6 +379,9 @@ async def create_settlement_order(
         previous_gold_debt=previous_gold_debt,
         gold_deposit_balance=gold_deposit_balance,
         cash_deposit_balance=cash_deposit_balance,
+        # 灵活支付状态
+        payment_difference=payment_difference,
+        payment_status=payment_status,
         status="pending",
         created_by=created_by,
         remark=remark

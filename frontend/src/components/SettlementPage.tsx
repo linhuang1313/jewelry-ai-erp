@@ -44,6 +44,9 @@ interface SettlementOrder {
   material_amount: number | null;
   labor_amount: number;
   total_amount: number;
+  // 灵活支付状态
+  payment_difference: number | null;  // 支付差额（正=多付，负=少付）
+  payment_status: string | null;  // full/overpaid/underpaid
   status: string;
   created_by: string | null;
   confirmed_by: string | null;
@@ -143,6 +146,14 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
 
   // 确认结算单
   const [confirmingSettlement, setConfirmingSettlement] = useState<SettlementOrder | null>(null);
+  
+  // 少付确认对话框
+  const [showUnderpayConfirm, setShowUnderpayConfirm] = useState(false);
+  const [underpayData, setUnderpayData] = useState<{
+    totalInput: number;
+    totalWeight: number;
+    difference: number;
+  } | null>(null);
 
   // 加载数据
   useEffect(() => {
@@ -177,15 +188,16 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
     }
   };
 
-  // 创建结算单
-  const handleCreateSettlement = async (e: React.FormEvent) => {
+  // 创建结算单（支持灵活支付）
+  const handleCreateSettlement = async (e: React.FormEvent, confirmedUnderpay: boolean = false) => {
     e.preventDefault();
     if (!selectedSalesOrder) return;
 
     const data: any = {
       sales_order_id: selectedSalesOrder.id,
       payment_method: createForm.payment_method,
-      remark: createForm.remark || null
+      remark: createForm.remark || null,
+      confirmed_underpay: confirmedUnderpay
     };
 
     if (createForm.payment_method === 'cash_price') {
@@ -206,16 +218,23 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
         toast.error('混合支付需要填写当日金价');
         return;
       }
-      if (!createForm.gold_payment_weight || !createForm.cash_payment_weight) {
-        toast.error('请填写结料克重和结价克重');
+      if (!createForm.gold_payment_weight && !createForm.cash_payment_weight) {
+        toast.error('请填写结料克重或结价克重');
         return;
       }
-      const goldWeight = parseFloat(createForm.gold_payment_weight);
-      const cashWeight = parseFloat(createForm.cash_payment_weight);
+      const goldWeight = parseFloat(createForm.gold_payment_weight || '0');
+      const cashWeight = parseFloat(createForm.cash_payment_weight || '0');
       const totalInput = goldWeight + cashWeight;
+      const difference = totalInput - selectedSalesOrder.total_weight;
       
-      if (Math.abs(totalInput - selectedSalesOrder.total_weight) > 0.01) {
-        toast.error(`结料克重(${goldWeight}) + 结价克重(${cashWeight}) = ${totalInput.toFixed(2)}克，必须等于销售总重量(${selectedSalesOrder.total_weight}克)`);
+      // 少付时需要确认
+      if (difference < -0.01 && !confirmedUnderpay) {
+        setUnderpayData({
+          totalInput,
+          totalWeight: selectedSalesOrder.total_weight,
+          difference: Math.abs(difference)
+        });
+        setShowUnderpayConfirm(true);
         return;
       }
       
@@ -232,10 +251,17 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
       });
 
       if (response.ok) {
-        toast.success('结算单创建成功');
+        const paymentStatus = data.gold_payment_weight + data.cash_payment_weight < selectedSalesOrder.total_weight 
+          ? '（客户欠款已记录）' 
+          : data.gold_payment_weight + data.cash_payment_weight > selectedSalesOrder.total_weight 
+            ? '（多付部分已记入存款）' 
+            : '';
+        toast.success(`结算单创建成功${paymentStatus}`);
         setShowCreateForm(false);
         setSelectedSalesOrder(null);
         setCreateForm({ payment_method: 'cash_price', gold_price: '', physical_gold_weight: '', gold_payment_weight: '', cash_payment_weight: '', remark: '' });
+        setShowUnderpayConfirm(false);
+        setUnderpayData(null);
         loadPendingSales();
         loadSettlements();
       } else {
@@ -245,6 +271,12 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
     } catch (error) {
       toast.error('创建失败');
     }
+  };
+  
+  // 确认少付后继续创建
+  const handleConfirmUnderpay = (e: React.FormEvent) => {
+    setShowUnderpayConfirm(false);
+    handleCreateSettlement(e, true);
   };
 
   // 确认结算单
@@ -326,6 +358,54 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
+      {/* 少付确认对话框 */}
+      {showUnderpayConfirm && underpayData && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-3 bg-orange-100 rounded-full">
+                <AlertCircle className="w-6 h-6 text-orange-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">支付金额不足</h3>
+            </div>
+            
+            <div className="space-y-3 mb-6">
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">本次支付</span>
+                <span className="font-medium">{underpayData.totalInput.toFixed(2)} 克</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">应付金额</span>
+                <span className="font-medium">{underpayData.totalWeight.toFixed(2)} 克</span>
+              </div>
+              <div className="flex justify-between py-2 bg-red-50 px-3 rounded-lg">
+                <span className="text-red-700 font-medium">差额欠款</span>
+                <span className="text-red-700 font-bold">{underpayData.difference.toFixed(2)} 克</span>
+              </div>
+            </div>
+            
+            <p className="text-sm text-gray-500 mb-6">
+              是否确认以当前金额创建结算单？欠款将记录在客户账户中。
+            </p>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={() => { setShowUnderpayConfirm(false); setUnderpayData(null); }}
+                className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={(e) => handleConfirmUnderpay(e)}
+                className="flex-1 px-4 py-2.5 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors"
+              >
+                确认继续
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="max-w-7xl mx-auto">
         {/* 标题栏 */}
         <div className="flex justify-between items-center mb-6">
@@ -462,7 +542,20 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-mono text-sm">{settlement.settlement_no}</span>
-                      <StatusBadge status={settlement.status} />
+                      <div className="flex items-center space-x-2">
+                        {/* 支付状态标签 */}
+                        {settlement.payment_status === 'overpaid' && (
+                          <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">
+                            多付 {Math.abs(settlement.payment_difference || 0).toFixed(2)}克
+                          </span>
+                        )}
+                        {settlement.payment_status === 'underpaid' && (
+                          <span className="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded-full">
+                            欠款 {Math.abs(settlement.payment_difference || 0).toFixed(2)}克
+                          </span>
+                        )}
+                        <StatusBadge status={settlement.status} />
+                      </div>
                     </div>
                     <div className="text-sm text-gray-600 mb-2">
                       销售单: {settlement.sales_order?.order_no || '-'}

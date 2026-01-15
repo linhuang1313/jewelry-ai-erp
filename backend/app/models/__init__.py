@@ -186,6 +186,10 @@ class SettlementOrder(Base):
     gold_deposit_balance = Column(Float, default=0.0)    # 存料余额（克）
     cash_deposit_balance = Column(Float, default=0.0)    # 存款余额（元）
     
+    # 灵活支付状态
+    payment_difference = Column(Float, default=0.0)  # 支付差额（正=多付，负=少付）
+    payment_status = Column(String(20), default="full")  # full全额 / overpaid多付 / underpaid少付
+    
     # 状态和操作信息
     status = Column(String(20), default="pending")  # pending待结算 / confirmed已确认 / printed已打印
     created_by = Column(String(50))  # 创建人（柜台）
