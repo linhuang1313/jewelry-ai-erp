@@ -423,13 +423,15 @@ async def chat(request: AIRequest, db: Session = Depends(get_db)):
         else:
             from .ai_analyzer import ai_analyzer
             
-            # 收集所有相关数据（传入入库单号和销售单号）
+            # 收集所有相关数据（传入入库单号、销售单号和用户角色）
+            # 用户角色决定显示哪个仓位的库存
             data = ai_analyzer.collect_all_data(
                 ai_response.action,
                 request.message,
                 db,
                 order_no=ai_response.order_no,  # RK开头的入库单号
-                sales_order_no=ai_response.sales_order_no  # XS开头的销售单号
+                sales_order_no=ai_response.sales_order_no,  # XS开头的销售单号
+                user_role=user_role  # 传入用户角色以确定显示哪个仓位的库存
             )
             
             # 使用AI进行分析
@@ -748,16 +750,69 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 'sales_order_no': ai_response.sales_order_no if hasattr(ai_response, 'sales_order_no') else None  # 添加销售单号（XS开头）
             }
             
-            # 收集库存数据
-            inventories = db.query(Inventory).all()
-            data['inventory'] = [
-                {
-                    'product_name': inv.product_name,
-                    'total_weight': inv.total_weight,
-                    'last_update': str(inv.last_update) if inv.last_update else None
-                }
-                for inv in inventories
-            ]
+            # 收集库存数据（根据用户角色显示对应仓位的库存）
+            # 管理层：显示总库存
+            # 商品专员：只显示商品部仓库库存
+            # 柜台/结算：只显示展厅库存
+            if user_role == "manager":
+                # 管理层看总库存
+                inventories = db.query(Inventory).all()
+                data['inventory'] = [
+                    {
+                        'product_name': inv.product_name,
+                        'total_weight': inv.total_weight,
+                        'location': '全部仓位',
+                        'last_update': str(inv.last_update) if inv.last_update else None
+                    }
+                    for inv in inventories
+                ]
+                data['inventory_location'] = '全部仓位（总库存）'
+            else:
+                # 根据角色确定仓位
+                if user_role == "product":
+                    location_code = "warehouse"
+                    location_display = "商品部仓库"
+                elif user_role in ["counter", "settlement"]:
+                    location_code = "showroom"
+                    location_display = "展厅"
+                else:
+                    # 其他角色（如业务员）看总库存
+                    location_code = None
+                    location_display = "全部仓位"
+                
+                if location_code:
+                    # 查询对应仓位的库存
+                    location = db.query(Location).filter(Location.code == location_code).first()
+                    if location:
+                        location_inventories = db.query(LocationInventory).filter(
+                            LocationInventory.location_id == location.id,
+                            LocationInventory.weight > 0
+                        ).all()
+                        data['inventory'] = [
+                            {
+                                'product_name': li.product_name,
+                                'total_weight': li.weight,
+                                'location': location_display,
+                                'last_update': str(li.last_update) if li.last_update else None
+                            }
+                            for li in location_inventories
+                        ]
+                    else:
+                        data['inventory'] = []
+                    data['inventory_location'] = location_display
+                else:
+                    # 没有指定仓位，显示总库存
+                    inventories = db.query(Inventory).all()
+                    data['inventory'] = [
+                        {
+                            'product_name': inv.product_name,
+                            'total_weight': inv.total_weight,
+                            'location': '全部仓位',
+                            'last_update': str(inv.last_update) if inv.last_update else None
+                        }
+                        for inv in inventories
+                    ]
+                    data['inventory_location'] = '全部仓位（总库存）'
             
             yield f"data: {json.dumps({'type': 'thinking', 'step': '数据收集', 'message': '正在收集供应商数据...', 'progress': 45}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0.05)
@@ -908,9 +963,13 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         ]
                     })
             
-            # 收集总体统计
+            # 收集总体统计（根据角色计算库存总重量）
+            # 库存总重量使用已收集的库存数据计算，这样就是角色对应仓位的库存
+            inventory_total = sum(inv.get('total_weight', 0) for inv in data.get('inventory', []))
+            
             data['statistics'] = {
-                'total_inventory_weight': float(db.query(func.sum(Inventory.total_weight)).scalar() or 0),
+                'total_inventory_weight': float(inventory_total),
+                'inventory_location': data.get('inventory_location', '全部仓位'),
                 'total_inbound_cost': float(db.query(func.sum(InboundDetail.total_cost)).scalar() or 0),
                 'total_suppliers': len(data['suppliers']),
                 'total_customers': len(data['customers']),
