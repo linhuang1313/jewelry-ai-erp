@@ -4169,3 +4169,130 @@ async def merge_inventory_manual(
         db.rollback()
         logger.error(f"手动合并库存失败: {e}", exc_info=True)
         return {"success": False, "message": str(e)}
+
+
+@app.get("/api/inventory/check-consistency")
+async def check_inventory_consistency(db: Session = Depends(get_db)):
+    """
+    检查 Inventory（总库存）和 LocationInventory（分仓库存）的一致性
+    """
+    from sqlalchemy import func
+    
+    # 获取总库存表数据
+    total_inventory = db.query(Inventory).all()
+    
+    # 获取分仓库存汇总（按商品名称分组求和）
+    location_inventory_summary = db.query(
+        LocationInventory.product_name,
+        func.sum(LocationInventory.weight).label("total_weight")
+    ).group_by(LocationInventory.product_name).all()
+    
+    # 转换为字典方便比对
+    total_dict = {inv.product_name: inv.total_weight for inv in total_inventory}
+    location_dict = {item.product_name: float(item.total_weight or 0) for item in location_inventory_summary}
+    
+    # 比对差异
+    discrepancies = []
+    all_products = set(total_dict.keys()) | set(location_dict.keys())
+    
+    for product in all_products:
+        total_weight = total_dict.get(product, 0)
+        location_weight = location_dict.get(product, 0)
+        
+        if abs(total_weight - location_weight) > 0.01:  # 允许 0.01 的误差
+            discrepancies.append({
+                "product_name": product,
+                "inventory_total": total_weight,
+                "location_total": location_weight,
+                "difference": total_weight - location_weight
+            })
+    
+    return {
+        "success": True,
+        "is_consistent": len(discrepancies) == 0,
+        "total_inventory_weight": sum(total_dict.values()),
+        "total_location_weight": sum(location_dict.values()),
+        "difference": sum(total_dict.values()) - sum(location_dict.values()),
+        "discrepancies": discrepancies,
+        "product_count_in_inventory": len(total_dict),
+        "product_count_in_location": len(location_dict)
+    }
+
+
+@app.post("/api/inventory/sync-to-location")
+async def sync_inventory_to_location(db: Session = Depends(get_db)):
+    """
+    将 Inventory 表的数据同步到 LocationInventory 表
+    以 Inventory 表为准，确保分仓库存（默认商品部仓库）与总库存一致
+    """
+    from sqlalchemy import func
+    
+    # 获取或创建默认仓库
+    default_location = db.query(Location).filter(Location.code == "warehouse").first()
+    if not default_location:
+        default_location = Location(
+            code="warehouse",
+            name="商品部仓库",
+            location_type="warehouse",
+            description="商品部主仓库"
+        )
+        db.add(default_location)
+        db.flush()
+    
+    # 获取总库存表数据
+    total_inventory = db.query(Inventory).all()
+    
+    sync_results = []
+    
+    for inv in total_inventory:
+        if inv.total_weight <= 0:
+            continue
+            
+        # 获取该商品在分仓库存中的总量
+        location_total = db.query(
+            func.sum(LocationInventory.weight)
+        ).filter(
+            LocationInventory.product_name == inv.product_name
+        ).scalar() or 0
+        
+        difference = inv.total_weight - float(location_total)
+        
+        if abs(difference) > 0.01:  # 有差异需要调整
+            # 获取或创建该商品在默认仓库的记录
+            location_inv = db.query(LocationInventory).filter(
+                LocationInventory.product_name == inv.product_name,
+                LocationInventory.location_id == default_location.id
+            ).first()
+            
+            if location_inv:
+                # 更新库存，补足差额
+                old_weight = location_inv.weight
+                location_inv.weight += difference
+                sync_results.append({
+                    "product_name": inv.product_name,
+                    "action": "updated",
+                    "old_weight": old_weight,
+                    "new_weight": location_inv.weight,
+                    "adjustment": difference
+                })
+            else:
+                # 创建新记录
+                new_location_inv = LocationInventory(
+                    product_name=inv.product_name,
+                    location_id=default_location.id,
+                    weight=inv.total_weight
+                )
+                db.add(new_location_inv)
+                sync_results.append({
+                    "product_name": inv.product_name,
+                    "action": "created",
+                    "weight": inv.total_weight
+                })
+    
+    db.commit()
+    
+    return {
+        "success": True,
+        "message": f"同步完成，共调整 {len(sync_results)} 项商品库存",
+        "sync_results": sync_results
+    }
