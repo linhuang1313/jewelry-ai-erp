@@ -2181,7 +2181,7 @@ function App() {
                       `}>
                         <div className="text-[15px] leading-relaxed whitespace-pre-wrap text-gray-800">
                           {/* 隐藏内容中的特殊标记 */}
-                          {msg.content?.replace(/\n\n<!-- (RETURN_ORDER|INBOUND_ORDER|SALES_ORDER|SETTLEMENT_ORDER|CUSTOMER_DEBT):[^>]+ -->/g, '')}
+                          {msg.content?.replace(/\n*<!-- (RETURN_ORDER|INBOUND_ORDER|SALES_ORDER|SETTLEMENT_ORDER|CUSTOMER_DEBT):[^>]+ -->/g, '')}
                           {/* 流式生成时的闪烁光标 */}
                           {msg.isStreaming && (
                             <span className="inline-block w-0.5 h-4 bg-blue-500 ml-1 animate-pulse"></span>
@@ -2329,10 +2329,10 @@ function App() {
                         {/* 客户账务下载按钮 - 从内容中解析隐藏标记 */}
                         {(() => {
                           if (!msg.content) return null
-                          const match = msg.content.match(/<!-- CUSTOMER_DEBT:(\d+):([^>]+) -->/)
+                          const match = msg.content.match(/<!-- CUSTOMER_DEBT:(\d+):(.+?) -->/)
                           if (!match) return null
                           const customerId = parseInt(match[1])
-                          const customerName = match[2]
+                          const customerName = match[2].trim()
                           return (
                             <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
                               <button
