@@ -1647,7 +1647,7 @@ async def create_inbound_order(card_data: InboundOrderCreate, db: Session = Depe
 
 @app.post("/api/inbound-orders/batch")
 async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Session = Depends(get_db)):
-    """批量创建入库单（快捷入库表格）"""
+    """批量创建入库单（快捷入库表格）- 创建1个入库单包含所有商品明细"""
     try:
         if not batch_data.items:
             return {
@@ -1655,41 +1655,138 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
                 "message": "没有商品数据"
             }
         
+        from .models import ProductCode as ProductCodeModel
+        import uuid
+        
+        # 生成唯一入库单号（使用UUID后缀确保唯一性）
+        timestamp = china_now().strftime("%Y%m%d%H%M%S")
+        unique_suffix = uuid.uuid4().hex[:4].upper()
+        order_no = f"RKPL{timestamp}{unique_suffix}"  # RKPL = 入库批量
+        
+        # 创建入库单
+        order = InboundOrder(order_no=order_no, create_time=china_now())
+        db.add(order)
+        db.flush()
+        
+        # 查找或创建供应商
+        supplier_name = batch_data.supplier
+        supplier_id = None
+        supplier_obj = None
+        if supplier_name:
+            supplier_obj = db.query(Supplier).filter(
+                Supplier.name == supplier_name,
+                Supplier.status == "active"
+            ).first()
+            
+            if not supplier_obj:
+                supplier_no = f"GYS{china_now().strftime('%Y%m%d%H%M%S')}"
+                supplier_obj = Supplier(
+                    supplier_no=supplier_no,
+                    name=supplier_name,
+                    supplier_type="个人"
+                )
+                db.add(supplier_obj)
+                db.flush()
+            
+            supplier_id = supplier_obj.id
+        
+        # 获取默认入库位置
+        default_location = db.query(Location).filter(Location.code == "warehouse").first()
+        if not default_location:
+            default_location = Location(
+                code="warehouse",
+                name="商品部仓库",
+                location_type="warehouse",
+                description="默认入库位置"
+            )
+            db.add(default_location)
+            db.flush()
+        
         results = []
+        total_weight = 0
+        total_cost = 0
         success_count = 0
         error_count = 0
         
         for idx, item in enumerate(batch_data.items):
             try:
-                card_dict = {
-                    "product_code": item.product_code,
-                    "product_name": item.product_name,
-                    "weight": item.weight,
-                    "labor_cost": item.labor_cost,
-                    "piece_count": item.piece_count or 0,
-                    "piece_labor_cost": item.piece_labor_cost or 0.0,
-                    "supplier": batch_data.supplier
-                }
+                product_name = item.product_name
+                product_code = item.product_code
+                weight = float(item.weight)
+                labor_cost = float(item.labor_cost)
+                piece_count = item.piece_count or 0
+                piece_labor_cost = item.piece_labor_cost or 0.0
                 
-                result = await execute_inbound(card_dict, db)
+                # 商品编码与名称关联处理
+                if product_code:
+                    code_record = db.query(ProductCodeModel).filter(ProductCodeModel.code == product_code).first()
+                    if code_record and code_record.name:
+                        product_name = code_record.name
                 
-                if result.get("success"):
-                    success_count += 1
-                    results.append({
-                        "index": idx + 1,
-                        "product_name": item.product_name,
-                        "success": True,
-                        "order_id": result.get("order_id"),
-                        "order_no": result.get("order_no")
-                    })
-                else:
+                # 验证数据
+                if not product_name or weight <= 0 or labor_cost < 0:
                     error_count += 1
                     results.append({
                         "index": idx + 1,
                         "product_name": item.product_name,
                         "success": False,
-                        "error": result.get("message", "入库失败")
+                        "error": "商品信息不完整或无效"
                     })
+                    continue
+                
+                # 计算总成本
+                gram_cost = labor_cost * weight
+                piece_cost = piece_count * piece_labor_cost
+                item_total_cost = gram_cost + piece_cost
+                
+                # 创建入库明细
+                detail = InboundDetail(
+                    order_id=order.id,
+                    product_name=product_name,
+                    weight=weight,
+                    labor_cost=labor_cost,
+                    piece_count=piece_count if piece_count > 0 else None,
+                    piece_labor_cost=piece_labor_cost if piece_labor_cost > 0 else None,
+                    supplier=supplier_name,
+                    supplier_id=supplier_id,
+                    total_cost=item_total_cost
+                )
+                db.add(detail)
+                
+                # 更新或创建总库存
+                inventory = db.query(Inventory).filter(Inventory.product_name == product_name).first()
+                if inventory:
+                    inventory.total_weight += weight
+                else:
+                    inventory = Inventory(product_name=product_name, total_weight=weight)
+                    db.add(inventory)
+                
+                # 更新或创建分仓库存
+                location_inventory = db.query(LocationInventory).filter(
+                    LocationInventory.product_name == product_name,
+                    LocationInventory.location_id == default_location.id
+                ).first()
+                
+                if location_inventory:
+                    location_inventory.weight += weight
+                else:
+                    location_inventory = LocationInventory(
+                        product_name=product_name,
+                        location_id=default_location.id,
+                        weight=weight
+                    )
+                    db.add(location_inventory)
+                
+                total_weight += weight
+                total_cost += item_total_cost
+                success_count += 1
+                results.append({
+                    "index": idx + 1,
+                    "product_name": product_name,
+                    "weight": weight,
+                    "success": True
+                })
+                
             except Exception as e:
                 error_count += 1
                 results.append({
@@ -1699,20 +1796,32 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
                     "error": str(e)
                 })
         
-        # 如果有失败的，把错误信息也返回
-        error_details = [r for r in results if not r.get("success")]
-        error_message = ""
-        if error_details:
-            error_message = "；".join([f"{r['product_name']}: {r.get('error', '未知错误')}" for r in error_details[:3]])
+        # 更新供应商统计信息
+        if supplier_obj and success_count > 0:
+            supplier_obj.total_supply_amount += total_cost
+            supplier_obj.total_supply_weight += total_weight
+            supplier_obj.total_supply_count += success_count
+            supplier_obj.last_supply_time = datetime.now()
+        
+        # 提交事务
+        db.commit()
+        db.refresh(order)
+        
+        logger.info(f"批量入库成功: order_id={order.id}, order_no={order.order_no}, items={success_count}")
         
         return {
             "success": success_count > 0,
-            "message": f"批量入库完成：成功 {success_count} 个，失败 {error_count} 个" + (f"。错误详情：{error_message}" if error_message else ""),
+            "message": f"批量入库成功：{success_count} 件商品已入库" if error_count == 0 else f"批量入库完成：成功 {success_count} 件，失败 {error_count} 件",
+            "order_id": order.id,
+            "order_no": order.order_no,
             "success_count": success_count,
             "error_count": error_count,
+            "total_weight": total_weight,
+            "total_cost": total_cost,
             "results": results
         }
     except Exception as e:
+        db.rollback()
         logger.error(f"批量入库失败: {e}", exc_info=True)
         return {
             "success": False,
