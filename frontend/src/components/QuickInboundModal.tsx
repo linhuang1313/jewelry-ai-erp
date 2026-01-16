@@ -42,6 +42,18 @@ interface QuickInboundModalProps {
   userRole: string;
 }
 
+// 珐琅产品下拉选项常量
+const FINENESS_OPTIONS = ['足金', '板料', 'S925银', '足银', '18K金', '足铂', '18K金珐琅', '旧料'];
+
+const CRAFT_OPTIONS = [
+  '5D镶嵌', '5D硬金珍珠珐琅', '5D钻石', '5G珍珠珐琅', '古法镶嵌', '古法镶钻',
+  '999.9精品', '5G珐琅', '古法镶钻珐琅', '古法珐琅999', '古珍珠', '5D硬金珐琅',
+  '古法珐琅珍珠', '钻石', '3D硬金', '3D硬金珐琅', '5G', '999.99精品',
+  '999精品', '古法999', '古法999.9', '古法999.99', '硬古法'
+];
+
+const STYLE_OPTIONS = ['配件', '饰品', '戒指', '项链', '手链', '手镯', '耳饰', '挂坠', '金条', '金币', '金钞', '金豆'];
+
 const createEmptyRow = (): InboundRow => ({
   id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
   productCode: '',
@@ -65,31 +77,19 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
   // 珐琅产品批量生成状态
   const [showEnamelGenerator, setShowEnamelGenerator] = useState(false);
   const [enamelCodeType, setEnamelCodeType] = useState<'f' | 'fl'>('f'); // F码或FL码
-  const [enamelProductName, setEnamelProductName] = useState('');
+  const [enamelFineness, setEnamelFineness] = useState(''); // 成色
+  const [enamelCraft, setEnamelCraft] = useState(''); // 工艺
+  const [enamelStyle, setEnamelStyle] = useState(''); // 款式
   const [enamelCount, setEnamelCount] = useState<string>('10');
   const [enamelWeight, setEnamelWeight] = useState<string>('');
   const [enamelLaborCost, setEnamelLaborCost] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [showEnamelDropdown, setShowEnamelDropdown] = useState(false); // 珐琅商品下拉框
 
-  // 获取珐琅相关商品列表（从商品编码表中筛选）
-  const enamelProducts = React.useMemo(() => {
-    const enamelNames = productCodes
-      .filter(p => p.name && p.name.includes('珐琅'))
-      .map(p => p.name);
-    // 去重
-    return [...new Set(enamelNames)];
-  }, [productCodes]);
+  // 自动拼接商品名称
+  const enamelProductName = React.useMemo(() => {
+    return `${enamelFineness}${enamelCraft}${enamelStyle}`;
+  }, [enamelFineness, enamelCraft, enamelStyle]);
 
-  // 根据输入过滤珐琅商品
-  const filteredEnamelProducts = React.useMemo(() => {
-    if (!enamelProductName.trim()) {
-      return enamelProducts;
-    }
-    return enamelProducts.filter(name => 
-      name.toLowerCase().includes(enamelProductName.toLowerCase())
-    );
-  }, [enamelProducts, enamelProductName]);
 
   // 加载供应商列表
   useEffect(() => {
@@ -106,17 +106,13 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       if (!target.closest('.dropdown-container')) {
         setOpenDropdownId(null);
       }
-      // 关闭珐琅商品下拉框
-      if (!target.closest('.enamel-dropdown-container')) {
-        setShowEnamelDropdown(false);
-      }
     };
     
-    if (openDropdownId || showEnamelDropdown) {
+    if (openDropdownId) {
       document.addEventListener('click', handleClickOutside);
       return () => document.removeEventListener('click', handleClickOutside);
     }
-  }, [openDropdownId, showEnamelDropdown]);
+  }, [openDropdownId]);
 
   const fetchSuppliers = async () => {
     try {
@@ -225,8 +221,8 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       toast.error('一次最多生成500个');
       return;
     }
-    if (!enamelProductName.trim()) {
-      toast.error('请输入商品名称');
+    if (!enamelFineness || !enamelCraft || !enamelStyle) {
+      toast.error('请选择成色、工艺和款式');
       return;
     }
     
@@ -284,7 +280,9 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       setShowEnamelGenerator(false);
       
       // 重置表单
-      setEnamelProductName('');
+      setEnamelFineness('');
+      setEnamelCraft('');
+      setEnamelStyle('');
       setEnamelCount('10');
       setEnamelWeight('');
       setEnamelLaborCost('');
@@ -741,85 +739,77 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                 🎨 珐琅产品批量生成
               </h4>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
                 {/* 编码类型选择 */}
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">编码类型</label>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1">
                     <button
                       onClick={() => setEnamelCodeType('f')}
-                      className={`flex-1 px-3 py-2 text-xs rounded-lg transition-colors ${
+                      className={`flex-1 px-2 py-2 text-xs rounded-lg transition-colors ${
                         enamelCodeType === 'f'
                           ? 'bg-purple-500 text-white'
                           : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                       }`}
                     >
-                      F码 (一码一件)
+                      F码
                     </button>
                     <button
                       onClick={() => setEnamelCodeType('fl')}
-                      className={`flex-1 px-3 py-2 text-xs rounded-lg transition-colors ${
+                      className={`flex-1 px-2 py-2 text-xs rounded-lg transition-colors ${
                         enamelCodeType === 'fl'
                           ? 'bg-purple-500 text-white'
                           : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                       }`}
                     >
-                      FL码 (批量)
+                      FL码
                     </button>
                   </div>
                 </div>
                 
-                {/* 商品名称 - 可搜索下拉框 */}
-                <div className="relative enamel-dropdown-container">
-                  <label className="block text-xs text-gray-600 mb-1">商品名称 *</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={enamelProductName}
-                      onChange={(e) => {
-                        setEnamelProductName(e.target.value);
-                        setShowEnamelDropdown(true);
-                      }}
-                      onFocus={() => setShowEnamelDropdown(true)}
-                      placeholder="输入或选择珐琅产品"
-                      className="w-full px-3 py-2 pr-8 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowEnamelDropdown(!showEnamelDropdown)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      <svg className={`w-4 h-4 transition-transform ${showEnamelDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                  </div>
-                  {/* 下拉选项 */}
-                  {showEnamelDropdown && filteredEnamelProducts.length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                      {filteredEnamelProducts.map((name, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => {
-                            setEnamelProductName(name);
-                            setShowEnamelDropdown(false);
-                          }}
-                          className={`w-full px-3 py-2 text-left text-sm hover:bg-purple-50 ${
-                            enamelProductName === name ? 'bg-purple-100 text-purple-700' : 'text-gray-700'
-                          }`}
-                        >
-                          {name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {/* 无匹配提示 */}
-                  {showEnamelDropdown && enamelProductName && filteredEnamelProducts.length === 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-sm text-gray-500">
-                      未找到匹配商品，将使用输入的名称
-                    </div>
-                  )}
+                {/* 成色下拉框 */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">成色 *</label>
+                  <select
+                    value={enamelFineness}
+                    onChange={(e) => setEnamelFineness(e.target.value)}
+                    className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500 bg-white"
+                  >
+                    <option value="">请选择</option>
+                    {FINENESS_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                {/* 工艺下拉框 */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">工艺 *</label>
+                  <select
+                    value={enamelCraft}
+                    onChange={(e) => setEnamelCraft(e.target.value)}
+                    className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500 bg-white"
+                  >
+                    <option value="">请选择</option>
+                    {CRAFT_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                {/* 款式下拉框 */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">款式 *</label>
+                  <select
+                    value={enamelStyle}
+                    onChange={(e) => setEnamelStyle(e.target.value)}
+                    className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500 bg-white"
+                  >
+                    <option value="">请选择</option>
+                    {STYLE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
                 </div>
                 
                 {/* 数量 */}
@@ -832,7 +822,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                     min="1"
                     max="500"
                     placeholder="10"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
                   />
                 </div>
                 
@@ -846,7 +836,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                     min="0"
                     step="0.01"
                     placeholder="可选"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
                   />
                 </div>
                 
@@ -860,10 +850,18 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                     min="0"
                     step="0.01"
                     placeholder="可选"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
                   />
                 </div>
               </div>
+              
+              {/* 显示拼接后的商品名称预览 */}
+              {(enamelFineness || enamelCraft || enamelStyle) && (
+                <div className="mt-3 p-2 bg-white rounded-lg border border-purple-200">
+                  <span className="text-xs text-gray-500">商品名称预览：</span>
+                  <span className="ml-2 text-sm font-medium text-purple-700">{enamelProductName || '（请选择成色、工艺和款式）'}</span>
+                </div>
+              )}
               
               <div className="mt-4 flex items-center justify-between">
                 <p className="text-xs text-gray-500">
