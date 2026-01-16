@@ -296,13 +296,13 @@ export const FinanceAnalysisTab: React.FC = () => {
               <div className="bg-blue-50 rounded-lg p-3">
                 <div className="text-blue-600 font-medium">工费成本</div>
                 <div className="text-lg font-bold text-gray-900">
-                  ¥{costStructure.labor_cost.toLocaleString()}
+                  ¥{(costStructure.labor_cost || 0).toLocaleString()}
                 </div>
               </div>
               <div className="bg-orange-50 rounded-lg p-3">
                 <div className="text-orange-600 font-medium">原料成本</div>
                 <div className="text-lg font-bold text-gray-900">
-                  ¥{costStructure.material_cost.toLocaleString()}
+                  ¥{(costStructure.material_cost || 0).toLocaleString()}
                 </div>
               </div>
             </div>
@@ -414,11 +414,11 @@ export const FinanceAnalysisTab: React.FC = () => {
             <tbody>
               {supplierCosts.map((s, idx) => (
                 <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-2 font-medium text-gray-900">{s.supplier}</td>
-                  <td className="py-2 text-right text-gray-700">¥{s.cost.toLocaleString()}</td>
-                  <td className="py-2 text-right text-gray-500">{s.weight.toFixed(2)}克</td>
+                  <td className="py-2 font-medium text-gray-900">{s.supplier || '未知'}</td>
+                  <td className="py-2 text-right text-gray-700">¥{(s.cost || 0).toLocaleString()}</td>
+                  <td className="py-2 text-right text-gray-500">{(s.weight || 0).toFixed(2)}克</td>
                   <td className="py-2 text-right text-blue-600">
-                    ¥{s.weight > 0 ? (s.cost / s.weight).toFixed(2) : '0'}/克
+                    ¥{(s.weight || 0) > 0 ? ((s.cost || 0) / s.weight).toFixed(2) : '0'}/克
                   </td>
                 </tr>
               ))}

@@ -314,10 +314,10 @@ export const SalesAnalysisTab: React.FC = () => {
                         {s.rank}
                       </span>
                     </td>
-                    <td className="py-2 font-medium text-gray-900">{s.salesperson}</td>
-                    <td className="py-2 text-right text-gray-700">¥{s.total_amount.toLocaleString()}</td>
-                    <td className="py-2 text-right text-gray-500">{s.order_count}</td>
-                    <td className="py-2 text-right text-gray-500">{s.customer_count}</td>
+                    <td className="py-2 font-medium text-gray-900">{s.salesperson || '未知'}</td>
+                    <td className="py-2 text-right text-gray-700">¥{(s.total_amount || 0).toLocaleString()}</td>
+                    <td className="py-2 text-right text-gray-500">{s.order_count || 0}</td>
+                    <td className="py-2 text-right text-gray-500">{s.customer_count || 0}</td>
                   </tr>
                 ))}
               </tbody>
@@ -349,10 +349,10 @@ export const SalesAnalysisTab: React.FC = () => {
               <tbody>
                 {customers.map((c, idx) => (
                   <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-2 font-medium text-gray-900">{c.customer_name}</td>
-                    <td className="py-2 text-right text-gray-700">¥{c.total_amount.toLocaleString()}</td>
-                    <td className="py-2 text-right text-gray-500">{c.purchase_count}</td>
-                    <td className="py-2 text-right text-gray-500">¥{c.avg_order_amount.toFixed(0)}</td>
+                    <td className="py-2 font-medium text-gray-900">{c.customer_name || '未知'}</td>
+                    <td className="py-2 text-right text-gray-700">¥{(c.total_amount || 0).toLocaleString()}</td>
+                    <td className="py-2 text-right text-gray-500">{c.purchase_count || 0}</td>
+                    <td className="py-2 text-right text-gray-500">¥{(c.avg_order_amount || 0).toFixed(0)}</td>
                   </tr>
                 ))}
               </tbody>

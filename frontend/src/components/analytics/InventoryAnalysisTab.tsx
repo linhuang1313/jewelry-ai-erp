@@ -380,10 +380,10 @@ export const InventoryAnalysisTab: React.FC = () => {
             <tbody>
               {productValues.map((p, idx) => (
                 <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-2 font-medium text-gray-900">{p.product_name}</td>
-                  <td className="py-2 text-right text-gray-700">{p.weight.toFixed(2)}克</td>
-                  <td className="py-2 text-right text-gray-500">¥{p.labor_cost.toFixed(2)}/克</td>
-                  <td className="py-2 text-right text-blue-600 font-medium">¥{p.value.toLocaleString()}</td>
+                  <td className="py-2 font-medium text-gray-900">{p.product_name || '未知'}</td>
+                  <td className="py-2 text-right text-gray-700">{(p.weight || 0).toFixed(2)}克</td>
+                  <td className="py-2 text-right text-gray-500">¥{(p.labor_cost || 0).toFixed(2)}/克</td>
+                  <td className="py-2 text-right text-blue-600 font-medium">¥{(p.value || 0).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
