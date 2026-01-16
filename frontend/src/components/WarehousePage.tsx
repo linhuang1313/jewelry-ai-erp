@@ -32,6 +32,21 @@ interface InventorySummary {
   locations: LocationInventory[];
 }
 
+interface BarcodeInventoryItem {
+  id: number;
+  product_code: string;
+  product_name: string;
+  weight: number;
+  labor_cost: number;
+  piece_count: number | null;
+  piece_labor_cost: number | null;
+  total_cost: number;
+  supplier: string | null;
+  order_no: string;
+  inbound_time: string | null;
+  status: string;
+}
+
 interface InventoryTransfer {
   id: number;
   transfer_no: string;
@@ -105,6 +120,11 @@ export const WarehousePage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocation, setSelectedLocation] = useState<number | null>(null);
+  
+  // 视图切换：按品名 / 按条码
+  const [inventoryViewMode, setInventoryViewMode] = useState<'byName' | 'byBarcode'>('byName');
+  const [barcodeInventory, setBarcodeInventory] = useState<BarcodeInventoryItem[]>([]);
+  const [barcodeLoading, setBarcodeLoading] = useState(false);
 
   // 转移表单状态
   const [showTransferForm, setShowTransferForm] = useState(false);
@@ -154,6 +174,27 @@ export const WarehousePage: React.FC = () => {
       console.error('加载库存汇总失败:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 加载按条码库存
+  const loadBarcodeInventory = async (search?: string) => {
+    setBarcodeLoading(true);
+    try {
+      const url = search 
+        ? `${API_ENDPOINTS.API_BASE_URL}/api/inventory/by-barcode?search=${encodeURIComponent(search)}&limit=200`
+        : `${API_ENDPOINTS.API_BASE_URL}/api/inventory/by-barcode?limit=200`;
+      const response = await fetch(url);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setBarcodeInventory(result.data || []);
+        }
+      }
+    } catch (error) {
+      console.error('加载条码库存失败:', error);
+    } finally {
+      setBarcodeLoading(false);
     }
   };
 
@@ -349,98 +390,205 @@ export const WarehousePage: React.FC = () => {
           {/* 库存总览 */}
           {activeTab === 'inventory' && (
             <div>
+              {/* 视图切换按钮 */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => {
+                      setInventoryViewMode('byName');
+                    }}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                      inventoryViewMode === 'byName'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    按品名
+                  </button>
+                  <button
+                    onClick={() => {
+                      setInventoryViewMode('byBarcode');
+                      if (barcodeInventory.length === 0) {
+                        loadBarcodeInventory(searchTerm || undefined);
+                      }
+                    }}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                      inventoryViewMode === 'byBarcode'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    按条码
+                  </button>
+                </div>
+                <span className="text-sm text-gray-500">
+                  {inventoryViewMode === 'byName' 
+                    ? `${filteredInventory.length} 种商品`
+                    : `${barcodeInventory.length} 条记录`
+                  }
+                </span>
+              </div>
+
               {/* 搜索和筛选 */}
               <div className="flex space-x-4 mb-6">
                 <div className="flex-1 relative">
                   <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="搜索商品名称..."
+                    placeholder={inventoryViewMode === 'byName' ? "搜索商品名称..." : "搜索条码或商品名称..."}
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      if (inventoryViewMode === 'byBarcode') {
+                        // 延迟搜索
+                        const timer = setTimeout(() => {
+                          loadBarcodeInventory(e.target.value || undefined);
+                        }, 500);
+                        return () => clearTimeout(timer);
+                      }
+                    }}
                     className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-                <select
-                  value={selectedLocation || ''}
-                  onChange={(e) => setSelectedLocation(e.target.value ? parseInt(e.target.value) : null)}
-                  className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">全部位置</option>
-                  {locations.map(loc => (
-                    <option key={loc.id} value={loc.id}>{loc.name}</option>
-                  ))}
-                </select>
+                {inventoryViewMode === 'byName' && (
+                  <select
+                    value={selectedLocation || ''}
+                    onChange={(e) => setSelectedLocation(e.target.value ? parseInt(e.target.value) : null)}
+                    className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">全部位置</option>
+                    {locations.map(loc => (
+                      <option key={loc.id} value={loc.id}>{loc.name}</option>
+                    ))}
+                  </select>
+                )}
               </div>
 
-              {/* 位置卡片 */}
-              {!selectedLocation && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  {locations.map(loc => {
-                    const locInventory = getInventoryByLocation(loc.id);
-                    const totalWeight = locInventory.reduce((sum, item) => 
-                      sum + item.locations.reduce((s, l) => s + l.weight, 0), 0
-                    );
-                    const productCount = locInventory.length;
-                    
-                    return (
-                      <div
-                        key={loc.id}
-                        onClick={() => setSelectedLocation(loc.id)}
-                        className={`p-4 rounded-xl cursor-pointer transition-all hover:shadow-md ${
-                          loc.location_type === 'warehouse'
-                            ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white'
-                            : 'bg-gradient-to-br from-green-500 to-green-600 text-white'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <MapPin className="w-5 h-5 opacity-80" />
-                          <span className="text-xs opacity-80">{loc.code}</span>
-                        </div>
-                        <h3 className="font-bold text-lg mb-2">{loc.name}</h3>
-                        <div className="flex justify-between text-sm opacity-90">
-                          <span>{productCount} 种商品</span>
-                          <span>{totalWeight.toFixed(1)}g</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* 库存列表 */}
-              {loading ? (
-                <div className="text-center py-12 text-gray-500">加载中...</div>
-              ) : filteredInventory.length === 0 ? (
-                <div className="text-center py-12">
-                  <Package className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                  <p className="text-gray-500">暂无库存数据</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {(selectedLocation 
-                    ? getInventoryByLocation(selectedLocation) 
-                    : filteredInventory
-                  ).map(item => (
-                    <div key={item.product_name} className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-semibold text-gray-900">{item.product_name}</h4>
-                        <span className="text-lg font-bold text-blue-600">{item.total_weight.toFixed(1)}g</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {item.locations.map(loc => (
-                          <span
+              {/* 按品名视图 */}
+              {inventoryViewMode === 'byName' && (
+                <>
+                  {/* 位置卡片 */}
+                  {!selectedLocation && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                      {locations.map(loc => {
+                        const locInventory = getInventoryByLocation(loc.id);
+                        const totalWeight = locInventory.reduce((sum, item) => 
+                          sum + item.locations.reduce((s, l) => s + l.weight, 0), 0
+                        );
+                        const productCount = locInventory.length;
+                        
+                        return (
+                          <div
                             key={loc.id}
-                            className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700"
+                            onClick={() => setSelectedLocation(loc.id)}
+                            className={`p-4 rounded-xl cursor-pointer transition-all hover:shadow-md ${
+                              loc.location_type === 'warehouse'
+                                ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white'
+                                : 'bg-gradient-to-br from-green-500 to-green-600 text-white'
+                            }`}
                           >
-                            <MapPin className="w-3 h-3 mr-1" />
-                            {loc.location_name}: {loc.weight.toFixed(1)}g
-                          </span>
+                            <div className="flex items-center justify-between mb-3">
+                              <MapPin className="w-5 h-5 opacity-80" />
+                              <span className="text-xs opacity-80">{loc.code}</span>
+                            </div>
+                            <h3 className="font-bold text-lg mb-2">{loc.name}</h3>
+                            <div className="flex justify-between text-sm opacity-90">
+                              <span>{productCount} 种商品</span>
+                              <span>{totalWeight.toFixed(1)}g</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* 库存列表 - 按品名 */}
+                  {loading ? (
+                    <div className="text-center py-12 text-gray-500">加载中...</div>
+                  ) : filteredInventory.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Package className="w-12 h-12 mx-auto text-gray-300 mb-4" />
+                      <p className="text-gray-500">暂无库存数据</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {(selectedLocation 
+                        ? getInventoryByLocation(selectedLocation) 
+                        : filteredInventory
+                      ).map(item => (
+                        <div key={item.product_name} className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-semibold text-gray-900">{item.product_name}</h4>
+                            <span className="text-lg font-bold text-blue-600">{item.total_weight.toFixed(1)}g</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {item.locations.map(loc => (
+                              <span
+                                key={loc.id}
+                                className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700"
+                              >
+                                <MapPin className="w-3 h-3 mr-1" />
+                                {loc.location_name}: {loc.weight.toFixed(1)}g
+                              </span>
                         ))}
                       </div>
                     </div>
                   ))}
                 </div>
+              )}
+                </>
+              )}
+
+              {/* 按条码视图 */}
+              {inventoryViewMode === 'byBarcode' && (
+                <>
+                  {barcodeLoading ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                      加载中...
+                    </div>
+                  ) : barcodeInventory.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Package className="w-12 h-12 mx-auto text-gray-300 mb-4" />
+                      <p className="text-gray-500">暂无入库明细数据</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left font-medium text-gray-600">商品编码</th>
+                            <th className="px-4 py-3 text-left font-medium text-gray-600">商品名称</th>
+                            <th className="px-4 py-3 text-right font-medium text-gray-600">克重</th>
+                            <th className="px-4 py-3 text-right font-medium text-gray-600">克工费</th>
+                            <th className="px-4 py-3 text-center font-medium text-gray-600">件数</th>
+                            <th className="px-4 py-3 text-left font-medium text-gray-600">供应商</th>
+                            <th className="px-4 py-3 text-left font-medium text-gray-600">入库单号</th>
+                            <th className="px-4 py-3 text-left font-medium text-gray-600">入库时间</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {barcodeInventory.map(item => (
+                            <tr key={item.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                <span className="font-mono text-blue-600">{item.product_code}</span>
+                              </td>
+                              <td className="px-4 py-3 font-medium text-gray-900">{item.product_name}</td>
+                              <td className="px-4 py-3 text-right">{item.weight.toFixed(2)}g</td>
+                              <td className="px-4 py-3 text-right">¥{item.labor_cost}/g</td>
+                              <td className="px-4 py-3 text-center">{item.piece_count || '-'}</td>
+                              <td className="px-4 py-3 text-gray-600">{item.supplier || '-'}</td>
+                              <td className="px-4 py-3">
+                                <span className="text-xs text-gray-500">{item.order_no}</span>
+                              </td>
+                              <td className="px-4 py-3 text-gray-500">{item.inbound_time || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

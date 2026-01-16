@@ -4672,6 +4672,75 @@ async def merge_inventory_manual(
         return {"success": False, "message": str(e)}
 
 
+@app.get("/api/inventory/by-barcode")
+async def get_inventory_by_barcode(
+    search: Optional[str] = Query(None, description="搜索商品编码或名称"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db)
+):
+    """
+    按条码查看库存 - 返回入库明细列表
+    
+    每条记录包含独立的商品编码、克重、工费等信息
+    """
+    try:
+        from .timezone_utils import to_china_time, format_china_time
+        
+        # 查询入库明细，关联入库单获取时间和单号
+        query = db.query(InboundDetail, InboundOrder).join(
+            InboundOrder, InboundDetail.order_id == InboundOrder.id
+        )
+        
+        # 搜索过滤
+        if search:
+            search_pattern = f"%{search}%"
+            query = query.filter(
+                (InboundDetail.product_code.ilike(search_pattern)) |
+                (InboundDetail.product_name.ilike(search_pattern))
+            )
+        
+        # 排序：按入库时间倒序
+        query = query.order_by(InboundOrder.create_time.desc())
+        
+        # 获取总数
+        total = query.count()
+        
+        # 分页
+        results = query.offset(skip).limit(limit).all()
+        
+        # 构建响应数据
+        items = []
+        for detail, order in results:
+            china_time = to_china_time(order.create_time) if order.create_time else None
+            items.append({
+                "id": detail.id,
+                "product_code": detail.product_code or "-",
+                "product_name": detail.product_name,
+                "weight": detail.weight,
+                "labor_cost": detail.labor_cost,
+                "piece_count": detail.piece_count,
+                "piece_labor_cost": detail.piece_labor_cost,
+                "total_cost": detail.total_cost,
+                "supplier": detail.supplier,
+                "order_no": order.order_no,
+                "inbound_time": format_china_time(china_time, "%Y-%m-%d %H:%M") if china_time else None,
+                "status": order.status
+            })
+        
+        return {
+            "success": True,
+            "data": items,
+            "total": total,
+            "skip": skip,
+            "limit": limit
+        }
+        
+    except Exception as e:
+        logger.error(f"按条码查询库存失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
 @app.get("/api/inventory/check-consistency")
 async def check_inventory_consistency(db: Session = Depends(get_db)):
     """
