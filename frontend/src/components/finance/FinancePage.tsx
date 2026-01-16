@@ -6,22 +6,24 @@ import { AccountReceivableTable } from './AccountReceivableTable';
 import { PaymentRecordTable } from './PaymentRecordTable';
 import { ReminderManagement } from './ReminderManagement';
 import { ReconciliationGenerator } from './ReconciliationGenerator';
-import { getReceivables, ReceivableItem } from '../../services/financeService';
+import { getReceivables, ReceivableItem, getPaymentRecords, PaymentRecordItem } from '../../services/financeService';
 import {
   mockStatistics,
-  mockPaymentRecords,
 } from '../../mockFinanceData';
 import {
   AccountReceivable,
   AccountReceivableStatus,
   PaymentRecord,
+  PaymentMethod,
   CustomerReference,
 } from '../../types/finance';
 
 export const FinancePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'receivables' | 'payments' | 'reminders' | 'reconciliation'>('receivables');
   const [receivables, setReceivables] = useState<AccountReceivable[]>([]);
+  const [paymentRecords, setPaymentRecords] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
 
   // 转换后端数据为前端格式
   const convertReceivable = (item: ReceivableItem): AccountReceivable => {
@@ -74,9 +76,59 @@ export const FinancePage: React.FC = () => {
     }
   }, []);
 
+  // 转换收款记录数据格式
+  const convertPaymentRecord = (item: PaymentRecordItem): PaymentRecord => {
+    const methodMap: Record<string, PaymentMethod> = {
+      'cash': PaymentMethod.CASH,
+      'bank_transfer': PaymentMethod.BANK_TRANSFER,
+      'wechat': PaymentMethod.WECHAT,
+      'alipay': PaymentMethod.ALIPAY,
+      'card': PaymentMethod.CARD,
+      'check': PaymentMethod.CHECK,
+      'other': PaymentMethod.OTHER,
+    };
+    return {
+      id: item.id,
+      accountReceivableId: item.accountReceivableId || 0,
+      customerId: item.customerId,
+      paymentDate: new Date(item.paymentDate),
+      amount: item.amount,
+      paymentMethod: methodMap[item.paymentMethod] || PaymentMethod.OTHER,
+      voucherImages: item.voucherImages,
+      remark: item.remark,
+      operator: item.operator || '系统',
+      createTime: new Date(item.createTime),
+      customer: item.customer ? {
+        id: item.customer.id,
+        customerNo: item.customer.customerNo,
+        name: item.customer.name,
+      } : undefined,
+    };
+  };
+
+  // 加载收款记录
+  const loadPaymentRecords = useCallback(async () => {
+    setPaymentsLoading(true);
+    try {
+      const result = await getPaymentRecords(undefined, 0, 200);
+      if (result.success && result.data) {
+        const converted = result.data.map(convertPaymentRecord);
+        setPaymentRecords(converted);
+      } else {
+        toast.error(result.error || '加载收款记录失败');
+      }
+    } catch (error) {
+      console.error('加载收款记录失败:', error);
+      toast.error('加载收款记录失败');
+    } finally {
+      setPaymentsLoading(false);
+    }
+  }, []);
+
   // 初始加载
   useEffect(() => {
     loadReceivables();
+    loadPaymentRecords();
   }, [loadReceivables]);
 
   // 获取逾期客户列表
@@ -127,7 +179,7 @@ export const FinancePage: React.FC = () => {
 
   const tabs = [
     { id: 'receivables' as const, label: '应收明细', count: receivables.length },
-    { id: 'payments' as const, label: '收款记录', count: mockPaymentRecords.length },
+    { id: 'payments' as const, label: '收款记录', count: paymentRecords.length },
     { id: 'reminders' as const, label: '催款管理', count: overdueAccounts.length },
     { id: 'reconciliation' as const, label: '对账单', count: null },
   ];
@@ -143,8 +195,8 @@ export const FinancePage: React.FC = () => {
             <p className="text-gray-600 mt-2 text-sm md:text-base">管理应收账款、收款记录、催款和对账单</p>
           </div>
           <button
-            onClick={loadReceivables}
-            disabled={loading}
+            onClick={() => { loadReceivables(); loadPaymentRecords(); }}
+            disabled={loading || paymentsLoading}
             className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -212,11 +264,18 @@ export const FinancePage: React.FC = () => {
             )}
 
             {activeTab === 'payments' && (
-              <PaymentRecordTable
-                data={mockPaymentRecords}
-                onAddPayment={handleAddPayment}
-                onViewDetail={handleViewPaymentDetail}
-              />
+              paymentsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
+                  <span className="ml-3 text-gray-500">加载中...</span>
+                </div>
+              ) : (
+                <PaymentRecordTable
+                  data={paymentRecords}
+                  onAddPayment={handleAddPayment}
+                  onViewDetail={handleViewPaymentDetail}
+                />
+              )
             )}
 
             {activeTab === 'reminders' && (

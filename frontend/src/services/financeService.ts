@@ -325,3 +325,87 @@ export async function generateReconciliationStatement(
     };
   }
 }
+
+export interface PaymentRecordItem {
+  id: number;
+  accountReceivableId?: number;
+  customerId: number;
+  paymentDate: string;
+  amount: number;
+  paymentMethod: string;
+  voucherImages?: string;
+  bankName?: string;
+  remark?: string;
+  operator?: string;
+  createTime: string;
+  customer?: {
+    id: number;
+    customerNo: string;
+    name: string;
+  };
+}
+
+export interface PaymentRecordsResponse {
+  success: boolean;
+  data?: PaymentRecordItem[];
+  total?: number;
+  error?: string;
+}
+
+/**
+ * 获取收款记录列表
+ */
+export async function getPaymentRecords(
+  customerId?: number,
+  skip: number = 0,
+  limit: number = 100
+): Promise<PaymentRecordsResponse> {
+  try {
+    const params = new URLSearchParams({
+      skip: skip.toString(),
+      limit: limit.toString(),
+    });
+    
+    if (customerId) {
+      params.append('customer_id', customerId.toString());
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/api/finance/payments?${params}`);
+    const result = await response.json();
+    
+    if (result.success && result.data) {
+      // 转换字段名为前端格式
+      const records = result.data.records.map((r: any) => ({
+        id: r.id,
+        accountReceivableId: r.account_receivable_id,
+        customerId: r.customer_id,
+        paymentDate: r.payment_date,
+        amount: r.amount,
+        paymentMethod: r.payment_method,
+        voucherImages: r.voucher_images,
+        bankName: r.bank_name,
+        remark: r.remark,
+        operator: r.operator,
+        createTime: r.create_time,
+        customer: r.customer,
+      }));
+      
+      return {
+        success: true,
+        data: records,
+        total: result.data.total,
+      };
+    } else {
+      return {
+        success: false,
+        error: result.error || '获取收款记录失败',
+      };
+    }
+  } catch (error) {
+    console.error('获取收款记录失败:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : '网络错误',
+    };
+  }
+}
