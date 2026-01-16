@@ -125,6 +125,9 @@ export const WarehousePage: React.FC = () => {
   const [inventoryViewMode, setInventoryViewMode] = useState<'byName' | 'byBarcode'>('byName');
   const [barcodeInventory, setBarcodeInventory] = useState<BarcodeInventoryItem[]>([]);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
+  
+  // 展开的商品名称（用于按品名视图中查看条码明细）
+  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
 
   // 转移表单状态
   const [showTransferForm, setShowTransferForm] = useState(false);
@@ -175,6 +178,26 @@ export const WarehousePage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 切换商品展开状态
+  const toggleProductExpand = async (productName: string) => {
+    const newSet = new Set(expandedProducts);
+    if (newSet.has(productName)) {
+      newSet.delete(productName);
+    } else {
+      newSet.add(productName);
+      // 如果条码数据还没加载，先加载
+      if (barcodeInventory.length === 0) {
+        await loadBarcodeInventory();
+      }
+    }
+    setExpandedProducts(newSet);
+  };
+  
+  // 获取某个商品名称下的所有条码明细
+  const getProductBarcodes = (productName: string) => {
+    return barcodeInventory.filter(item => item.product_name === productName);
   };
 
   // 加载按条码库存
@@ -516,25 +539,79 @@ export const WarehousePage: React.FC = () => {
                         ? getInventoryByLocation(selectedLocation) 
                         : filteredInventory
                       ).map(item => (
-                        <div key={item.product_name} className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
-                          <div className="flex items-center justify-between mb-3">
-                            <h4 className="font-semibold text-gray-900">{item.product_name}</h4>
-                            <span className="text-lg font-bold text-blue-600">{item.total_weight.toFixed(1)}g</span>
+                        <div key={item.product_name} className="border border-gray-200 rounded-lg overflow-hidden hover:border-blue-300 transition-colors">
+                          {/* 商品头部 - 可点击展开 */}
+                          <div 
+                            className="p-4 cursor-pointer hover:bg-gray-50"
+                            onClick={() => toggleProductExpand(item.product_name)}
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <ChevronDown 
+                                  className={`w-5 h-5 text-gray-400 transition-transform ${
+                                    expandedProducts.has(item.product_name) ? 'rotate-180' : ''
+                                  }`} 
+                                />
+                                <h4 className="font-semibold text-gray-900">{item.product_name}</h4>
+                              </div>
+                              <span className="text-lg font-bold text-blue-600">{item.total_weight.toFixed(1)}g</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2 ml-7">
+                              {item.locations.map(loc => (
+                                <span
+                                  key={loc.id}
+                                  className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700"
+                                >
+                                  <MapPin className="w-3 h-3 mr-1" />
+                                  {loc.location_name}: {loc.weight.toFixed(1)}g
+                                </span>
+                              ))}
+                            </div>
                           </div>
-                          <div className="flex flex-wrap gap-2">
-                            {item.locations.map(loc => (
-                              <span
-                                key={loc.id}
-                                className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700"
-                              >
-                                <MapPin className="w-3 h-3 mr-1" />
-                                {loc.location_name}: {loc.weight.toFixed(1)}g
-                              </span>
-                        ))}
-                      </div>
+                          
+                          {/* 条码明细 - 展开时显示 */}
+                          {expandedProducts.has(item.product_name) && (
+                            <div className="border-t border-gray-100 bg-gray-50 p-4">
+                              <div className="text-xs text-gray-500 mb-2 font-medium">条码明细：</div>
+                              {getProductBarcodes(item.product_name).length === 0 ? (
+                                <div className="text-sm text-gray-400 py-2">
+                                  {barcodeLoading ? '加载中...' : '暂无条码明细数据'}
+                                </div>
+                              ) : (
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-sm">
+                                    <thead className="bg-white">
+                                      <tr>
+                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">条码</th>
+                                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">克重</th>
+                                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">克工费</th>
+                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">供应商</th>
+                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">入库时间</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                      {getProductBarcodes(item.product_name).map((barcode, idx) => (
+                                        <tr key={barcode.id || idx} className="bg-white">
+                                          <td className="px-3 py-2">
+                                            <span className="font-mono text-blue-600">
+                                              {barcode.product_code || '-（无编码）'}
+                                            </span>
+                                          </td>
+                                          <td className="px-3 py-2 text-right">{barcode.weight.toFixed(2)}g</td>
+                                          <td className="px-3 py-2 text-right">¥{barcode.labor_cost}/g</td>
+                                          <td className="px-3 py-2 text-gray-600">{barcode.supplier || '-'}</td>
+                                          <td className="px-3 py-2 text-gray-500 text-xs">{barcode.inbound_time || '-'}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
               )}
                 </>
               )}
