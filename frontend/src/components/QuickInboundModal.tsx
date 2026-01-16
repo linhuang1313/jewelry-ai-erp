@@ -124,6 +124,22 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
     }
   }, [isOpen]);
   
+  // 键盘快捷键：Ctrl+N 添加新行
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+N 添加新行
+      if (e.ctrlKey && e.key === 'n') {
+        e.preventDefault(); // 阻止浏览器默认行为（打开新窗口）
+        setRows(prev => [...prev, createEmptyRow()]);
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+  
   // 获取商品属性配置
   const fetchProductAttributes = async () => {
     try {
