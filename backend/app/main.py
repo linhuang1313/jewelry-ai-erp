@@ -4741,6 +4741,92 @@ async def get_inventory_by_barcode(
         return {"success": False, "error": str(e)}
 
 
+@app.post("/api/inventory/merge-product-names")
+async def merge_product_names(
+    old_name: str = Query(..., description="原商品名称（要被合并的）"),
+    new_name: str = Query(..., description="新商品名称（合并到）"),
+    db: Session = Depends(get_db)
+):
+    """
+    合并商品名称：将 old_name 的所有数据合并到 new_name
+    
+    - 库存表：克重累加，删除旧记录
+    - 分仓库存表：克重累加，删除旧记录
+    - 入库明细表：更新商品名称
+    - 销售明细表：更新商品名称
+    """
+    try:
+        from sqlalchemy import update
+        
+        changes = {
+            "inventory": 0,
+            "location_inventory": 0,
+            "inbound_details": 0,
+            "sales_details": 0
+        }
+        
+        # 1. 处理总库存表
+        old_inv = db.query(Inventory).filter(Inventory.product_name == old_name).first()
+        new_inv = db.query(Inventory).filter(Inventory.product_name == new_name).first()
+        
+        if old_inv:
+            if new_inv:
+                # 合并克重
+                new_inv.total_weight += old_inv.total_weight
+                db.delete(old_inv)
+                changes["inventory"] = 1
+                logger.info(f"库存合并: {old_name} ({old_inv.total_weight}g) -> {new_name}")
+            else:
+                # 直接改名
+                old_inv.product_name = new_name
+                changes["inventory"] = 1
+                logger.info(f"库存改名: {old_name} -> {new_name}")
+        
+        # 2. 处理分仓库存表
+        old_loc_invs = db.query(LocationInventory).filter(LocationInventory.product_name == old_name).all()
+        for old_loc in old_loc_invs:
+            new_loc = db.query(LocationInventory).filter(
+                LocationInventory.product_name == new_name,
+                LocationInventory.location_id == old_loc.location_id
+            ).first()
+            
+            if new_loc:
+                # 合并克重
+                new_loc.weight += old_loc.weight
+                db.delete(old_loc)
+            else:
+                # 直接改名
+                old_loc.product_name = new_name
+            changes["location_inventory"] += 1
+        
+        # 3. 更新入库明细表
+        result = db.execute(
+            update(InboundDetail).where(InboundDetail.product_name == old_name).values(product_name=new_name)
+        )
+        changes["inbound_details"] = result.rowcount
+        
+        # 4. 更新销售明细表
+        result = db.execute(
+            update(SalesDetail).where(SalesDetail.product_name == old_name).values(product_name=new_name)
+        )
+        changes["sales_details"] = result.rowcount
+        
+        db.commit()
+        
+        logger.info(f"商品名称合并完成: {old_name} -> {new_name}, 变更: {changes}")
+        
+        return {
+            "success": True,
+            "message": f"已将 '{old_name}' 合并到 '{new_name}'",
+            "changes": changes
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"合并商品名称失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
 @app.get("/api/inventory/check-consistency")
 async def check_inventory_consistency(db: Session = Depends(get_db)):
     """
