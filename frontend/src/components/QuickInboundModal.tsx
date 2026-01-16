@@ -360,13 +360,28 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
 
   // 更新行数据
   const updateRow = (id: string, field: keyof InboundRow, value: string) => {
-    setRows(prev => prev.map(row => 
-      row.id === id ? { ...row, [field]: value } : row
-    ));
-    
-    // 如果是商品编码字段，触发搜索
+    // 如果是商品编码字段，检查是否完全匹配已有编码，自动填充商品名称
     if (field === 'productCode') {
+      const matchedCode = productCodes.find(
+        pc => pc.code.toUpperCase() === value.toUpperCase()
+      );
+      
+      if (matchedCode) {
+        // 完全匹配，同时更新编码和名称
+        setRows(prev => prev.map(row => 
+          row.id === id ? { ...row, productCode: matchedCode.code, productName: matchedCode.name } : row
+        ));
+      } else {
+        // 不匹配，只更新编码
+        setRows(prev => prev.map(row => 
+          row.id === id ? { ...row, [field]: value } : row
+        ));
+      }
       searchProductCode(id, value);
+    } else {
+      setRows(prev => prev.map(row => 
+        row.id === id ? { ...row, [field]: value } : row
+      ));
     }
   };
 
