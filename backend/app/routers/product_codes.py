@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional
 from ..database import get_db
-from ..models import ProductCode, ProductAttribute
+from ..models import ProductCode, ProductAttribute, InboundDetail
 from ..schemas import (
     ProductCodeCreate, ProductCodeUpdate, 
     ProductCodeResponse, ProductCodeSearchResponse
@@ -140,7 +140,35 @@ def get_product_codes(
         query = query.filter(ProductCode.code_type == code_type)
     
     codes = query.order_by(ProductCode.code).offset(skip).limit(limit).all()
-    return [ProductCodeResponse.model_validate(c) for c in codes]
+    
+    # 对于 F 编码，关联查询供应商信息
+    result = []
+    for code in codes:
+        code_dict = {
+            "id": code.id,
+            "code": code.code,
+            "name": code.name,
+            "code_type": code.code_type,
+            "is_unique": code.is_unique,
+            "is_used": code.is_used,
+            "created_by": code.created_by,
+            "created_at": code.created_at,
+            "updated_at": code.updated_at,
+            "remark": code.remark,
+            "supplier_name": None
+        }
+        
+        # 查询入库记录中的供应商信息
+        if code.code_type == "f_single":
+            inbound_detail = db.query(InboundDetail).filter(
+                InboundDetail.product_code == code.code
+            ).first()
+            if inbound_detail and inbound_detail.supplier:
+                code_dict["supplier_name"] = inbound_detail.supplier
+        
+        result.append(ProductCodeResponse(**code_dict))
+    
+    return result
 
 
 # ========== 商品属性配置 API（必须在 /{code} 之前定义）==========

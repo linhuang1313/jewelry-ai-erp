@@ -752,6 +752,7 @@ class ProductCodeResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     remark: Optional[str] = None
+    supplier_name: Optional[str] = None  # 供应商名称（通过入库记录关联）
 
 
 class ProductCodeSearchResponse(BaseModel):

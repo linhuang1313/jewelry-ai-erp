@@ -14,6 +14,7 @@ interface ProductCode {
   created_at: string | null;
   updated_at: string | null;
   remark: string | null;
+  supplier_name: string | null;
 }
 
 interface ProductAttribute {
@@ -720,6 +721,9 @@ const ProductCodePage: React.FC<ProductCodePageProps> = ({ userRole }) => {
               {activeTab === 'f_single' && (
                 <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #ddd' }}>使用状态</th>
               )}
+              {activeTab === 'f_single' && (
+                <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>供应商</th>
+              )}
               <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>备注</th>
               {canManage && activeTab !== 'predefined' && (
                 <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #ddd' }}>操作</th>
@@ -765,6 +769,11 @@ const ProductCodePage: React.FC<ProductCodePageProps> = ({ userRole }) => {
                       }}>
                         {code.is_used ? '已使用' : '未使用'}
                       </span>
+                    </td>
+                  )}
+                  {activeTab === 'f_single' && (
+                    <td style={{ padding: '12px', color: '#666' }}>
+                      {code.supplier_name || '-'}
                     </td>
                   )}
                   <td style={{ padding: '12px', color: '#666' }}>{code.remark || '-'}</td>
