@@ -29,6 +29,8 @@ interface LocationInventory {
 interface InventorySummary {
   product_name: string;
   total_weight: number;
+  quantity: number;  // 库存数量（件数）
+  total_amount: number;  // 库存金额（含工费）
   locations: LocationInventory[];
 }
 
@@ -534,83 +536,132 @@ export const WarehousePage: React.FC = () => {
                       <p className="text-gray-500">暂无库存数据</p>
                     </div>
                   ) : (
-                    <div className="space-y-4">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 sticky top-0">
+                          <tr>
+                            <th className="px-4 py-3 text-left font-medium text-gray-600 w-8"></th>
+                            <th className="px-4 py-3 text-left font-medium text-gray-600">饰品名称</th>
+                            <th className="px-4 py-3 text-right font-medium text-gray-600">库存数量</th>
+                            <th className="px-4 py-3 text-right font-medium text-gray-600">库存重量</th>
+                            <th className="px-4 py-3 text-right font-medium text-gray-600">库存金额</th>
+                            <th className="px-4 py-3 text-left font-medium text-gray-600">仓库分布</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
                       {(selectedLocation 
                         ? getInventoryByLocation(selectedLocation) 
                         : filteredInventory
                       ).map(item => (
-                        <div key={item.product_name} className="border border-gray-200 rounded-lg overflow-hidden hover:border-blue-300 transition-colors">
-                          {/* 商品头部 - 可点击展开 */}
-                          <div 
-                            className="p-4 cursor-pointer hover:bg-gray-50"
+                        <React.Fragment key={item.product_name}>
+                          {/* 商品行 - 可点击展开 */}
+                          <tr 
+                            className="hover:bg-gray-50 cursor-pointer"
                             onClick={() => toggleProductExpand(item.product_name)}
                           >
-                            <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center gap-2">
-                                <ChevronDown 
-                                  className={`w-5 h-5 text-gray-400 transition-transform ${
-                                    expandedProducts.has(item.product_name) ? 'rotate-180' : ''
-                                  }`} 
-                                />
-                                <h4 className="font-semibold text-gray-900">{item.product_name}</h4>
+                            <td className="px-4 py-3">
+                              <ChevronDown 
+                                className={`w-4 h-4 text-gray-400 transition-transform ${
+                                  expandedProducts.has(item.product_name) ? 'rotate-180' : ''
+                                }`} 
+                              />
+                            </td>
+                            <td className="px-4 py-3 font-medium text-gray-900">{item.product_name}</td>
+                            <td className="px-4 py-3 text-right text-gray-700">{item.quantity || 0}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-blue-600">{item.total_weight.toFixed(2)}g</td>
+                            <td className="px-4 py-3 text-right text-green-600">¥{(item.total_amount || 0).toFixed(2)}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap gap-1">
+                                {item.locations.map(loc => (
+                                  <span
+                                    key={loc.id}
+                                    className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600"
+                                  >
+                                    {loc.location_name}: {loc.weight.toFixed(1)}g
+                                  </span>
+                                ))}
                               </div>
-                              <span className="text-lg font-bold text-blue-600">{item.total_weight.toFixed(1)}g</span>
-                            </div>
-                            <div className="flex flex-wrap gap-2 ml-7">
-                              {item.locations.map(loc => (
-                                <span
-                                  key={loc.id}
-                                  className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700"
-                                >
-                                  <MapPin className="w-3 h-3 mr-1" />
-                                  {loc.location_name}: {loc.weight.toFixed(1)}g
-                                </span>
-                              ))}
-                            </div>
-                          </div>
+                            </td>
+                          </tr>
                           
                           {/* 条码明细 - 展开时显示 */}
                           {expandedProducts.has(item.product_name) && (
-                            <div className="border-t border-gray-100 bg-gray-50 p-4">
-                              <div className="text-xs text-gray-500 mb-2 font-medium">条码明细：</div>
-                              {getProductBarcodes(item.product_name).length === 0 ? (
-                                <div className="text-sm text-gray-400 py-2">
-                                  {barcodeLoading ? '加载中...' : '暂无条码明细数据'}
+                            <tr>
+                              <td colSpan={6} className="bg-blue-50 p-0">
+                                <div className="p-4">
+                                  <div className="text-xs text-gray-500 mb-2 font-medium">条码明细：</div>
+                                  {getProductBarcodes(item.product_name).length === 0 ? (
+                                    <div className="text-sm text-gray-400 py-2">
+                                      {barcodeLoading ? '加载中...' : '暂无条码明细数据'}
+                                    </div>
+                                  ) : (
+                                    <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
+                                      <table className="w-full text-sm">
+                                        <thead className="bg-gray-50">
+                                          <tr>
+                                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">条码</th>
+                                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">克重</th>
+                                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">克工费</th>
+                                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">件工费</th>
+                                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">金额小计</th>
+                                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">供应商</th>
+                                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">入库时间</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                          {getProductBarcodes(item.product_name).map((barcode, idx) => (
+                                            <tr key={barcode.id || idx} className="bg-white hover:bg-gray-50">
+                                              <td className="px-3 py-2">
+                                                <span className="font-mono text-blue-600">
+                                                  {barcode.product_code || '-（无编码）'}
+                                                </span>
+                                              </td>
+                                              <td className="px-3 py-2 text-right">{barcode.weight.toFixed(2)}g</td>
+                                              <td className="px-3 py-2 text-right">¥{barcode.labor_cost}/g</td>
+                                              <td className="px-3 py-2 text-right">{barcode.piece_labor_cost ? `¥${barcode.piece_labor_cost}/件` : '-'}</td>
+                                              <td className="px-3 py-2 text-right text-green-600">¥{barcode.total_cost.toFixed(2)}</td>
+                                              <td className="px-3 py-2 text-gray-600">{barcode.supplier || '-'}</td>
+                                              <td className="px-3 py-2 text-gray-500 text-xs">{barcode.inbound_time || '-'}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
                                 </div>
-                              ) : (
-                                <div className="overflow-x-auto">
-                                  <table className="w-full text-sm">
-                                    <thead className="bg-white">
-                                      <tr>
-                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">条码</th>
-                                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">克重</th>
-                                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">克工费</th>
-                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">供应商</th>
-                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">入库时间</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                      {getProductBarcodes(item.product_name).map((barcode, idx) => (
-                                        <tr key={barcode.id || idx} className="bg-white">
-                                          <td className="px-3 py-2">
-                                            <span className="font-mono text-blue-600">
-                                              {barcode.product_code || '-（无编码）'}
-                                            </span>
-                                          </td>
-                                          <td className="px-3 py-2 text-right">{barcode.weight.toFixed(2)}g</td>
-                                          <td className="px-3 py-2 text-right">¥{barcode.labor_cost}/g</td>
-                                          <td className="px-3 py-2 text-gray-600">{barcode.supplier || '-'}</td>
-                                          <td className="px-3 py-2 text-gray-500 text-xs">{barcode.inbound_time || '-'}</td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              )}
-                            </div>
+                              </td>
+                            </tr>
                           )}
-                        </div>
+                        </React.Fragment>
                       ))}
+                        </tbody>
+                        {/* 汇总行 */}
+                        <tfoot className="bg-gray-100 font-medium">
+                          <tr>
+                            <td className="px-4 py-3"></td>
+                            <td className="px-4 py-3 text-gray-700">合计</td>
+                            <td className="px-4 py-3 text-right text-gray-700">
+                              {(selectedLocation 
+                                ? getInventoryByLocation(selectedLocation) 
+                                : filteredInventory
+                              ).reduce((sum, item) => sum + (item.quantity || 0), 0)}
+                            </td>
+                            <td className="px-4 py-3 text-right font-semibold text-blue-600">
+                              {(selectedLocation 
+                                ? getInventoryByLocation(selectedLocation) 
+                                : filteredInventory
+                              ).reduce((sum, item) => sum + item.total_weight, 0).toFixed(2)}g
+                            </td>
+                            <td className="px-4 py-3 text-right font-semibold text-green-600">
+                              ¥{(selectedLocation 
+                                ? getInventoryByLocation(selectedLocation) 
+                                : filteredInventory
+                              ).reduce((sum, item) => sum + (item.total_amount || 0), 0).toFixed(2)}
+                            </td>
+                            <td className="px-4 py-3"></td>
+                          </tr>
+                        </tfoot>
+                      </table>
                     </div>
               )}
                 </>
@@ -632,36 +683,54 @@ export const WarehousePage: React.FC = () => {
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
-                        <thead className="bg-gray-50">
+                        <thead className="bg-gray-50 sticky top-0">
                           <tr>
-                            <th className="px-4 py-3 text-left font-medium text-gray-600">商品编码</th>
-                            <th className="px-4 py-3 text-left font-medium text-gray-600">商品名称</th>
-                            <th className="px-4 py-3 text-right font-medium text-gray-600">克重</th>
-                            <th className="px-4 py-3 text-right font-medium text-gray-600">克工费</th>
-                            <th className="px-4 py-3 text-center font-medium text-gray-600">件数</th>
-                            <th className="px-4 py-3 text-left font-medium text-gray-600">供应商</th>
-                            <th className="px-4 py-3 text-left font-medium text-gray-600">入库单号</th>
-                            <th className="px-4 py-3 text-left font-medium text-gray-600">入库时间</th>
+                            <th className="px-3 py-3 text-left font-medium text-gray-600">条码号</th>
+                            <th className="px-3 py-3 text-left font-medium text-gray-600">饰品名称</th>
+                            <th className="px-3 py-3 text-right font-medium text-gray-600">库存重量</th>
+                            <th className="px-3 py-3 text-right font-medium text-gray-600">克工费</th>
+                            <th className="px-3 py-3 text-right font-medium text-gray-600">件工费</th>
+                            <th className="px-3 py-3 text-right font-medium text-gray-600">金额小计</th>
+                            <th className="px-3 py-3 text-left font-medium text-gray-600">供应商</th>
+                            <th className="px-3 py-3 text-left font-medium text-gray-600">入库单号</th>
+                            <th className="px-3 py-3 text-left font-medium text-gray-600">入库时间</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                           {barcodeInventory.map(item => (
                             <tr key={item.id} className="hover:bg-gray-50">
-                              <td className="px-4 py-3">
+                              <td className="px-3 py-3">
                                 <span className="font-mono text-blue-600">{item.product_code}</span>
                               </td>
-                              <td className="px-4 py-3 font-medium text-gray-900">{item.product_name}</td>
-                              <td className="px-4 py-3 text-right">{item.weight.toFixed(2)}g</td>
-                              <td className="px-4 py-3 text-right">¥{item.labor_cost}/g</td>
-                              <td className="px-4 py-3 text-center">{item.piece_count || '-'}</td>
-                              <td className="px-4 py-3 text-gray-600">{item.supplier || '-'}</td>
-                              <td className="px-4 py-3">
+                              <td className="px-3 py-3 font-medium text-gray-900">{item.product_name}</td>
+                              <td className="px-3 py-3 text-right">{item.weight.toFixed(2)}g</td>
+                              <td className="px-3 py-3 text-right">¥{item.labor_cost}/g</td>
+                              <td className="px-3 py-3 text-right">{item.piece_labor_cost ? `¥${item.piece_labor_cost}/件` : '-'}</td>
+                              <td className="px-3 py-3 text-right text-green-600">¥{item.total_cost.toFixed(2)}</td>
+                              <td className="px-3 py-3 text-gray-600">{item.supplier || '-'}</td>
+                              <td className="px-3 py-3">
                                 <span className="text-xs text-gray-500">{item.order_no}</span>
                               </td>
-                              <td className="px-4 py-3 text-gray-500">{item.inbound_time || '-'}</td>
+                              <td className="px-3 py-3 text-gray-500">{item.inbound_time || '-'}</td>
                             </tr>
                           ))}
                         </tbody>
+                        {/* 汇总行 */}
+                        <tfoot className="bg-gray-100 font-medium">
+                          <tr>
+                            <td className="px-3 py-3 text-gray-700">合计</td>
+                            <td className="px-3 py-3 text-gray-500">{barcodeInventory.length} 件</td>
+                            <td className="px-3 py-3 text-right font-semibold text-blue-600">
+                              {barcodeInventory.reduce((sum, item) => sum + item.weight, 0).toFixed(2)}g
+                            </td>
+                            <td className="px-3 py-3"></td>
+                            <td className="px-3 py-3"></td>
+                            <td className="px-3 py-3 text-right font-semibold text-green-600">
+                              ¥{barcodeInventory.reduce((sum, item) => sum + item.total_cost, 0).toFixed(2)}
+                            </td>
+                            <td colSpan={3} className="px-3 py-3"></td>
+                          </tr>
+                        </tfoot>
                       </table>
                     </div>
                   )}

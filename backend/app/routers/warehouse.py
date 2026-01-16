@@ -161,7 +161,10 @@ async def get_inventory_summary(
     product_name: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """获取库存汇总（按商品分组，显示各位置库存）"""
+    """获取库存汇总（按商品分组，显示各位置库存、件数、金额）"""
+    from sqlalchemy import func
+    from ..models import InboundDetail
+    
     query = db.query(LocationInventory).join(Location).filter(LocationInventory.weight > 0)
     
     if product_name:
@@ -169,13 +172,36 @@ async def get_inventory_summary(
     
     items = query.order_by(LocationInventory.product_name, Location.id).all()
     
+    # 获取所有商品名称
+    product_names = list(set(item.product_name for item in items))
+    
+    # 从入库明细表统计每个商品的件数和金额
+    product_stats = {}
+    if product_names:
+        stats_query = db.query(
+            InboundDetail.product_name,
+            func.count(InboundDetail.id).label("quantity"),
+            func.sum(InboundDetail.total_cost).label("total_amount")
+        ).filter(
+            InboundDetail.product_name.in_(product_names)
+        ).group_by(InboundDetail.product_name).all()
+        
+        for stat in stats_query:
+            product_stats[stat.product_name] = {
+                "quantity": stat.quantity or 0,
+                "total_amount": float(stat.total_amount or 0)
+            }
+    
     # 按商品分组
     summary = {}
     for item in items:
         if item.product_name not in summary:
+            stats = product_stats.get(item.product_name, {"quantity": 0, "total_amount": 0})
             summary[item.product_name] = {
                 "product_name": item.product_name,
                 "total_weight": 0,
+                "quantity": stats["quantity"],
+                "total_amount": stats["total_amount"],
                 "locations": []
             }
         summary[item.product_name]["total_weight"] += item.weight

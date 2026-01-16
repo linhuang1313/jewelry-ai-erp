@@ -385,6 +385,8 @@ class LocationInventorySummary(BaseModel):
     """分仓库存汇总"""
     product_name: str
     total_weight: float  # 总库存
+    quantity: int = 0  # 库存数量（件数）
+    total_amount: float = 0.0  # 库存金额（含工费）
     locations: List[LocationInventoryResponse]  # 各位置库存
 
 
