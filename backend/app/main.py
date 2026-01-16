@@ -1708,6 +1708,10 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
         success_count = 0
         error_count = 0
         
+        # 本地缓存：跟踪已处理的库存，避免同一事务中重复查询/插入
+        inventory_cache = {}  # product_name -> Inventory object
+        location_inventory_cache = {}  # product_name -> LocationInventory object
+        
         for idx, item in enumerate(batch_data.items):
             try:
                 product_name = item.product_name
@@ -1753,29 +1757,43 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
                 )
                 db.add(detail)
                 
-                # 更新或创建总库存
-                inventory = db.query(Inventory).filter(Inventory.product_name == product_name).first()
-                if inventory:
-                    inventory.total_weight += weight
+                # 更新或创建总库存（使用本地缓存避免重复插入）
+                if product_name in inventory_cache:
+                    # 已在本批次中处理过，直接累加
+                    inventory_cache[product_name].total_weight += weight
                 else:
-                    inventory = Inventory(product_name=product_name, total_weight=weight)
-                    db.add(inventory)
+                    # 首次处理，查询数据库
+                    inventory = db.query(Inventory).filter(Inventory.product_name == product_name).first()
+                    if inventory:
+                        inventory.total_weight += weight
+                        inventory_cache[product_name] = inventory
+                    else:
+                        inventory = Inventory(product_name=product_name, total_weight=weight)
+                        db.add(inventory)
+                        inventory_cache[product_name] = inventory
                 
-                # 更新或创建分仓库存
-                location_inventory = db.query(LocationInventory).filter(
-                    LocationInventory.product_name == product_name,
-                    LocationInventory.location_id == default_location.id
-                ).first()
-                
-                if location_inventory:
-                    location_inventory.weight += weight
+                # 更新或创建分仓库存（使用本地缓存避免重复插入）
+                if product_name in location_inventory_cache:
+                    # 已在本批次中处理过，直接累加
+                    location_inventory_cache[product_name].weight += weight
                 else:
-                    location_inventory = LocationInventory(
-                        product_name=product_name,
-                        location_id=default_location.id,
-                        weight=weight
-                    )
-                    db.add(location_inventory)
+                    # 首次处理，查询数据库
+                    location_inventory = db.query(LocationInventory).filter(
+                        LocationInventory.product_name == product_name,
+                        LocationInventory.location_id == default_location.id
+                    ).first()
+                    
+                    if location_inventory:
+                        location_inventory.weight += weight
+                        location_inventory_cache[product_name] = location_inventory
+                    else:
+                        location_inventory = LocationInventory(
+                            product_name=product_name,
+                            location_id=default_location.id,
+                            weight=weight
+                        )
+                        db.add(location_inventory)
+                        location_inventory_cache[product_name] = location_inventory
                 
                 total_weight += weight
                 total_cost += item_total_cost
