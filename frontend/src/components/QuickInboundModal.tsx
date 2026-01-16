@@ -124,14 +124,14 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
     }
   }, [isOpen]);
   
-  // 键盘快捷键：Ctrl+N 添加新行
+  // 键盘快捷键：Ctrl+1 添加新行
   useEffect(() => {
     if (!isOpen) return;
     
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+N 添加新行
-      if (e.ctrlKey && e.key === 'n') {
-        e.preventDefault(); // 阻止浏览器默认行为（打开新窗口）
+      // Ctrl+1 添加新行
+      if (e.ctrlKey && e.key === '1') {
+        e.preventDefault();
         setRows(prev => [...prev, createEmptyRow()]);
       }
     };
