@@ -170,6 +170,7 @@ ROLE_PERMISSIONS = {
         'can_return_to_supplier': True,
         'can_return_to_warehouse': True,
         'can_view_finance': True,
+        'can_record_payment': True,        # 可以登记收款
         # 金料管理权限（全部）
         'can_create_gold_receipt': True,
         'can_view_gold_material': True,
