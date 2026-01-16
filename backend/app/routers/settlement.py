@@ -839,7 +839,7 @@ async def download_settlement_order(
                 p.drawString(50, y, f"应收现金：¥{settlement.total_amount:.2f}")
                 y -= 25
                 if settlement.payment_method in ["physical_gold", "mixed"] and settlement.physical_gold_weight:
-                    p.drawString(50, y, f"应收金料：{settlement.physical_gold_weight:.2f} 克")
+                    p.drawString(50, y, f"尚欠金料：{settlement.physical_gold_weight:.2f} 克")
                     y -= 25
                 y -= 15
                 
@@ -1023,7 +1023,7 @@ async def download_settlement_order(
                 <span>应收现金</span>
                 <span>¥{settlement.total_amount:.2f}</span>
             </div>
-            {f'<div class="summary-row total" style="color: #f39c12;"><span>应收金料</span><span>{settlement.physical_gold_weight:.2f} 克</span></div>' if settlement.payment_method in ["physical_gold", "mixed"] and settlement.physical_gold_weight else ''}
+            {f'<div class="summary-row total" style="color: #f39c12;"><span>尚欠金料</span><span>{settlement.physical_gold_weight:.2f} 克</span></div>' if settlement.payment_method in ["physical_gold", "mixed"] and settlement.physical_gold_weight else ''}
         </div>
         {balance_info_html}
         {f'<div class="remark"><strong>备注：</strong>{settlement.remark}</div>' if settlement.remark else ''}

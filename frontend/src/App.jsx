@@ -3113,7 +3113,8 @@ function App() {
                   `${idx + 1}. ${item.product_name}：${item.weight}克 × ¥${item.labor_cost}/克 = ¥${item.total_labor_cost.toFixed(2)}`
                 ).join('\n')
                 
-                const paymentMethodStr = data.payment_method === 'cash_price' ? '结价' : '结料'
+                const paymentMethodStr = data.payment_method === 'cash_price' ? '结价' : 
+                          data.payment_method === 'mixed' ? '混合支付' : '结料'
                 
                 const settlementMessage = `✅ **结算单确认成功**
 
