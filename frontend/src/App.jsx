@@ -3129,7 +3129,7 @@ ${itemsList}
 📊 **汇总**：
 - 总克重：${data.total_weight.toFixed(2)}克
 - 工费合计：¥${data.labor_amount.toFixed(2)}
-${data.material_amount > 0 ? `- 料费合计：¥${data.material_amount.toFixed(2)}` : ''}
+${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(2)}` : ''}
 - **应收总计：¥${data.total_amount.toFixed(2)}**
 
 <!-- SETTLEMENT_ORDER:${data.settlement_id}:${data.settlement_no} -->`
