@@ -542,7 +542,7 @@ export const WarehousePage: React.FC = () => {
                           <tr>
                             <th className="px-4 py-3 text-left font-medium text-gray-600 w-8"></th>
                             <th className="px-4 py-3 text-left font-medium text-gray-600">饰品名称</th>
-                            <th className="px-4 py-3 text-right font-medium text-gray-600">库存数量</th>
+                            <th className="px-4 py-3 text-right font-medium text-gray-600">明细数量</th>
                             <th className="px-4 py-3 text-right font-medium text-gray-600">库存重量</th>
                             <th className="px-4 py-3 text-right font-medium text-gray-600">库存金额</th>
                             <th className="px-4 py-3 text-left font-medium text-gray-600">仓库分布</th>
