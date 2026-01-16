@@ -1746,6 +1746,7 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
                 # 创建入库明细
                 detail = InboundDetail(
                     order_id=order.id,
+                    product_code=product_code,  # 保存商品编码/条码
                     product_name=product_name,
                     weight=weight,
                     labor_cost=labor_cost,
