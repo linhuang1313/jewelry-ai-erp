@@ -24,6 +24,116 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
 
+# ============= 仪表盘汇总 API =============
+
+@router.get("/dashboard/summary")
+async def get_dashboard_summary(
+    db: Session = Depends(get_db)
+):
+    """获取仪表盘汇总数据（今日/本月关键指标）"""
+    try:
+        now = china_now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        last_month_start = (month_start - timedelta(days=1)).replace(day=1)
+        yesterday_start = today_start - timedelta(days=1)
+        
+        # 今日销售额
+        today_sales = db.query(
+            func.sum(SettlementOrder.total_amount).label("amount"),
+            func.sum(SettlementOrder.total_weight).label("weight"),
+            func.count(SettlementOrder.id).label("count")
+        ).filter(
+            SettlementOrder.status.in_(["confirmed", "printed"]),
+            SettlementOrder.created_at >= today_start
+        ).first()
+        
+        # 昨日销售额（对比）
+        yesterday_sales = db.query(
+            func.sum(SettlementOrder.total_amount).label("amount")
+        ).filter(
+            SettlementOrder.status.in_(["confirmed", "printed"]),
+            SettlementOrder.created_at >= yesterday_start,
+            SettlementOrder.created_at < today_start
+        ).first()
+        
+        # 本月销售额
+        month_sales = db.query(
+            func.sum(SettlementOrder.total_amount).label("amount"),
+            func.sum(SettlementOrder.total_weight).label("weight"),
+            func.count(SettlementOrder.id).label("count")
+        ).filter(
+            SettlementOrder.status.in_(["confirmed", "printed"]),
+            SettlementOrder.created_at >= month_start
+        ).first()
+        
+        # 上月销售额（对比）
+        last_month_sales = db.query(
+            func.sum(SettlementOrder.total_amount).label("amount")
+        ).filter(
+            SettlementOrder.status.in_(["confirmed", "printed"]),
+            SettlementOrder.created_at >= last_month_start,
+            SettlementOrder.created_at < month_start
+        ).first()
+        
+        # 今日/本月订单数
+        today_amount = float(today_sales.amount or 0)
+        yesterday_amount = float(yesterday_sales.amount or 0)
+        month_amount = float(month_sales.amount or 0)
+        last_month_amount = float(last_month_sales.amount or 0)
+        
+        # 计算同比
+        today_change = ((today_amount - yesterday_amount) / yesterday_amount * 100) if yesterday_amount > 0 else 0
+        month_change = ((month_amount - last_month_amount) / last_month_amount * 100) if last_month_amount > 0 else 0
+        
+        # 本月新客户数
+        new_customers = db.query(func.count(distinct(SalesOrder.customer_name))).filter(
+            SalesOrder.create_time >= month_start,
+            ~SalesOrder.customer_name.in_(
+                db.query(distinct(SalesOrder.customer_name)).filter(
+                    SalesOrder.create_time < month_start
+                )
+            )
+        ).scalar() or 0
+        
+        # 库存总值（简化计算）
+        total_inventory = db.query(func.sum(Inventory.total_weight)).scalar() or 0
+        
+        # 待处理事项
+        pending_settlements = db.query(func.count(SettlementOrder.id)).filter(
+            SettlementOrder.status == "pending"
+        ).scalar() or 0
+        
+        return {
+            "success": True,
+            "data": {
+                "today": {
+                    "sales_amount": today_amount,
+                    "sales_weight": float(today_sales.weight or 0),
+                    "order_count": int(today_sales.count or 0),
+                    "change_percent": round(today_change, 1)
+                },
+                "month": {
+                    "sales_amount": month_amount,
+                    "sales_weight": float(month_sales.weight or 0),
+                    "order_count": int(month_sales.count or 0),
+                    "change_percent": round(month_change, 1)
+                },
+                "inventory": {
+                    "total_weight": float(total_inventory)
+                },
+                "new_customers": new_customers,
+                "pending": {
+                    "settlements": pending_settlements
+                },
+                "updated_at": now.isoformat()
+            }
+        }
+    except Exception as e:
+        logger.error(f"获取仪表盘汇总失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
+
+
 # ============= 销售分析 API =============
 
 @router.get("/sales/trends")

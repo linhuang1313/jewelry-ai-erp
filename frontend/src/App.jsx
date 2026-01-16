@@ -9,6 +9,7 @@ import { createCardFromBackend, updateCard, createNewCard } from './utils/inboun
 import { confirmInbound, reportError } from './services/inboundService'
 import { FinancePage } from './components/finance'
 import { AnalyticsPage } from './components/AnalyticsPage'
+import DashboardPage from './components/DashboardPage'
 import { ExportPage } from './components/ExportPage'
 import { WarehousePage } from './components/WarehousePage'
 import { SettlementPage } from './components/SettlementPage'
@@ -24,7 +25,7 @@ import GoldMaterialPage from './components/GoldMaterialPage'
 import ProductCodePage from './components/ProductCodePage'
 import LineNumberedTextarea from './components/LineNumberedTextarea'
 import { USER_ROLES } from './constants/roles'
-import { DollarSign, ArrowLeft, ChevronDown, BarChart3, Download, Warehouse, Users, UserPlus, FileText, History, Building2, RotateCcw, Package, Calculator, Scale } from 'lucide-react'
+import { DollarSign, ArrowLeft, ChevronDown, BarChart3, Download, Warehouse, Users, UserPlus, FileText, History, Building2, RotateCcw, Package, Calculator, Scale, TrendingUp } from 'lucide-react'
 import { ChatHistoryPanel } from './components/ChatHistoryPanel'
 import {
   Chart as ChartJS,
@@ -1733,6 +1734,18 @@ function App() {
               {/* 导航按钮 */}
               {currentPage === 'chat' ? (
                 <>
+                  {/* 仪表盘按钮 - 管理层快速查看 */}
+                  {hasPermission(userRole, 'canViewAnalytics') && (
+                    <button
+                      onClick={() => setCurrentPage('dashboard')}
+                      className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl 
+                                 hover:from-blue-600 hover:to-indigo-600 transition-all duration-200 font-medium text-[15px] 
+                                 shadow-sm hover:shadow-md"
+                    >
+                      <TrendingUp className="w-4 h-4" />
+                      <span>仪表盘</span>
+                    </button>
+                  )}
                   {/* 数据分析按钮 - 使用权限检查 */}
                   {hasPermission(userRole, 'canViewAnalytics') && (
                     <>
@@ -2062,6 +2075,18 @@ function App() {
                       <div className="text-2xl mb-3">🏭</div>
                       <h3 className="font-semibold text-gray-900 mb-2">供应商管理</h3>
                       <p className="text-sm text-gray-600">管理供应商信息</p>
+                    </div>
+                  )}
+                  
+                  {/* 仪表盘卡片 - 管理层快速查看 */}
+                  {hasPermission(userRole, 'canViewAnalytics') && (
+                    <div 
+                      onClick={() => setCurrentPage('dashboard')}
+                      className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                    >
+                      <div className="text-2xl mb-3">📈</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">数据仪表盘</h3>
+                      <p className="text-sm text-gray-600">今日销售、业绩排行</p>
                     </div>
                   )}
                   
@@ -3320,6 +3345,12 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
         {currentPage === 'product-codes' && (
           <div className="flex-1 overflow-y-auto">
             <ProductCodePage userRole={userRole} />
+          </div>
+        )}
+
+        {currentPage === 'dashboard' && (
+          <div className="flex-1 overflow-y-auto">
+            <DashboardPage />
           </div>
         )}
       </div>
