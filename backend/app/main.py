@@ -1891,7 +1891,6 @@ async def download_inbound_order(
         
         if format == "pdf":
             try:
-                from reportlab.lib.pagesizes import A4
                 from reportlab.pdfgen import canvas
                 from reportlab.lib.units import mm
                 from reportlab.pdfbase import pdfmetrics
@@ -1900,10 +1899,14 @@ async def download_inbound_order(
                 import os
                 from .timezone_utils import to_china_time, format_china_time
                 
+                # 自定义纸张尺寸：241mm × 140mm 横向（针式打印机常用尺寸）
+                PAGE_WIDTH = 241 * mm
+                PAGE_HEIGHT = 140 * mm
+                
                 # 生成PDF
                 buffer = io.BytesIO()
-                p = canvas.Canvas(buffer, pagesize=A4)
-                width, height = A4
+                p = canvas.Canvas(buffer, pagesize=(PAGE_WIDTH, PAGE_HEIGHT))
+                width, height = PAGE_WIDTH, PAGE_HEIGHT
                 
                 # 使用 CID 字体（内置支持中文，无需外部字体文件）
                 try:
@@ -1914,131 +1917,136 @@ async def download_inbound_order(
                     logger.warning(f"注册CID字体失败: {cid_error}")
                     chinese_font = None
                 
-                # 标题
-                if chinese_font:
-                    p.setFont(chinese_font, 18)
-                else:
-                    p.setFont("Helvetica-Bold", 18)
-                p.drawString(50, height - 50, "珠宝入库单")
+                # 页边距设置（适应241mm×140mm横向纸张）
+                left_margin = 10 * mm
+                right_margin = width - 10 * mm
+                top_margin = height - 8 * mm
                 
-                # 入库单信息
-                font_size = 12
-                y = height - 100
+                # 标题（居中）
                 if chinese_font:
-                    p.setFont(chinese_font, font_size)
+                    p.setFont(chinese_font, 14)
                 else:
-                    p.setFont("Helvetica", font_size)
+                    p.setFont("Helvetica-Bold", 14)
+                p.drawCentredString(width / 2, top_margin, "珠宝入库单")
                 
-                # 入库单号
-                p.drawString(50, y, f"入库单号：{order.order_no}")
-                y -= 25
+                # 入库单信息（两列布局）
+                y = top_margin - 18
+                if chinese_font:
+                    p.setFont(chinese_font, 9)
+                else:
+                    p.setFont("Helvetica", 9)
                 
                 # 入库时间（使用时区转换）
                 if order.create_time:
                     china_time = to_china_time(order.create_time)
-                    create_time_str = format_china_time(china_time, '%Y-%m-%d %H:%M:%S')
+                    create_time_str = format_china_time(china_time, '%Y-%m-%d %H:%M')
                 else:
                     create_time_str = "未知"
-                p.drawString(50, y, f"入库时间：{create_time_str}")
-                y -= 25
                 
-                # 操作员
-                p.drawString(50, y, f"操作员：{order.operator}")
-                y -= 40
-                
-                # 表格标题（始终使用中文）
-                if chinese_font:
-                    p.setFont(chinese_font, 9)
-                else:
-                    p.setFont("Helvetica-Bold", 9)
-                p.drawString(50, y, "商品名称")
-                p.drawString(160, y, "重量(克)")
-                p.drawString(220, y, "克工费")
-                p.drawString(270, y, "件数")
-                p.drawString(310, y, "件工费")
-                p.drawString(360, y, "总成本")
-                p.drawString(420, y, "供应商")
-                y -= 25
+                # 左侧：入库单号
+                p.drawString(left_margin, y, f"单号：{order.order_no}")
+                # 右侧：时间和操作员
+                p.drawString(width / 2, y, f"时间：{create_time_str}  操作员：{order.operator}")
+                y -= 15
                 
                 # 分隔线
-                p.line(50, y, width - 50, y)
-                y -= 15
+                p.line(left_margin, y, right_margin, y)
+                y -= 12
+                
+                # 表格标题（调整列位置适应横向布局）
+                col_x = [left_margin, 70*mm, 100*mm, 125*mm, 150*mm, 175*mm, 200*mm]
+                if chinese_font:
+                    p.setFont(chinese_font, 8)
+                else:
+                    p.setFont("Helvetica-Bold", 8)
+                p.drawString(col_x[0], y, "商品名称")
+                p.drawString(col_x[1], y, "重量(克)")
+                p.drawString(col_x[2], y, "克工费")
+                p.drawString(col_x[3], y, "件数")
+                p.drawString(col_x[4], y, "件工费")
+                p.drawString(col_x[5], y, "总成本")
+                p.drawString(col_x[6], y, "供应商")
+                y -= 10
+                
+                # 分隔线
+                p.line(left_margin, y, right_margin, y)
+                y -= 10
                 
                 # 商品明细
                 total_cost = 0
                 total_weight = 0
                 total_piece_count = 0
-                page_height = 100
+                bottom_margin = 25 * mm  # 底部留空给合计
                 
                 for idx, detail in enumerate(details):
-                    if y < page_height:  # 换页
+                    if y < bottom_margin:  # 换页
                         p.showPage()
-                        y = height - 50
-                        # 重新绘制表头（始终使用中文）
+                        y = top_margin - 10
+                        # 重新绘制表头
                         if chinese_font:
-                            p.setFont(chinese_font, 9)
+                            p.setFont(chinese_font, 8)
                         else:
-                            p.setFont("Helvetica-Bold", 9)
-                        p.drawString(50, y, "商品名称")
-                        p.drawString(160, y, "重量(克)")
-                        p.drawString(220, y, "克工费")
-                        p.drawString(270, y, "件数")
-                        p.drawString(310, y, "件工费")
-                        p.drawString(360, y, "总成本")
-                        p.drawString(420, y, "供应商")
-                        y -= 25
-                        p.line(50, y, width - 50, y)
-                        y -= 15
+                            p.setFont("Helvetica-Bold", 8)
+                        p.drawString(col_x[0], y, "商品名称")
+                        p.drawString(col_x[1], y, "重量(克)")
+                        p.drawString(col_x[2], y, "克工费")
+                        p.drawString(col_x[3], y, "件数")
+                        p.drawString(col_x[4], y, "件工费")
+                        p.drawString(col_x[5], y, "总成本")
+                        p.drawString(col_x[6], y, "供应商")
+                        y -= 10
+                        p.line(left_margin, y, right_margin, y)
+                        y -= 10
                     
-                    # 商品信息（处理长文本）
-                    product_name = detail.product_name[:15] if len(detail.product_name) > 15 else detail.product_name
-                    supplier_name = (detail.supplier or "-")[:10] if detail.supplier else "-"
+                    # 商品信息（处理长文本，适应更紧凑的布局）
+                    product_name = detail.product_name[:12] if len(detail.product_name) > 12 else detail.product_name
+                    supplier_name = (detail.supplier or "-")[:6] if detail.supplier else "-"
                     piece_count = getattr(detail, 'piece_count', None) or 0
                     piece_labor_cost = getattr(detail, 'piece_labor_cost', None) or 0
                     piece_count_str = str(piece_count) if piece_count > 0 else "-"
-                    piece_labor_cost_str = f"{piece_labor_cost:.2f}" if piece_count > 0 else "-"
+                    piece_labor_cost_str = f"{piece_labor_cost:.1f}" if piece_count > 0 else "-"
                     
-                    # 使用中文字体绘制商品名称和供应商（如果可用）
+                    # 使用中文字体绘制商品名称和供应商
                     if chinese_font:
-                        p.setFont(chinese_font, 9)
-                        p.drawString(50, y, product_name)
-                        p.setFont("Helvetica", 9)  # 数字使用Helvetica
-                        p.drawString(160, y, f"{detail.weight:.2f}")
-                        p.drawString(220, y, f"{detail.labor_cost:.2f}")
-                        p.drawString(270, y, piece_count_str)
-                        p.drawString(310, y, piece_labor_cost_str)
-                        p.drawString(360, y, f"{detail.total_cost:.2f}")
-                        p.setFont(chinese_font, 9)
-                        p.drawString(420, y, supplier_name)
+                        p.setFont(chinese_font, 8)
+                        p.drawString(col_x[0], y, product_name)
+                        p.setFont("Helvetica", 8)
+                        p.drawString(col_x[1], y, f"{detail.weight:.2f}")
+                        p.drawString(col_x[2], y, f"{detail.labor_cost:.1f}")
+                        p.drawString(col_x[3], y, piece_count_str)
+                        p.drawString(col_x[4], y, piece_labor_cost_str)
+                        p.drawString(col_x[5], y, f"{detail.total_cost:.2f}")
+                        p.setFont(chinese_font, 8)
+                        p.drawString(col_x[6], y, supplier_name)
                     else:
-                        p.setFont("Helvetica", 9)
-                        p.drawString(50, y, product_name)
-                        p.drawString(160, y, f"{detail.weight:.2f}")
-                        p.drawString(220, y, f"{detail.labor_cost:.2f}")
-                        p.drawString(270, y, piece_count_str)
-                        p.drawString(310, y, piece_labor_cost_str)
-                        p.drawString(360, y, f"{detail.total_cost:.2f}")
-                        p.drawString(420, y, supplier_name)
+                        p.setFont("Helvetica", 8)
+                        p.drawString(col_x[0], y, product_name)
+                        p.drawString(col_x[1], y, f"{detail.weight:.2f}")
+                        p.drawString(col_x[2], y, f"{detail.labor_cost:.1f}")
+                        p.drawString(col_x[3], y, piece_count_str)
+                        p.drawString(col_x[4], y, piece_labor_cost_str)
+                        p.drawString(col_x[5], y, f"{detail.total_cost:.2f}")
+                        p.drawString(col_x[6], y, supplier_name)
                     
                     total_cost += detail.total_cost
                     total_weight += detail.weight
                     total_piece_count += piece_count
-                    y -= 20
+                    y -= 12
                 
-                # 总计（始终使用中文）
-                y -= 10
-                p.line(50, y, width - 50, y)
-                y -= 20
+                # 总计（紧凑布局）
+                y -= 5
+                p.line(left_margin, y, right_margin, y)
+                y -= 12
                 if chinese_font:
-                    p.setFont(chinese_font, 12)
+                    p.setFont(chinese_font, 9)
                 else:
-                    p.setFont("Helvetica-Bold", 12)
-                p.drawString(50, y, f"总重量：{total_weight:.2f} 克")
-                y -= 25
+                    p.setFont("Helvetica-Bold", 9)
+                # 一行显示所有合计信息
+                summary_text = f"合计：重量 {total_weight:.2f}克"
                 if total_piece_count > 0:
-                    p.drawString(50, y, f"总件数：{total_piece_count} 件")
-                    y -= 25
-                p.drawString(50, y, f"总成本：¥{total_cost:.2f}")
+                    summary_text += f"  |  件数 {total_piece_count}件"
+                summary_text += f"  |  总工费 ¥{total_cost:.2f}"
+                p.drawString(left_margin, y, summary_text)
                 
                 p.save()
                 buffer.seek(0)
