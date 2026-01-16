@@ -95,6 +95,10 @@ class AIResponse(BaseModel):
     payment_amount: Optional[float] = None  # 收款金额（元）
     payment_method: Optional[str] = None  # 收款方式：转账/现金/微信/支付宝/刷卡
     payment_remark: Optional[str] = None  # 备注
+    # 销售数据查询相关字段
+    sales_query_type: Optional[str] = None  # 查询类型：today/month/compare/top_products/salesperson/summary
+    sales_query_days: Optional[int] = None  # 查询天数
+    sales_query_salesperson: Optional[str] = None  # 查询特定业务员
 
 
 # ============= 入库相关 Schema =============

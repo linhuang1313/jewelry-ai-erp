@@ -911,6 +911,54 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     data['customer_debt'] = debt_result
                     logger.info(f"[流式] 已收集客户账务数据: {debt_customer_name}")
             
+            # 如果是销售数据查询，收集销售分析数据
+            if ai_response.action == "销售数据查询":
+                sales_query_type = getattr(ai_response, 'sales_query_type', 'summary') or 'summary'
+                sales_query_days = getattr(ai_response, 'sales_query_days', 30) or 30
+                sales_query_salesperson = getattr(ai_response, 'sales_query_salesperson', None)
+                
+                yield f"data: {json.dumps({'type': 'thinking', 'step': '数据收集', 'message': '正在查询销售数据...', 'progress': 60}, ensure_ascii=False)}\n\n"
+                await asyncio.sleep(0.05)
+                
+                # 导入分析API
+                from .routers.analytics import (
+                    get_dashboard_summary,
+                    get_sales_trends,
+                    get_top_products,
+                    get_salesperson_performance
+                )
+                
+                sales_data = {
+                    'query_type': sales_query_type,
+                    'query_salesperson': sales_query_salesperson
+                }
+                
+                # 获取仪表盘汇总（今日/本月数据）
+                summary_result = await get_dashboard_summary(db=db)
+                if summary_result.get('success'):
+                    sales_data['summary'] = summary_result.get('data')
+                
+                # 获取销售趋势
+                if sales_query_type in ['month', 'compare', 'summary']:
+                    trends_result = await get_sales_trends(days=sales_query_days, period='day', db=db)
+                    if trends_result.get('success'):
+                        sales_data['trends'] = trends_result.get('data', {}).get('trends', [])
+                
+                # 获取热销商品
+                if sales_query_type in ['top_products', 'summary']:
+                    products_result = await get_top_products(limit=10, sort_by='amount', days=sales_query_days, db=db)
+                    if products_result.get('success'):
+                        sales_data['top_products'] = products_result.get('data', {}).get('products', [])
+                
+                # 获取业务员业绩
+                if sales_query_type in ['salesperson', 'summary']:
+                    salesperson_result = await get_salesperson_performance(days=sales_query_days, db=db)
+                    if salesperson_result.get('success'):
+                        sales_data['salesperson_performance'] = salesperson_result.get('data', {}).get('salespersons', [])
+                
+                data['sales_analytics'] = sales_data
+                logger.info(f"[流式] 已收集销售分析数据: {sales_query_type}")
+            
             yield f"data: {json.dumps({'type': 'thinking', 'step': '数据收集', 'message': '正在收集订单数据...', 'progress': 65}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0.05)
             

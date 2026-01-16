@@ -384,6 +384,53 @@ class AIAnalyzer:
                 text += f"查询失败：{debt_data.get('message', '未知错误')}\n"
                 text += f"搜索的客户名称：{debt_data.get('customer_name', 'N/A')}\n\n"
         
+        # 销售分析数据
+        if data.get("sales_analytics"):
+            analytics = data["sales_analytics"]
+            text += f"\n=== 销售数据分析 ===\n"
+            
+            # 仪表盘汇总
+            summary = analytics.get("summary", {})
+            if summary:
+                today = summary.get("today", {})
+                month = summary.get("month", {})
+                
+                text += "\n--- 今日销售 ---\n"
+                text += f"💰 销售额：¥{today.get('sales_amount', 0):.2f}\n"
+                text += f"📦 订单数：{today.get('order_count', 0)}单\n"
+                text += f"⚖️ 销售克重：{today.get('sales_weight', 0):.2f}克\n"
+                if today.get('change_percent') is not None:
+                    change = today['change_percent']
+                    text += f"📈 较昨日：{'↑' if change >= 0 else '↓'}{abs(change):.1f}%\n"
+                
+                text += "\n--- 本月销售 ---\n"
+                text += f"💰 销售额：¥{month.get('sales_amount', 0):.2f}\n"
+                text += f"📦 订单数：{month.get('order_count', 0)}单\n"
+                text += f"⚖️ 销售克重：{month.get('sales_weight', 0):.2f}克\n"
+                if month.get('change_percent') is not None:
+                    change = month['change_percent']
+                    text += f"📈 较上月：{'↑' if change >= 0 else '↓'}{abs(change):.1f}%\n"
+            
+            # 热销商品
+            top_products = analytics.get("top_products", [])
+            if top_products:
+                text += "\n--- 热销商品TOP5 ---\n"
+                for idx, p in enumerate(top_products[:5], 1):
+                    text += f"{idx}. {p.get('product_name', 'N/A')}：¥{p.get('total_amount', 0):.2f}（{p.get('total_weight', 0):.1f}克）\n"
+            
+            # 业务员业绩
+            salesperson_data = analytics.get("salesperson_performance", [])
+            if salesperson_data:
+                text += "\n--- 业务员业绩排行 ---\n"
+                query_sp = analytics.get("query_salesperson")
+                for sp in salesperson_data:
+                    # 如果指定了业务员，只显示该业务员
+                    if query_sp and query_sp not in sp.get('salesperson', ''):
+                        continue
+                    text += f"👔 {sp.get('salesperson', 'N/A')}：¥{sp.get('total_amount', 0):.2f}，{sp.get('order_count', 0)}单，{sp.get('total_weight', 0):.1f}克\n"
+            
+            text += "\n"
+        
         return text
     
     def analyze(self, user_message: str, intent: str, data: Dict[str, Any]) -> str:
@@ -752,6 +799,44 @@ class AIAnalyzer:
 
 请用自然、专业且友好的语言回答，使用表情符号增强可读性：💰现金、⚖️金料、📦存料。"""
             system_prompt = "你是珠宝ERP系统AI助手，专门帮助用户查询客户账务信息。请以友好、清晰的方式回答。"
+        elif intent == "销售数据查询":
+            # 销售数据查询的提示词
+            sales_analytics = data.get("sales_analytics", {})
+            query_type = sales_analytics.get("query_type", "summary")
+            query_salesperson = sales_analytics.get("query_salesperson")
+            
+            prompt = f"""你是一个专业的珠宝ERP系统AI分析专家。用户要查询销售数据统计。
+
+**用户问题：** {user_message}
+**用户意图：** {intent}
+**查询类型：** {query_type}
+{f'**指定业务员：** {query_salesperson}' if query_salesperson else ''}
+
+以下是系统数据库中查询到的销售分析数据：
+
+{data_text}
+
+请基于这些数据，用清晰友好的方式回答用户关于销售数据的问题。要求：
+
+1. **关键指标展示**：
+   - 💰 今日销售额：¥金额（订单数、环比变化）
+   - 📊 本月销售额：¥金额（订单数、同比变化）
+   - ⚖️ 销售克重：xx克
+
+2. **排行榜**（根据查询类型）：
+   - 🏆 热销商品TOP5（如果是top_products查询）
+   - 👔 业务员业绩排行（如果是salesperson查询）
+
+3. **对比分析**（如果是compare查询）：
+   - 本月 vs 上月：变化率、增减情况
+
+4. **友好总结**：
+   - 简洁的业绩评价
+   - 亮点或需要关注的地方
+
+请用自然、专业且友好的语言回答，使用表情符号增强可读性。
+金额格式：如果超过1万，用"万"为单位，如 ¥12.5万。"""
+            system_prompt = "你是珠宝ERP系统AI助手，专门帮助用户分析销售数据。请以友好、清晰的方式回答，突出关键指标。"
         elif needs_analysis:
             # 用户明确要求分析，强制给出详细回答
             prompt = f"""**用户问题：** {user_message}
