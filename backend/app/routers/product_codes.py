@@ -39,8 +39,17 @@ def get_next_fl_code_api(db: Session = Depends(get_db)):
 
 
 @router.get("/batch-f-codes", response_model=dict)
-def get_batch_f_codes(count: int = 1, db: Session = Depends(get_db)):
-    """批量获取多个F编码（不创建，仅预览）"""
+def get_batch_f_codes(
+    count: int = 1, 
+    save: bool = Query(False, description="是否保存到数据库（确保全局唯一）"),
+    product_name: Optional[str] = Query(None, description="商品名称（save=true时必填）"),
+    db: Session = Depends(get_db)
+):
+    """批量获取多个F编码
+    
+    - save=false（默认）：仅预览，不保存
+    - save=true：保存到数据库，确保全局唯一递增
+    """
     if count <= 0:
         return {"codes": [], "count": 0}
     if count > 500:
@@ -63,11 +72,30 @@ def get_batch_f_codes(count: int = 1, db: Session = Depends(get_db)):
     # 生成编码列表
     codes = [f"F{start_num + i:08d}" for i in range(count)]
     
+    # 如果需要保存到数据库
+    if save:
+        if not product_name:
+            product_name = "珐琅产品"  # 默认名称
+        
+        for code in codes:
+            new_code = ProductCode(
+                code=code,
+                name=product_name,
+                code_type="f_single",
+                is_unique=1,
+                is_used=0,
+                created_by="系统"
+            )
+            db.add(new_code)
+        
+        db.commit()
+    
     return {
         "codes": codes,
         "count": len(codes),
         "start": codes[0] if codes else None,
-        "end": codes[-1] if codes else None
+        "end": codes[-1] if codes else None,
+        "saved": save
     }
 
 

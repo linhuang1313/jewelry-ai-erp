@@ -236,8 +236,9 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       let codes: string[] = [];
       
       if (enamelCodeType === 'f') {
-        // F码：每件一个唯一编码
-        const response = await fetch(`${API_BASE_URL}/api/product-codes/batch-f-codes?count=${count}`);
+        // F码：每件一个唯一编码，保存到数据库确保全局唯一
+        const encodedName = encodeURIComponent(enamelProductName.trim());
+        const response = await fetch(`${API_BASE_URL}/api/product-codes/batch-f-codes?count=${count}&save=true&product_name=${encodedName}`);
         if (response.ok) {
           const data = await response.json();
           codes = data.codes || [];
