@@ -70,6 +70,26 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
   const [enamelWeight, setEnamelWeight] = useState<string>('');
   const [enamelLaborCost, setEnamelLaborCost] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showEnamelDropdown, setShowEnamelDropdown] = useState(false); // 珐琅商品下拉框
+
+  // 获取珐琅相关商品列表（从商品编码表中筛选）
+  const enamelProducts = React.useMemo(() => {
+    const enamelNames = productCodes
+      .filter(p => p.name && p.name.includes('珐琅'))
+      .map(p => p.name);
+    // 去重
+    return [...new Set(enamelNames)];
+  }, [productCodes]);
+
+  // 根据输入过滤珐琅商品
+  const filteredEnamelProducts = React.useMemo(() => {
+    if (!enamelProductName.trim()) {
+      return enamelProducts;
+    }
+    return enamelProducts.filter(name => 
+      name.toLowerCase().includes(enamelProductName.toLowerCase())
+    );
+  }, [enamelProducts, enamelProductName]);
 
   // 加载供应商列表
   useEffect(() => {
@@ -86,13 +106,17 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       if (!target.closest('.dropdown-container')) {
         setOpenDropdownId(null);
       }
+      // 关闭珐琅商品下拉框
+      if (!target.closest('.enamel-dropdown-container')) {
+        setShowEnamelDropdown(false);
+      }
     };
     
-    if (openDropdownId) {
+    if (openDropdownId || showEnamelDropdown) {
       document.addEventListener('click', handleClickOutside);
       return () => document.removeEventListener('click', handleClickOutside);
     }
-  }, [openDropdownId]);
+  }, [openDropdownId, showEnamelDropdown]);
 
   const fetchSuppliers = async () => {
     try {
@@ -748,16 +772,57 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                   </div>
                 </div>
                 
-                {/* 商品名称 */}
-                <div>
+                {/* 商品名称 - 可搜索下拉框 */}
+                <div className="relative enamel-dropdown-container">
                   <label className="block text-xs text-gray-600 mb-1">商品名称 *</label>
-                  <input
-                    type="text"
-                    value={enamelProductName}
-                    onChange={(e) => setEnamelProductName(e.target.value)}
-                    placeholder="如：珐琅吊坠"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={enamelProductName}
+                      onChange={(e) => {
+                        setEnamelProductName(e.target.value);
+                        setShowEnamelDropdown(true);
+                      }}
+                      onFocus={() => setShowEnamelDropdown(true)}
+                      placeholder="输入或选择珐琅产品"
+                      className="w-full px-3 py-2 pr-8 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowEnamelDropdown(!showEnamelDropdown)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <svg className={`w-4 h-4 transition-transform ${showEnamelDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
+                  {/* 下拉选项 */}
+                  {showEnamelDropdown && filteredEnamelProducts.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {filteredEnamelProducts.map((name, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setEnamelProductName(name);
+                            setShowEnamelDropdown(false);
+                          }}
+                          className={`w-full px-3 py-2 text-left text-sm hover:bg-purple-50 ${
+                            enamelProductName === name ? 'bg-purple-100 text-purple-700' : 'text-gray-700'
+                          }`}
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {/* 无匹配提示 */}
+                  {showEnamelDropdown && enamelProductName && filteredEnamelProducts.length === 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-sm text-gray-500">
+                      未找到匹配商品，将使用输入的名称
+                    </div>
+                  )}
                 </div>
                 
                 {/* 数量 */}
