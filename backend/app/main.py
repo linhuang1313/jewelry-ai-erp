@@ -681,6 +681,17 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     elif ai_response.action == "查询客户账务":
                         # 特殊处理：查询客户账务，需要走AI分析流程
                         pass  # 继续执行后续的AI分析流程
+                    elif ai_response.action == "登记收款":
+                        # 登记收款：返回确认卡片数据
+                        result = await handle_payment_registration(ai_response, db)
+                        if result.get("success"):
+                            # 返回确认卡片数据
+                            yield f"data: {json.dumps({'type': 'payment_confirm', 'data': result}, ensure_ascii=False)}\n\n"
+                            return
+                        else:
+                            # 返回错误信息
+                            yield f"data: {json.dumps({'type': 'complete', 'data': result}, ensure_ascii=False)}\n\n"
+                            return
                     
                     # 【上下文工程】记录成功操作（Append-Only）
                     action_desc = f"{ai_response.action}"
@@ -3070,6 +3081,96 @@ async def handle_return(ai_response, db: Session, user_role: str) -> Dict[str, A
         return {
             "success": False,
             "message": f"退货失败: {str(e)}"
+        }
+
+
+async def handle_payment_registration(ai_response, db: Session) -> Dict[str, Any]:
+    """处理登记收款：返回确认数据供前端显示确认卡片"""
+    try:
+        customer_name = ai_response.payment_customer_name
+        amount = ai_response.payment_amount
+        payment_method = ai_response.payment_method or "转账"
+        remark = ai_response.payment_remark or ""
+        
+        # 验证必填信息
+        if not customer_name:
+            return {
+                "success": False,
+                "message": "请提供收款的客户名称，例如：张老板收到5000元"
+            }
+        
+        if not amount or amount <= 0:
+            return {
+                "success": False,
+                "message": "请提供收款金额，例如：张老板收到5000元"
+            }
+        
+        # 模糊查询客户
+        from .models import Customer
+        from .models.finance import AccountReceivable
+        from sqlalchemy import func
+        
+        customer = db.query(Customer).filter(
+            Customer.name.ilike(f"%{customer_name}%")
+        ).first()
+        
+        if not customer:
+            return {
+                "success": False,
+                "message": f"未找到名称包含【{customer_name}】的客户，请确认客户名称"
+            }
+        
+        # 查询客户当前欠款
+        total_debt = db.query(func.sum(AccountReceivable.unpaid_amount)).filter(
+            AccountReceivable.customer_id == customer.id,
+            AccountReceivable.status.in_(["unpaid", "overdue"])
+        ).scalar() or 0
+        
+        # 查询未付清的应收账款明细
+        unpaid_receivables = db.query(AccountReceivable).filter(
+            AccountReceivable.customer_id == customer.id,
+            AccountReceivable.status.in_(["unpaid", "overdue"]),
+            AccountReceivable.unpaid_amount > 0
+        ).order_by(AccountReceivable.credit_start_date.asc()).all()
+        
+        receivables_list = []
+        for r in unpaid_receivables:
+            receivables_list.append({
+                "id": r.id,
+                "sales_order_id": r.sales_order_id,
+                "total_amount": r.total_amount,
+                "received_amount": r.received_amount,
+                "unpaid_amount": r.unpaid_amount,
+                "credit_start_date": r.credit_start_date.strftime("%Y-%m-%d") if r.credit_start_date else None
+            })
+        
+        # 计算收款后余额
+        balance_after = max(0, total_debt - amount)
+        
+        return {
+            "success": True,
+            "action": "登记收款",
+            "confirm_required": True,
+            "customer": {
+                "id": customer.id,
+                "name": customer.name,
+                "customer_no": customer.customer_no,
+                "phone": customer.phone
+            },
+            "current_debt": round(total_debt, 2),
+            "payment_amount": round(amount, 2),
+            "balance_after": round(balance_after, 2),
+            "payment_method": payment_method,
+            "remark": remark,
+            "receivables": receivables_list,
+            "message": f"确认为【{customer.name}】登记收款 ¥{amount:.2f}？"
+        }
+        
+    except Exception as e:
+        logger.error(f"处理登记收款失败: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"登记收款失败: {str(e)}"
         }
 
 

@@ -1,11 +1,12 @@
 import { PaymentMethod } from '../types/finance';
+import { API_BASE_URL } from '../config';
 
 export interface PaymentSubmitData {
   customerId: number;
   customerName: string;
-  receivableId: number;
-  salesOrderId: number;
-  salesOrderNo: string;
+  receivableId?: number;
+  salesOrderId?: number;
+  salesOrderNo?: string;
   amount: number;
   paymentMethod: PaymentMethod;
   paymentDate: Date;
@@ -52,21 +53,199 @@ export interface ReconciliationGenerateResponse {
   message?: string;
 }
 
+export interface ReceivableItem {
+  id: number;
+  salesOrderId: number;
+  customerId: number;
+  totalAmount: number;
+  receivedAmount: number;
+  unpaidAmount: number;
+  status: string;
+  isOverdue: boolean;
+  overdueDays: number;
+  creditStartDate: string;
+  dueDate: string;
+  customer?: {
+    id: number;
+    customerNo: string;
+    name: string;
+    phone?: string;
+  };
+  salesOrder?: {
+    id: number;
+    orderNo: string;
+    orderDate: string;
+    salesperson?: string;
+    totalAmount: number;
+  };
+}
+
+export interface ReceivablesResponse {
+  success: boolean;
+  data?: ReceivableItem[];
+  total?: number;
+  error?: string;
+}
+
 /**
- * 提交收款记录（Mock版本）
+ * 获取应收账款列表
+ */
+export async function getReceivables(
+  filterType: string = 'all',
+  search?: string,
+  sortBy: string = 'overdue_days',
+  sortOrder: string = 'desc',
+  skip: number = 0,
+  limit: number = 100
+): Promise<ReceivablesResponse> {
+  try {
+    const params = new URLSearchParams({
+      filter_type: filterType,
+      sort_by: sortBy,
+      sort_order: sortOrder,
+      skip: skip.toString(),
+      limit: limit.toString(),
+    });
+    
+    if (search) {
+      params.append('search', search);
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/api/finance/receivables?${params}`);
+    const result = await response.json();
+    
+    if (result.success) {
+      return {
+        success: true,
+        data: result.data,
+        total: result.total,
+      };
+    } else {
+      return {
+        success: false,
+        error: result.error || '获取应收账款失败',
+      };
+    }
+  } catch (error) {
+    console.error('获取应收账款失败:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : '网络错误',
+    };
+  }
+}
+
+/**
+ * 提交收款记录
  */
 export async function submitPayment(data: PaymentSubmitData): Promise<PaymentSubmitResponse> {
-  // Mock API调用，延迟1秒模拟网络请求
-  await new Promise((resolve) => setTimeout(resolve, 1000));
-  
-  console.log('收款数据:', data);
-  
-  // 模拟成功响应
-  return {
-    success: true,
-    paymentId: `PAY${Date.now()}`,
-    message: '收款记录已保存',
-  };
+  try {
+    // 转换支付方式为后端格式
+    const methodMap: Record<PaymentMethod, string> = {
+      [PaymentMethod.CASH]: 'cash',
+      [PaymentMethod.BANK_TRANSFER]: 'bank_transfer',
+      [PaymentMethod.WECHAT]: 'wechat',
+      [PaymentMethod.ALIPAY]: 'alipay',
+      [PaymentMethod.CARD]: 'card',
+      [PaymentMethod.OTHER]: 'other',
+    };
+    
+    const requestData = {
+      customer_id: data.customerId,
+      account_receivable_id: data.receivableId,
+      amount: data.amount,
+      payment_method: methodMap[data.paymentMethod] || 'bank_transfer',
+      payment_date: data.paymentDate.toISOString().split('T')[0],
+      remark: data.remark || '',
+    };
+    
+    const response = await fetch(`${API_BASE_URL}/api/finance/payment`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestData),
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      return {
+        success: true,
+        paymentId: result.data?.payment_id?.toString(),
+        message: result.message || '收款记录已保存',
+      };
+    } else {
+      return {
+        success: false,
+        error: result.error || '提交收款失败',
+      };
+    }
+  } catch (error) {
+    console.error('提交收款失败:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : '网络错误',
+    };
+  }
+}
+
+/**
+ * 确认收款（从聊天界面调用）
+ */
+export async function confirmPayment(
+  customerId: number,
+  amount: number,
+  paymentMethod: string = '转账',
+  remark: string = ''
+): Promise<PaymentSubmitResponse> {
+  try {
+    // 将中文支付方式转换为后端格式
+    const methodMap: Record<string, string> = {
+      '转账': 'bank_transfer',
+      '现金': 'cash',
+      '微信': 'wechat',
+      '支付宝': 'alipay',
+      '刷卡': 'card',
+    };
+    
+    const requestData = {
+      customer_id: customerId,
+      amount: amount,
+      payment_method: methodMap[paymentMethod] || 'bank_transfer',
+      payment_date: new Date().toISOString().split('T')[0],
+      remark: remark,
+    };
+    
+    const response = await fetch(`${API_BASE_URL}/api/finance/payment`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestData),
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      return {
+        success: true,
+        paymentId: result.data?.payment_id?.toString(),
+        message: result.message || '收款登记成功',
+      };
+    } else {
+      return {
+        success: false,
+        error: result.error || '收款登记失败',
+      };
+    }
+  } catch (error) {
+    console.error('收款登记失败:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : '网络错误',
+    };
+  }
 }
 
 /**
@@ -78,92 +257,71 @@ export async function getUnpaidSalesOrders(customerId: number): Promise<Array<{
   unpaidAmount: number;
   totalAmount: number;
 }>> {
-  // Mock数据，实际应该从API获取
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  
-  // 这里应该调用真实API，现在返回Mock数据
-  // 实际实现时，应该从后端获取该客户所有未付清的销售单
-  return [];
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/finance/receivables?filter_type=unpaid&customer_id=${customerId}`);
+    const result = await response.json();
+    
+    if (result.success && result.data) {
+      return result.data.map((r: ReceivableItem) => ({
+        id: r.salesOrderId,
+        orderNo: r.salesOrder?.orderNo || '',
+        unpaidAmount: r.unpaidAmount,
+        totalAmount: r.totalAmount,
+      }));
+    }
+    return [];
+  } catch (error) {
+    console.error('获取未付清销售单失败:', error);
+    return [];
+  }
 }
 
 /**
- * 生成对账单（Mock版本）
- * GET /api/finance/statement?customerId=xxx&start=xxx&end=xxx
+ * 生成对账单
  */
 export async function generateReconciliationStatement(
   customerId: number,
   startDate: Date,
   endDate: Date
 ): Promise<ReconciliationGenerateResponse> {
-  // Mock API调用，延迟1.5秒模拟网络请求
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  
-  console.log('生成对账单请求:', { customerId, startDate, endDate });
-  
-  // 生成对账单号
-  const dateStr = startDate.toISOString().slice(0, 10).replace(/-/g, '');
-  const statementNo = `DZ${customerId}${dateStr}${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
-  
-  // Mock对账单数据（按照用户要求的数据格式）
-  const mockData: StatementData = {
-    customer: {
-      id: customerId,
-      name: '李总',
-      phone: '138****1234',
-      customerNo: 'C001',
-    },
-    period: {
-      start: startDate,
-      end: endDate,
-    },
-    summary: {
-      openingBalance: 12000,
-      totalSales: 45800,
-      totalPayments: 30000,
-      closingBalance: 27800,
-    },
-    salesDetails: [
-      {
-        date: new Date('2025-01-05'),
-        orderNo: 'SO20250105001',
-        amount: 15200,
-        salesperson: '张业务',
+  try {
+    const params = new URLSearchParams({
+      customer_id: customerId.toString(),
+      start_date: startDate.toISOString().split('T')[0],
+      end_date: endDate.toISOString().split('T')[0],
+    });
+    
+    const response = await fetch(`${API_BASE_URL}/api/finance/statement?${params}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-      {
-        date: new Date('2025-01-15'),
-        orderNo: 'SO20250115002',
-        amount: 18600,
-        salesperson: '李业务',
-      },
-      {
-        date: new Date('2025-01-28'),
-        orderNo: 'SO20250128003',
-        amount: 12000,
-        salesperson: '王业务',
-      },
-    ],
-    paymentDetails: [
-      {
-        date: new Date('2025-01-10'),
-        amount: 15000,
-        method: '转账',
-        relatedOrderNo: 'SO20250105001',
-      },
-      {
-        date: new Date('2025-01-25'),
-        amount: 15000,
-        method: '微信',
-        relatedOrderNo: 'SO20250115002',
-      },
-    ],
-    generatedAt: new Date(),
-    statementNo,
-  };
-  
-  return {
-    success: true,
-    data: mockData,
-    message: '对账单生成成功',
-  };
+      body: JSON.stringify({
+        customer_id: customerId,
+        start_date: startDate.toISOString().split('T')[0],
+        end_date: endDate.toISOString().split('T')[0],
+      }),
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      return {
+        success: true,
+        data: result.data,
+        message: '对账单生成成功',
+      };
+    } else {
+      return {
+        success: false,
+        error: result.error || '生成对账单失败',
+      };
+    }
+  } catch (error) {
+    console.error('生成对账单失败:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : '网络错误',
+    };
+  }
 }
-

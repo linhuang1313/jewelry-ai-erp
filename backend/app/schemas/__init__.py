@@ -90,6 +90,11 @@ class AIResponse(BaseModel):
     debt_query_type: Optional[str] = None  # 查询类型：all/cash_debt/gold_debt/gold_deposit
     date_start: Optional[str] = None  # 开始日期（YYYY-MM-DD）
     date_end: Optional[str] = None  # 结束日期（YYYY-MM-DD）
+    # 收款登记相关字段
+    payment_customer_name: Optional[str] = None  # 收款客户名称
+    payment_amount: Optional[float] = None  # 收款金额（元）
+    payment_method: Optional[str] = None  # 收款方式：转账/现金/微信/支付宝/刷卡
+    payment_remark: Optional[str] = None  # 备注
 
 
 # ============= 入库相关 Schema =============

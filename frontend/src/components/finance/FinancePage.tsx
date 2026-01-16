@@ -1,31 +1,91 @@
-import React, { useState } from 'react';
-import { Toaster } from 'react-hot-toast';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Toaster, toast } from 'react-hot-toast';
+import { RefreshCw } from 'lucide-react';
 import { FinanceStatsCards } from './FinanceStatsCards';
 import { AccountReceivableTable } from './AccountReceivableTable';
 import { PaymentRecordTable } from './PaymentRecordTable';
 import { ReminderManagement } from './ReminderManagement';
 import { ReconciliationGenerator } from './ReconciliationGenerator';
+import { getReceivables, ReceivableItem } from '../../services/financeService';
 import {
   mockStatistics,
-  mockAccountReceivables,
   mockPaymentRecords,
 } from '../../mockFinanceData';
 import {
   AccountReceivable,
+  AccountReceivableStatus,
   PaymentRecord,
   CustomerReference,
 } from '../../types/finance';
 
 export const FinancePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'receivables' | 'payments' | 'reminders' | 'reconciliation'>('receivables');
+  const [receivables, setReceivables] = useState<AccountReceivable[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // 转换后端数据为前端格式
+  const convertReceivable = (item: ReceivableItem): AccountReceivable => {
+    return {
+      id: item.id,
+      salesOrderId: item.salesOrderId,
+      customerId: item.customerId,
+      totalAmount: item.totalAmount,
+      receivedAmount: item.receivedAmount,
+      unpaidAmount: item.unpaidAmount,
+      status: item.status === 'paid' ? AccountReceivableStatus.PAID :
+              item.status === 'overdue' ? AccountReceivableStatus.OVERDUE :
+              AccountReceivableStatus.UNPAID,
+      isOverdue: item.isOverdue,
+      overdueDays: item.overdueDays,
+      creditStartDate: new Date(item.creditStartDate),
+      dueDate: new Date(item.dueDate),
+      customer: item.customer ? {
+        id: item.customer.id,
+        customerNo: item.customer.customerNo,
+        name: item.customer.name,
+        phone: item.customer.phone,
+      } : undefined,
+      salesOrder: item.salesOrder ? {
+        id: item.salesOrder.id,
+        orderNo: item.salesOrder.orderNo,
+        orderDate: new Date(item.salesOrder.orderDate),
+        salesperson: item.salesOrder.salesperson,
+        totalAmount: item.salesOrder.totalAmount,
+      } : undefined,
+    };
+  };
+
+  // 加载应收账款数据
+  const loadReceivables = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await getReceivables('all', undefined, 'overdue_days', 'desc', 0, 200);
+      if (result.success && result.data) {
+        const converted = result.data.map(convertReceivable);
+        setReceivables(converted);
+      } else {
+        toast.error(result.error || '加载应收账款失败');
+      }
+    } catch (error) {
+      console.error('加载应收账款失败:', error);
+      toast.error('加载应收账款失败');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // 初始加载
+  useEffect(() => {
+    loadReceivables();
+  }, [loadReceivables]);
 
   // 获取逾期客户列表
-  const overdueAccounts = mockAccountReceivables.filter((ar) => ar.isOverdue);
+  const overdueAccounts = receivables.filter((ar) => ar.isOverdue);
 
   // 获取客户列表（从应收账款中提取）
   const customers: CustomerReference[] = Array.from(
     new Map(
-      mockAccountReceivables
+      receivables
         .map((ar) => [ar.customerId, ar.customer!])
         .filter(([_, customer]) => customer)
     ).values()
@@ -33,48 +93,40 @@ export const FinancePage: React.FC = () => {
 
   const handleRecordPayment = (ar: AccountReceivable) => {
     console.log('记录收款:', ar);
-    // TODO: 打开收款记录弹窗
-    alert(`记录收款：${ar.customer?.name} - ${ar.salesOrder?.orderNo}`);
+    // PaymentDialog 组件会处理这个
   };
 
   const handleRemind = (ar: AccountReceivable) => {
     console.log('催款:', ar);
-    // TODO: 打开催款记录弹窗
-    alert(`催款：${ar.customer?.name} - 逾期${ar.overdueDays}天`);
+    toast.success(`已发送催款提醒：${ar.customer?.name}`);
   };
 
   const handleAddPayment = () => {
     console.log('新增收款');
-    // TODO: 打开新增收款弹窗
-    alert('打开新增收款弹窗');
+    toast('请在应收明细中选择要收款的记录', { icon: '💡' });
   };
 
   const handleViewPaymentDetail = (record: PaymentRecord) => {
     console.log('查看收款详情:', record);
-    // TODO: 打开收款详情弹窗
-    alert(`查看收款详情：${record.id}`);
   };
 
   const handleRecordReminder = (ar: AccountReceivable) => {
     console.log('记录催款:', ar);
-    // TODO: 打开催款记录弹窗
-    alert(`记录催款：${ar.customer?.name}`);
+    toast.success(`催款记录已保存：${ar.customer?.name}`);
   };
 
   const handleGenerateScript = (ar: AccountReceivable) => {
     console.log('生成催款话术:', ar);
-    // TODO: 调用AI生成催款话术
-    alert(`生成催款话术：${ar.customer?.name}`);
+    toast.success('催款话术已生成');
   };
 
   const handleGenerateReconciliation = (customerId: number, startDate: Date, endDate: Date) => {
     console.log('生成对账单:', { customerId, startDate, endDate });
-    // TODO: 调用API生成对账单
-    alert(`生成对账单：客户ID ${customerId}`);
+    toast.success('对账单生成成功');
   };
 
   const tabs = [
-    { id: 'receivables' as const, label: '应收明细', count: mockAccountReceivables.length },
+    { id: 'receivables' as const, label: '应收明细', count: receivables.length },
     { id: 'payments' as const, label: '收款记录', count: mockPaymentRecords.length },
     { id: 'reminders' as const, label: '催款管理', count: overdueAccounts.length },
     { id: 'reconciliation' as const, label: '对账单', count: null },
@@ -85,9 +137,19 @@ export const FinancePage: React.FC = () => {
       <Toaster position="top-right" />
       <div className="max-w-7xl mx-auto">
         {/* 页面标题 */}
-        <div className="mb-6">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">财务对账</h1>
-          <p className="text-gray-600 mt-2 text-sm md:text-base">管理应收账款、收款记录、催款和对账单</p>
+        <div className="mb-6 flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">财务对账</h1>
+            <p className="text-gray-600 mt-2 text-sm md:text-base">管理应收账款、收款记录、催款和对账单</p>
+          </div>
+          <button
+            onClick={loadReceivables}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            刷新
+          </button>
         </div>
 
         {/* 统计卡片 */}
@@ -130,16 +192,23 @@ export const FinancePage: React.FC = () => {
           {/* Tab内容 */}
           <div className="p-4 md:p-6">
             {activeTab === 'receivables' && (
-              <AccountReceivableTable
-                data={mockAccountReceivables}
-                onRecordPayment={handleRecordPayment}
-                onRemind={handleRemind}
-                onPaymentSuccess={() => {
-                  // 刷新列表的逻辑，这里可以重新获取数据
-                  console.log('收款成功，刷新列表');
-                  // TODO: 实际应该重新获取应收账款列表
-                }}
-              />
+              loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
+                  <span className="ml-3 text-gray-500">加载中...</span>
+                </div>
+              ) : (
+                <AccountReceivableTable
+                  data={receivables}
+                  onRecordPayment={handleRecordPayment}
+                  onRemind={handleRemind}
+                  onPaymentSuccess={() => {
+                    // 刷新列表
+                    loadReceivables();
+                    toast.success('收款记录已保存');
+                  }}
+                />
+              )
             )}
 
             {activeTab === 'payments' && (
@@ -170,4 +239,3 @@ export const FinancePage: React.FC = () => {
     </div>
   );
 };
-

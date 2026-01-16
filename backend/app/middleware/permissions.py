@@ -109,7 +109,7 @@ ROLE_PERMISSIONS = {
         'can_transfer': False,
         'can_receive_transfer': False,
         'can_manage_customers': False,
-        'can_view_customers': False,       # 不能查看客户
+        'can_view_customers': True,        # 可以查看客户（查询欠款信息）
         'can_manage_suppliers': False,
         'can_manage_salespersons': False,
         'can_view_analytics': False,
@@ -118,6 +118,7 @@ ROLE_PERMISSIONS = {
         'can_return_to_supplier': False,
         'can_return_to_warehouse': False,
         'can_view_finance': True,          # 可以查看财务
+        'can_record_payment': True,        # 可以登记收款
     },
     
     # 料部 - 管理金料的收发
@@ -231,6 +232,8 @@ ACTION_TO_PERMISSION = {
     '创建收料单': 'can_create_gold_receipt',
     '确认收料': 'can_confirm_gold_receive',
     '创建付料单': 'can_create_gold_payment',
+    # 财务操作
+    '登记收款': 'can_record_payment',
 }
 
 
