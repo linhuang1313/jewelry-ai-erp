@@ -375,11 +375,6 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       if (result.success) {
         toast.success(result.message);
         
-        // 调用成功回调，传递入库详情（包含第一个订单的ID用于下载）
-        // 注意：后端返回的是 results 数组，每个元素包含 order_id 和 order_no
-        const successfulOrders = result.results?.filter((r: any) => r.success) || [];
-        const firstOrder = successfulOrders[0];
-        
         // 计算总工费
         const totalLaborCost = validRows.reduce((sum, row) => {
           const weight = parseFloat(row.weight || '0');
@@ -389,13 +384,14 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
           return sum + (weight * laborCost) + (pieceCount * pieceLaborCost);
         }, 0);
         
-        // 使用 batchData.items 来构建 products，确保使用发送到后端的确切数据
+        // 调用成功回调，传递入库详情
+        // 注意：新的批量入库返回 order_id 和 order_no 在根级别
         onSuccess?.({
-          order_id: firstOrder?.order_id,
-          order_no: firstOrder?.order_no,
-          total_count: batchData.items.length,
-          total_weight: batchData.items.reduce((sum, item) => sum + item.weight, 0),
-          total_labor_cost: totalLaborCost,
+          order_id: result.order_id,
+          order_no: result.order_no,
+          total_count: result.success_count || batchData.items.length,
+          total_weight: result.total_weight || batchData.items.reduce((sum, item) => sum + item.weight, 0),
+          total_labor_cost: result.total_cost || totalLaborCost,
           supplier_name: batchData.supplier,
           products: batchData.items.map(item => ({ 
             name: item.product_name, 
