@@ -124,13 +124,13 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
     }
   }, [isOpen]);
   
-  // 键盘快捷键：Alt+A 添加新行
+  // 键盘快捷键：Ctrl+Enter 添加新行
   useEffect(() => {
     if (!isOpen) return;
     
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Alt+A 添加新行
-      if (e.altKey && (e.key === 'a' || e.key === 'A')) {
+      // Ctrl+Enter 添加新行
+      if (e.ctrlKey && e.key === 'Enter') {
         e.preventDefault();
         e.stopPropagation();
         setRows(prev => [...prev, createEmptyRow()]);
