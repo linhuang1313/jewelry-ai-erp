@@ -3,7 +3,7 @@
 包含所有 SQLAlchemy ORM 模型定义
 """
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from ..database import Base
@@ -628,6 +628,19 @@ class ProductCode(Base):
     remark = Column(Text, nullable=True)
 
 
+class ProductAttribute(Base):
+    """商品属性配置表 - 管理成色、工艺、款式等下拉选项"""
+    __tablename__ = "product_attributes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    category = Column(String(50), nullable=False, index=True)  # fineness(成色)/craft(工艺)/style(款式)
+    value = Column(String(100), nullable=False)  # 属性值
+    sort_order = Column(Integer, default=0)  # 排序顺序
+    is_active = Column(Boolean, default=True)  # 是否启用
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+
 # 导出所有模型
 __all__ = [
     # 入库
@@ -668,4 +681,6 @@ __all__ = [
     'CustomerTransfer',
     # 商品编码
     'ProductCode',
+    # 商品属性配置
+    'ProductAttribute',
 ]

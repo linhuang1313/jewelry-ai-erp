@@ -42,17 +42,23 @@ interface QuickInboundModalProps {
   userRole: string;
 }
 
-// 珐琅产品下拉选项常量
-const FINENESS_OPTIONS = ['足金', '板料', 'S925银', '足银', '18K金', '足铂', '18K金珐琅', '旧料'];
+// 珐琅产品属性接口
+interface ProductAttribute {
+  id: number;
+  value: string;
+  sort_order: number;
+}
 
-const CRAFT_OPTIONS = [
-  '5D镶嵌', '5D硬金珍珠珐琅', '5D钻石', '5G珍珠珐琅', '古法镶嵌', '古法镶钻',
-  '999.9精品', '5G珐琅', '古法镶钻珐琅', '古法珐琅999', '古珍珠', '5D硬金珐琅',
-  '古法珐琅珍珠', '钻石', '3D硬金', '3D硬金珐琅', '5G', '999.99精品',
-  '999精品', '古法999', '古法999.9', '古法999.99', '硬古法'
-];
+interface ProductAttributes {
+  fineness: ProductAttribute[];
+  craft: ProductAttribute[];
+  style: ProductAttribute[];
+}
 
-const STYLE_OPTIONS = ['配件', '饰品', '戒指', '项链', '手链', '手镯', '耳饰', '挂坠', '金条', '金币', '金钞', '金豆'];
+// 静态回退选项（API 失败时使用）
+const FALLBACK_FINENESS = ['足金', '板料', 'S925银', '足银', '18K金', '足铂', '18K金珐琅', '旧料'];
+const FALLBACK_CRAFT = ['3D硬金', '古法珐琅', '5D镶嵌', '999.9精品', '5G珐琅'];
+const FALLBACK_STYLE = ['戒指', '项链', '挂坠', '手链', '手镯', '耳饰'];
 
 const createEmptyRow = (): InboundRow => ({
   id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -84,20 +90,53 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
   const [enamelWeight, setEnamelWeight] = useState<string>('');
   const [enamelLaborCost, setEnamelLaborCost] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
+  
+  // 动态属性选项
+  const [productAttributes, setProductAttributes] = useState<ProductAttributes>({
+    fineness: [],
+    craft: [],
+    style: []
+  });
 
   // 自动拼接商品名称
   const enamelProductName = React.useMemo(() => {
     return `${enamelFineness}${enamelCraft}${enamelStyle}`;
   }, [enamelFineness, enamelCraft, enamelStyle]);
+  
+  // 获取选项列表（动态优先，静态回退）
+  const finenessOptions = productAttributes.fineness.length > 0 
+    ? productAttributes.fineness.map(a => a.value) 
+    : FALLBACK_FINENESS;
+  const craftOptions = productAttributes.craft.length > 0 
+    ? productAttributes.craft.map(a => a.value) 
+    : FALLBACK_CRAFT;
+  const styleOptions = productAttributes.style.length > 0 
+    ? productAttributes.style.map(a => a.value) 
+    : FALLBACK_STYLE;
 
 
-  // 加载供应商列表
+  // 加载供应商列表和属性配置
   useEffect(() => {
     if (isOpen) {
       fetchSuppliers();
       fetchProductCodes();
+      fetchProductAttributes();
     }
   }, [isOpen]);
+  
+  // 获取商品属性配置
+  const fetchProductAttributes = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/product-codes/attributes`);
+      if (response.ok) {
+        const data = await response.json();
+        setProductAttributes(data);
+      }
+    } catch (error) {
+      console.error('加载商品属性失败:', error);
+      // 失败时使用静态回退选项，不提示错误
+    }
+  };
 
   // 点击外部关闭下拉框
   useEffect(() => {
@@ -776,7 +815,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                     className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500 bg-white"
                   >
                     <option value="">请选择</option>
-                    {FINENESS_OPTIONS.map((option) => (
+                    {finenessOptions.map((option) => (
                       <option key={option} value={option}>{option}</option>
                     ))}
                   </select>
@@ -791,7 +830,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                     className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500 bg-white"
                   >
                     <option value="">请选择</option>
-                    {CRAFT_OPTIONS.map((option) => (
+                    {craftOptions.map((option) => (
                       <option key={option} value={option}>{option}</option>
                     ))}
                   </select>
@@ -806,7 +845,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                     className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500 bg-white"
                   >
                     <option value="">请选择</option>
-                    {STYLE_OPTIONS.map((option) => (
+                    {styleOptions.map((option) => (
                       <option key={option} value={option}>{option}</option>
                     ))}
                   </select>

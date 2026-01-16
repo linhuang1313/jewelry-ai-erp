@@ -16,6 +16,18 @@ interface ProductCode {
   remark: string | null;
 }
 
+interface ProductAttribute {
+  id: number;
+  value: string;
+  sort_order: number;
+}
+
+interface ProductAttributes {
+  fineness: ProductAttribute[];
+  craft: ProductAttribute[];
+  style: ProductAttribute[];
+}
+
 interface ProductCodePageProps {
   userRole: string;
 }
@@ -23,7 +35,7 @@ interface ProductCodePageProps {
 const API_BASE = API_BASE_URL;
 
 const ProductCodePage: React.FC<ProductCodePageProps> = ({ userRole }) => {
-  const [activeTab, setActiveTab] = useState<'predefined' | 'f_single' | 'fl_batch'>('predefined');
+  const [activeTab, setActiveTab] = useState<'predefined' | 'f_single' | 'fl_batch' | 'attributes'>('predefined');
   const [codes, setCodes] = useState<ProductCode[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -38,11 +50,25 @@ const ProductCodePage: React.FC<ProductCodePageProps> = ({ userRole }) => {
     remark: ''
   });
   
+  // 商品属性配置状态
+  const [attributes, setAttributes] = useState<ProductAttributes>({
+    fineness: [],
+    craft: [],
+    style: []
+  });
+  const [attributesLoading, setAttributesLoading] = useState(false);
+  const [newAttributeValue, setNewAttributeValue] = useState({
+    fineness: '',
+    craft: '',
+    style: ''
+  });
+  
   // 权限检查
   const canManage = hasPermission(userRole, 'canManageProductCodes');
   
   // 加载编码列表
   const loadCodes = useCallback(async () => {
+    if (activeTab === 'attributes') return;
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE}/api/product-codes?code_type=${activeTab}`);
@@ -60,9 +86,99 @@ const ProductCodePage: React.FC<ProductCodePageProps> = ({ userRole }) => {
     }
   }, [activeTab]);
   
+  // 加载商品属性配置
+  const loadAttributes = useCallback(async () => {
+    setAttributesLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/product-codes/attributes`);
+      if (response.ok) {
+        const data = await response.json();
+        setAttributes(data);
+      } else {
+        toast.error('加载商品属性失败');
+      }
+    } catch (error) {
+      console.error('加载商品属性失败:', error);
+      toast.error('加载商品属性失败');
+    } finally {
+      setAttributesLoading(false);
+    }
+  }, []);
+  
+  // 添加新属性
+  const handleAddAttribute = async (category: 'fineness' | 'craft' | 'style') => {
+    const value = newAttributeValue[category].trim();
+    if (!value) {
+      toast.error('请输入属性值');
+      return;
+    }
+    
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/product-codes/attributes?category=${category}&value=${encodeURIComponent(value)}`,
+        { method: 'POST' }
+      );
+      
+      if (response.ok) {
+        toast.success('添加成功');
+        setNewAttributeValue(prev => ({ ...prev, [category]: '' }));
+        loadAttributes();
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || '添加失败');
+      }
+    } catch (error) {
+      console.error('添加属性失败:', error);
+      toast.error('添加失败');
+    }
+  };
+  
+  // 删除属性
+  const handleDeleteAttribute = async (id: number, value: string) => {
+    if (!confirm(`确定要删除属性 "${value}" 吗？`)) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${API_BASE}/api/product-codes/attributes/${id}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        toast.success('删除成功');
+        loadAttributes();
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || '删除失败');
+      }
+    } catch (error) {
+      console.error('删除属性失败:', error);
+      toast.error('删除失败');
+    }
+  };
+  
+  // 初始化属性（首次使用时）
+  const handleInitAttributes = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/product-codes/attributes/init`);
+      if (response.ok) {
+        const data = await response.json();
+        toast.success(data.message);
+        loadAttributes();
+      }
+    } catch (error) {
+      console.error('初始化属性失败:', error);
+      toast.error('初始化失败');
+    }
+  };
+  
   useEffect(() => {
-    loadCodes();
-  }, [loadCodes]);
+    if (activeTab === 'attributes') {
+      loadAttributes();
+    } else {
+      loadCodes();
+    }
+  }, [activeTab, loadCodes, loadAttributes]);
   
   // 搜索编码
   const handleSearch = async () => {
@@ -274,76 +390,327 @@ const ProductCodePage: React.FC<ProductCodePageProps> = ({ userRole }) => {
         >
           FL编码（批量）
         </button>
+        <button
+          onClick={() => setActiveTab('attributes')}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: activeTab === 'attributes' ? '#9C27B0' : '#f0f0f0',
+            color: activeTab === 'attributes' ? 'white' : '#333',
+            border: 'none',
+            borderRadius: '5px',
+            cursor: 'pointer',
+            fontWeight: 'bold'
+          }}
+        >
+          商品属性配置
+        </button>
       </div>
       
-      {/* 搜索和操作栏 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <input
-            type="text"
-            value={searchKeyword}
-            onChange={(e) => setSearchKeyword(e.target.value)}
-            placeholder="输入编码或名称搜索..."
-            style={{
-              padding: '10px 15px',
-              border: '1px solid #ddd',
-              borderRadius: '5px',
-              width: '250px'
-            }}
-            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-          />
-          <button
-            onClick={handleSearch}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#666',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer'
-            }}
-          >
-            搜索
-          </button>
-          <button
-            onClick={() => { setSearchKeyword(''); loadCodes(); }}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#999',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer'
-            }}
-          >
-            重置
-          </button>
+      {/* 搜索和操作栏 - 仅在编码 Tab 显示 */}
+      {activeTab !== 'attributes' && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <input
+              type="text"
+              value={searchKeyword}
+              onChange={(e) => setSearchKeyword(e.target.value)}
+              placeholder="输入编码或名称搜索..."
+              style={{
+                padding: '10px 15px',
+                border: '1px solid #ddd',
+                borderRadius: '5px',
+                width: '250px'
+              }}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+            />
+            <button
+              onClick={handleSearch}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#666',
+                color: 'white',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer'
+              }}
+            >
+              搜索
+            </button>
+            <button
+              onClick={() => { setSearchKeyword(''); loadCodes(); }}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#999',
+                color: 'white',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer'
+              }}
+            >
+              重置
+            </button>
+          </div>
+          
+          {canManage && activeTab !== 'predefined' && (
+            <button
+              onClick={handleAdd}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              + 新增{activeTab === 'f_single' ? 'F' : 'FL'}编码
+            </button>
+          )}
         </div>
-        
-        {canManage && activeTab !== 'predefined' && (
-          <button
-            onClick={handleAdd}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#28a745',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer',
-              fontWeight: 'bold'
-            }}
-          >
-            + 新增{activeTab === 'f_single' ? 'F' : 'FL'}编码
-          </button>
-        )}
-      </div>
+      )}
+      
+      {/* 商品属性配置界面 */}
+      {activeTab === 'attributes' && (
+        <div style={{ marginBottom: '20px' }}>
+          {attributesLoading ? (
+            <div style={{ textAlign: 'center', padding: '50px', color: '#666' }}>
+              加载中...
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
+              {/* 成色列 */}
+              <div style={{ backgroundColor: '#f8f9fa', borderRadius: '10px', padding: '20px' }}>
+                <h3 style={{ margin: '0 0 15px 0', color: '#9C27B0', borderBottom: '2px solid #9C27B0', paddingBottom: '10px' }}>
+                  成色 ({attributes.fineness.length}个)
+                </h3>
+                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  {attributes.fineness.map((attr) => (
+                    <div key={attr.id} style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      padding: '8px 12px',
+                      backgroundColor: 'white',
+                      borderRadius: '5px',
+                      marginBottom: '8px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                    }}>
+                      <span>{attr.value}</span>
+                      {canManage && (
+                        <button
+                          onClick={() => handleDeleteAttribute(attr.id, attr.value)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#f44336',
+                            cursor: 'pointer',
+                            fontSize: '18px',
+                            padding: '0 5px'
+                          }}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {canManage && (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '15px' }}>
+                    <input
+                      type="text"
+                      value={newAttributeValue.fineness}
+                      onChange={(e) => setNewAttributeValue(prev => ({ ...prev, fineness: e.target.value }))}
+                      placeholder="输入新的成色..."
+                      style={{ flex: 1, padding: '8px', border: '1px solid #ddd', borderRadius: '5px' }}
+                      onKeyPress={(e) => e.key === 'Enter' && handleAddAttribute('fineness')}
+                    />
+                    <button
+                      onClick={() => handleAddAttribute('fineness')}
+                      style={{
+                        padding: '8px 15px',
+                        backgroundColor: '#9C27B0',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '5px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      添加
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              {/* 工艺列 */}
+              <div style={{ backgroundColor: '#f8f9fa', borderRadius: '10px', padding: '20px' }}>
+                <h3 style={{ margin: '0 0 15px 0', color: '#FF9800', borderBottom: '2px solid #FF9800', paddingBottom: '10px' }}>
+                  工艺 ({attributes.craft.length}个)
+                </h3>
+                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  {attributes.craft.map((attr) => (
+                    <div key={attr.id} style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      padding: '8px 12px',
+                      backgroundColor: 'white',
+                      borderRadius: '5px',
+                      marginBottom: '8px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                    }}>
+                      <span>{attr.value}</span>
+                      {canManage && (
+                        <button
+                          onClick={() => handleDeleteAttribute(attr.id, attr.value)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#f44336',
+                            cursor: 'pointer',
+                            fontSize: '18px',
+                            padding: '0 5px'
+                          }}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {canManage && (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '15px' }}>
+                    <input
+                      type="text"
+                      value={newAttributeValue.craft}
+                      onChange={(e) => setNewAttributeValue(prev => ({ ...prev, craft: e.target.value }))}
+                      placeholder="输入新的工艺..."
+                      style={{ flex: 1, padding: '8px', border: '1px solid #ddd', borderRadius: '5px' }}
+                      onKeyPress={(e) => e.key === 'Enter' && handleAddAttribute('craft')}
+                    />
+                    <button
+                      onClick={() => handleAddAttribute('craft')}
+                      style={{
+                        padding: '8px 15px',
+                        backgroundColor: '#FF9800',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '5px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      添加
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              {/* 款式列 */}
+              <div style={{ backgroundColor: '#f8f9fa', borderRadius: '10px', padding: '20px' }}>
+                <h3 style={{ margin: '0 0 15px 0', color: '#4CAF50', borderBottom: '2px solid #4CAF50', paddingBottom: '10px' }}>
+                  款式 ({attributes.style.length}个)
+                </h3>
+                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  {attributes.style.map((attr) => (
+                    <div key={attr.id} style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      padding: '8px 12px',
+                      backgroundColor: 'white',
+                      borderRadius: '5px',
+                      marginBottom: '8px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                    }}>
+                      <span>{attr.value}</span>
+                      {canManage && (
+                        <button
+                          onClick={() => handleDeleteAttribute(attr.id, attr.value)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#f44336',
+                            cursor: 'pointer',
+                            fontSize: '18px',
+                            padding: '0 5px'
+                          }}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {canManage && (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '15px' }}>
+                    <input
+                      type="text"
+                      value={newAttributeValue.style}
+                      onChange={(e) => setNewAttributeValue(prev => ({ ...prev, style: e.target.value }))}
+                      placeholder="输入新的款式..."
+                      style={{ flex: 1, padding: '8px', border: '1px solid #ddd', borderRadius: '5px' }}
+                      onKeyPress={(e) => e.key === 'Enter' && handleAddAttribute('style')}
+                    />
+                    <button
+                      onClick={() => handleAddAttribute('style')}
+                      style={{
+                        padding: '8px 15px',
+                        backgroundColor: '#4CAF50',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '5px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      添加
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          
+          {/* 初始化按钮 */}
+          {attributes.fineness.length === 0 && attributes.craft.length === 0 && attributes.style.length === 0 && !attributesLoading && (
+            <div style={{ textAlign: 'center', marginTop: '30px' }}>
+              <p style={{ color: '#666', marginBottom: '15px' }}>暂无属性配置，点击下方按钮初始化默认属性</p>
+              <button
+                onClick={handleInitAttributes}
+                style={{
+                  padding: '12px 30px',
+                  backgroundColor: '#9C27B0',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: '16px'
+                }}
+              >
+                初始化默认属性
+              </button>
+            </div>
+          )}
+          
+          {/* 说明 */}
+          <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f3e5f5', borderRadius: '5px' }}>
+            <h4 style={{ margin: '0 0 10px 0', color: '#7B1FA2' }}>属性配置说明</h4>
+            <ul style={{ margin: 0, paddingLeft: '20px', color: '#666' }}>
+              <li><strong>成色</strong>：金料的纯度和材质，如足金、18K金、S925银等</li>
+              <li><strong>工艺</strong>：产品的制作工艺，如3D硬金、古法、5D镶嵌等</li>
+              <li><strong>款式</strong>：首饰的类型，如戒指、项链、挂坠等</li>
+              <li>这些属性将在快速入库的珐琅产品批量生成中作为下拉选项使用</li>
+            </ul>
+          </div>
+        </div>
+      )}
       
       {/* 编码表格 */}
-      {loading ? (
+      {activeTab !== 'attributes' && loading ? (
         <div style={{ textAlign: 'center', padding: '50px', color: '#666' }}>
           加载中...
         </div>
-      ) : (
+      ) : activeTab !== 'attributes' && (
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ backgroundColor: '#f5f5f5' }}>
@@ -441,15 +808,17 @@ const ProductCodePage: React.FC<ProductCodePageProps> = ({ userRole }) => {
         </table>
       )}
       
-      {/* 提示信息 */}
-      <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#fff3e0', borderRadius: '5px' }}>
-        <h4 style={{ margin: '0 0 10px 0', color: '#e65100' }}>编码规则说明</h4>
-        <ul style={{ margin: 0, paddingLeft: '20px', color: '#666' }}>
-          <li><strong>预定义编码</strong>：35个固定编码，对应足金999精品、古法、3D硬金、5D硬金等商品类型，不可修改删除</li>
-          <li><strong>F编码（一码一件）</strong>：格式为 F + 8位数字（如 F00000001），用于珐琅产品，每个编码对应唯一商品</li>
-          <li><strong>FL编码（批量）</strong>：格式为 FL + 4位数字（如 FL0001），用于批量珐琅产品，如直营电商，无需一码一件</li>
-        </ul>
-      </div>
+      {/* 提示信息 - 仅在编码 Tab 显示 */}
+      {activeTab !== 'attributes' && (
+        <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#fff3e0', borderRadius: '5px' }}>
+          <h4 style={{ margin: '0 0 10px 0', color: '#e65100' }}>编码规则说明</h4>
+          <ul style={{ margin: 0, paddingLeft: '20px', color: '#666' }}>
+            <li><strong>预定义编码</strong>：35个固定编码，对应足金999精品、古法、3D硬金、5D硬金等商品类型，不可修改删除</li>
+            <li><strong>F编码（一码一件）</strong>：格式为 F + 8位数字（如 F00000001），用于珐琅产品，每个编码对应唯一商品</li>
+            <li><strong>FL编码（批量）</strong>：格式为 FL + 4位数字（如 FL0001），用于批量珐琅产品，如直营电商，无需一码一件</li>
+          </ul>
+        </div>
+      )}
       
       {/* 新增/编辑弹窗 */}
       {showModal && (

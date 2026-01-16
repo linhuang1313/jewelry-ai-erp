@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional
 from ..database import get_db
-from ..models import ProductCode
+from ..models import ProductCode, ProductAttribute
 from ..schemas import (
     ProductCodeCreate, ProductCodeUpdate, 
     ProductCodeResponse, ProductCodeSearchResponse
@@ -280,4 +280,165 @@ def mark_code_as_used(code: str, db: Session = Depends(get_db)):
         db.commit()
     
     return {"message": f"商品编码 {code} 已标记为已使用"}
+
+
+# ========== 商品属性配置 API ==========
+
+# 初始数据
+DEFAULT_ATTRIBUTES = {
+    "fineness": ['足金', '板料', 'S925银', '足银', '18K金', '足铂', '18K金珐琅', '旧料'],
+    "craft": [
+        '5D镶嵌', '5D硬金珍珠珐琅', '5D钻石', '5G珍珠珐琅', '古法镶嵌', '古法镶钻',
+        '999.9精品', '5G珐琅', '古法镶钻珐琅', '古法珐琅999', '古珍珠', '5D硬金珐琅',
+        '古法珐琅珍珠', '钻石', '3D硬金', '3D硬金珐琅', '5G', '999.99精品',
+        '999精品', '古法999', '古法999.9', '古法999.99', '硬古法'
+    ],
+    "style": ['配件', '饰品', '戒指', '项链', '手链', '手镯', '耳饰', '挂坠', '金条', '金币', '金钞', '金豆']
+}
+
+
+@router.get("/attributes/init")
+def init_product_attributes(db: Session = Depends(get_db)):
+    """初始化商品属性配置（首次部署时调用）"""
+    count = 0
+    for category, values in DEFAULT_ATTRIBUTES.items():
+        for idx, value in enumerate(values):
+            # 检查是否已存在
+            existing = db.query(ProductAttribute).filter(
+                ProductAttribute.category == category,
+                ProductAttribute.value == value
+            ).first()
+            if not existing:
+                attr = ProductAttribute(
+                    category=category,
+                    value=value,
+                    sort_order=idx,
+                    is_active=True
+                )
+                db.add(attr)
+                count += 1
+    db.commit()
+    return {"message": f"已初始化 {count} 个商品属性", "count": count}
+
+
+@router.get("/attributes", response_model=dict)
+def get_product_attributes(
+    category: Optional[str] = Query(None, description="属性类别: fineness/craft/style"),
+    db: Session = Depends(get_db)
+):
+    """获取商品属性列表"""
+    query = db.query(ProductAttribute).filter(ProductAttribute.is_active == True)
+    
+    if category:
+        query = query.filter(ProductAttribute.category == category)
+    
+    attributes = query.order_by(ProductAttribute.category, ProductAttribute.sort_order).all()
+    
+    # 按类别分组返回
+    result = {"fineness": [], "craft": [], "style": []}
+    for attr in attributes:
+        if attr.category in result:
+            result[attr.category].append({
+                "id": attr.id,
+                "value": attr.value,
+                "sort_order": attr.sort_order
+            })
+    
+    return result
+
+
+@router.post("/attributes", response_model=dict)
+def create_product_attribute(
+    category: str = Query(..., description="属性类别: fineness/craft/style"),
+    value: str = Query(..., description="属性值"),
+    db: Session = Depends(get_db)
+):
+    """新增商品属性"""
+    if category not in ["fineness", "craft", "style"]:
+        raise HTTPException(status_code=400, detail="无效的属性类别")
+    
+    # 检查是否已存在
+    existing = db.query(ProductAttribute).filter(
+        ProductAttribute.category == category,
+        ProductAttribute.value == value
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"属性 '{value}' 已存在")
+    
+    # 获取当前最大排序
+    max_order = db.query(ProductAttribute).filter(
+        ProductAttribute.category == category
+    ).count()
+    
+    attr = ProductAttribute(
+        category=category,
+        value=value,
+        sort_order=max_order,
+        is_active=True
+    )
+    db.add(attr)
+    db.commit()
+    db.refresh(attr)
+    
+    return {
+        "id": attr.id,
+        "category": attr.category,
+        "value": attr.value,
+        "sort_order": attr.sort_order
+    }
+
+
+@router.put("/attributes/{id}", response_model=dict)
+def update_product_attribute(
+    id: int,
+    value: Optional[str] = Query(None, description="新的属性值"),
+    sort_order: Optional[int] = Query(None, description="排序顺序"),
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    db: Session = Depends(get_db)
+):
+    """更新商品属性"""
+    attr = db.query(ProductAttribute).filter(ProductAttribute.id == id).first()
+    if not attr:
+        raise HTTPException(status_code=404, detail="属性不存在")
+    
+    if value is not None:
+        # 检查是否与其他属性冲突
+        existing = db.query(ProductAttribute).filter(
+            ProductAttribute.category == attr.category,
+            ProductAttribute.value == value,
+            ProductAttribute.id != id
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"属性 '{value}' 已存在")
+        attr.value = value
+    
+    if sort_order is not None:
+        attr.sort_order = sort_order
+    
+    if is_active is not None:
+        attr.is_active = is_active
+    
+    db.commit()
+    db.refresh(attr)
+    
+    return {
+        "id": attr.id,
+        "category": attr.category,
+        "value": attr.value,
+        "sort_order": attr.sort_order,
+        "is_active": attr.is_active
+    }
+
+
+@router.delete("/attributes/{id}")
+def delete_product_attribute(id: int, db: Session = Depends(get_db)):
+    """删除商品属性"""
+    attr = db.query(ProductAttribute).filter(ProductAttribute.id == id).first()
+    if not attr:
+        raise HTTPException(status_code=404, detail="属性不存在")
+    
+    db.delete(attr)
+    db.commit()
+    
+    return {"message": f"属性 '{attr.value}' 已删除"}
 
