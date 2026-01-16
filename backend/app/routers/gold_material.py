@@ -1509,16 +1509,20 @@ async def export_gold_ledger(
     
     elif format == "pdf":
         try:
-            from reportlab.lib.pagesizes import A4
             from reportlab.pdfgen import canvas
+            from reportlab.lib.units import mm
             from reportlab.pdfbase import pdfmetrics
             from reportlab.pdfbase.cidfonts import UnicodeCIDFont
             import io
             from ..timezone_utils import format_china_time
             
+            # 自定义纸张尺寸：241mm × 140mm 横向（针式打印机）
+            PAGE_WIDTH = 241 * mm
+            PAGE_HEIGHT = 140 * mm
+            
             buffer = io.BytesIO()
-            p = canvas.Canvas(buffer, pagesize=A4)
-            width, height = A4
+            p = canvas.Canvas(buffer, pagesize=(PAGE_WIDTH, PAGE_HEIGHT))
+            width, height = PAGE_WIDTH, PAGE_HEIGHT
             
             # 使用 CID 字体
             try:
@@ -1527,58 +1531,85 @@ async def export_gold_ledger(
             except Exception:
                 chinese_font = None
             
-            # 标题
+            # 页边距
+            left_margin = 8 * mm
+            right_margin = width - 8 * mm
+            top_margin = height - 6 * mm
+            
+            # 标题（居中）
             if chinese_font:
-                p.setFont(chinese_font, 16)
+                p.setFont(chinese_font, 11)
             else:
-                p.setFont("Helvetica-Bold", 16)
+                p.setFont("Helvetica-Bold", 11)
             title = f"金料进出台账 ({ledger_data['start_date']} 至 {ledger_data['end_date']})"
-            p.drawString(50, height - 50, title)
+            p.drawCentredString(width / 2, top_margin, title)
             
             # 表头
-            y = height - 100
+            y = top_margin - 16
+            col_x = [left_margin, 55*mm, 100*mm, 150*mm]
             if chinese_font:
-                p.setFont(chinese_font, 12)
+                p.setFont(chinese_font, 8)
             else:
-                p.setFont("Helvetica-Bold", 12)
+                p.setFont("Helvetica-Bold", 8)
             
-            p.drawString(50, y, "日期")
-            p.drawString(150, y, "收入（克）")
-            p.drawString(250, y, "支出（克）")
-            p.drawString(350, y, "净额（克）")
+            p.drawString(col_x[0], y, "日期")
+            p.drawString(col_x[1], y, "收入（克）")
+            p.drawString(col_x[2], y, "支出（克）")
+            p.drawString(col_x[3], y, "净额（克）")
+            y -= 8
+            p.line(left_margin, y, right_margin, y)
+            y -= 8
             
             # 数据
-            y -= 25
             if chinese_font:
-                p.setFont(chinese_font, 10)
+                p.setFont(chinese_font, 7)
             else:
-                p.setFont("Helvetica", 10)
+                p.setFont("Helvetica", 7)
             
+            bottom_margin = 20 * mm
             for day in ledger_data['ledger']:
-                if y < 100:  # 换页
+                if y < bottom_margin:  # 换页
                     p.showPage()
-                    y = height - 50
+                    y = top_margin - 10
+                    # 重绘表头
+                    if chinese_font:
+                        p.setFont(chinese_font, 8)
+                    p.drawString(col_x[0], y, "日期")
+                    p.drawString(col_x[1], y, "收入（克）")
+                    p.drawString(col_x[2], y, "支出（克）")
+                    p.drawString(col_x[3], y, "净额（克）")
+                    y -= 8
+                    p.line(left_margin, y, right_margin, y)
+                    y -= 8
+                    if chinese_font:
+                        p.setFont(chinese_font, 7)
                 
-                p.drawString(50, y, day['date'])
-                p.drawString(150, y, f"{day['income']:.2f}")
-                p.drawString(250, y, f"{day['expense']:.2f}")
-                p.drawString(350, y, f"{day['net']:.2f}")
-                y -= 20
+                p.drawString(col_x[0], y, day['date'])
+                p.setFont("Helvetica", 7)
+                p.drawString(col_x[1], y, f"{day['income']:.2f}")
+                p.drawString(col_x[2], y, f"{day['expense']:.2f}")
+                p.drawString(col_x[3], y, f"{day['net']:.2f}")
+                y -= 10
             
             # 总计
+            y -= 3
+            p.line(left_margin, y, right_margin, y)
             y -= 10
             if chinese_font:
-                p.setFont(chinese_font, 12)
+                p.setFont(chinese_font, 8)
             else:
-                p.setFont("Helvetica-Bold", 12)
-            p.drawString(50, y, "总计")
-            p.drawString(150, y, f"{ledger_data['summary']['total_income']:.2f}")
-            p.drawString(250, y, f"{ledger_data['summary']['total_expense']:.2f}")
-            p.drawString(350, y, f"{ledger_data['summary']['total_net']:.2f}")
+                p.setFont("Helvetica-Bold", 8)
+            p.drawString(col_x[0], y, "合计")
+            p.setFont("Helvetica", 8)
+            p.drawString(col_x[1], y, f"{ledger_data['summary']['total_income']:.2f}")
+            p.drawString(col_x[2], y, f"{ledger_data['summary']['total_expense']:.2f}")
+            p.drawString(col_x[3], y, f"{ledger_data['summary']['total_net']:.2f}")
             
-            # 打印时间
-            print_time = format_china_time(china_now(), '%Y-%m-%d %H:%M:%S')
-            p.drawString(50, 50, f"打印时间：{print_time}")
+            # 打印时间（底部）
+            print_time = format_china_time(china_now(), '%Y-%m-%d %H:%M')
+            if chinese_font:
+                p.setFont(chinese_font, 6)
+            p.drawString(left_margin, 5*mm, f"打印时间：{print_time}")
             
             p.save()
             buffer.seek(0)

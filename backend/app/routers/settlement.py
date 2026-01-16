@@ -752,14 +752,18 @@ async def download_settlement_order(
         
         if format == "pdf":
             try:
-                from reportlab.lib.pagesizes import A4
                 from reportlab.pdfgen import canvas
+                from reportlab.lib.units import mm
                 from reportlab.pdfbase import pdfmetrics
                 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
                 
+                # 自定义纸张尺寸：241mm × 140mm 横向（针式打印机）
+                PAGE_WIDTH = 241 * mm
+                PAGE_HEIGHT = 140 * mm
+                
                 buffer = io.BytesIO()
-                p = canvas.Canvas(buffer, pagesize=A4)
-                width, height = A4
+                p = canvas.Canvas(buffer, pagesize=(PAGE_WIDTH, PAGE_HEIGHT))
+                width, height = PAGE_WIDTH, PAGE_HEIGHT
                 
                 # 使用 CID 字体
                 try:
@@ -769,100 +773,100 @@ async def download_settlement_order(
                     logger.warning(f"注册CID字体失败: {cid_error}")
                     chinese_font = None
                 
-                # 标题
-                if chinese_font:
-                    p.setFont(chinese_font, 18)
-                else:
-                    p.setFont("Helvetica-Bold", 18)
-                p.drawString(50, height - 50, "结算单")
+                # 页边距
+                left_margin = 8 * mm
+                right_margin = width - 8 * mm
+                top_margin = height - 6 * mm
                 
-                # 基本信息
-                font_size = 12
-                y = height - 100
+                # 标题（居中）
                 if chinese_font:
-                    p.setFont(chinese_font, font_size)
+                    p.setFont(chinese_font, 12)
                 else:
-                    p.setFont("Helvetica", font_size)
+                    p.setFont("Helvetica-Bold", 12)
+                p.drawCentredString(width / 2, top_margin, "结算单")
                 
-                p.drawString(50, y, f"结算单号：{settlement.settlement_no}")
-                y -= 25
-                p.drawString(50, y, f"创建时间：{created_at_str}")
-                y -= 25
-                p.drawString(50, y, f"客户名称：{sales_order.customer_name if sales_order else '未知'}")
-                y -= 25
-                p.drawString(50, y, f"业务员：{sales_order.salesperson if sales_order else '未知'}")
-                y -= 25
-                p.drawString(50, y, f"支付方式：{payment_method_str}")
-                y -= 25
-                p.drawString(50, y, f"状态：{status_str}")
-                y -= 40
+                # 基本信息（紧凑两列布局）
+                y = top_margin - 14
+                if chinese_font:
+                    p.setFont(chinese_font, 8)
+                else:
+                    p.setFont("Helvetica", 8)
+                
+                customer_name = (sales_order.customer_name if sales_order else '未知')[:10]
+                salesperson = (sales_order.salesperson if sales_order else '未知')[:6]
+                p.drawString(left_margin, y, f"单号：{settlement.settlement_no}")
+                p.drawString(width/2, y, f"时间：{created_at_str}")
+                y -= 10
+                p.drawString(left_margin, y, f"客户：{customer_name}  业务员：{salesperson}")
+                p.drawString(width/2, y, f"支付方式：{payment_method_str}  状态：{status_str}")
+                y -= 12
+                
+                # 分隔线
+                p.line(left_margin, y, right_margin, y)
+                y -= 10
                 
                 # 商品明细表头
-                p.drawString(50, y, "商品明细：")
-                y -= 25
-                p.drawString(50, y, f"{'序号':<6}{'商品名称':<20}{'克重(g)':<12}{'工费/克':<12}{'总工费':<12}")
-                y -= 20
-                p.line(50, y, width - 50, y)
-                y -= 15
+                col_x = [left_margin, 55*mm, 85*mm, 115*mm, 145*mm]
+                if chinese_font:
+                    p.setFont(chinese_font, 7)
+                else:
+                    p.setFont("Helvetica-Bold", 7)
+                p.drawString(col_x[0], y, "商品名称")
+                p.drawString(col_x[1], y, "克重(g)")
+                p.drawString(col_x[2], y, "工费/克")
+                p.drawString(col_x[3], y, "总工费")
+                y -= 8
+                p.line(left_margin, y, right_margin, y)
+                y -= 8
                 
                 # 商品明细行
-                for idx, detail in enumerate(details, 1):
-                    p.drawString(50, y, f"{idx:<6}{detail.product_name[:15]:<20}{detail.weight:<12.2f}{detail.labor_cost:<12.2f}{detail.total_labor_cost:<12.2f}")
-                    y -= 20
+                if chinese_font:
+                    p.setFont(chinese_font, 7)
+                else:
+                    p.setFont("Helvetica", 7)
+                for detail in details:
+                    product_name = detail.product_name[:12] if len(detail.product_name) > 12 else detail.product_name
+                    if chinese_font:
+                        p.setFont(chinese_font, 7)
+                    p.drawString(col_x[0], y, product_name)
+                    p.setFont("Helvetica", 7)
+                    p.drawString(col_x[1], y, f"{detail.weight:.2f}")
+                    p.drawString(col_x[2], y, f"{detail.labor_cost:.1f}")
+                    p.drawString(col_x[3], y, f"{detail.total_labor_cost:.2f}")
+                    y -= 9
                 
+                y -= 3
+                p.line(left_margin, y, right_margin, y)
                 y -= 10
-                p.line(50, y, width - 50, y)
-                y -= 25
                 
-                # 汇总
-                p.drawString(50, y, f"总克重：{settlement.total_weight:.2f} 克")
-                y -= 25
-                p.drawString(50, y, f"工费合计：¥{settlement.labor_amount:.2f}")
-                y -= 25
+                # 汇总信息（紧凑布局）
+                if chinese_font:
+                    p.setFont(chinese_font, 8)
+                else:
+                    p.setFont("Helvetica-Bold", 8)
+                p.drawString(left_margin, y, f"总克重：{settlement.total_weight:.2f}g  工费：¥{settlement.labor_amount:.2f}")
                 
-                # 混合支付详情
+                # 右侧显示应收
+                p.drawString(width/2, y, f"应收现金：¥{settlement.total_amount:.2f}")
+                y -= 10
+                
+                # 混合支付/金料信息
+                extra_info = []
                 if settlement.payment_method == "mixed":
                     if settlement.gold_payment_weight:
-                        p.drawString(50, y, f"结料克重：{settlement.gold_payment_weight:.2f} 克")
-                        y -= 25
+                        extra_info.append(f"结料：{settlement.gold_payment_weight:.2f}g")
                     if settlement.cash_payment_weight and settlement.gold_price:
-                        p.drawString(50, y, f"结价克重：{settlement.cash_payment_weight:.2f} 克 × ¥{settlement.gold_price:.2f}/克")
-                        y -= 25
-                        p.drawString(50, y, f"结价部分料费：¥{settlement.material_amount:.2f}")
-                        y -= 25
+                        extra_info.append(f"结价：{settlement.cash_payment_weight:.2f}g×¥{settlement.gold_price:.0f}")
                 elif settlement.payment_method == "cash_price" and settlement.gold_price:
-                    p.drawString(50, y, f"金价：¥{settlement.gold_price:.2f}/克")
-                    y -= 25
-                    p.drawString(50, y, f"料费合计：¥{settlement.material_amount:.2f}")
-                    y -= 25
-                
-                p.drawString(50, y, f"应收现金：¥{settlement.total_amount:.2f}")
-                y -= 25
+                    extra_info.append(f"金价：¥{settlement.gold_price:.0f}/g  料费：¥{settlement.material_amount:.2f}")
                 if settlement.payment_method in ["physical_gold", "mixed"] and settlement.physical_gold_weight:
-                    p.drawString(50, y, f"尚欠金料：{settlement.physical_gold_weight:.2f} 克")
-                    y -= 25
-                y -= 15
+                    extra_info.append(f"尚欠金料：{settlement.physical_gold_weight:.2f}g")
                 
-                # 客户历史余额
-                if settlement.previous_cash_debt or settlement.previous_gold_debt or settlement.gold_deposit_balance:
-                    p.drawString(50, y, "客户余额信息：")
-                    y -= 25
-                    if settlement.previous_cash_debt:
-                        p.drawString(50, y, f"上次现金欠款：¥{settlement.previous_cash_debt:.2f}")
-                        y -= 20
-                    if settlement.previous_gold_debt:
-                        p.drawString(50, y, f"上次金料欠款：{settlement.previous_gold_debt:.2f}克")
-                        y -= 20
-                    if settlement.gold_deposit_balance:
-                        p.drawString(50, y, f"存料余额：{settlement.gold_deposit_balance:.2f}克")
-                        y -= 20
-                    y -= 20
+                if extra_info:
+                    if chinese_font:
+                        p.setFont(chinese_font, 7)
+                    p.drawString(left_margin, y, "  ".join(extra_info))
                 
-                # 备注
-                if settlement.remark:
-                    p.drawString(50, y, f"备注：{settlement.remark}")
-                
-                p.showPage()
                 p.save()
                 buffer.seek(0)
                 

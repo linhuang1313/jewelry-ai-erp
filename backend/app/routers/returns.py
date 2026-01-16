@@ -503,7 +503,6 @@ async def download_return_order(
         
         if format == "pdf":
             try:
-                from reportlab.lib.pagesizes import A4
                 from reportlab.pdfgen import canvas
                 from reportlab.lib.units import mm
                 from reportlab.pdfbase import pdfmetrics
@@ -511,12 +510,15 @@ async def download_return_order(
                 import io
                 from ..timezone_utils import to_china_time, format_china_time
                 
-                # 生成PDF
-                buffer = io.BytesIO()
-                p = canvas.Canvas(buffer, pagesize=A4)
-                width, height = A4
+                # 自定义纸张尺寸：241mm × 140mm 横向（针式打印机）
+                PAGE_WIDTH = 241 * mm
+                PAGE_HEIGHT = 140 * mm
                 
-                # 使用 CID 字体（内置支持中文）
+                buffer = io.BytesIO()
+                p = canvas.Canvas(buffer, pagesize=(PAGE_WIDTH, PAGE_HEIGHT))
+                width, height = PAGE_WIDTH, PAGE_HEIGHT
+                
+                # 使用 CID 字体
                 try:
                     pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
                     chinese_font = 'STSong-Light'
@@ -524,58 +526,20 @@ async def download_return_order(
                     logger.warning(f"注册CID字体失败: {cid_error}")
                     chinese_font = None
                 
-                # 标题
-                if chinese_font:
-                    p.setFont(chinese_font, 18)
-                else:
-                    p.setFont("Helvetica-Bold", 18)
-                p.drawString(50, height - 50, "退货单")
+                # 页边距
+                left_margin = 8 * mm
+                right_margin = width - 8 * mm
+                top_margin = height - 6 * mm
                 
-                # 退货单信息
-                font_size = 12
-                y = height - 100
+                # 标题（居中）
                 if chinese_font:
-                    p.setFont(chinese_font, font_size)
+                    p.setFont(chinese_font, 12)
                 else:
-                    p.setFont("Helvetica", font_size)
-                
-                # 退货单号
-                p.drawString(50, y, f"退货单号：{return_order.return_no}")
-                y -= 25
+                    p.setFont("Helvetica-Bold", 12)
+                p.drawCentredString(width / 2, top_margin, "退货单")
                 
                 # 退货类型
                 return_type_str = "退给供应商" if return_order.return_type == "to_supplier" else "退给商品部"
-                p.drawString(50, y, f"退货类型：{return_type_str}")
-                y -= 25
-                
-                # 商品名称
-                p.drawString(50, y, f"商品名称：{return_order.product_name}")
-                y -= 25
-                
-                # 退货克重
-                p.drawString(50, y, f"退货克重：{return_order.return_weight:.2f} 克")
-                y -= 25
-                
-                # 供应商（如果是退给供应商）
-                if return_order.return_type == "to_supplier" and supplier_name:
-                    p.drawString(50, y, f"供应商：{supplier_name}")
-                    y -= 25
-                
-                # 发起位置
-                if from_location_name:
-                    p.drawString(50, y, f"发起位置：{from_location_name}")
-                    y -= 25
-                
-                # 退货原因
-                p.drawString(50, y, f"退货原因：{return_order.return_reason}")
-                y -= 25
-                
-                # 详细说明
-                if return_order.reason_detail:
-                    p.drawString(50, y, f"详细说明：{return_order.reason_detail}")
-                    y -= 25
-                
-                # 状态
                 status_map = {
                     "pending": "待审批",
                     "approved": "已批准",
@@ -583,37 +547,80 @@ async def download_return_order(
                     "rejected": "已驳回"
                 }
                 status_str = status_map.get(return_order.status, return_order.status)
-                p.drawString(50, y, f"状态：{status_str}")
-                y -= 25
                 
                 # 创建时间
                 if return_order.created_at:
                     china_time = to_china_time(return_order.created_at)
-                    create_time_str = format_china_time(china_time, '%Y-%m-%d %H:%M:%S')
+                    create_time_str = format_china_time(china_time, '%Y-%m-%d %H:%M')
                 else:
                     create_time_str = "未知"
-                p.drawString(50, y, f"创建时间：{create_time_str}")
-                y -= 25
                 
-                # 创建人
+                # 基本信息（紧凑两列布局）
+                y = top_margin - 14
+                if chinese_font:
+                    p.setFont(chinese_font, 8)
+                else:
+                    p.setFont("Helvetica", 8)
+                
+                p.drawString(left_margin, y, f"单号：{return_order.return_no}")
+                p.drawString(width/2, y, f"时间：{create_time_str}")
+                y -= 10
+                p.drawString(left_margin, y, f"类型：{return_type_str}  状态：{status_str}")
                 if return_order.created_by:
-                    p.drawString(50, y, f"创建人：{return_order.created_by}")
-                    y -= 25
+                    p.drawString(width/2, y, f"创建人：{return_order.created_by}")
+                y -= 12
+                
+                # 分隔线
+                p.line(left_margin, y, right_margin, y)
+                y -= 10
+                
+                # 商品信息
+                product_name = return_order.product_name[:15] if len(return_order.product_name) > 15 else return_order.product_name
+                if chinese_font:
+                    p.setFont(chinese_font, 8)
+                p.drawString(left_margin, y, f"商品：{product_name}")
+                p.setFont("Helvetica", 8)
+                p.drawString(width/2, y, f"克重：{return_order.return_weight:.2f}g")
+                y -= 10
+                
+                # 供应商/位置信息
+                if return_order.return_type == "to_supplier" and supplier_name:
+                    supplier_short = supplier_name[:10] if len(supplier_name) > 10 else supplier_name
+                    if chinese_font:
+                        p.setFont(chinese_font, 8)
+                    p.drawString(left_margin, y, f"供应商：{supplier_short}")
+                if from_location_name:
+                    p.drawString(width/2, y, f"发起位置：{from_location_name}")
+                y -= 10
+                
+                # 退货原因
+                reason_short = return_order.return_reason[:20] if len(return_order.return_reason) > 20 else return_order.return_reason
+                if chinese_font:
+                    p.setFont(chinese_font, 8)
+                p.drawString(left_margin, y, f"原因：{reason_short}")
+                y -= 12
+                
+                # 分隔线
+                p.line(left_margin, y, right_margin, y)
+                y -= 10
                 
                 # 审批信息
                 if return_order.approved_by:
-                    p.drawString(50, y, f"审批人：{return_order.approved_by}")
-                    y -= 25
+                    if chinese_font:
+                        p.setFont(chinese_font, 8)
+                    p.drawString(left_margin, y, f"审批人：{return_order.approved_by}")
                     if return_order.approved_at:
                         approved_time = to_china_time(return_order.approved_at)
-                        approved_time_str = format_china_time(approved_time, '%Y-%m-%d %H:%M:%S')
-                        p.drawString(50, y, f"审批时间：{approved_time_str}")
-                        y -= 25
+                        approved_time_str = format_china_time(approved_time, '%Y-%m-%d %H:%M')
+                        p.drawString(width/2, y, f"审批时间：{approved_time_str}")
+                    y -= 10
                 
                 # 备注
                 if return_order.remark:
-                    p.drawString(50, y, f"备注：{return_order.remark}")
-                    y -= 25
+                    remark_short = return_order.remark[:30] if len(return_order.remark) > 30 else return_order.remark
+                    if chinese_font:
+                        p.setFont(chinese_font, 7)
+                    p.drawString(left_margin, y, f"备注：{remark_short}")
                 
                 p.save()
                 buffer.seek(0)

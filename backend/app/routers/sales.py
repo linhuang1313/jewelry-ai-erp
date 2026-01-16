@@ -374,14 +374,18 @@ async def download_sales_order(
         
         if format == "pdf":
             try:
-                from reportlab.lib.pagesizes import A4
                 from reportlab.pdfgen import canvas
+                from reportlab.lib.units import mm
                 from reportlab.pdfbase import pdfmetrics
                 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
                 
+                # 自定义纸张尺寸：241mm × 140mm 横向（针式打印机）
+                PAGE_WIDTH = 241 * mm
+                PAGE_HEIGHT = 140 * mm
+                
                 buffer = io.BytesIO()
-                p = canvas.Canvas(buffer, pagesize=A4)
-                width, height = A4
+                p = canvas.Canvas(buffer, pagesize=(PAGE_WIDTH, PAGE_HEIGHT))
+                width, height = PAGE_WIDTH, PAGE_HEIGHT
                 
                 # 使用 CID 字体
                 try:
@@ -391,60 +395,83 @@ async def download_sales_order(
                     logger.warning(f"注册CID字体失败: {cid_error}")
                     chinese_font = None
                 
-                # 标题
-                if chinese_font:
-                    p.setFont(chinese_font, 18)
-                else:
-                    p.setFont("Helvetica-Bold", 18)
-                p.drawString(50, height - 50, "销售单")
+                # 页边距
+                left_margin = 8 * mm
+                right_margin = width - 8 * mm
+                top_margin = height - 6 * mm
                 
-                # 基本信息
-                font_size = 12
-                y = height - 100
+                # 标题（居中）
                 if chinese_font:
-                    p.setFont(chinese_font, font_size)
+                    p.setFont(chinese_font, 12)
                 else:
-                    p.setFont("Helvetica", font_size)
+                    p.setFont("Helvetica-Bold", 12)
+                p.drawCentredString(width / 2, top_margin, "销售单")
                 
-                p.drawString(50, y, f"销售单号：{order.order_no}")
-                y -= 25
-                p.drawString(50, y, f"销售日期：{order_date_str}")
-                y -= 25
-                p.drawString(50, y, f"客户名称：{order.customer_name or '未知'}")
-                y -= 25
-                p.drawString(50, y, f"业务员：{order.salesperson or '未知'}")
-                y -= 25
-                p.drawString(50, y, f"订单状态：{order.status}")
-                y -= 40
+                # 基本信息（紧凑两列布局）
+                y = top_margin - 14
+                if chinese_font:
+                    p.setFont(chinese_font, 8)
+                else:
+                    p.setFont("Helvetica", 8)
+                
+                customer_name = (order.customer_name or '未知')[:10]
+                salesperson = (order.salesperson or '未知')[:6]
+                p.drawString(left_margin, y, f"单号：{order.order_no}")
+                p.drawString(width/2, y, f"日期：{order_date_str}")
+                y -= 10
+                p.drawString(left_margin, y, f"客户：{customer_name}  业务员：{salesperson}")
+                p.drawString(width/2, y, f"状态：{order.status}")
+                y -= 12
+                
+                # 分隔线
+                p.line(left_margin, y, right_margin, y)
+                y -= 10
                 
                 # 商品明细表头
-                p.drawString(50, y, "商品明细：")
-                y -= 25
-                p.drawString(50, y, f"{'序号':<6}{'商品名称':<20}{'克重(g)':<12}{'工费/克':<12}{'总工费':<12}")
-                y -= 20
-                p.line(50, y, width - 50, y)
-                y -= 15
+                col_x = [left_margin, 55*mm, 85*mm, 115*mm, 145*mm]
+                if chinese_font:
+                    p.setFont(chinese_font, 7)
+                else:
+                    p.setFont("Helvetica-Bold", 7)
+                p.drawString(col_x[0], y, "商品名称")
+                p.drawString(col_x[1], y, "克重(g)")
+                p.drawString(col_x[2], y, "工费/克")
+                p.drawString(col_x[3], y, "总工费")
+                y -= 8
+                p.line(left_margin, y, right_margin, y)
+                y -= 8
                 
                 # 商品明细行
-                for idx, detail in enumerate(details, 1):
-                    p.drawString(50, y, f"{idx:<6}{detail.product_name[:15]:<20}{detail.weight:<12.2f}{detail.labor_cost:<12.2f}{detail.total_labor_cost:<12.2f}")
-                    y -= 20
+                for detail in details:
+                    product_name = detail.product_name[:12] if len(detail.product_name) > 12 else detail.product_name
+                    if chinese_font:
+                        p.setFont(chinese_font, 7)
+                    p.drawString(col_x[0], y, product_name)
+                    p.setFont("Helvetica", 7)
+                    p.drawString(col_x[1], y, f"{detail.weight:.2f}")
+                    p.drawString(col_x[2], y, f"{detail.labor_cost:.1f}")
+                    p.drawString(col_x[3], y, f"{detail.total_labor_cost:.2f}")
+                    y -= 9
                 
+                y -= 3
+                p.line(left_margin, y, right_margin, y)
                 y -= 10
-                p.line(50, y, width - 50, y)
-                y -= 25
                 
                 # 汇总
-                p.drawString(50, y, f"总克重：{order.total_weight:.2f} 克")
-                y -= 25
-                p.drawString(50, y, f"总工费：¥{order.total_labor_cost:.2f}")
-                y -= 40
+                if chinese_font:
+                    p.setFont(chinese_font, 8)
+                else:
+                    p.setFont("Helvetica-Bold", 8)
+                p.drawString(left_margin, y, f"合计：总克重 {order.total_weight:.2f}g  |  总工费 ¥{order.total_labor_cost:.2f}")
+                y -= 10
                 
                 # 备注
                 if order.remark:
-                    p.drawString(50, y, f"备注：{order.remark}")
+                    if chinese_font:
+                        p.setFont(chinese_font, 7)
+                    remark_text = order.remark[:30] if len(order.remark) > 30 else order.remark
+                    p.drawString(left_margin, y, f"备注：{remark_text}")
                 
-                p.showPage()
                 p.save()
                 buffer.seek(0)
                 

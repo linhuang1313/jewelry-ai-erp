@@ -2100,8 +2100,8 @@ async def download_inbound_order(
     <style>
         @media print {{
             @page {{
-                size: A4;
-                margin: 2cm;
+                size: 241mm 140mm landscape;
+                margin: 5mm;
             }}
             body {{
                 margin: 0;
@@ -2110,65 +2110,63 @@ async def download_inbound_order(
         }}
         body {{
             font-family: "Microsoft YaHei", Arial, sans-serif;
-            padding: 20px;
-            max-width: 800px;
+            padding: 8px;
+            max-width: 235mm;
             margin: 0 auto;
+            font-size: 10px;
         }}
         .header {{
             text-align: center;
-            margin-bottom: 30px;
-            border-bottom: 2px solid #333;
-            padding-bottom: 20px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
         }}
         .header h1 {{
             margin: 0;
-            font-size: 24px;
+            font-size: 14px;
             color: #333;
         }}
         .info {{
-            margin-bottom: 30px;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            font-size: 9px;
         }}
         .info-item {{
-            display: flex;
+            display: inline-block;
+            margin-right: 15px;
         }}
         .info-label {{
             font-weight: bold;
-            min-width: 80px;
         }}
         table {{
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
-            margin-bottom: 30px;
+            margin-top: 5px;
+            margin-bottom: 8px;
+            font-size: 9px;
         }}
         th, td {{
-            border: 1px solid #ddd;
-            padding: 12px;
-            text-align: left;
+            border: 1px solid #999;
+            padding: 3px 5px;
+            text-align: center;
         }}
         th {{
-            background-color: #f5f5f5;
+            background-color: #f0f0f0;
             font-weight: bold;
-            text-align: center;
-        }}
-        td {{
-            text-align: center;
         }}
         .total {{
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 2px solid #333;
-            text-align: right;
+            margin-top: 5px;
+            padding-top: 5px;
+            border-top: 1px solid #333;
+            font-size: 10px;
         }}
         .total-item {{
-            margin: 10px 0;
-            font-size: 16px;
+            display: inline-block;
+            margin-right: 20px;
         }}
         .total-amount {{
-            font-size: 20px;
             font-weight: bold;
             color: #d32f2f;
         }}
@@ -2179,33 +2177,21 @@ async def download_inbound_order(
         <h1>珠宝入库单</h1>
     </div>
     <div class="info">
-        <div class="info-item">
-            <span class="info-label">入库单号：</span>
-            <span>{order.order_no}</span>
-        </div>
-        <div class="info-item">
-            <span class="info-label">入库时间：</span>
-            <span>{create_time_str}</span>
-        </div>
-        <div class="info-item">
-            <span class="info-label">操作员：</span>
-            <span>{order.operator}</span>
-        </div>
-        <div class="info-item">
-            <span class="info-label">状态：</span>
-            <span>{order.status}</span>
-        </div>
+        <span class="info-item"><span class="info-label">单号：</span>{order.order_no}</span>
+        <span class="info-item"><span class="info-label">时间：</span>{create_time_str}</span>
+        <span class="info-item"><span class="info-label">操作员：</span>{order.operator}</span>
+        <span class="info-item"><span class="info-label">状态：</span>{order.status}</span>
     </div>
     <table>
         <thead>
             <tr>
-                <th style="width: 22%;">商品名称</th>
-                <th style="width: 10%;">重量(克)</th>
-                <th style="width: 10%;">克工费</th>
-                <th style="width: 8%;">件数</th>
-                <th style="width: 10%;">件工费</th>
-                <th style="width: 15%;">总成本(元)</th>
-                <th style="width: 15%;">供应商</th>
+                <th>商品名称</th>
+                <th>重量(克)</th>
+                <th>克工费</th>
+                <th>件数</th>
+                <th>件工费</th>
+                <th>总成本</th>
+                <th>供应商</th>
             </tr>
         </thead>
         <tbody>
@@ -2235,16 +2221,15 @@ async def download_inbound_order(
                 total_weight += detail.weight
                 total_piece_count += piece_count
             
-            # 生成件数汇总行（如果有件数）
-            piece_count_summary = f"<div class='total-item'>总件数：<strong>{total_piece_count}</strong> 件</div>" if total_piece_count > 0 else ""
+            # 生成件数文本（如果有件数）
+            piece_text = f"  |  件数：{total_piece_count}件" if total_piece_count > 0 else ""
             
             html_content += f"""
         </tbody>
     </table>
     <div class="total">
-        <div class="total-item">总重量：<strong>{total_weight:.2f}</strong> 克</div>
-        {piece_count_summary}
-        <div class="total-item total-amount">总成本：¥<strong>{total_cost:.2f}</strong></div>
+        <span class="total-item">合计：重量 <strong>{total_weight:.2f}</strong>克{piece_text}</span>
+        <span class="total-item total-amount">总成本：¥<strong>{total_cost:.2f}</strong></span>
     </div>
 </body>
 </html>
