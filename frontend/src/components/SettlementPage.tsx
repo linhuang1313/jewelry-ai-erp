@@ -442,23 +442,56 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
           </button>
         </div>
 
-        {/* 统计卡片 */}
+        {/* 统计卡片 - 可点击筛选 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-4 text-white">
+          {/* 待开结算单卡片 - 点击滚动到销售单列表 */}
+          <div 
+            onClick={() => {
+              // 滚动到待开结算单列表区域
+              const element = document.getElementById('pending-sales-section');
+              if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            }}
+            className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-4 text-white 
+              cursor-pointer hover:from-orange-600 hover:to-orange-700 hover:shadow-lg hover:shadow-orange-300/50
+              transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+          >
             <div className="flex items-center justify-between">
               <span className="text-sm opacity-80">待开结算单</span>
               <FileText className="w-5 h-5 opacity-60" />
             </div>
             <div className="text-3xl font-bold mt-2">{pendingSales.length}</div>
           </div>
-          <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl p-4 text-white">
+          
+          {/* 待确认卡片 - 点击切换到待确认Tab */}
+          <div 
+            onClick={() => setActiveTab('pending')}
+            className={`relative bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl p-4 text-white 
+              cursor-pointer hover:from-yellow-600 hover:to-yellow-700 hover:shadow-lg hover:shadow-yellow-300/50
+              transition-all transform hover:scale-[1.02] active:scale-[0.98]
+              ${activeTab === 'pending' ? 'ring-4 ring-white/50 shadow-lg shadow-yellow-300/50' : ''}`}
+          >
             <div className="flex items-center justify-between">
               <span className="text-sm opacity-80">待确认</span>
               <Clock className="w-5 h-5 opacity-60" />
             </div>
             <div className="text-3xl font-bold mt-2">{pendingCount}</div>
+            {activeTab === 'pending' && (
+              <div className="absolute top-2 right-2">
+                <Check className="w-4 h-4 text-white/80" />
+              </div>
+            )}
           </div>
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 text-white">
+          
+          {/* 已完成卡片 - 点击切换到已确认Tab */}
+          <div 
+            onClick={() => setActiveTab('confirmed')}
+            className={`relative bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 text-white 
+              cursor-pointer hover:from-green-600 hover:to-green-700 hover:shadow-lg hover:shadow-green-300/50
+              transition-all transform hover:scale-[1.02] active:scale-[0.98]
+              ${activeTab === 'confirmed' ? 'ring-4 ring-white/50 shadow-lg shadow-green-300/50' : ''}`}
+          >
             <div className="flex items-center justify-between">
               <span className="text-sm opacity-80">已完成</span>
               <Check className="w-5 h-5 opacity-60" />
@@ -466,6 +499,11 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
             <div className="text-3xl font-bold mt-2">
               {settlements.filter(s => s.status === 'confirmed' || s.status === 'printed').length}
             </div>
+            {activeTab === 'confirmed' && (
+              <div className="absolute top-2 right-2">
+                <Check className="w-4 h-4 text-white/80" />
+              </div>
+            )}
           </div>
         </div>
 
@@ -494,7 +532,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* 左侧：待结算销售单 */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
+          <div id="pending-sales-section" className="bg-white rounded-xl shadow-sm p-6">
             <h2 className="text-lg font-semibold mb-4 flex items-center">
               <FileText className="w-5 h-5 mr-2 text-orange-500" />
               待开结算单的销售单
