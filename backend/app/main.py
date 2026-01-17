@@ -631,7 +631,7 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     return
             
             # ========== 写操作：先检查权限，再执行 ==========
-            if ai_response.action in ["入库", "创建客户", "创建供应商", "创建销售单", "创建转移单", "退货", "登记收款", "查询客户账务"]:
+            if ai_response.action in ["入库", "创建客户", "创建供应商", "创建销售单", "创建转移单", "退货", "登记收款", "查询客户账务", "收料"]:
                 # 导入权限检查模块
                 from .middleware.permissions import check_action_permission, get_permission_denied_message
                 
@@ -687,6 +687,17 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         if result.get("success"):
                             # 返回确认卡片数据
                             yield f"data: {json.dumps({'type': 'payment_confirm', 'data': result}, ensure_ascii=False)}\n\n"
+                            return
+                        else:
+                            # 返回错误信息
+                            yield f"data: {json.dumps({'type': 'complete', 'data': result}, ensure_ascii=False)}\n\n"
+                            return
+                    elif ai_response.action == "收料":
+                        # 收料：返回确认卡片数据
+                        result = await handle_gold_receipt(ai_response, db)
+                        if result.get("success"):
+                            # 返回确认卡片数据
+                            yield f"data: {json.dumps({'type': 'receipt_confirm', 'data': result}, ensure_ascii=False)}\n\n"
                             return
                         else:
                             # 返回错误信息
@@ -3340,6 +3351,64 @@ async def handle_payment_registration(ai_response, db: Session) -> Dict[str, Any
         return {
             "success": False,
             "message": f"登记收款失败: {str(e)}"
+        }
+
+
+async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
+    """处理收料：返回确认数据供前端显示确认卡片"""
+    try:
+        customer_name = ai_response.receipt_customer_name
+        gold_weight = ai_response.receipt_gold_weight
+        gold_fineness = ai_response.receipt_gold_fineness or "足金999"
+        remark = ai_response.receipt_remark or ""
+        
+        # 验证必填信息
+        if not customer_name:
+            return {
+                "success": False,
+                "message": "请提供交料的客户名称，例如：张老板交料5克"
+            }
+        
+        if not gold_weight or gold_weight <= 0:
+            return {
+                "success": False,
+                "message": "请提供交料克重，例如：张老板交料5克"
+            }
+        
+        # 模糊查询客户
+        from .models import Customer
+        
+        customer = db.query(Customer).filter(
+            Customer.name.ilike(f"%{customer_name}%")
+        ).first()
+        
+        if not customer:
+            return {
+                "success": False,
+                "message": f"未找到客户【{customer_name}】，请确认客户姓名是否正确"
+            }
+        
+        return {
+            "success": True,
+            "action": "收料",
+            "confirm_required": True,
+            "customer": {
+                "id": customer.id,
+                "name": customer.name,
+                "customer_no": customer.customer_no,
+                "phone": customer.phone
+            },
+            "gold_weight": round(gold_weight, 2),
+            "gold_fineness": gold_fineness,
+            "remark": remark,
+            "message": f"确认为【{customer.name}】开具收料单：{gold_weight:.2f}克 {gold_fineness}？"
+        }
+        
+    except Exception as e:
+        logger.error(f"处理收料失败: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"收料失败: {str(e)}"
         }
 
 

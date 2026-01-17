@@ -100,6 +100,12 @@ class AIResponse(BaseModel):
     sales_query_days: Optional[int] = None  # 查询天数
     sales_query_salesperson: Optional[str] = None  # 查询特定业务员
 
+    # 收料相关字段
+    receipt_customer_name: Optional[str] = None  # 交料客户名称
+    receipt_gold_weight: Optional[float] = None  # 交料克重
+    receipt_gold_fineness: Optional[str] = None  # 成色，默认足金999
+    receipt_remark: Optional[str] = None  # 备注
+
 
 # ============= 入库相关 Schema =============
 

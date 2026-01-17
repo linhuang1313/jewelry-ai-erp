@@ -165,11 +165,99 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
     remark: ''
   });
 
+  // 快捷收料弹窗
+  const [showQuickReceiptForm, setShowQuickReceiptForm] = useState(false);
+  const [customers, setCustomers] = useState<Array<{id: number; name: string; phone?: string}>>([]);
+  const [quickReceiptForm, setQuickReceiptForm] = useState({
+    customer_id: '',
+    gold_weight: '',
+    gold_fineness: '足金999',
+    remark: ''
+  });
+  const [customerSearch, setCustomerSearch] = useState('');
+
   // 加载数据
   useEffect(() => {
     loadPendingSales();
     loadSettlements();
   }, []);
+
+  // 加载客户列表
+  const loadCustomers = async () => {
+    try {
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/customers`);
+      if (response.ok) {
+        const data = await response.json();
+        setCustomers(data.data || data || []);
+      }
+    } catch (error) {
+      console.error('加载客户列表失败:', error);
+    }
+  };
+
+  // 打开快捷收料弹窗
+  const openQuickReceiptForm = () => {
+    loadCustomers();
+    setQuickReceiptForm({
+      customer_id: '',
+      gold_weight: '',
+      gold_fineness: '足金999',
+      remark: ''
+    });
+    setCustomerSearch('');
+    setShowQuickReceiptForm(true);
+  };
+
+  // 创建快捷收料单
+  const handleCreateQuickReceipt = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!quickReceiptForm.customer_id) {
+      toast.error('请选择客户');
+      return;
+    }
+    if (!quickReceiptForm.gold_weight || parseFloat(quickReceiptForm.gold_weight) <= 0) {
+      toast.error('请输入有效的收料克重');
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams({
+        customer_id: quickReceiptForm.customer_id,
+        gold_weight: quickReceiptForm.gold_weight,
+        gold_fineness: quickReceiptForm.gold_fineness,
+        remark: quickReceiptForm.remark || '快捷收料',
+        created_by: '结算专员'
+      });
+
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/gold-material/gold-receipts?${params}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        toast.success(`收料单创建成功：${result.data.receipt_no}`);
+        setShowQuickReceiptForm(false);
+        
+        // 打开打印页面
+        if (result.data.id) {
+          window.open(`${API_ENDPOINTS.API_BASE_URL}/api/gold-material/gold-receipts/${result.data.id}/print`, '_blank');
+        }
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || '创建收料单失败');
+      }
+    } catch (error) {
+      toast.error('创建收料单失败');
+    }
+  };
+
+  // 筛选客户
+  const filteredCustomers = customers.filter(c => 
+    c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    (c.phone && c.phone.includes(customerSearch))
+  );
 
   const loadPendingSales = async () => {
     try {
@@ -504,15 +592,26 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
               <p className="text-gray-500 text-sm">确认销售单支付方式并复核打印</p>
             </div>
           </div>
-          <button
-            onClick={() => { loadPendingSales(); loadSettlements(); }}
-            className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 text-white 
-              rounded-xl shadow-lg shadow-amber-200/50 hover:from-amber-600 hover:to-yellow-600 
-              transition-all font-medium"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span>刷新</span>
-          </button>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={openQuickReceiptForm}
+              className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-yellow-500 to-amber-500 text-white 
+                rounded-xl shadow-lg shadow-yellow-200/50 hover:from-yellow-600 hover:to-amber-600 
+                transition-all font-medium"
+            >
+              <Package className="w-4 h-4" />
+              <span>快捷收料</span>
+            </button>
+            <button
+              onClick={() => { loadPendingSales(); loadSettlements(); }}
+              className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white 
+                rounded-xl shadow-lg shadow-gray-200/50 hover:from-gray-600 hover:to-gray-700 
+                transition-all font-medium"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>刷新</span>
+            </button>
+          </div>
         </div>
 
         {/* 统计卡片 - 可点击筛选 */}
@@ -1182,6 +1281,118 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                   <button
                     type="button"
                     onClick={() => setShowReceiptForm(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>创建并打印</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* 快捷收料弹窗 */}
+        {showQuickReceiptForm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold flex items-center">
+                  <Package className="w-5 h-5 mr-2 text-yellow-500" />
+                  快捷收料
+                </h3>
+                <button onClick={() => setShowQuickReceiptForm(false)} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateQuickReceipt} className="space-y-4">
+                {/* 客户搜索和选择 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">选择客户</label>
+                  <input
+                    type="text"
+                    placeholder="搜索客户姓名或电话..."
+                    value={customerSearch}
+                    onChange={(e) => setCustomerSearch(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 mb-2"
+                  />
+                  <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
+                    {filteredCustomers.length === 0 ? (
+                      <div className="p-3 text-center text-gray-500 text-sm">暂无匹配客户</div>
+                    ) : (
+                      filteredCustomers.slice(0, 10).map(customer => (
+                        <div
+                          key={customer.id}
+                          onClick={() => setQuickReceiptForm({ ...quickReceiptForm, customer_id: customer.id.toString() })}
+                          className={`p-3 cursor-pointer hover:bg-yellow-50 border-b last:border-b-0 flex justify-between items-center ${
+                            quickReceiptForm.customer_id === customer.id.toString() ? 'bg-yellow-100' : ''
+                          }`}
+                        >
+                          <span className="font-medium">{customer.name}</span>
+                          <span className="text-sm text-gray-500">{customer.phone || '-'}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {quickReceiptForm.customer_id && (
+                    <div className="mt-2 text-sm text-green-600">
+                      已选择：{customers.find(c => c.id.toString() === quickReceiptForm.customer_id)?.name}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">收料克重 (克)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={quickReceiptForm.gold_weight}
+                    onChange={(e) => setQuickReceiptForm({ ...quickReceiptForm, gold_weight: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    placeholder="输入收料克重"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">成色</label>
+                  <select
+                    value={quickReceiptForm.gold_fineness}
+                    onChange={(e) => setQuickReceiptForm({ ...quickReceiptForm, gold_fineness: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  >
+                    <option value="足金999">足金999</option>
+                    <option value="足金9999">足金9999</option>
+                    <option value="Au999">Au999</option>
+                    <option value="Au9999">Au9999</option>
+                    <option value="18K">18K</option>
+                    <option value="22K">22K</option>
+                    <option value="其他">其他</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">备注（可选）</label>
+                  <textarea
+                    value={quickReceiptForm.remark}
+                    onChange={(e) => setQuickReceiptForm({ ...quickReceiptForm, remark: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    rows={2}
+                    placeholder="客户存料 / 其他说明"
+                  />
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickReceiptForm(false)}
                     className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     取消
