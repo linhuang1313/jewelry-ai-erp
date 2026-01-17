@@ -127,7 +127,7 @@ const INITIAL_PAYMENT_FORM = {
 // ==================== 组件 ====================
 
 export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
-  const [activeTab, setActiveTab] = useState<'ledger' | 'receipts' | 'payments' | 'balance' | 'withdrawals' | 'transfers' | 'pending-receipts'>('ledger');
+  const [activeTab, setActiveTab] = useState<'ledger' | 'receipts' | 'payments' | 'balance' | 'withdrawals' | 'transfers' | 'pending-receipts' | 'daily-summary'>('ledger');
   
   // 台账数据
   const [ledger, setLedger] = useState<LedgerDay[]>([]);
@@ -135,6 +135,11 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
   // 待接收收料单（新系统）
   const [pendingGoldReceipts, setPendingGoldReceipts] = useState<any[]>([]);
   const [loadingGoldReceipts, setLoadingGoldReceipts] = useState(false);
+
+  // 每日统计
+  const [summaryPeriod, setSummaryPeriod] = useState<'today' | 'week' | 'month'>('today');
+  const [summaryData, setSummaryData] = useState<any>(null);
+  const [loadingSummary, setLoadingSummary] = useState(false);
   const [ledgerStartDate, setLedgerStartDate] = useState('');
   const [ledgerEndDate, setLedgerEndDate] = useState('');
   const [ledgerLoading, setLedgerLoading] = useState(false);
@@ -244,6 +249,22 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
   const handlePrintReceipt = (receiptId: number) => {
     window.open(`${API_ENDPOINTS.API_BASE_URL}/api/gold-material/gold-receipts/${receiptId}/print`, '_blank');
   };
+
+  // 加载每日统计
+  const loadDailySummary = useCallback(async (period: 'today' | 'week' | 'month' = 'today') => {
+    setLoadingSummary(true);
+    try {
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/gold-material/daily-summary?period=${period}`);
+      if (response.ok) {
+        const result = await response.json();
+        setSummaryData(result);
+      }
+    } catch (error) {
+      console.error('加载每日统计失败:', error);
+    } finally {
+      setLoadingSummary(false);
+    }
+  }, []);
 
   const loadLedger = useCallback(async () => {
     setLedgerLoading(true);
@@ -648,6 +669,8 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
       loadCustomers();
     } else if (activeTab === 'pending-receipts') {
       loadPendingGoldReceipts();
+    } else if (activeTab === 'daily-summary') {
+      loadDailySummary(summaryPeriod);
     }
   }, [activeTab]);
 
@@ -826,6 +849,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
               {userRole === 'material' && (
                 <>
                   {renderTabButton('ledger', '金料台账')}
+                  {renderTabButton('daily-summary', '每日统计')}
                   {renderTabButton('pending-receipts', '待接收金料', pendingGoldReceipts.length)}
                   {renderTabButton('receipts', '待确认收料')}
                   {renderTabButton('payments', '付料单')}
@@ -843,6 +867,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
               {userRole === 'manager' && (
                 <>
                   {renderTabButton('ledger', '金料台账')}
+                  {renderTabButton('daily-summary', '每日统计')}
                   {renderTabButton('receipts', '收料单')}
                   {renderTabButton('payments', '付料单')}
                   {renderTabButton('withdrawals', '取料单')}
@@ -853,6 +878,136 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
             </nav>
           </div>
         </div>
+
+        {/* 每日统计 */}
+        {activeTab === 'daily-summary' && (userRole === 'material' || userRole === 'manager') && (
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold">金料每日统计</h2>
+              <div className="flex items-center gap-2">
+                {/* 时间范围切换 */}
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  {[
+                    { value: 'today', label: '今日' },
+                    { value: 'week', label: '本周' },
+                    { value: 'month', label: '本月' }
+                  ].map(item => (
+                    <button
+                      key={item.value}
+                      onClick={() => {
+                        setSummaryPeriod(item.value as 'today' | 'week' | 'month');
+                        loadDailySummary(item.value as 'today' | 'week' | 'month');
+                      }}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        summaryPeriod === item.value
+                          ? 'bg-white text-amber-700 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => loadDailySummary(summaryPeriod)}
+                  className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  刷新
+                </button>
+              </div>
+            </div>
+
+            {loadingSummary ? renderLoading() : !summaryData ? (
+              <div className="text-center py-12 text-gray-500">暂无数据</div>
+            ) : (
+              <div className="space-y-6">
+                {/* 日期范围提示 */}
+                <div className="text-sm text-gray-500 text-center">
+                  统计周期：{summaryData.date_range?.start} 至 {summaryData.date_range?.end}
+                </div>
+
+                {/* 统计卡片 */}
+                <div className="grid grid-cols-2 gap-6">
+                  {/* 收料汇总 */}
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-5">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-600">收料统计</div>
+                        <div className="text-2xl font-bold text-green-700">
+                          {summaryData.receipt_summary?.total_weight?.toFixed(2) || 0} 克
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-500 mb-3">
+                      共 {summaryData.receipt_summary?.total_count || 0} 笔收料
+                    </div>
+                    {/* 收料明细 */}
+                    {summaryData.receipt_summary?.by_customer?.length > 0 && (
+                      <div className="border-t border-green-200 pt-3 space-y-2">
+                        <div className="text-xs text-gray-500 font-medium">客户明细</div>
+                        {summaryData.receipt_summary.by_customer.map((item: any) => (
+                          <div key={item.customer_id} className="flex justify-between text-sm">
+                            <span className="text-gray-700">{item.customer_name}</span>
+                            <span className="font-medium text-green-600">{item.total_weight?.toFixed(2)} 克 ({item.count}笔)</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 付料汇总 */}
+                  <div className="bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-xl p-5">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-600">付料统计</div>
+                        <div className="text-2xl font-bold text-orange-700">
+                          {summaryData.payment_summary?.total_weight?.toFixed(2) || 0} 克
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-500 mb-3">
+                      共 {summaryData.payment_summary?.total_count || 0} 笔付料
+                    </div>
+                    {/* 付料明细 */}
+                    {summaryData.payment_summary?.by_supplier?.length > 0 && (
+                      <div className="border-t border-orange-200 pt-3 space-y-2">
+                        <div className="text-xs text-gray-500 font-medium">供应商明细</div>
+                        {summaryData.payment_summary.by_supplier.map((item: any) => (
+                          <div key={item.supplier_id || 'unknown'} className="flex justify-between text-sm">
+                            <span className="text-gray-700">{item.supplier_name}</span>
+                            <span className="font-medium text-orange-600">{item.total_weight?.toFixed(2)} 克 ({item.count}笔)</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 净收入/支出 */}
+                <div className="bg-gray-50 rounded-xl p-4 text-center">
+                  <div className="text-sm text-gray-500 mb-1">净收入</div>
+                  <div className={`text-3xl font-bold ${
+                    (summaryData.receipt_summary?.total_weight || 0) - (summaryData.payment_summary?.total_weight || 0) >= 0
+                      ? 'text-green-600'
+                      : 'text-red-600'
+                  }`}>
+                    {((summaryData.receipt_summary?.total_weight || 0) - (summaryData.payment_summary?.total_weight || 0)).toFixed(2)} 克
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 金料台账 */}
         {activeTab === 'ledger' && (userRole === 'material' || userRole === 'manager') && (

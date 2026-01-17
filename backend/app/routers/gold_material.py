@@ -2789,3 +2789,125 @@ async def print_gold_receipt(
         headers={"Access-Control-Allow-Origin": "*"}
     )
 
+
+# ==================== 金料每日统计 ====================
+
+@router.get("/daily-summary")
+async def get_gold_daily_summary(
+    period: str = Query("today", pattern="^(today|week|month)$", description="统计周期：today/week/month"),
+    db: Session = Depends(get_db)
+):
+    """
+    获取金料每日统计汇总
+    - period: today=今日, week=本周, month=本月
+    返回：收料汇总、付料汇总、明细列表
+    """
+    from datetime import timedelta
+    from sqlalchemy import func, cast, Date
+    from .finance import GoldReceipt
+    
+    now = china_now()
+    today = now.date()
+    
+    # 根据 period 计算日期范围
+    if period == "today":
+        start_date = today
+        end_date = today
+    elif period == "week":
+        # 本周一到今天
+        start_date = today - timedelta(days=today.weekday())
+        end_date = today
+    else:  # month
+        # 本月1号到今天
+        start_date = today.replace(day=1)
+        end_date = today
+    
+    # ========== 收料统计（使用新系统 GoldReceipt）==========
+    from ..models.finance import GoldReceipt
+    
+    # 收料总计
+    receipt_stats = db.query(
+        func.count(GoldReceipt.id).label("count"),
+        func.coalesce(func.sum(GoldReceipt.gold_weight), 0).label("total_weight")
+    ).filter(
+        func.date(GoldReceipt.created_at) >= start_date,
+        func.date(GoldReceipt.created_at) <= end_date
+    ).first()
+    
+    # 收料明细（按客户分组）
+    receipt_by_customer = db.query(
+        GoldReceipt.customer_id,
+        Customer.name.label("customer_name"),
+        func.count(GoldReceipt.id).label("count"),
+        func.sum(GoldReceipt.gold_weight).label("total_weight")
+    ).join(
+        Customer, GoldReceipt.customer_id == Customer.id
+    ).filter(
+        func.date(GoldReceipt.created_at) >= start_date,
+        func.date(GoldReceipt.created_at) <= end_date
+    ).group_by(
+        GoldReceipt.customer_id, Customer.name
+    ).all()
+    
+    # ========== 付料统计（使用 GoldMaterialTransaction）==========
+    payment_stats = db.query(
+        func.count(GoldMaterialTransaction.id).label("count"),
+        func.coalesce(func.sum(GoldMaterialTransaction.gold_weight), 0).label("total_weight")
+    ).filter(
+        GoldMaterialTransaction.transaction_type == "expense",
+        func.date(GoldMaterialTransaction.created_at) >= start_date,
+        func.date(GoldMaterialTransaction.created_at) <= end_date
+    ).first()
+    
+    # 付料明细（按供应商分组）
+    payment_by_supplier = db.query(
+        GoldMaterialTransaction.supplier_id,
+        Supplier.name.label("supplier_name"),
+        func.count(GoldMaterialTransaction.id).label("count"),
+        func.sum(GoldMaterialTransaction.gold_weight).label("total_weight")
+    ).outerjoin(
+        Supplier, GoldMaterialTransaction.supplier_id == Supplier.id
+    ).filter(
+        GoldMaterialTransaction.transaction_type == "expense",
+        func.date(GoldMaterialTransaction.created_at) >= start_date,
+        func.date(GoldMaterialTransaction.created_at) <= end_date
+    ).group_by(
+        GoldMaterialTransaction.supplier_id, Supplier.name
+    ).all()
+    
+    # 构建响应
+    return {
+        "success": True,
+        "period": period,
+        "date_range": {
+            "start": start_date.isoformat(),
+            "end": end_date.isoformat()
+        },
+        "receipt_summary": {
+            "total_count": receipt_stats.count or 0,
+            "total_weight": float(receipt_stats.total_weight or 0),
+            "by_customer": [
+                {
+                    "customer_id": r.customer_id,
+                    "customer_name": r.customer_name,
+                    "count": r.count,
+                    "total_weight": float(r.total_weight or 0)
+                }
+                for r in receipt_by_customer
+            ]
+        },
+        "payment_summary": {
+            "total_count": payment_stats.count or 0,
+            "total_weight": float(payment_stats.total_weight or 0),
+            "by_supplier": [
+                {
+                    "supplier_id": p.supplier_id,
+                    "supplier_name": p.supplier_name or "未知供应商",
+                    "count": p.count,
+                    "total_weight": float(p.total_weight or 0)
+                }
+                for p in payment_by_supplier
+            ]
+        }
+    }
+
