@@ -304,6 +304,7 @@ class SettlementOrderCreate(BaseModel):
     sales_order_id: int  # 关联的销售单ID
     payment_method: str  # 'cash_price' 结价 / 'physical_gold' 结料 / 'mixed' 混合支付
     gold_price: Optional[float] = None  # 当日金价（结价或混合支付时必填）
+    physical_gold_weight: Optional[float] = None  # 结料支付：客户提供的黄金重量
     use_deposit: Optional[float] = None  # 使用存料抵扣的重量（克，结料时可选）
     # 混合支付专用参数
     gold_payment_weight: Optional[float] = None  # 混合支付：结料部分的克重
