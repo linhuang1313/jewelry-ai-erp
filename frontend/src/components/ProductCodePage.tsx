@@ -982,6 +982,7 @@ const ProductCodePage: React.FC<ProductCodePageProps> = ({ userRole }) => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };
