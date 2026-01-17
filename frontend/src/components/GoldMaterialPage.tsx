@@ -127,10 +127,14 @@ const INITIAL_PAYMENT_FORM = {
 // ==================== 组件 ====================
 
 export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
-  const [activeTab, setActiveTab] = useState<'ledger' | 'receipts' | 'payments' | 'balance' | 'withdrawals' | 'transfers'>('ledger');
+  const [activeTab, setActiveTab] = useState<'ledger' | 'receipts' | 'payments' | 'balance' | 'withdrawals' | 'transfers' | 'pending-receipts'>('ledger');
   
   // 台账数据
   const [ledger, setLedger] = useState<LedgerDay[]>([]);
+  
+  // 待接收收料单（新系统）
+  const [pendingGoldReceipts, setPendingGoldReceipts] = useState<any[]>([]);
+  const [loadingGoldReceipts, setLoadingGoldReceipts] = useState(false);
   const [ledgerStartDate, setLedgerStartDate] = useState('');
   const [ledgerEndDate, setLedgerEndDate] = useState('');
   const [ledgerLoading, setLedgerLoading] = useState(false);
@@ -196,6 +200,46 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
   // ==================== API 调用函数 ====================
 
   // 加载台账数据
+  // 加载待接收收料单（新系统）
+  const loadPendingGoldReceipts = useCallback(async () => {
+    setLoadingGoldReceipts(true);
+    try {
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/gold-material/gold-receipts?status=pending`);
+      if (response.ok) {
+        const result = await response.json();
+        setPendingGoldReceipts(result.data || []);
+      }
+    } catch (error) {
+      console.error('加载待接收收料单失败:', error);
+    } finally {
+      setLoadingGoldReceipts(false);
+    }
+  }, []);
+
+  // 确认接收金料
+  const handleReceiveGold = async (receiptId: number) => {
+    try {
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/gold-material/gold-receipts/${receiptId}/receive?received_by=料部专员`, {
+        method: 'POST'
+      });
+      
+      if (response.ok) {
+        toast.success('金料接收确认成功');
+        loadPendingGoldReceipts();
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || '确认失败');
+      }
+    } catch (error) {
+      toast.error('确认失败');
+    }
+  };
+
+  // 打印收料单
+  const handlePrintReceipt = (receiptId: number) => {
+    window.open(`${API_ENDPOINTS.API_BASE_URL}/api/gold-material/gold-receipts/${receiptId}/print`, '_blank');
+  };
+
   const loadLedger = useCallback(async () => {
     setLedgerLoading(true);
     const params = buildQueryString({
@@ -592,6 +636,8 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
     } else if (activeTab === 'transfers' && (userRole === 'settlement' || userRole === 'manager')) {
       loadTransfers();
       loadCustomers();
+    } else if (activeTab === 'pending-receipts') {
+      loadPendingGoldReceipts();
     }
   }, [activeTab]);
 
@@ -733,15 +779,18 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
   );
 
   // 渲染空状态
-  const renderEmpty = (colSpan?: number) => {
+  const renderEmpty = (colSpanOrMessage?: number | string) => {
+    const message = typeof colSpanOrMessage === 'string' ? colSpanOrMessage : '暂无数据';
+    const colSpan = typeof colSpanOrMessage === 'number' ? colSpanOrMessage : undefined;
+    
     if (colSpan) {
       return (
         <tr>
-          <td colSpan={colSpan} className="px-6 py-8 text-center text-gray-500">暂无数据</td>
+          <td colSpan={colSpan} className="px-6 py-8 text-center text-gray-500">{message}</td>
         </tr>
       );
     }
-    return <div className="text-center py-8 text-gray-500">暂无数据</div>;
+    return <div className="text-center py-8 text-gray-500">{message}</div>;
   };
 
   return (
@@ -767,7 +816,8 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
               {userRole === 'material' && (
                 <>
                   {renderTabButton('ledger', '金料台账')}
-                  {renderTabButton('receipts', '待确认收料', pendingReceipts.length)}
+                  {renderTabButton('pending-receipts', '待接收金料', pendingGoldReceipts.length)}
+                  {renderTabButton('receipts', '待确认收料')}
                   {renderTabButton('payments', '付料单')}
                   {renderTabButton('withdrawals', '待发取料', withdrawals.filter(w => w.status === 'pending').length)}
                   {renderTabButton('balance', '金料库存')}
@@ -870,7 +920,74 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
           </div>
         )}
 
-        {/* 收料单列表 */}
+        {/* 待接收金料（新收料单系统） */}
+        {activeTab === 'pending-receipts' && (
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">待接收金料</h2>
+              <button
+                onClick={loadPendingGoldReceipts}
+                className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                刷新
+              </button>
+            </div>
+
+            {loadingGoldReceipts ? renderLoading() : (
+              pendingGoldReceipts.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  暂无待接收金料
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {pendingGoldReceipts.map((receipt) => (
+                    <div key={receipt.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow bg-yellow-50 border-yellow-200">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-4 mb-2">
+                            <span className="font-semibold text-lg">收料单号：{receipt.receipt_no}</span>
+                            <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">
+                              待接收
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                            <div>客户：{receipt.customer_name || '-'}</div>
+                            <div>关联结算单：{receipt.settlement_no || '无'}</div>
+                            <div className="text-yellow-700 font-medium">
+                              金料克重：{receipt.gold_weight?.toFixed(2) || 0} 克
+                            </div>
+                            <div>成色：{receipt.gold_fineness || '-'}</div>
+                            <div>开单人：{receipt.created_by || '-'}</div>
+                            <div>开单时间：{receipt.created_at ? new Date(receipt.created_at).toLocaleString() : '-'}</div>
+                          </div>
+                          {receipt.remark && (
+                            <div className="mt-2 text-sm text-gray-500">备注：{receipt.remark}</div>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-2 ml-4">
+                          <button
+                            onClick={() => handleReceiveGold(receipt.id)}
+                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                          >
+                            确认接收
+                          </button>
+                          <button
+                            onClick={() => handlePrintReceipt(receipt.id)}
+                            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+                          >
+                            打印单据
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+          </div>
+        )}
+
+        {/* 收料单列表（旧系统） */}
         {activeTab === 'receipts' && (
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex justify-between items-center mb-4">

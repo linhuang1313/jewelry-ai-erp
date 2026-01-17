@@ -206,7 +206,7 @@ class SettlementOrder(Base):
 
 # ============= 财务相关模型 =============
 # 从 finance.py 导入
-from .finance import AccountReceivable, PaymentRecord, ReminderRecord, ReconciliationStatement
+from .finance import AccountReceivable, PaymentRecord, ReminderRecord, ReconciliationStatement, GoldReceipt
 
 
 # ============= 对话日志模型 =============

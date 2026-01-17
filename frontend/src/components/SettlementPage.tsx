@@ -19,6 +19,7 @@ interface SalesOrder {
   id: number;
   order_no: string;
   order_date: string;
+  customer_id?: number;
   customer_name: string;
   salesperson: string;
   store_code: string | null;
@@ -154,6 +155,15 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
     totalWeight: number;
     difference: number;
   } | null>(null);
+
+  // 收料单弹窗
+  const [showReceiptForm, setShowReceiptForm] = useState(false);
+  const [selectedSettlementForReceipt, setSelectedSettlementForReceipt] = useState<SettlementOrder | null>(null);
+  const [receiptForm, setReceiptForm] = useState({
+    gold_weight: '',
+    gold_fineness: '足金999',
+    remark: ''
+  });
 
   // 加载数据
   useEffect(() => {
@@ -317,7 +327,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
             payment_method: confirmingSettlement.payment_method,
             total_weight: confirmingSettlement.total_weight,
             labor_amount: confirmingSettlement.labor_amount,
-            material_amount: confirmingSettlement.material_amount,
+            material_amount: confirmingSettlement.material_amount || 0,
             total_amount: confirmingSettlement.total_amount,
             details: confirmingSettlement.sales_order?.details?.map(d => ({
               product_name: d.product_name,
@@ -358,6 +368,69 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
     } catch (error) {
       toast.error('操作失败');
     }
+  };
+
+  // 打开开具收料单弹窗
+  const openReceiptForm = (settlement: SettlementOrder) => {
+    setSelectedSettlementForReceipt(settlement);
+    // 预填克重（结料部分或全部克重）
+    const goldWeight = settlement.payment_method === 'physical_gold' 
+      ? settlement.total_weight 
+      : settlement.gold_payment_weight || 0;
+    setReceiptForm({
+      gold_weight: goldWeight.toString(),
+      gold_fineness: '足金999',
+      remark: ''
+    });
+    setShowReceiptForm(true);
+  };
+
+  // 创建收料单
+  const handleCreateReceipt = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSettlementForReceipt) return;
+
+    if (!receiptForm.gold_weight || parseFloat(receiptForm.gold_weight) <= 0) {
+      toast.error('请输入有效的收料克重');
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams({
+        gold_weight: receiptForm.gold_weight,
+        gold_fineness: receiptForm.gold_fineness,
+        settlement_id: selectedSettlementForReceipt.id.toString(),
+        remark: receiptForm.remark,
+        created_by: '结算专员'
+      });
+
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/gold-material/gold-receipts?${params}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        toast.success(`收料单创建成功：${result.data.receipt_no}`);
+        setShowReceiptForm(false);
+        setSelectedSettlementForReceipt(null);
+        
+        // 打开打印页面
+        if (result.data.id) {
+          window.open(`${API_ENDPOINTS.API_BASE_URL}/api/gold-material/gold-receipts/${result.data.id}/print`, '_blank');
+        }
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || '创建收料单失败');
+      }
+    } catch (error) {
+      toast.error('创建收料单失败');
+    }
+  };
+
+  // 判断结算单是否需要收料（支付方式包含金料）
+  const needsGoldReceipt = (settlement: SettlementOrder) => {
+    return settlement.payment_method === 'physical_gold' || settlement.payment_method === 'mixed';
   };
 
   // 过滤结算单
@@ -656,6 +729,16 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                         <span className="flex-1 text-center text-sm text-green-600 py-2">
                           ✓ 已打印
                         </span>
+                      )}
+                      {/* 开具收料单按钮 - 只在支付方式包含金料且已确认/已打印时显示 */}
+                      {needsGoldReceipt(settlement) && (settlement.status === 'confirmed' || settlement.status === 'printed') && (
+                        <button
+                          onClick={() => openReceiptForm(settlement)}
+                          className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors text-sm"
+                        >
+                          <Package className="w-4 h-4" />
+                          <span>收料单</span>
+                        </button>
                       )}
                     </div>
                   </div>
@@ -1013,6 +1096,105 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                   确认结算
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* 开具收料单弹窗 */}
+        {showReceiptForm && selectedSettlementForReceipt && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold flex items-center">
+                  <Package className="w-5 h-5 mr-2 text-yellow-500" />
+                  开具收料单
+                </h3>
+                <button onClick={() => setShowReceiptForm(false)} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* 结算单信息 */}
+              <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-500">关联结算单</span>
+                  <span className="font-mono text-sm">{selectedSettlementForReceipt.settlement_no}</span>
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-500">客户</span>
+                  <span className="font-medium">{selectedSettlementForReceipt.sales_order?.customer_name || '-'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-500">应收金料</span>
+                  <span className="font-bold text-yellow-600">
+                    {selectedSettlementForReceipt.payment_method === 'physical_gold' 
+                      ? `${selectedSettlementForReceipt.total_weight.toFixed(2)} 克`
+                      : `${(selectedSettlementForReceipt.gold_payment_weight || 0).toFixed(2)} 克`
+                    }
+                  </span>
+                </div>
+              </div>
+
+              {/* 表单 */}
+              <form onSubmit={handleCreateReceipt} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">实收克重 (克)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={receiptForm.gold_weight}
+                    onChange={(e) => setReceiptForm({ ...receiptForm, gold_weight: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    placeholder="输入实际收取的克重"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">成色</label>
+                  <select
+                    value={receiptForm.gold_fineness}
+                    onChange={(e) => setReceiptForm({ ...receiptForm, gold_fineness: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  >
+                    <option value="足金999">足金999</option>
+                    <option value="足金9999">足金9999</option>
+                    <option value="Au999">Au999</option>
+                    <option value="Au9999">Au9999</option>
+                    <option value="18K">18K</option>
+                    <option value="22K">22K</option>
+                    <option value="其他">其他</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">备注（可选）</label>
+                  <textarea
+                    value={receiptForm.remark}
+                    onChange={(e) => setReceiptForm({ ...receiptForm, remark: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    rows={2}
+                    placeholder="输入备注信息"
+                  />
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowReceiptForm(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>创建并打印</span>
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

@@ -125,6 +125,43 @@ class ReminderRecord(Base):
     customer = relationship("Customer", backref="reminder_records")
 
 
+class GoldReceipt(Base):
+    """收料单表 - 记录客户交付金料"""
+    __tablename__ = "gold_receipts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    receipt_no = Column(String(50), unique=True, index=True, nullable=False)  # 收料单号 (SL+时间戳)
+    
+    # 关联信息
+    settlement_id = Column(Integer, ForeignKey("settlement_orders.id"), nullable=True)  # 关联结算单（可选）
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)  # 客户ID
+    
+    # 金料信息
+    gold_weight = Column(Float, nullable=False)  # 收料克重
+    gold_fineness = Column(String(50), default="足金999")  # 成色
+    
+    # 状态
+    status = Column(String(20), default="pending")  # pending=待接收, received=已接收
+    
+    # 开单信息
+    created_by = Column(String(50), nullable=False)  # 开单人（结算专员）
+    
+    # 料部接收信息
+    received_by = Column(String(50), nullable=True)  # 料部接收人
+    received_at = Column(DateTime, nullable=True)  # 接收时间
+    
+    # 其他
+    remark = Column(Text)  # 备注
+    
+    # 操作记录
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    
+    # 关系
+    customer = relationship("Customer", backref="gold_receipts")
+    settlement = relationship("SettlementOrder", backref="gold_receipts")
+
+
 class ReconciliationStatement(Base):
     """对账单表"""
     __tablename__ = "reconciliation_statements"

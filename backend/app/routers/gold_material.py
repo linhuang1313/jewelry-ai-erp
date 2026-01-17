@@ -29,6 +29,7 @@ from ..models import (
     Customer,
     Supplier,
 )
+from ..models.finance import GoldReceipt
 from ..schemas import (
     GoldReceiptCreate,
     GoldReceiptUpdate,
@@ -2300,4 +2301,491 @@ async def download_customer_transfer(
             content=html_content,
             headers={"Access-Control-Allow-Origin": "*"}
         )
+
+
+# ==================== 收料单管理（从客户收取金料）====================
+
+@router.get("/gold-receipts")
+async def get_gold_receipts(
+    status: Optional[str] = Query(None, description="状态筛选: pending/received"),
+    customer_id: Optional[int] = Query(None, description="客户ID"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db)
+):
+    """获取收料单列表"""
+    query = db.query(GoldReceipt).options(
+        joinedload(GoldReceipt.customer),
+        joinedload(GoldReceipt.settlement)
+    )
+    
+    if status:
+        query = query.filter(GoldReceipt.status == status)
+    if customer_id:
+        query = query.filter(GoldReceipt.customer_id == customer_id)
+    
+    total = query.count()
+    receipts = query.order_by(desc(GoldReceipt.created_at)).offset(skip).limit(limit).all()
+    
+    result = []
+    for r in receipts:
+        result.append({
+            "id": r.id,
+            "receipt_no": r.receipt_no,
+            "settlement_id": r.settlement_id,
+            "settlement_no": r.settlement.settlement_no if r.settlement else None,
+            "customer_id": r.customer_id,
+            "customer_name": r.customer.name if r.customer else None,
+            "gold_weight": r.gold_weight,
+            "gold_fineness": r.gold_fineness,
+            "status": r.status,
+            "created_by": r.created_by,
+            "received_by": r.received_by,
+            "received_at": r.received_at.isoformat() if r.received_at else None,
+            "remark": r.remark,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        })
+    
+    return {
+        "success": True,
+        "data": result,
+        "total": total
+    }
+
+
+@router.post("/gold-receipts")
+async def create_gold_receipt(
+    gold_weight: float,
+    gold_fineness: str = "足金999",
+    customer_id: Optional[int] = None,
+    settlement_id: Optional[int] = None,
+    remark: str = "",
+    created_by: str = "结算专员",
+    db: Session = Depends(get_db)
+):
+    """创建收料单"""
+    # 如果指定了 settlement_id，可以从结算单获取客户信息
+    if settlement_id:
+        settlement = db.query(SettlementOrder).options(
+            joinedload(SettlementOrder.sales_order)
+        ).filter(SettlementOrder.id == settlement_id).first()
+        if not settlement:
+            raise HTTPException(status_code=404, detail="结算单不存在")
+        # 从结算单关联的销售单获取客户ID
+        if settlement.sales_order and not customer_id:
+            customer_id = settlement.sales_order.customer_id
+    
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="请提供客户ID或关联结算单")
+    
+    # 验证客户存在
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    
+    # 生成收料单号 SL + 时间戳
+    now = china_now()
+    receipt_no = f"SL{now.strftime('%Y%m%d%H%M%S')}"
+    
+    # 创建收料单
+    receipt = GoldReceipt(
+        receipt_no=receipt_no,
+        settlement_id=settlement_id,
+        customer_id=customer_id,
+        gold_weight=gold_weight,
+        gold_fineness=gold_fineness,
+        status="pending",
+        created_by=created_by,
+        remark=remark
+    )
+    
+    db.add(receipt)
+    db.commit()
+    db.refresh(receipt)
+    
+    logger.info(f"创建收料单: {receipt_no}, 客户={customer.name}, 克重={gold_weight}")
+    
+    return {
+        "success": True,
+        "message": "收料单创建成功",
+        "data": {
+            "id": receipt.id,
+            "receipt_no": receipt.receipt_no,
+            "customer_name": customer.name,
+            "gold_weight": receipt.gold_weight,
+            "gold_fineness": receipt.gold_fineness,
+            "status": receipt.status
+        }
+    }
+
+
+@router.post("/gold-receipts/{receipt_id}/receive")
+async def confirm_gold_receipt(
+    receipt_id: int,
+    received_by: str = "料部专员",
+    db: Session = Depends(get_db)
+):
+    """料部确认接收金料"""
+    receipt = db.query(GoldReceipt).filter(GoldReceipt.id == receipt_id).first()
+    
+    if not receipt:
+        raise HTTPException(status_code=404, detail="收料单不存在")
+    
+    if receipt.status == "received":
+        raise HTTPException(status_code=400, detail="该收料单已接收")
+    
+    # 更新状态
+    receipt.status = "received"
+    receipt.received_by = received_by
+    receipt.received_at = china_now()
+    
+    db.commit()
+    db.refresh(receipt)
+    
+    logger.info(f"收料单已接收: {receipt.receipt_no}, 接收人={received_by}")
+    
+    return {
+        "success": True,
+        "message": "收料确认成功",
+        "data": {
+            "id": receipt.id,
+            "receipt_no": receipt.receipt_no,
+            "status": receipt.status,
+            "received_by": receipt.received_by,
+            "received_at": receipt.received_at.isoformat() if receipt.received_at else None
+        }
+    }
+
+
+@router.get("/gold-receipts/{receipt_id}")
+async def get_gold_receipt_detail(
+    receipt_id: int,
+    db: Session = Depends(get_db)
+):
+    """获取收料单详情"""
+    receipt = db.query(GoldReceipt).options(
+        joinedload(GoldReceipt.customer),
+        joinedload(GoldReceipt.settlement)
+    ).filter(GoldReceipt.id == receipt_id).first()
+    
+    if not receipt:
+        raise HTTPException(status_code=404, detail="收料单不存在")
+    
+    return {
+        "success": True,
+        "data": {
+            "id": receipt.id,
+            "receipt_no": receipt.receipt_no,
+            "settlement_id": receipt.settlement_id,
+            "settlement_no": receipt.settlement.settlement_no if receipt.settlement else None,
+            "customer_id": receipt.customer_id,
+            "customer_name": receipt.customer.name if receipt.customer else None,
+            "customer_phone": receipt.customer.phone if receipt.customer else None,
+            "gold_weight": receipt.gold_weight,
+            "gold_fineness": receipt.gold_fineness,
+            "status": receipt.status,
+            "created_by": receipt.created_by,
+            "received_by": receipt.received_by,
+            "received_at": receipt.received_at.isoformat() if receipt.received_at else None,
+            "remark": receipt.remark,
+            "created_at": receipt.created_at.isoformat() if receipt.created_at else None,
+        }
+    }
+
+
+@router.get("/gold-receipts/{receipt_id}/print")
+async def print_gold_receipt(
+    receipt_id: int,
+    format: str = Query("html", pattern="^(pdf|html)$"),
+    db: Session = Depends(get_db)
+):
+    """
+    打印收料单（针式打印机格式 241mm x 140mm）
+    支持两联打印：客户联 + 存根联
+    """
+    from fastapi.responses import HTMLResponse
+    
+    receipt = db.query(GoldReceipt).options(
+        joinedload(GoldReceipt.customer),
+        joinedload(GoldReceipt.settlement)
+    ).filter(GoldReceipt.id == receipt_id).first()
+    
+    if not receipt:
+        raise HTTPException(status_code=404, detail="收料单不存在")
+    
+    # 获取客户和结算单信息
+    customer_name = receipt.customer.name if receipt.customer else "-"
+    customer_phone = receipt.customer.phone if receipt.customer else "-"
+    settlement_no = receipt.settlement.settlement_no if receipt.settlement else "无关联结算单"
+    created_time = receipt.created_at.strftime("%Y-%m-%d %H:%M") if receipt.created_at else "-"
+    status_text = "已接收" if receipt.status == "received" else "待接收"
+    
+    # HTML 打印格式（适配针式打印机 241mm x 140mm）
+    html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>收料单 - {receipt.receipt_no}</title>
+    <style>
+        @page {{
+            size: 241mm 140mm landscape;
+            margin: 5mm;
+        }}
+        
+        @media print {{
+            body {{ margin: 0; padding: 0; }}
+            .page-break {{ page-break-after: always; }}
+        }}
+        
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        
+        body {{
+            font-family: "SimSun", "宋体", serif;
+            font-size: 12px;
+            line-height: 1.4;
+            padding: 8px;
+            max-width: 241mm;
+        }}
+        
+        .receipt {{
+            border: 1px solid #000;
+            padding: 10px;
+            margin-bottom: 10px;
+            height: 125mm;
+        }}
+        
+        .header {{
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+        }}
+        
+        .header h1 {{
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }}
+        
+        .header .receipt-no {{
+            font-size: 11px;
+            color: #333;
+        }}
+        
+        .header .copy-type {{
+            font-size: 10px;
+            color: #666;
+            margin-top: 2px;
+        }}
+        
+        .info-row {{
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            border-bottom: 1px dashed #ccc;
+            padding-bottom: 6px;
+        }}
+        
+        .info-item {{
+            flex: 1;
+        }}
+        
+        .info-label {{
+            color: #666;
+            font-size: 10px;
+        }}
+        
+        .info-value {{
+            font-weight: bold;
+            font-size: 13px;
+        }}
+        
+        .gold-info {{
+            background: #f5f5f5;
+            padding: 12px;
+            margin: 10px 0;
+            text-align: center;
+            border: 1px solid #ddd;
+        }}
+        
+        .gold-weight {{
+            font-size: 28px;
+            font-weight: bold;
+            color: #d4a017;
+        }}
+        
+        .gold-fineness {{
+            font-size: 14px;
+            color: #666;
+            margin-top: 4px;
+        }}
+        
+        .signature-area {{
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #000;
+        }}
+        
+        .signature-box {{
+            width: 30%;
+            text-align: center;
+        }}
+        
+        .signature-line {{
+            border-bottom: 1px solid #000;
+            height: 25px;
+            margin-bottom: 4px;
+        }}
+        
+        .signature-label {{
+            font-size: 10px;
+            color: #666;
+        }}
+        
+        .footer {{
+            text-align: center;
+            font-size: 9px;
+            color: #999;
+            margin-top: 8px;
+        }}
+    </style>
+</head>
+<body>
+    <!-- 客户联 -->
+    <div class="receipt">
+        <div class="header">
+            <h1>金 料 收 据</h1>
+            <div class="receipt-no">单号：{receipt.receipt_no}</div>
+            <div class="copy-type">【客户联】</div>
+        </div>
+        
+        <div class="info-row">
+            <div class="info-item">
+                <div class="info-label">客户姓名</div>
+                <div class="info-value">{customer_name}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">联系电话</div>
+                <div class="info-value">{customer_phone}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">开单时间</div>
+                <div class="info-value">{created_time}</div>
+            </div>
+        </div>
+        
+        <div class="info-row">
+            <div class="info-item">
+                <div class="info-label">关联结算单</div>
+                <div class="info-value">{settlement_no}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">状态</div>
+                <div class="info-value">{status_text}</div>
+            </div>
+        </div>
+        
+        <div class="gold-info">
+            <div class="gold-weight">{receipt.gold_weight:.2f} 克</div>
+            <div class="gold-fineness">成色：{receipt.gold_fineness}</div>
+        </div>
+        
+        <div class="signature-area">
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-label">客户签字</div>
+            </div>
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-label">开单人：{receipt.created_by}</div>
+            </div>
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-label">料部接收</div>
+            </div>
+        </div>
+        
+        <div class="footer">本单一式两联，客户联由客户留存，存根联由公司留存</div>
+    </div>
+    
+    <div class="page-break"></div>
+    
+    <!-- 存根联 -->
+    <div class="receipt">
+        <div class="header">
+            <h1>金 料 收 据</h1>
+            <div class="receipt-no">单号：{receipt.receipt_no}</div>
+            <div class="copy-type">【存根联】</div>
+        </div>
+        
+        <div class="info-row">
+            <div class="info-item">
+                <div class="info-label">客户姓名</div>
+                <div class="info-value">{customer_name}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">联系电话</div>
+                <div class="info-value">{customer_phone}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">开单时间</div>
+                <div class="info-value">{created_time}</div>
+            </div>
+        </div>
+        
+        <div class="info-row">
+            <div class="info-item">
+                <div class="info-label">关联结算单</div>
+                <div class="info-value">{settlement_no}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">状态</div>
+                <div class="info-value">{status_text}</div>
+            </div>
+        </div>
+        
+        <div class="gold-info">
+            <div class="gold-weight">{receipt.gold_weight:.2f} 克</div>
+            <div class="gold-fineness">成色：{receipt.gold_fineness}</div>
+        </div>
+        
+        <div class="signature-area">
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-label">客户签字</div>
+            </div>
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-label">开单人：{receipt.created_by}</div>
+            </div>
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-label">料部接收</div>
+            </div>
+        </div>
+        
+        <div class="footer">本单一式两联，客户联由客户留存，存根联由公司留存</div>
+    </div>
+    
+    <script>
+        // 自动打印
+        window.onload = function() {{
+            window.print();
+        }}
+    </script>
+</body>
+</html>
+"""
+    
+    return HTMLResponse(
+        content=html_content,
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
 
