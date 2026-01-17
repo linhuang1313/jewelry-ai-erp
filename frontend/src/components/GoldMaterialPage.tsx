@@ -663,17 +663,20 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
 
   // ==================== 渲染组件 ====================
 
-  // 渲染标签页按钮
+  // 渲染标签页按钮 - 珠宝风格
   const renderTabButton = (tab: typeof activeTab, label: string, badge?: number) => (
     <button
       onClick={() => setActiveTab(tab)}
-      className={`px-6 py-3 text-sm font-medium ${
+      className={`px-4 py-2.5 text-sm font-medium rounded-xl transition-all ${
         activeTab === tab
-          ? 'border-b-2 border-blue-500 text-blue-600'
-          : 'text-gray-500 hover:text-gray-700'
+          ? 'bg-white text-amber-700 shadow-sm border border-amber-100'
+          : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
       }`}
     >
-      {label} {badge !== undefined && badge > 0 && `(${badge})`}
+      {label}
+      {badge !== undefined && badge > 0 && (
+        <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-red-500 text-white">{badge}</span>
+      )}
     </button>
   );
 
@@ -742,17 +745,25 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-amber-50/30 to-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">金料管理</h1>
-          <p className="text-gray-600 mt-2">管理金料收料、付料和台账</p>
+        {/* 页面标题 - 珠宝风格 */}
+        <div className="mb-6 flex items-center gap-4">
+          <div className="p-3 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-xl shadow-lg shadow-amber-200/50">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">金料管理</h1>
+            <p className="text-gray-500 text-sm">管理金料收料、付料和台账</p>
+          </div>
         </div>
 
-        {/* 标签页 */}
-        <div className="bg-white rounded-lg shadow-sm mb-6">
-          <div className="border-b border-gray-200">
-            <nav className="flex -mb-px flex-wrap">
+        {/* 标签页 - 珠宝风格 */}
+        <div className="bg-white rounded-2xl shadow-sm mb-6 overflow-hidden">
+          <div className="border-b border-gray-100 bg-gradient-to-r from-gray-50 to-amber-50/30 p-2">
+            <nav className="flex flex-wrap gap-1">
               {userRole === 'material' && (
                 <>
                   {renderTabButton('ledger', '金料台账')}

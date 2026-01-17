@@ -74,7 +74,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   );
 };
 
-// Tab 组件
+// Tab 组件 - 珠宝风格
 const TabButton: React.FC<{
   active: boolean;
   onClick: () => void;
@@ -84,17 +84,17 @@ const TabButton: React.FC<{
 }> = ({ active, onClick, icon, label, count }) => (
   <button
     onClick={onClick}
-    className={`flex items-center space-x-2 px-4 py-3 rounded-lg font-medium transition-all ${
+    className={`flex items-center space-x-2 px-5 py-3 rounded-xl font-medium transition-all ${
       active
-        ? 'bg-cyan-600 text-white shadow-md'
-        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+        ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-lg shadow-amber-200/50'
+        : 'bg-white text-gray-600 hover:bg-amber-50 border border-gray-200'
     }`}
   >
     {icon}
     <span>{label}</span>
     {count !== undefined && count > 0 && (
-      <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
-        active ? 'bg-white/20' : 'bg-cyan-500 text-white'
+      <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${
+        active ? 'bg-white/20' : 'bg-red-500 text-white'
       }`}>
         {count}
       </span>
@@ -370,7 +370,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
   const pendingCount = settlements.filter(s => s.status === 'pending').length;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-amber-50/30 to-gray-50 p-6">
       {/* 少付确认对话框 - z-index 要高于其他弹窗 */}
       {showUnderpayConfirm && underpayData && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
@@ -420,15 +420,22 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
       )}
       
       <div className="max-w-7xl mx-auto">
-        {/* 标题栏 */}
+        {/* 标题栏 - 珠宝风格 */}
         <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">结算管理</h1>
-            <p className="text-gray-500 mt-1">确认销售单的原料支付方式并复核打印</p>
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-xl shadow-lg shadow-cyan-200/50">
+              <FileText className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">结算管理</h1>
+              <p className="text-gray-500 text-sm">确认销售单支付方式并复核打印</p>
+            </div>
           </div>
           <button
             onClick={() => { loadPendingSales(); loadSettlements(); }}
-            className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 text-white 
+              rounded-xl shadow-lg shadow-amber-200/50 hover:from-amber-600 hover:to-yellow-600 
+              transition-all font-medium"
           >
             <RefreshCw className="w-4 h-4" />
             <span>刷新</span>

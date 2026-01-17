@@ -69,7 +69,7 @@ interface InventoryTransfer {
   diff_reason: string | null;
 }
 
-// Tab 组件
+// Tab 组件 - 珠宝风格
 const TabButton: React.FC<{
   active: boolean;
   onClick: () => void;
@@ -79,16 +79,16 @@ const TabButton: React.FC<{
 }> = ({ active, onClick, icon, label, count }) => (
   <button
     onClick={onClick}
-    className={`flex items-center space-x-2 px-4 py-3 rounded-lg font-medium transition-all ${
+    className={`flex items-center space-x-2 px-5 py-3 rounded-xl font-medium transition-all ${
       active
-        ? 'bg-blue-600 text-white shadow-md'
-        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+        ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-lg shadow-amber-200/50'
+        : 'bg-white text-gray-600 hover:bg-amber-50 border border-gray-200'
     }`}
   >
     {icon}
     <span>{label}</span>
     {count !== undefined && count > 0 && (
-      <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
+      <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${
         active ? 'bg-white/20' : 'bg-red-500 text-white'
       }`}>
         {count}
@@ -359,18 +359,25 @@ export const WarehousePage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-amber-50/30 to-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
-        {/* 标题栏 */}
+        {/* 标题栏 - 珠宝风格 */}
         <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">分仓库存管理</h1>
-            <p className="text-gray-500 mt-1">管理不同位置的库存和货品转移</p>
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl shadow-lg shadow-blue-200/50">
+              <Package className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">分仓库存管理</h1>
+              <p className="text-gray-500 text-sm">管理库存和货品转移</p>
+            </div>
           </div>
           <div className="flex space-x-3">
             <button
               onClick={() => { loadInventorySummary(); loadTransfers(); }}
-              className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 text-white 
+                rounded-xl shadow-lg shadow-amber-200/50 hover:from-amber-600 hover:to-yellow-600 
+                transition-all font-medium"
             >
               <RefreshCw className="w-4 h-4" />
               <span>刷新</span>
@@ -378,7 +385,7 @@ export const WarehousePage: React.FC = () => {
             {locations.length === 0 && (
               <button
                 onClick={initDefaultLocations}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-sm font-medium"
               >
                 <Plus className="w-4 h-4" />
                 <span>初始化位置</span>

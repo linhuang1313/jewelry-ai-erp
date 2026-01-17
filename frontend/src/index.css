@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 珠宝ERP主题样式 */
+@import './styles/jewelry-theme.css';
+
 /* React DatePicker 样式覆盖 */
 .react-datepicker-wrapper {
   width: 100%;

@@ -1,0 +1,302 @@
+/* 珠宝ERP系统 - 全局样式主题 */
+
+:root {
+  /* 珠宝品牌色 */
+  --jewelry-gold: #C9A86C;
+  --jewelry-gold-light: #D4AF37;
+  --jewelry-gold-dark: #B8860B;
+  --jewelry-gold-50: #FBF8F1;
+  --jewelry-gold-100: #F5EDD9;
+  --jewelry-gold-200: #EBDBB3;
+  
+  /* 深海蓝 - 专业信任 */
+  --jewelry-navy: #1E3A5F;
+  --jewelry-navy-light: #2D4A6F;
+  --jewelry-navy-dark: #0F2847;
+  
+  /* 功能色 */
+  --jewelry-success: #10B981;
+  --jewelry-warning: #F59E0B;
+  --jewelry-error: #EF4444;
+  --jewelry-info: #3B82F6;
+  
+  /* 渐变 */
+  --gradient-gold: linear-gradient(135deg, #C9A86C 0%, #D4AF37 100%);
+  --gradient-gold-button: linear-gradient(to right, #F59E0B, #EAB308);
+  --gradient-navy: linear-gradient(135deg, #1E3A5F 0%, #2D4A6F 100%);
+  --gradient-success: linear-gradient(135deg, #10B981 0%, #14B8A6 100%);
+  --gradient-premium: linear-gradient(135deg, #C9A86C 0%, #D4AF37 50%, #C9A86C 100%);
+  
+  /* 阴影 */
+  --shadow-gold: 0 4px 14px rgba(201, 168, 108, 0.25);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-card-hover: 0 10px 40px rgba(0, 0, 0, 0.08);
+  --shadow-button: 0 4px 14px rgba(0, 0, 0, 0.1);
+  
+  /* 圆角 */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  
+  /* 动画 */
+  --transition-fast: 150ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms ease;
+}
+
+/* 珠宝风格按钮 */
+.btn-jewelry-primary {
+  background: var(--gradient-gold-button);
+  color: white;
+  font-weight: 500;
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-gold);
+  transition: all var(--transition-normal);
+}
+
+.btn-jewelry-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(201, 168, 108, 0.35);
+}
+
+.btn-jewelry-primary:active {
+  transform: scale(0.98);
+}
+
+/* 珠宝风格卡片 */
+.card-jewelry {
+  background: white;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(201, 168, 108, 0.1);
+  box-shadow: var(--shadow-card);
+  transition: all var(--transition-normal);
+}
+
+.card-jewelry:hover {
+  box-shadow: var(--shadow-card-hover);
+  border-color: rgba(201, 168, 108, 0.2);
+}
+
+/* 珠宝风格指标卡片 */
+.metric-card-gold {
+  background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%);
+  color: white;
+}
+
+.metric-card-emerald {
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  color: white;
+}
+
+.metric-card-sapphire {
+  background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+  color: white;
+}
+
+.metric-card-amethyst {
+  background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+  color: white;
+}
+
+/* 珠宝风格表格 */
+.table-jewelry thead {
+  background: linear-gradient(to right, #FBF8F1, #F5EDD9);
+}
+
+.table-jewelry thead th {
+  color: #92400E;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.table-jewelry tbody tr:hover {
+  background-color: rgba(201, 168, 108, 0.05);
+}
+
+/* 珠宝风格输入框 */
+.input-jewelry {
+  border: 1px solid #E5E7EB;
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.75rem;
+  transition: all var(--transition-fast);
+}
+
+.input-jewelry:focus {
+  border-color: var(--jewelry-gold);
+  box-shadow: 0 0 0 3px rgba(201, 168, 108, 0.15);
+  outline: none;
+}
+
+/* 珠宝风格标签 */
+.badge-gold {
+  background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+  color: #92400E;
+  font-weight: 500;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+}
+
+.badge-success {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.badge-warning {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.badge-error {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+/* 珠宝风格加载动画 */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.loading-shimmer {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 25%,
+    #e0e0e0 50%,
+    #f0f0f0 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* 珠宝风格页面背景 */
+.page-bg-jewelry {
+  background: linear-gradient(135deg, #F9FAFB 0%, #FBF8F1 50%, #F9FAFB 100%);
+  min-height: 100vh;
+}
+
+/* 金额显示样式 */
+.amount-display {
+  font-family: "SF Mono", "Consolas", monospace;
+  font-weight: 700;
+  color: var(--jewelry-gold-dark);
+}
+
+.amount-display-large {
+  font-size: 1.5rem;
+  background: var(--gradient-gold);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 克重显示样式 */
+.weight-display {
+  font-family: "SF Mono", "Consolas", monospace;
+  color: #374151;
+}
+
+.weight-unit {
+  font-size: 0.875em;
+  color: #6B7280;
+  margin-left: 2px;
+}
+
+/* 珠宝图标装饰 */
+.icon-wrapper-gold {
+  background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+  padding: 0.75rem;
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 8px rgba(201, 168, 108, 0.2);
+}
+
+.icon-wrapper-gold svg {
+  color: #B45309;
+}
+
+/* 侧边栏样式增强 */
+.sidebar-jewelry {
+  background: linear-gradient(180deg, #FFFFFF 0%, #FBF8F1 100%);
+  border-right: 1px solid rgba(201, 168, 108, 0.15);
+}
+
+/* 导航项悬浮效果 */
+.nav-item-jewelry {
+  transition: all var(--transition-normal);
+  border-radius: var(--radius-md);
+}
+
+.nav-item-jewelry:hover {
+  background: rgba(201, 168, 108, 0.1);
+  transform: translateX(4px);
+}
+
+.nav-item-jewelry.active {
+  background: linear-gradient(90deg, rgba(201, 168, 108, 0.15), transparent);
+  border-left: 3px solid var(--jewelry-gold);
+}
+
+/* 头部样式增强 */
+.header-jewelry {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(201, 168, 108, 0.1);
+}
+
+/* 聊天气泡样式 */
+.chat-bubble-user {
+  background: linear-gradient(135deg, #3B82F6, #2563EB);
+  color: white;
+  border-radius: 20px 20px 4px 20px;
+}
+
+.chat-bubble-system {
+  background: white;
+  border: 1px solid rgba(201, 168, 108, 0.15);
+  border-radius: 20px 20px 20px 4px;
+  box-shadow: var(--shadow-card);
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F3F4F6;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--jewelry-gold), var(--jewelry-gold-light));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--jewelry-gold-dark);
+}
+
+/* 表单focus环 */
+.focus-ring-gold:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(201, 168, 108, 0.3);
+}
+
+/* 渐变文字 */
+.text-gradient-gold {
+  background: var(--gradient-gold);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+

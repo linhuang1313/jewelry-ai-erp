@@ -344,68 +344,68 @@ const ProductCodePage: React.FC<ProductCodePageProps> = ({ userRole }) => {
   };
   
   return (
-    <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-      <h2 style={{ marginBottom: '20px', color: '#333' }}>商品编码管理</h2>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-amber-50/30 to-gray-50 p-6">
+      <div className="max-w-6xl mx-auto">
+        {/* 页面标题 - 珠宝风格 */}
+        <div className="mb-6 flex items-center gap-4">
+          <div className="p-3 bg-gradient-to-br from-amber-400 to-yellow-500 rounded-xl shadow-lg shadow-amber-200/50">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" />
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">商品编码管理</h1>
+            <p className="text-gray-500 text-sm">管理预定义编码、F编码和商品属性</p>
+          </div>
+        </div>
       
-      {/* 标签页 */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-        <button
-          onClick={() => setActiveTab('predefined')}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: activeTab === 'predefined' ? '#D4AF37' : '#f0f0f0',
-            color: activeTab === 'predefined' ? 'white' : '#333',
-            border: 'none',
-            borderRadius: '5px',
-            cursor: 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-          预定义编码（35个）
-        </button>
-        <button
-          onClick={() => setActiveTab('f_single')}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: activeTab === 'f_single' ? '#D4AF37' : '#f0f0f0',
-            color: activeTab === 'f_single' ? 'white' : '#333',
-            border: 'none',
-            borderRadius: '5px',
-            cursor: 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-          F编码（一码一件）
-        </button>
-        <button
-          onClick={() => setActiveTab('fl_batch')}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: activeTab === 'fl_batch' ? '#D4AF37' : '#f0f0f0',
-            color: activeTab === 'fl_batch' ? 'white' : '#333',
-            border: 'none',
-            borderRadius: '5px',
-            cursor: 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-          FL编码（批量）
-        </button>
-        <button
-          onClick={() => setActiveTab('attributes')}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: activeTab === 'attributes' ? '#9C27B0' : '#f0f0f0',
-            color: activeTab === 'attributes' ? 'white' : '#333',
-            border: 'none',
-            borderRadius: '5px',
-            cursor: 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-          商品属性配置
-        </button>
-      </div>
+        {/* 标签页 - 珠宝风格 */}
+        <div className="bg-white rounded-2xl shadow-sm mb-6 overflow-hidden">
+          <div className="border-b border-gray-100 bg-gradient-to-r from-gray-50 to-amber-50/30 p-2">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setActiveTab('predefined')}
+                className={`px-4 py-2.5 text-sm font-medium rounded-xl transition-all ${
+                  activeTab === 'predefined'
+                    ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-lg shadow-amber-200/50'
+                    : 'bg-white text-gray-600 hover:bg-amber-50 border border-gray-200'
+                }`}
+              >
+                预定义编码（35个）
+              </button>
+              <button
+                onClick={() => setActiveTab('f_single')}
+                className={`px-4 py-2.5 text-sm font-medium rounded-xl transition-all ${
+                  activeTab === 'f_single'
+                    ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-lg shadow-amber-200/50'
+                    : 'bg-white text-gray-600 hover:bg-amber-50 border border-gray-200'
+                }`}
+              >
+                F编码（一码一件）
+              </button>
+              <button
+                onClick={() => setActiveTab('fl_batch')}
+                className={`px-4 py-2.5 text-sm font-medium rounded-xl transition-all ${
+                  activeTab === 'fl_batch'
+                    ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-lg shadow-amber-200/50'
+                    : 'bg-white text-gray-600 hover:bg-amber-50 border border-gray-200'
+                }`}
+              >
+                FL编码（批量）
+              </button>
+              <button
+                onClick={() => setActiveTab('attributes')}
+                className={`px-4 py-2.5 text-sm font-medium rounded-xl transition-all ${
+                  activeTab === 'attributes'
+                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-200/50'
+                    : 'bg-white text-gray-600 hover:bg-purple-50 border border-gray-200'
+                }`}
+              >
+                商品属性配置
+              </button>
+            </div>
+          </div>
+        </div>
       
       {/* 搜索和操作栏 - 仅在编码 Tab 显示 */}
       {activeTab !== 'attributes' && (
