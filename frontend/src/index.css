@@ -1,9 +1,9 @@
+/* 珠宝ERP主题样式 - 必须在 @tailwind 之前导入 */
+@import './styles/jewelry-theme.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* 珠宝ERP主题样式 */
-@import './styles/jewelry-theme.css';
 
 /* React DatePicker 样式覆盖 */
 .react-datepicker-wrapper {
