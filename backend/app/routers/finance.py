@@ -172,6 +172,122 @@ async def record_payment(
         )
 
 
+@router.post("/payment/chat", response_model=ApiResponse)
+async def record_payment_from_chat(
+    customer_id: int,
+    amount: float,
+    payment_method: str = "bank_transfer",
+    payment_date: str = None,
+    remark: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    从聊天界面登记收款
+    
+    自动查找客户最旧的未付清应收账款进行冲抵
+    """
+    try:
+        from ..models.finance import AccountReceivable, PaymentRecord
+        from ..models import Customer
+        from datetime import date, datetime
+        
+        # 验证客户存在
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        if not customer:
+            return ApiResponse(
+                success=False,
+                error=f"客户不存在: ID={customer_id}"
+            )
+        
+        # 解析日期
+        if payment_date:
+            try:
+                pay_date = datetime.strptime(payment_date, "%Y-%m-%d").date()
+            except:
+                pay_date = date.today()
+        else:
+            pay_date = date.today()
+        
+        # 查找客户未付清的应收账款（按日期升序，先冲抵最旧的）
+        unpaid_receivables = db.query(AccountReceivable).filter(
+            AccountReceivable.customer_id == customer_id,
+            AccountReceivable.status.in_(["unpaid", "overdue"]),
+            AccountReceivable.unpaid_amount > 0
+        ).order_by(AccountReceivable.credit_start_date.asc()).all()
+        
+        if not unpaid_receivables:
+            # 如果没有未付清的应收账款，创建一个虚拟的"预收款"记录
+            # 或者直接返回错误
+            return ApiResponse(
+                success=False,
+                error=f"客户【{customer.name}】没有未付清的应收账款"
+            )
+        
+        remaining_amount = amount
+        created_payments = []
+        
+        # FIFO方式冲抵
+        for receivable in unpaid_receivables:
+            if remaining_amount <= 0:
+                break
+            
+            # 计算本次可冲抵金额
+            pay_amount = min(remaining_amount, receivable.unpaid_amount)
+            
+            # 创建收款记录
+            payment = PaymentRecord(
+                account_receivable_id=receivable.id,
+                customer_id=customer_id,
+                payment_date=pay_date,
+                amount=pay_amount,
+                payment_method=payment_method,
+                remark=remark or f"聊天收款登记",
+                operator="财务"
+            )
+            db.add(payment)
+            
+            # 更新应收账款
+            receivable.received_amount += pay_amount
+            receivable.unpaid_amount = receivable.total_amount - receivable.received_amount
+            
+            # 更新状态
+            if receivable.unpaid_amount <= 0:
+                receivable.status = "paid"
+            
+            created_payments.append({
+                "receivable_id": receivable.id,
+                "amount": pay_amount
+            })
+            
+            remaining_amount -= pay_amount
+        
+        db.commit()
+        
+        total_paid = amount - remaining_amount
+        
+        logger.info(f"聊天收款成功: 客户={customer.name}, 金额={total_paid}, 冲抵{len(created_payments)}笔应收账款")
+        
+        return ApiResponse(
+            success=True,
+            data={
+                "payment_count": len(created_payments),
+                "total_paid": total_paid,
+                "remaining": remaining_amount,
+                "payments": created_payments,
+                "message": f"收款登记成功，共冲抵{len(created_payments)}笔应收账款，金额¥{total_paid:.2f}"
+            },
+            message="收款登记成功"
+        )
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"聊天收款失败: {e}", exc_info=True)
+        return ApiResponse(
+            success=False,
+            error=f"收款登记失败: {str(e)}"
+        )
+
+
 @router.post("/reminder", response_model=ApiResponse)
 async def record_reminder(
     reminder_data: ReminderRecordCreate,

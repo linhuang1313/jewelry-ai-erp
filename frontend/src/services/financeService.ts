@@ -192,6 +192,7 @@ export async function submitPayment(data: PaymentSubmitData): Promise<PaymentSub
 
 /**
  * 确认收款（从聊天界面调用）
+ * 使用专门的聊天收款API，自动查找客户未付清的应收账款进行冲抵
  */
 export async function confirmPayment(
   customerId: number,
@@ -209,20 +210,23 @@ export async function confirmPayment(
       '刷卡': 'card',
     };
     
-    const requestData = {
-      customer_id: customerId,
-      amount: amount,
-      payment_method: methodMap[paymentMethod] || 'bank_transfer',
-      payment_date: new Date().toISOString().split('T')[0],
-      remark: remark,
-    };
+    const paymentMethodCode = methodMap[paymentMethod] || 'bank_transfer';
+    const paymentDate = new Date().toISOString().split('T')[0];
     
-    const response = await fetch(`${API_BASE_URL}/api/finance/payment`, {
+    // 使用专门的聊天收款API（支持不指定account_receivable_id）
+    const params = new URLSearchParams({
+      customer_id: customerId.toString(),
+      amount: amount.toString(),
+      payment_method: paymentMethodCode,
+      payment_date: paymentDate,
+      remark: remark || '聊天收款登记',
+    });
+    
+    const response = await fetch(`${API_BASE_URL}/api/finance/payment/chat?${params.toString()}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(requestData),
     });
     
     const result = await response.json();
@@ -230,8 +234,8 @@ export async function confirmPayment(
     if (result.success) {
       return {
         success: true,
-        paymentId: result.data?.payment_id?.toString(),
-        message: result.message || '收款登记成功',
+        paymentId: result.data?.payment_count?.toString(),
+        message: result.data?.message || result.message || '收款登记成功',
       };
     } else {
       return {
