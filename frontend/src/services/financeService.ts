@@ -88,6 +88,38 @@ export interface ReceivablesResponse {
 }
 
 /**
+ * 将后端返回的 snake_case 数据转换为前端的 camelCase
+ */
+function convertReceivableFromBackend(item: any): ReceivableItem {
+  return {
+    id: item.id,
+    salesOrderId: item.sales_order_id,
+    customerId: item.customer_id,
+    totalAmount: item.total_amount ?? 0,
+    receivedAmount: item.received_amount ?? 0,
+    unpaidAmount: item.unpaid_amount ?? 0,
+    status: item.status,
+    isOverdue: item.is_overdue ?? false,
+    overdueDays: item.overdue_days ?? 0,
+    creditStartDate: item.credit_start_date,
+    dueDate: item.due_date,
+    customer: item.customer ? {
+      id: item.customer.id,
+      customerNo: item.customer.customer_no,
+      name: item.customer.name,
+      phone: item.customer.phone,
+    } : undefined,
+    salesOrder: item.sales_order ? {
+      id: item.sales_order.id,
+      orderNo: item.sales_order.order_no,
+      orderDate: item.sales_order.order_date,
+      salesperson: item.sales_order.salesperson,
+      totalAmount: item.sales_order.total_amount ?? 0,
+    } : undefined,
+  };
+}
+
+/**
  * 获取应收账款列表
  */
 export async function getReceivables(
@@ -115,9 +147,11 @@ export async function getReceivables(
     const result = await response.json();
     
     if (result.success) {
+      // 转换后端 snake_case 数据为前端 camelCase
+      const convertedData = (result.data || []).map(convertReceivableFromBackend);
       return {
         success: true,
-        data: result.data,
+        data: convertedData,
         total: result.total,
       };
     } else {
