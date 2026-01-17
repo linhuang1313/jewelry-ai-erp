@@ -1,13 +1,25 @@
-import React, { useState, useMemo } from 'react';
-import { Search, Filter, ArrowUpDown, AlertCircle } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { Search, Filter, ArrowUpDown, AlertCircle, Calendar } from 'lucide-react';
 import { AccountReceivable, AccountReceivableStatus } from '../../types/finance';
 import { PaymentDialog } from './PaymentDialog';
+
+export interface ReceivableFilterParams {
+  filterType: string;
+  search?: string;
+  sortBy: string;
+  sortOrder: string;
+  startDate?: string;
+  endDate?: string;
+  salesOrderNo?: string;
+  settlementNo?: string;
+}
 
 interface AccountReceivableTableProps {
   data: AccountReceivable[];
   onRecordPayment: (ar: AccountReceivable) => void;
   onRemind: (ar: AccountReceivable) => void;
   onPaymentSuccess?: () => void;
+  onFilterChange?: (params: ReceivableFilterParams) => void;
 }
 
 type FilterType = 'all' | 'unpaid' | 'overdue' | 'due_this_month';
@@ -18,13 +30,56 @@ export const AccountReceivableTable: React.FC<AccountReceivableTableProps> = ({
   onRecordPayment,
   onRemind,
   onPaymentSuccess,
+  onFilterChange,
 }) => {
   const [filter, setFilter] = useState<FilterType>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<SortType>('overdue_days');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [salesOrderNo, setSalesOrderNo] = useState('');
+  const [settlementNo, setSettlementNo] = useState('');
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [selectedReceivable, setSelectedReceivable] = useState<AccountReceivable | null>(null);
+
+  // 触发筛选变化
+  const triggerFilterChange = useCallback(() => {
+    if (onFilterChange) {
+      onFilterChange({
+        filterType: filter,
+        search: searchTerm || undefined,
+        sortBy,
+        sortOrder,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        salesOrderNo: salesOrderNo || undefined,
+        settlementNo: settlementNo || undefined,
+      });
+    }
+  }, [filter, searchTerm, sortBy, sortOrder, startDate, endDate, salesOrderNo, settlementNo, onFilterChange]);
+
+  // 处理搜索按钮点击
+  const handleSearch = () => {
+    triggerFilterChange();
+  };
+
+  // 处理重置筛选
+  const handleReset = () => {
+    setFilter('all');
+    setSearchTerm('');
+    setStartDate('');
+    setEndDate('');
+    setSalesOrderNo('');
+    setSettlementNo('');
+    if (onFilterChange) {
+      onFilterChange({
+        filterType: 'all',
+        sortBy,
+        sortOrder,
+      });
+    }
+  };
 
   const filteredAndSortedData = useMemo(() => {
     let filtered = [...data];
@@ -67,7 +122,7 @@ export const AccountReceivableTable: React.FC<AccountReceivableTableProps> = ({
     return filtered;
   }, [data, filter, searchTerm, sortBy, sortOrder]);
 
-  const getStatusBadge = (status: AccountReceivableStatus, isOverdue: boolean) => {
+  const getStatusBadge = (status: AccountReceivableStatus, isOverdue: boolean, receivedAmount: number) => {
     if (isOverdue) {
       return (
         <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
@@ -82,9 +137,17 @@ export const AccountReceivableTable: React.FC<AccountReceivableTableProps> = ({
         </span>
       );
     }
+    // 根据已收金额判断是"未付款"还是"部分付款"
+    if (receivedAmount > 0) {
+      return (
+        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+          部分付款
+        </span>
+      );
+    }
     return (
-      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-        部分付款
+      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+        未付款
       </span>
     );
   };
@@ -109,6 +172,7 @@ export const AccountReceivableTable: React.FC<AccountReceivableTableProps> = ({
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
       {/* 筛选器 */}
       <div className="p-4 border-b border-gray-200 space-y-4">
+        {/* 第一行：状态筛选、客户搜索、排序 */}
         <div className="flex flex-col md:flex-row gap-4">
           {/* 状态筛选 */}
           <div className="flex items-center space-x-2">
@@ -154,6 +218,67 @@ export const AccountReceivableTable: React.FC<AccountReceivableTableProps> = ({
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
             >
               {sortOrder === 'asc' ? '↑' : '↓'}
+            </button>
+          </div>
+        </div>
+
+        {/* 第二行：时间筛选和单号筛选 */}
+        <div className="flex flex-col md:flex-row gap-4 items-end">
+          {/* 时间范围 */}
+          <div className="flex items-center space-x-2">
+            <Calendar className="w-4 h-4 text-gray-500" />
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="开始日期"
+            />
+            <span className="text-gray-500">至</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="结束日期"
+            />
+          </div>
+
+          {/* 销售单号 */}
+          <div className="flex items-center space-x-2">
+            <input
+              type="text"
+              placeholder="销售单号..."
+              value={salesOrderNo}
+              onChange={(e) => setSalesOrderNo(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-40"
+            />
+          </div>
+
+          {/* 结算单号 */}
+          <div className="flex items-center space-x-2">
+            <input
+              type="text"
+              placeholder="结算单号..."
+              value={settlementNo}
+              onChange={(e) => setSettlementNo(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-40"
+            />
+          </div>
+
+          {/* 搜索和重置按钮 */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleSearch}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors"
+            >
+              搜索
+            </button>
+            <button
+              onClick={handleReset}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+            >
+              重置
             </button>
           </div>
         </div>
@@ -251,7 +376,7 @@ export const AccountReceivableTable: React.FC<AccountReceivableTableProps> = ({
                     )}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-center">
-                    {getStatusBadge(item.status, item.isOverdue)}
+                    {getStatusBadge(item.status, item.isOverdue, item.receivedAmount)}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-center text-sm">
                     <div className="flex items-center justify-center space-x-2 flex-wrap gap-1">

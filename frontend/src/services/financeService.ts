@@ -119,6 +119,19 @@ function convertReceivableFromBackend(item: any): ReceivableItem {
   };
 }
 
+export interface ReceivablesFilterParams {
+  filterType?: string;
+  search?: string;
+  sortBy?: string;
+  sortOrder?: string;
+  startDate?: string;
+  endDate?: string;
+  salesOrderNo?: string;
+  settlementNo?: string;
+  skip?: number;
+  limit?: number;
+}
+
 /**
  * 获取应收账款列表
  */
@@ -128,7 +141,11 @@ export async function getReceivables(
   sortBy: string = 'overdue_days',
   sortOrder: string = 'desc',
   skip: number = 0,
-  limit: number = 100
+  limit: number = 100,
+  startDate?: string,
+  endDate?: string,
+  salesOrderNo?: string,
+  settlementNo?: string
 ): Promise<ReceivablesResponse> {
   try {
     const params = new URLSearchParams({
@@ -141,6 +158,18 @@ export async function getReceivables(
     
     if (search) {
       params.append('search', search);
+    }
+    if (startDate) {
+      params.append('start_date', startDate);
+    }
+    if (endDate) {
+      params.append('end_date', endDate);
+    }
+    if (salesOrderNo) {
+      params.append('sales_order_no', salesOrderNo);
+    }
+    if (settlementNo) {
+      params.append('settlement_no', settlementNo);
     }
     
     const response = await fetch(`${API_BASE_URL}/api/finance/receivables?${params}`);
@@ -181,6 +210,7 @@ export async function submitPayment(data: PaymentSubmitData): Promise<PaymentSub
       [PaymentMethod.WECHAT]: 'wechat',
       [PaymentMethod.ALIPAY]: 'alipay',
       [PaymentMethod.CARD]: 'card',
+      [PaymentMethod.CHECK]: 'check',
       [PaymentMethod.OTHER]: 'other',
     };
     
@@ -390,13 +420,25 @@ export interface PaymentRecordsResponse {
   error?: string;
 }
 
+export interface PaymentRecordsFilterParams {
+  customerId?: number;
+  startDate?: string;
+  endDate?: string;
+  salesOrderNo?: string;
+  skip?: number;
+  limit?: number;
+}
+
 /**
  * 获取收款记录列表
  */
 export async function getPaymentRecords(
   customerId?: number,
   skip: number = 0,
-  limit: number = 100
+  limit: number = 100,
+  startDate?: string,
+  endDate?: string,
+  salesOrderNo?: string
 ): Promise<PaymentRecordsResponse> {
   try {
     const params = new URLSearchParams({
@@ -406,6 +448,15 @@ export async function getPaymentRecords(
     
     if (customerId) {
       params.append('customer_id', customerId.toString());
+    }
+    if (startDate) {
+      params.append('start_date', startDate);
+    }
+    if (endDate) {
+      params.append('end_date', endDate);
+    }
+    if (salesOrderNo) {
+      params.append('sales_order_no', salesOrderNo);
     }
     
     const response = await fetch(`${API_BASE_URL}/api/finance/payments?${params}`);

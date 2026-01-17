@@ -9,6 +9,7 @@ from typing import Optional, List
 
 from ..database import get_db
 from ..services.finance_service import FinanceService
+from ..models import SalesOrder
 from ..schemas.finance import (
     AccountReceivableResponse,
     PaymentRecordCreate,
@@ -39,6 +40,10 @@ async def get_receivables(
     search: Optional[str] = Query(None, description="搜索客户名称"),
     sort_by: str = Query("overdue_days", description="排序字段: amount/overdue_days/due_date"),
     sort_order: str = Query("desc", description="排序方向: asc/desc"),
+    start_date: Optional[str] = Query(None, description="开始日期 (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="结束日期 (YYYY-MM-DD)"),
+    sales_order_no: Optional[str] = Query(None, description="销售单号"),
+    settlement_no: Optional[str] = Query(None, description="结算单号"),
     skip: int = Query(0, ge=0, description="跳过记录数"),
     limit: int = Query(100, ge=1, le=1000, description="返回记录数"),
     db: Session = Depends(get_db)
@@ -54,6 +59,10 @@ async def get_receivables(
     - **search**: 按客户名称搜索
     - **sort_by**: 排序字段 (amount/overdue_days/due_date)
     - **sort_order**: 排序方向 (asc/desc)
+    - **start_date**: 开始日期 (按销售日期筛选)
+    - **end_date**: 结束日期 (按销售日期筛选)
+    - **sales_order_no**: 销售单号
+    - **settlement_no**: 结算单号
     """
     try:
         service = FinanceService(db)
@@ -62,6 +71,10 @@ async def get_receivables(
             search=search,
             sort_by=sort_by,
             sort_order=sort_order,
+            start_date=start_date,
+            end_date=end_date,
+            sales_order_no=sales_order_no,
+            settlement_no=settlement_no,
             skip=skip,
             limit=limit
         )
@@ -490,15 +503,23 @@ async def get_receivable_detail(
 async def get_payment_records(
     customer_id: Optional[int] = Query(None, description="客户ID"),
     receivable_id: Optional[int] = Query(None, description="应收账款ID"),
+    start_date: Optional[str] = Query(None, description="开始日期 (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="结束日期 (YYYY-MM-DD)"),
+    sales_order_no: Optional[str] = Query(None, description="销售单号"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     db: Session = Depends(get_db)
 ):
     """
     获取收款记录列表
+    
+    - **start_date**: 开始日期 (按收款日期筛选)
+    - **end_date**: 结束日期 (按收款日期筛选)
+    - **sales_order_no**: 销售单号
     """
     try:
-        from ..models.finance import PaymentRecord
+        from ..models.finance import PaymentRecord, AccountReceivable
+        from datetime import datetime
         
         query = db.query(PaymentRecord)
         
@@ -506,6 +527,31 @@ async def get_payment_records(
             query = query.filter(PaymentRecord.customer_id == customer_id)
         if receivable_id:
             query = query.filter(PaymentRecord.account_receivable_id == receivable_id)
+        
+        # 时间范围筛选（按收款日期）
+        if start_date:
+            try:
+                start = datetime.strptime(start_date, "%Y-%m-%d").date()
+                query = query.filter(PaymentRecord.payment_date >= start)
+            except ValueError:
+                pass
+        
+        if end_date:
+            try:
+                end = datetime.strptime(end_date, "%Y-%m-%d").date()
+                query = query.filter(PaymentRecord.payment_date <= end)
+            except ValueError:
+                pass
+        
+        # 销售单号筛选（需要联表）
+        if sales_order_no:
+            query = query.join(
+                AccountReceivable, 
+                PaymentRecord.account_receivable_id == AccountReceivable.id
+            ).join(
+                SalesOrder,
+                AccountReceivable.sales_order_id == SalesOrder.id
+            ).filter(SalesOrder.order_no.contains(sales_order_no))
         
         payments = query.order_by(PaymentRecord.payment_date.desc()).offset(skip).limit(limit).all()
         

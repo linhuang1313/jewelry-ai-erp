@@ -1,18 +1,50 @@
-import React from 'react';
-import { Plus, Eye, Wallet, CreditCard, Smartphone, Building2, Banknote, Receipt } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { Plus, Eye, Wallet, CreditCard, Smartphone, Building2, Banknote, Receipt, Calendar, Search } from 'lucide-react';
 import { PaymentRecord, PaymentMethod } from '../../types/finance';
+
+export interface PaymentFilterParams {
+  startDate?: string;
+  endDate?: string;
+  salesOrderNo?: string;
+}
 
 interface PaymentRecordTableProps {
   data: PaymentRecord[];
   onAddPayment: () => void;
   onViewDetail: (record: PaymentRecord) => void;
+  onFilterChange?: (params: PaymentFilterParams) => void;
 }
 
 export const PaymentRecordTable: React.FC<PaymentRecordTableProps> = ({
   data,
   onAddPayment,
   onViewDetail,
+  onFilterChange,
 }) => {
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [salesOrderNo, setSalesOrderNo] = useState('');
+
+  // 触发筛选
+  const handleSearch = useCallback(() => {
+    if (onFilterChange) {
+      onFilterChange({
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        salesOrderNo: salesOrderNo || undefined,
+      });
+    }
+  }, [startDate, endDate, salesOrderNo, onFilterChange]);
+
+  // 重置筛选
+  const handleReset = useCallback(() => {
+    setStartDate('');
+    setEndDate('');
+    setSalesOrderNo('');
+    if (onFilterChange) {
+      onFilterChange({});
+    }
+  }, [onFilterChange]);
   const getPaymentMethodIcon = (method: PaymentMethod) => {
     switch (method) {
       case PaymentMethod.CASH:
@@ -61,15 +93,68 @@ export const PaymentRecordTable: React.FC<PaymentRecordTableProps> = ({
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
       {/* 头部操作栏 */}
-      <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <h3 className="text-lg font-semibold text-gray-900">收款记录</h3>
-        <button
-          onClick={onAddPayment}
-          className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors w-full sm:w-auto justify-center sm:justify-start"
-        >
-          <Plus className="w-4 h-4" />
-          <span>新增收款</span>
-        </button>
+      <div className="p-4 border-b border-gray-200 space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <h3 className="text-lg font-semibold text-gray-900">收款记录</h3>
+          <button
+            onClick={onAddPayment}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors w-full sm:w-auto justify-center sm:justify-start"
+          >
+            <Plus className="w-4 h-4" />
+            <span>新增收款</span>
+          </button>
+        </div>
+
+        {/* 筛选控件 */}
+        <div className="flex flex-col md:flex-row gap-4 items-end">
+          {/* 时间范围 */}
+          <div className="flex items-center space-x-2">
+            <Calendar className="w-4 h-4 text-gray-500" />
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="开始日期"
+            />
+            <span className="text-gray-500">至</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="结束日期"
+            />
+          </div>
+
+          {/* 销售单号 */}
+          <div className="flex items-center space-x-2">
+            <Search className="w-4 h-4 text-gray-500" />
+            <input
+              type="text"
+              placeholder="搜索销售单号..."
+              value={salesOrderNo}
+              onChange={(e) => setSalesOrderNo(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-40"
+            />
+          </div>
+
+          {/* 搜索和重置按钮 */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleSearch}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors"
+            >
+              搜索
+            </button>
+            <button
+              onClick={handleReset}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+            >
+              重置
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* 表格 */}

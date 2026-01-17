@@ -48,6 +48,10 @@ class FinanceService:
         search: Optional[str] = None,
         sort_by: str = "overdue_days",
         sort_order: str = "desc",
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        sales_order_no: Optional[str] = None,
+        settlement_no: Optional[str] = None,
         skip: int = 0,
         limit: int = 100
     ) -> List[AccountReceivable]:
@@ -59,6 +63,10 @@ class FinanceService:
             search: 搜索关键词（客户名称）
             sort_by: 排序字段
             sort_order: 排序方向 (asc/desc)
+            start_date: 开始日期 (YYYY-MM-DD)
+            end_date: 结束日期 (YYYY-MM-DD)
+            sales_order_no: 销售单号
+            settlement_no: 结算单号
             skip: 跳过记录数
             limit: 返回记录数
             
@@ -95,11 +103,39 @@ class FinanceService:
                 )
             )
         
+        # 时间范围筛选（按销售日期）
+        if start_date or end_date or sales_order_no or settlement_no:
+            query = query.join(SalesOrder, AccountReceivable.sales_order_id == SalesOrder.id)
+            
+            if start_date:
+                try:
+                    start = datetime.strptime(start_date, "%Y-%m-%d").date()
+                    query = query.filter(SalesOrder.order_date >= start)
+                except ValueError:
+                    pass
+            
+            if end_date:
+                try:
+                    end = datetime.strptime(end_date, "%Y-%m-%d").date()
+                    query = query.filter(SalesOrder.order_date <= end)
+                except ValueError:
+                    pass
+            
+            # 销售单号筛选
+            if sales_order_no:
+                query = query.filter(SalesOrder.order_no.contains(sales_order_no))
+            
+            # 结算单号筛选（通过remark字段查找）
+            if settlement_no:
+                query = query.filter(AccountReceivable.remark.contains(settlement_no))
+        
         # 搜索（通过客户名称）
         if search:
-            query = query.join(Customer).filter(
-                Customer.name.contains(search)
-            )
+            if not (start_date or end_date or sales_order_no or settlement_no):
+                query = query.join(Customer)
+            else:
+                query = query.join(Customer, AccountReceivable.customer_id == Customer.id)
+            query = query.filter(Customer.name.contains(search))
         
         # 排序
         if sort_by == "amount":

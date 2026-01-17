@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Toaster, toast } from 'react-hot-toast';
 import { RefreshCw } from 'lucide-react';
 import { FinanceStatsCards } from './FinanceStatsCards';
-import { AccountReceivableTable } from './AccountReceivableTable';
-import { PaymentRecordTable } from './PaymentRecordTable';
+import { AccountReceivableTable, ReceivableFilterParams } from './AccountReceivableTable';
+import { PaymentRecordTable, PaymentFilterParams } from './PaymentRecordTable';
 import { ReminderManagement } from './ReminderManagement';
 import { ReconciliationGenerator } from './ReconciliationGenerator';
 import { getReceivables, ReceivableItem, getPaymentRecords, PaymentRecordItem } from '../../services/financeService';
@@ -74,11 +74,30 @@ export const FinancePage: React.FC = () => {
     };
   };
 
+  // 保存筛选参数
+  const [receivableFilters, setReceivableFilters] = useState<ReceivableFilterParams>({
+    filterType: 'all',
+    sortBy: 'overdue_days',
+    sortOrder: 'desc',
+  });
+
   // 加载应收账款数据
-  const loadReceivables = useCallback(async () => {
+  const loadReceivables = useCallback(async (filters?: ReceivableFilterParams) => {
     setLoading(true);
     try {
-      const result = await getReceivables('all', undefined, 'overdue_days', 'desc', 0, 200);
+      const f = filters || receivableFilters;
+      const result = await getReceivables(
+        f.filterType || 'all',
+        f.search,
+        f.sortBy || 'overdue_days',
+        f.sortOrder || 'desc',
+        0,
+        200,
+        f.startDate,
+        f.endDate,
+        f.salesOrderNo,
+        f.settlementNo
+      );
       if (result.success && result.data) {
         const converted = result.data.map(convertReceivable);
         setReceivables(converted);
@@ -91,7 +110,13 @@ export const FinancePage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [receivableFilters]);
+
+  // 处理应收明细筛选变化
+  const handleReceivableFilterChange = useCallback((params: ReceivableFilterParams) => {
+    setReceivableFilters(params);
+    loadReceivables(params);
+  }, [loadReceivables]);
 
   // 转换收款记录数据格式
   const convertPaymentRecord = (item: PaymentRecordItem): PaymentRecord => {
@@ -123,11 +148,22 @@ export const FinancePage: React.FC = () => {
     };
   };
 
+  // 保存收款记录筛选参数
+  const [paymentFilters, setPaymentFilters] = useState<PaymentFilterParams>({});
+
   // 加载收款记录
-  const loadPaymentRecords = useCallback(async () => {
+  const loadPaymentRecords = useCallback(async (filters?: PaymentFilterParams) => {
     setPaymentsLoading(true);
     try {
-      const result = await getPaymentRecords(undefined, 0, 200);
+      const f = filters || paymentFilters;
+      const result = await getPaymentRecords(
+        undefined,
+        0,
+        200,
+        f.startDate,
+        f.endDate,
+        f.salesOrderNo
+      );
       if (result.success && result.data) {
         const converted = result.data.map(convertPaymentRecord);
         setPaymentRecords(converted);
@@ -140,7 +176,13 @@ export const FinancePage: React.FC = () => {
     } finally {
       setPaymentsLoading(false);
     }
-  }, []);
+  }, [paymentFilters]);
+
+  // 处理收款记录筛选变化
+  const handlePaymentFilterChange = useCallback((params: PaymentFilterParams) => {
+    setPaymentFilters(params);
+    loadPaymentRecords(params);
+  }, [loadPaymentRecords]);
 
   // 初始加载
   useEffect(() => {
@@ -280,6 +322,7 @@ export const FinancePage: React.FC = () => {
                   data={receivables}
                   onRecordPayment={handleRecordPayment}
                   onRemind={handleRemind}
+                  onFilterChange={handleReceivableFilterChange}
                   onPaymentSuccess={() => {
                     // 刷新列表
                     loadReceivables();
@@ -300,6 +343,7 @@ export const FinancePage: React.FC = () => {
                   data={paymentRecords}
                   onAddPayment={handleAddPayment}
                   onViewDetail={handleViewPaymentDetail}
+                  onFilterChange={handlePaymentFilterChange}
                 />
               )
             )}
