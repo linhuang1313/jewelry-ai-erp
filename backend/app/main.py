@@ -631,7 +631,7 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     return
             
             # ========== 写操作：先检查权限，再执行 ==========
-            if ai_response.action in ["入库", "创建客户", "创建供应商", "创建销售单", "创建转移单", "退货"]:
+            if ai_response.action in ["入库", "创建客户", "创建供应商", "创建销售单", "创建转移单", "退货", "登记收款", "查询客户账务"]:
                 # 导入权限检查模块
                 from .middleware.permissions import check_action_permission, get_permission_denied_message
                 
