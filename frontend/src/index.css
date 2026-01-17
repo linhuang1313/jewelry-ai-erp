@@ -1,6 +1,3 @@
-/* 珠宝ERP主题样式 - 必须在 @tailwind 之前导入 */
-@import './styles/jewelry-theme.css';
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
