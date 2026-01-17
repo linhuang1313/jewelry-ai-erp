@@ -25,6 +25,23 @@ export const FinancePage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [paymentsLoading, setPaymentsLoading] = useState(false);
 
+  // 安全的日期解析函数
+  const safeParseDate = (dateStr: string | null | undefined): Date => {
+    if (!dateStr) return new Date();
+    try {
+      const date = new Date(dateStr);
+      // 检查日期是否有效
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date value:', dateStr);
+        return new Date();
+      }
+      return date;
+    } catch (e) {
+      console.warn('Failed to parse date:', dateStr, e);
+      return new Date();
+    }
+  };
+
   // 转换后端数据为前端格式
   const convertReceivable = (item: ReceivableItem): AccountReceivable => {
     return {
@@ -39,8 +56,8 @@ export const FinancePage: React.FC = () => {
               AccountReceivableStatus.UNPAID,
       isOverdue: item.isOverdue,
       overdueDays: item.overdueDays,
-      creditStartDate: new Date(item.creditStartDate),
-      dueDate: new Date(item.dueDate),
+      creditStartDate: safeParseDate(item.creditStartDate),
+      dueDate: safeParseDate(item.dueDate),
       customer: item.customer ? {
         id: item.customer.id,
         customerNo: item.customer.customerNo,
@@ -50,7 +67,7 @@ export const FinancePage: React.FC = () => {
       salesOrder: item.salesOrder ? {
         id: item.salesOrder.id,
         orderNo: item.salesOrder.orderNo,
-        orderDate: new Date(item.salesOrder.orderDate),
+        orderDate: safeParseDate(item.salesOrder.orderDate),
         salesperson: item.salesOrder.salesperson,
         totalAmount: item.salesOrder.totalAmount,
       } : undefined,
