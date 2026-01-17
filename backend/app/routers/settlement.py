@@ -495,6 +495,52 @@ async def confirm_settlement_order(
     if sales_order:
         sales_order.status = "已结算"
     
+    # ========== 创建应收账款记录 ==========
+    from ..models.finance import AccountReceivable
+    from datetime import timedelta
+    
+    # 根据支付方式计算应收金额
+    if settlement.payment_method == "cash_price":
+        # 结价：应收全额（料价+工费）
+        receivable_amount = settlement.total_amount or 0
+    elif settlement.payment_method == "physical_gold":
+        # 结料：只应收工费（原料用金料抵扣）
+        receivable_amount = settlement.labor_amount or 0
+    elif settlement.payment_method == "mixed":
+        # 混合支付：结价部分的料价 + 工费
+        # cash_payment_weight 是结价部分的克重，需要换算成金额
+        cash_material_amount = (settlement.cash_payment_weight or 0) * (settlement.gold_price or 0)
+        receivable_amount = cash_material_amount + (settlement.labor_amount or 0)
+    else:
+        receivable_amount = settlement.total_amount or 0
+    
+    # 只有应收金额大于0才创建记录
+    if receivable_amount > 0 and sales_order:
+        now = china_now()
+        credit_days = 30  # 默认账期30天
+        due_date = now.date() + timedelta(days=credit_days)
+        
+        account_receivable = AccountReceivable(
+            sales_order_id=settlement.sales_order_id,
+            customer_id=sales_order.customer_id,
+            total_amount=receivable_amount,
+            received_amount=0.0,
+            unpaid_amount=receivable_amount,
+            credit_days=credit_days,
+            credit_start_date=now.date(),
+            due_date=due_date,
+            overdue_days=0,
+            status="unpaid",
+            is_overdue=False,
+            salesperson=sales_order.salesperson,
+            store_code=sales_order.store_code,
+            remark=f"结算单：{settlement.settlement_no}，支付方式：{settlement.payment_method}",
+            operator=data.confirmed_by
+        )
+        db.add(account_receivable)
+        logger.info(f"创建应收账款: 客户ID={sales_order.customer_id}, 金额={receivable_amount}, 结算单={settlement.settlement_no}")
+    # ========== 应收账款创建结束 ==========
+    
     db.commit()
     db.refresh(settlement)
     
