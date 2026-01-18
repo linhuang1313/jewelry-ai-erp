@@ -3398,15 +3398,14 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
                 
                 // 保存到聊天历史
                 if (currentSessionId) {
-                  fetch(`${API_BASE_URL}/api/chat-logs/message`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      session_id: currentSessionId,
-                      message_type: 'assistant',
-                      content: settlementMessage,
-                      user_role: userRole
-                    })
+                  const params = new URLSearchParams({
+                    session_id: currentSessionId,
+                    message_type: 'assistant',
+                    content: settlementMessage,
+                    user_role: userRole
+                  })
+                  fetch(`${API_BASE_URL}/api/chat-logs/message?${params}`, {
+                    method: 'POST'
                   }).catch(err => console.error('保存结算单消息失败:', err))
                 }
                 
@@ -3507,15 +3506,14 @@ ${itemsList}
             
             // 保存到聊天历史
             if (currentSessionId) {
-              fetch(`${API_BASE_URL}/api/chat-logs/message`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  session_id: currentSessionId,
-                  message_type: 'assistant',
-                  content: salesMessage,
-                  user_role: userRole
-                })
+              const params = new URLSearchParams({
+                session_id: currentSessionId,
+                message_type: 'assistant',
+                content: salesMessage,
+                user_role: userRole
+              })
+              fetch(`${API_BASE_URL}/api/chat-logs/message?${params}`, {
+                method: 'POST'
               }).catch(err => console.error('保存销售单消息失败:', err))
             }
           }}
