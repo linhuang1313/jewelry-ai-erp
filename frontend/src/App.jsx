@@ -108,6 +108,9 @@ function App() {
   })
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false)
   const roleDropdownRef = useRef(null)
+  
+  // 待处理转移单数量（用于分仓库存按钮badge）
+  const [pendingTransferCount, setPendingTransferCount] = useState(0)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -235,6 +238,32 @@ function App() {
   useEffect(() => {
     loadRoleHistory(userRole)
   }, [userRole]) // 当角色变化时重新加载
+
+  // 加载待处理转移单数量（柜台角色需要看到商品部发来的转移单）
+  const loadPendingTransferCount = async () => {
+    // 只有柜台、结算、管理层需要看到待接收转移单数量
+    if (!['counter', 'settlement', 'manager'].includes(userRole)) {
+      setPendingTransferCount(0)
+      return
+    }
+    try {
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/warehouse/transfers?status=pending`)
+      if (response.ok) {
+        const transfers = await response.json()
+        setPendingTransferCount(transfers.length)
+      }
+    } catch (error) {
+      console.error('加载待处理转移单数量失败:', error)
+    }
+  }
+
+  // 角色变化时加载待处理转移单数量
+  useEffect(() => {
+    loadPendingTransferCount()
+    // 每60秒刷新一次
+    const interval = setInterval(loadPendingTransferCount, 60000)
+    return () => clearInterval(interval)
+  }, [userRole])
 
   // 保存对话到历史记录（保存到当前角色的历史记录）
   const saveConversation = () => {
@@ -1798,12 +1827,20 @@ function App() {
                   {(hasPermission(userRole, 'canReceiveTransfer') || hasPermission(userRole, 'canTransfer')) && (
                     <button
                       onClick={() => setCurrentPage('warehouse')}
-                      className="flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-xl 
+                      className="relative flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-xl 
                                  hover:bg-orange-600 transition-all duration-200 font-medium text-[15px] 
                                  shadow-sm hover:shadow-md"
                     >
                       <Warehouse className="w-4 h-4" />
                       <span>分仓库存</span>
+                      {/* 待处理转移单数量badge */}
+                      {pendingTransferCount > 0 && (
+                        <span className="absolute -top-2 -right-2 min-w-[20px] h-5 flex items-center justify-center 
+                                         bg-red-500 text-white text-xs font-bold rounded-full px-1.5 
+                                         shadow-lg animate-pulse">
+                          {pendingTransferCount > 99 ? '99+' : pendingTransferCount}
+                        </span>
+                      )}
                     </button>
                   )}
                   {/* 结算管理按钮 - 使用权限检查 */}
