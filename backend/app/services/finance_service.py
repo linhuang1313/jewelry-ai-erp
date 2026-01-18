@@ -396,6 +396,9 @@ class FinanceService:
         Returns:
             对账单
         """
+        from ..models import SettlementOrder
+        from ..models.finance import GoldReceipt
+        
         # 验证客户存在
         customer = self.db.query(Customer).filter(
             Customer.id == statement_data.customer_id
@@ -409,28 +412,114 @@ class FinanceService:
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             statement_no = f"DZ{statement_data.customer_id}{timestamp}"
             
-            # 计算期初欠款（期间开始前的未收金额）
-            opening_balance = self._calculate_opening_balance(
+            # 计算期初余额（期初欠款金额和期初欠料克重）
+            opening_cash, opening_gold = self._calculate_opening_balance_v2(
                 statement_data.customer_id,
                 statement_data.period_start_date
             )
             
-            # 获取本期销售
+            # ========== 获取合并的往来明细 ==========
+            transactions = []
+            period_start = statement_data.period_start_date
+            period_end = statement_data.period_end_date
+            
+            # 1. 销售结算记录
+            settlements = self.db.query(SettlementOrder).join(SalesOrder).filter(
+                SalesOrder.customer_id == statement_data.customer_id,
+                SettlementOrder.status.in_(['confirmed', 'printed']),
+                SettlementOrder.create_time >= datetime.combine(period_start, datetime.min.time()),
+                SettlementOrder.create_time <= datetime.combine(period_end, datetime.max.time())
+            ).all()
+            
+            for s in settlements:
+                gold_amount = 0.0
+                cash_amount = 0.0
+                if s.payment_method == 'physical_gold':
+                    gold_amount = s.physical_gold_weight or 0.0
+                elif s.payment_method == 'cash_price':
+                    cash_amount = s.total_amount or 0.0
+                elif s.payment_method == 'mixed':
+                    gold_amount = s.gold_payment_weight or 0.0
+                    cash_amount = s.cash_payment_weight or 0.0
+                
+                transactions.append({
+                    "date": s.create_time.strftime("%Y-%m-%d") if s.create_time else None,
+                    "datetime": s.create_time.isoformat() if s.create_time else None,
+                    "type": "销售结算",
+                    "order_no": s.settlement_no,
+                    "gold_amount": round(gold_amount, 3),
+                    "cash_amount": round(cash_amount, 2),
+                    "remark": s.remark or ""
+                })
+            
+            # 2. 客户来料记录
+            receipts = self.db.query(GoldReceipt).filter(
+                GoldReceipt.customer_id == statement_data.customer_id,
+                GoldReceipt.status == 'received',
+                GoldReceipt.created_at >= datetime.combine(period_start, datetime.min.time()),
+                GoldReceipt.created_at <= datetime.combine(period_end, datetime.max.time())
+            ).all()
+            
+            for r in receipts:
+                transactions.append({
+                    "date": r.received_at.strftime("%Y-%m-%d") if r.received_at else (r.created_at.strftime("%Y-%m-%d") if r.created_at else None),
+                    "datetime": r.received_at.isoformat() if r.received_at else (r.created_at.isoformat() if r.created_at else None),
+                    "type": "客户来料",
+                    "order_no": r.receipt_no,
+                    "gold_amount": round(-(r.gold_weight or 0), 3),  # 负数表示客户给料
+                    "cash_amount": 0.0,
+                    "remark": f"{r.gold_fineness or ''} {r.remark or ''}".strip()
+                })
+            
+            # 3. 客户来款记录
+            payments = self.db.query(PaymentRecord).filter(
+                PaymentRecord.customer_id == statement_data.customer_id,
+                PaymentRecord.payment_date >= period_start,
+                PaymentRecord.payment_date <= period_end
+            ).all()
+            
+            for p in payments:
+                payment_method_label = {
+                    'bank_transfer': '银行转账',
+                    'cash': '现金',
+                    'wechat': '微信',
+                    'alipay': '支付宝',
+                    'card': '刷卡'
+                }.get(p.payment_method, p.payment_method)
+                
+                transactions.append({
+                    "date": p.payment_date.strftime("%Y-%m-%d") if p.payment_date else None,
+                    "datetime": p.create_time.isoformat() if p.create_time else None,
+                    "type": "客户来款",
+                    "order_no": p.payment_no or f"SK{p.id}",
+                    "gold_amount": 0.0,
+                    "cash_amount": round(-(p.amount or 0), 2),  # 负数表示客户付款
+                    "remark": f"{payment_method_label} {p.remark or ''}".strip()
+                })
+            
+            # 按日期排序
+            transactions.sort(key=lambda x: x.get("datetime") or "0000-00-00")
+            
+            # 计算合计
+            total_gold = sum(t["gold_amount"] for t in transactions)
+            total_cash = sum(t["cash_amount"] for t in transactions)
+            
+            # 期末余额
+            closing_gold = opening_gold + total_gold
+            closing_cash = opening_cash + total_cash
+            
+            # 获取旧格式的销售和收款明细（保持向后兼容）
             sales_details, period_sales_amount = self._get_period_sales(
                 statement_data.customer_id,
                 statement_data.period_start_date,
                 statement_data.period_end_date
             )
             
-            # 获取本期收款
             payment_details, period_payment_amount = self._get_period_payments(
                 statement_data.customer_id,
                 statement_data.period_start_date,
                 statement_data.period_end_date
             )
-            
-            # 计算期末欠款
-            closing_balance = opening_balance + period_sales_amount - period_payment_amount
             
             # 创建对账单
             statement = ReconciliationStatement(
@@ -439,10 +528,10 @@ class FinanceService:
                 period_start_date=statement_data.period_start_date,
                 period_end_date=statement_data.period_end_date,
                 period_description=statement_data.period_description,
-                opening_balance=opening_balance,
+                opening_balance=opening_cash,
                 period_sales_amount=period_sales_amount,
                 period_payment_amount=period_payment_amount,
-                closing_balance=closing_balance,
+                closing_balance=closing_cash,
                 sales_details=json.dumps(sales_details, default=str, ensure_ascii=False),
                 payment_details=json.dumps(payment_details, default=str, ensure_ascii=False),
                 remark=statement_data.remark,
@@ -452,6 +541,13 @@ class FinanceService:
             self.db.commit()
             self.db.refresh(statement)
             
+            # 将合并的往来明细附加到返回对象
+            statement._transactions = transactions
+            statement._opening_gold = opening_gold
+            statement._closing_gold = closing_gold
+            statement._total_gold = total_gold
+            statement._total_cash = total_cash
+            
             logger.info(f"对账单生成成功: {statement_no}")
             
             return statement
@@ -460,6 +556,61 @@ class FinanceService:
             self.db.rollback()
             logger.error(f"生成对账单失败: {e}")
             raise
+    
+    def _calculate_opening_balance_v2(self, customer_id: int, period_start: date) -> tuple:
+        """
+        计算期初余额（欠款金额和欠料克重）
+        
+        Returns:
+            (期初欠款金额, 期初欠料克重)
+        """
+        from ..models import SettlementOrder
+        from ..models.finance import GoldReceipt
+        
+        # 期初欠款：销售金额 - 收款金额
+        total_sales = self.db.query(func.coalesce(func.sum(SalesOrder.total_labor_cost), 0)).filter(
+            and_(
+                SalesOrder.customer_id == customer_id,
+                SalesOrder.order_date < period_start
+            )
+        ).scalar() or 0
+        
+        total_payments = self.db.query(func.coalesce(func.sum(PaymentRecord.amount), 0)).filter(
+            and_(
+                PaymentRecord.customer_id == customer_id,
+                PaymentRecord.payment_date < period_start
+            )
+        ).scalar() or 0
+        
+        opening_cash = float(total_sales) - float(total_payments)
+        
+        # 期初欠料：结算欠料 - 来料
+        # 结算欠料（结料方式的结算单）
+        total_settlement_gold = self.db.query(
+            func.coalesce(func.sum(SettlementOrder.physical_gold_weight), 0)
+        ).join(SalesOrder).filter(
+            and_(
+                SalesOrder.customer_id == customer_id,
+                SettlementOrder.payment_method == 'physical_gold',
+                SettlementOrder.status.in_(['confirmed', 'printed']),
+                SettlementOrder.create_time < datetime.combine(period_start, datetime.min.time())
+            )
+        ).scalar() or 0
+        
+        # 来料
+        total_receipts_gold = self.db.query(
+            func.coalesce(func.sum(GoldReceipt.gold_weight), 0)
+        ).filter(
+            and_(
+                GoldReceipt.customer_id == customer_id,
+                GoldReceipt.status == 'received',
+                GoldReceipt.created_at < datetime.combine(period_start, datetime.min.time())
+            )
+        ).scalar() or 0
+        
+        opening_gold = float(total_settlement_gold) - float(total_receipts_gold)
+        
+        return opening_cash, opening_gold
     
     def _calculate_opening_balance(self, customer_id: int, period_start: date) -> float:
         """

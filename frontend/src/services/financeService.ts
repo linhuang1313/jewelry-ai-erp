@@ -21,15 +21,30 @@ export interface PaymentSubmitResponse {
   error?: string;
 }
 
+export interface TransactionItem {
+  date: string;
+  datetime?: string;
+  type: string;  // 销售结算, 客户来料, 客户来款
+  orderNo: string;
+  goldAmount: number;  // 正数=客户欠料, 负数=客户给料
+  cashAmount: number;  // 正数=客户欠款, 负数=客户付款
+  remark?: string;
+}
+
 export interface StatementData {
   customer: { id: number; name: string; phone?: string; customerNo: string };
   period: { start: Date | string; end: Date | string };
   summary: {
     openingBalance: number;
+    openingGold?: number;
     totalSales: number;
     totalPayments: number;
+    totalGold?: number;
+    totalCash?: number;
     closingBalance: number;
+    closingGold?: number;
   };
+  transactions?: TransactionItem[];  // 合并的往来明细
   salesDetails: Array<{
     date: Date | string;
     orderNo: string;
@@ -384,10 +399,24 @@ export async function generateReconciliationStatement(
         },
         summary: {
           openingBalance: rawData.summary?.openingBalance ?? 0,
+          openingGold: rawData.summary?.openingGold ?? 0,
           totalSales: rawData.summary?.totalSales ?? 0,
           totalPayments: rawData.summary?.totalPayments ?? 0,
+          totalGold: rawData.summary?.totalGold ?? 0,
+          totalCash: rawData.summary?.totalCash ?? 0,
           closingBalance: rawData.summary?.closingBalance ?? 0,
+          closingGold: rawData.summary?.closingGold ?? 0,
         },
+        // 合并的往来明细
+        transactions: (rawData.transactions || []).map((item: any) => ({
+          date: item.date,
+          datetime: item.datetime,
+          type: item.type,
+          orderNo: item.order_no,
+          goldAmount: item.gold_amount ?? 0,
+          cashAmount: item.cash_amount ?? 0,
+          remark: item.remark || '',
+        })),
         salesDetails: (rawData.salesDetails || []).map((item: any) => ({
           date: item.sales_date || item.date,
           orderNo: item.sales_order_no || item.orderNo,

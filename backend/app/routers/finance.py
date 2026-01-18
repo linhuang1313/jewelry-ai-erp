@@ -361,6 +361,7 @@ async def generate_statement(
     生成对账单
     
     自动计算期初欠款、本期销售、本期收款、期末欠款
+    返回合并的往来账明细表
     """
     try:
         service = FinanceService(db)
@@ -369,6 +370,13 @@ async def generate_statement(
         # 解析明细数据
         sales_details = json.loads(statement.sales_details) if statement.sales_details else []
         payment_details = json.loads(statement.payment_details) if statement.payment_details else []
+        
+        # 获取合并的往来明细（如果存在）
+        transactions = getattr(statement, '_transactions', [])
+        opening_gold = getattr(statement, '_opening_gold', 0.0)
+        closing_gold = getattr(statement, '_closing_gold', 0.0)
+        total_gold = getattr(statement, '_total_gold', 0.0)
+        total_cash = getattr(statement, '_total_cash', 0.0)
         
         # 获取客户信息
         customer_ref = None
@@ -391,12 +399,17 @@ async def generate_statement(
                 },
                 "summary": {
                     "openingBalance": statement.opening_balance,
+                    "openingGold": round(opening_gold, 3),
                     "totalSales": statement.period_sales_amount,
                     "totalPayments": statement.period_payment_amount,
-                    "closingBalance": statement.closing_balance
+                    "totalGold": round(total_gold, 3),
+                    "totalCash": round(total_cash, 2),
+                    "closingBalance": statement.closing_balance,
+                    "closingGold": round(closing_gold, 3)
                 },
-                "salesDetails": sales_details,
-                "paymentDetails": payment_details,
+                "transactions": transactions,  # 合并的往来明细
+                "salesDetails": sales_details,  # 保持向后兼容
+                "paymentDetails": payment_details,  # 保持向后兼容
                 "generatedAt": statement.create_time.isoformat()
             },
             message="对账单生成成功"
