@@ -1037,16 +1037,16 @@ async def download_settlement_order(
                     p.setFont(chinese_font, 7)
                 p.drawString(left_margin + 2, y, "【饰品出货】")
                 
-                # 表头 - 8列简化版
+                # 表头 - 9列（增加金料金额列）
                 y -= 12
-                # 列宽：饰品名称(60), 数量(15), 重量(25), 出货方式(22), 金价(25), 工价(22), 工费小计(28), 销售金额(35)
-                col_widths = [60, 15, 25, 22, 25, 22, 28, 35]  # mm
+                # 列宽：饰品名称(55), 数量(12), 重量(22), 出货方式(20), 金价(22), 金料金额(28), 工价(20), 工费小计(26), 销售金额(32)
+                col_widths = [55, 12, 22, 20, 22, 28, 20, 26, 32]  # mm
                 table_width = sum(col_widths) * mm
                 col_x = [left_margin]
                 for w in col_widths[:-1]:
                     col_x.append(col_x[-1] + w*mm)
                 
-                headers = ["饰品名称", "数量", "重量(g)", "出货方式", "金价", "工价", "工费小计", "销售金额"]
+                headers = ["饰品名称", "数量", "重量(g)", "出货方式", "金价", "金料金额", "工价", "工费小计", "销售金额"]
                 if chinese_font:
                     p.setFont(chinese_font, 6)
                 else:
@@ -1064,6 +1064,7 @@ async def download_settlement_order(
                 y -= 10
                 total_qty = 0
                 total_weight = 0.0
+                total_material = 0.0
                 total_labor = 0.0
                 total_sales = 0.0
                 gold_price = settlement.gold_price or 0
@@ -1077,10 +1078,11 @@ async def download_settlement_order(
                     
                     total_qty += 1
                     total_weight += weight
+                    total_material += material_cost
                     total_labor += total_labor_cost
                     total_sales += sales_amount
                     
-                    product_name = detail.product_name[:18] if len(detail.product_name) > 18 else detail.product_name
+                    product_name = detail.product_name[:16] if len(detail.product_name) > 16 else detail.product_name
                     
                     if chinese_font:
                         p.setFont(chinese_font, 6)
@@ -1093,9 +1095,10 @@ async def download_settlement_order(
                     p.drawCentredString(col_x[3] + col_widths[3]*mm/2, y, "重量")
                     p.setFont("Helvetica", 6)
                     p.drawRightString(col_x[4] + col_widths[4]*mm - 2, y, f"{gold_price:.2f}")
-                    p.drawRightString(col_x[5] + col_widths[5]*mm - 2, y, f"{labor_cost:.2f}")
-                    p.drawRightString(col_x[6] + col_widths[6]*mm - 2, y, f"{total_labor_cost:.2f}")
-                    p.drawRightString(col_x[7] + col_widths[7]*mm - 2, y, f"{sales_amount:,.2f}")
+                    p.drawRightString(col_x[5] + col_widths[5]*mm - 2, y, f"{material_cost:,.2f}")
+                    p.drawRightString(col_x[6] + col_widths[6]*mm - 2, y, f"{labor_cost:.2f}")
+                    p.drawRightString(col_x[7] + col_widths[7]*mm - 2, y, f"{total_labor_cost:.2f}")
+                    p.drawRightString(col_x[8] + col_widths[8]*mm - 2, y, f"{sales_amount:,.2f}")
                     
                     y -= 8
                     if y < 25 * mm:  # 防止超出页面
@@ -1109,8 +1112,9 @@ async def download_settlement_order(
                 p.setFont("Helvetica", 6)
                 p.drawCentredString(col_x[1] + col_widths[1]*mm/2, y, str(total_qty))
                 p.drawRightString(col_x[2] + col_widths[2]*mm - 2, y, f"{total_weight:.2f}")
-                p.drawRightString(col_x[6] + col_widths[6]*mm - 2, y, f"{total_labor:.2f}")
-                p.drawRightString(col_x[7] + col_widths[7]*mm - 2, y, f"{total_sales:,.2f}")
+                p.drawRightString(col_x[5] + col_widths[5]*mm - 2, y, f"{total_material:,.2f}")
+                p.drawRightString(col_x[7] + col_widths[7]*mm - 2, y, f"{total_labor:.2f}")
+                p.drawRightString(col_x[8] + col_widths[8]*mm - 2, y, f"{total_sales:,.2f}")
                 p.line(left_margin, y - 2, left_margin + table_width, y - 2)
                 
                 # 汇总行
@@ -1233,6 +1237,7 @@ async def download_settlement_order(
             detail_rows_html = ""
             total_quantity = 0
             total_weight = 0.0
+            total_material_cost = 0.0
             total_labor_cost = 0.0
             total_sales_amount = 0.0
             
@@ -1247,6 +1252,7 @@ async def download_settlement_order(
                 
                 total_quantity += 1
                 total_weight += weight
+                total_material_cost += material_cost
                 total_labor_cost += total_labor
                 total_sales_amount += sales_amount
                 
@@ -1265,6 +1271,7 @@ async def download_settlement_order(
                     <td>{weight:.2f}</td>
                     <td class="center">{delivery_method}</td>
                     <td>{gold_price:.2f}</td>
+                    <td>{material_cost:,.2f}</td>
                     <td>{labor_cost:.2f}</td>
                     <td>{total_labor:.2f}</td>
                     <td>{sales_amount:,.2f}</td>
@@ -1550,14 +1557,15 @@ async def download_settlement_order(
         <div class="section-title">【饰品出货】</div>
         <table>
             <colgroup>
-                <col style="width: 28%;">
-                <col style="width: 6%;">
-                <col style="width: 10%;">
-                <col style="width: 8%;">
-                <col style="width: 10%;">
-                <col style="width: 8%;">
-                <col style="width: 12%;">
-                <col style="width: 18%;">
+                <col style="width: 22%;">
+                <col style="width: 5%;">
+                <col style="width: 9%;">
+                <col style="width: 7%;">
+                <col style="width: 9%;">
+                <col style="width: 13%;">
+                <col style="width: 7%;">
+                <col style="width: 11%;">
+                <col style="width: 17%;">
             </colgroup>
             <thead>
                 <tr>
@@ -1566,6 +1574,7 @@ async def download_settlement_order(
                     <th>重量(g)</th>
                     <th>出货方式</th>
                     <th>金价</th>
+                    <th>金料金额</th>
                     <th>工价</th>
                     <th>工费小计</th>
                     <th>销售金额</th>
@@ -1579,6 +1588,7 @@ async def download_settlement_order(
                     <td>{total_weight:.2f}</td>
                     <td></td>
                     <td></td>
+                    <td>{total_material_cost:,.2f}</td>
                     <td></td>
                     <td>{total_labor_cost:.2f}</td>
                     <td>{total_sales_amount:.2f}</td>
