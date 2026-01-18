@@ -76,14 +76,16 @@ interface DebtSummaryItem {
   customer_name: string;
   phone: string | null;
   cash_debt: number;
-  gold_debt: number;
-  gold_deposit: number;
+  gold_balance: number;    // 金料净额：正数=客人欠我们，负数=客人有存料
+  gold_debt: number;       // 兼容旧字段
+  gold_deposit: number;    // 兼容旧字段
   last_transaction_date: string | null;
 }
 
 interface DebtSummary {
   total_cash_debt: number;
-  total_gold_debt: number;
+  total_gold_balance: number;  // 金料净额总计
+  total_gold_debt: number;     // 兼容旧字段
   customer_count: number;
 }
 
@@ -139,10 +141,10 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
   
   // 欠款查询相关状态
   const [debtList, setDebtList] = useState<DebtSummaryItem[]>([]);
-  const [debtSummary, setDebtSummary] = useState<DebtSummary>({ total_cash_debt: 0, total_gold_debt: 0, customer_count: 0 });
+  const [debtSummary, setDebtSummary] = useState<DebtSummary>({ total_cash_debt: 0, total_gold_balance: 0, total_gold_debt: 0, customer_count: 0 });
   const [debtLoading, setDebtLoading] = useState(false);
   const [debtSearch, setDebtSearch] = useState('');
-  const [debtSortBy, setDebtSortBy] = useState<'cash_debt' | 'gold_debt' | 'name'>('cash_debt');
+  const [debtSortBy, setDebtSortBy] = useState<'cash_debt' | 'gold_balance' | 'name'>('cash_debt');
   const [debtSortOrder, setDebtSortOrder] = useState<'asc' | 'desc'>('desc');
   
   // 欠款历史弹窗
@@ -360,7 +362,7 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
       
       if (data.success) {
         setDebtList(data.items || []);
-        setDebtSummary(data.summary || { total_cash_debt: 0, total_gold_debt: 0, customer_count: 0 });
+        setDebtSummary(data.summary || { total_cash_debt: 0, total_gold_balance: 0, total_gold_debt: 0, customer_count: 0 });
       } else {
         toast.error(data.message || '获取欠款列表失败');
       }
@@ -405,7 +407,7 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
   };
   
   // 切换排序
-  const toggleDebtSort = (field: 'cash_debt' | 'gold_debt' | 'name') => {
+  const toggleDebtSort = (field: 'cash_debt' | 'gold_balance' | 'name') => {
     if (debtSortBy === field) {
       setDebtSortOrder(debtSortOrder === 'desc' ? 'asc' : 'desc');
     } else {
@@ -1055,16 +1057,33 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                 </div>
               </div>
             </div>
-            <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl p-5 border border-orange-200">
+            <div className={`bg-gradient-to-br rounded-2xl p-5 border ${
+              (debtSummary.total_gold_balance || 0) >= 0 
+                ? 'from-orange-50 to-orange-100 border-orange-200' 
+                : 'from-green-50 to-green-100 border-green-200'
+            }`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-orange-600 font-medium">金料欠款总计</p>
-                  <p className="text-2xl font-bold text-orange-700 mt-1">
-                    {debtSummary.total_gold_debt.toFixed(2)} 克
+                  <p className={`text-sm font-medium ${
+                    (debtSummary.total_gold_balance || 0) >= 0 ? 'text-orange-600' : 'text-green-600'
+                  }`}>
+                    {(debtSummary.total_gold_balance || 0) >= 0 ? '金料欠款总计' : '金料存料总计'}
+                  </p>
+                  <p className={`text-2xl font-bold mt-1 ${
+                    (debtSummary.total_gold_balance || 0) >= 0 ? 'text-orange-700' : 'text-green-700'
+                  }`}>
+                    {(debtSummary.total_gold_balance || 0) >= 0 
+                      ? `${(debtSummary.total_gold_balance || 0).toFixed(2)} 克`
+                      : `${Math.abs(debtSummary.total_gold_balance || 0).toFixed(2)} 克`
+                    }
                   </p>
                 </div>
-                <div className="p-3 bg-orange-200/50 rounded-xl">
-                  <TrendingDown className="w-6 h-6 text-orange-600" />
+                <div className={`p-3 rounded-xl ${
+                  (debtSummary.total_gold_balance || 0) >= 0 ? 'bg-orange-200/50' : 'bg-green-200/50'
+                }`}>
+                  <TrendingDown className={`w-6 h-6 ${
+                    (debtSummary.total_gold_balance || 0) >= 0 ? 'text-orange-600' : 'text-green-600'
+                  }`} />
                 </div>
               </div>
             </div>
@@ -1164,16 +1183,15 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                         <button
-                          onClick={() => toggleDebtSort('gold_debt')}
+                          onClick={() => toggleDebtSort('gold_balance')}
                           className="flex items-center space-x-1 hover:text-gray-700"
                         >
-                          <span>金料欠款</span>
-                          {debtSortBy === 'gold_debt' && (
+                          <span>欠料</span>
+                          {debtSortBy === 'gold_balance' && (
                             <ArrowUpDown className="w-3 h-3" />
                           )}
                         </button>
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">存料余额</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">最后交易</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
                     </tr>
@@ -1196,17 +1214,12 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          {item.gold_debt > 0 ? (
-                            <span className="font-semibold text-orange-600">{item.gold_debt.toFixed(2)}克</span>
+                          {(item.gold_balance || 0) > 0.001 ? (
+                            <span className="font-semibold text-orange-600">+{item.gold_balance.toFixed(2)}克</span>
+                          ) : (item.gold_balance || 0) < -0.001 ? (
+                            <span className="font-semibold text-green-600">{item.gold_balance.toFixed(2)}克</span>
                           ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {item.gold_deposit > 0 ? (
-                            <span className="font-semibold text-green-600">{item.gold_deposit.toFixed(2)}克</span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
+                            <span className="text-gray-400">0</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">

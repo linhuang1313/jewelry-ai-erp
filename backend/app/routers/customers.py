@@ -252,9 +252,12 @@ async def get_customer_debt_summary(
                     last_tx_map[row.customer_name] = row.last_time.strftime("%Y-%m-%d")
         
         # ========== 构建欠款数据 ==========
+        # gold_balance = gold_debt - gold_deposit
+        # 正数 = 客人欠我们的料
+        # 负数 = 客人有存料（我们欠客人的）
         debt_list = []
         total_cash_debt = 0.0
-        total_gold_debt = 0.0
+        total_gold_balance = 0.0
         
         for customer in customers:
             cash_debt = cash_debt_map.get(customer.id, 0.0)
@@ -262,8 +265,11 @@ async def get_customer_debt_summary(
             gold_deposit = gold_deposit_map.get(customer.id, 0.0)
             last_transaction_date = last_tx_map.get(customer.name)
             
-            # 如果隐藏无欠款客户
-            if hide_zero and cash_debt <= 0 and gold_debt <= 0:
+            # 计算金料净额：正数=客人欠我们，负数=客人有存料
+            gold_balance = gold_debt - gold_deposit
+            
+            # 如果隐藏无欠款客户（现金欠款为0且金料净额为0）
+            if hide_zero and cash_debt <= 0 and abs(gold_balance) < 0.001:
                 continue
             
             debt_list.append({
@@ -272,25 +278,27 @@ async def get_customer_debt_summary(
                 "customer_name": customer.name,
                 "phone": customer.phone,
                 "cash_debt": round(cash_debt, 2),
-                "gold_debt": round(gold_debt, 3),
-                "gold_deposit": round(gold_deposit, 3),
-                "total_debt": round(cash_debt, 2),  # 用于排序（现金欠款）
+                "gold_balance": round(gold_balance, 3),  # 合并后的金料净额
+                # 保留原字段用于兼容
+                "gold_debt": round(max(0, gold_balance), 3),  # 正数部分
+                "gold_deposit": round(abs(min(0, gold_balance)), 3),  # 负数部分的绝对值
+                "total_debt": round(cash_debt, 2),
                 "last_transaction_date": last_transaction_date
             })
             
             total_cash_debt += cash_debt
-            total_gold_debt += gold_debt
+            total_gold_balance += gold_balance
         
         # 排序
         reverse = sort_order == "desc"
         if sort_by == "cash_debt":
             debt_list.sort(key=lambda x: x["cash_debt"], reverse=reverse)
-        elif sort_by == "gold_debt":
-            debt_list.sort(key=lambda x: x["gold_debt"], reverse=reverse)
+        elif sort_by == "gold_debt" or sort_by == "gold_balance":
+            debt_list.sort(key=lambda x: x["gold_balance"], reverse=reverse)
         elif sort_by == "name":
             debt_list.sort(key=lambda x: x["customer_name"], reverse=reverse)
         else:  # total_debt
-            debt_list.sort(key=lambda x: (x["cash_debt"], x["gold_debt"]), reverse=reverse)
+            debt_list.sort(key=lambda x: (x["cash_debt"], x["gold_balance"]), reverse=reverse)
         
         # 分页
         total = len(debt_list)
@@ -302,7 +310,8 @@ async def get_customer_debt_summary(
             "total": total,
             "summary": {
                 "total_cash_debt": round(total_cash_debt, 2),
-                "total_gold_debt": round(total_gold_debt, 3),
+                "total_gold_balance": round(total_gold_balance, 3),  # 金料净额总计
+                "total_gold_debt": round(max(0, total_gold_balance), 3),  # 兼容旧字段
                 "customer_count": total
             }
         }
