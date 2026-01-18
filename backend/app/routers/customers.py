@@ -1265,3 +1265,182 @@ async def chat_debt_query(
             "success": False,
             "message": f"查询失败: {str(e)}"
         }
+
+
+# ============= 客户往来账明细表 API =============
+
+@router.get("/{customer_id}/transactions-detail")
+async def get_customer_transactions_detail(
+    customer_id: int,
+    start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+    user_role: str = Query(default="settlement", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    获取客户往来账明细表
+    
+    合并显示：销售结算、客户来料、客户来款
+    按发生日期排序
+    """
+    from ..middleware.permissions import has_permission
+    from ..models import SettlementOrder
+    from ..models.finance import GoldReceipt, PaymentRecord, AccountReceivable
+    
+    # 权限检查
+    can_view = (
+        has_permission(user_role, 'can_view_customers') or 
+        has_permission(user_role, 'can_create_settlement') or
+        user_role == 'manager'
+    )
+    if not can_view:
+        raise HTTPException(status_code=403, detail="权限不足")
+    
+    try:
+        # 验证客户存在
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        if not customer:
+            raise HTTPException(status_code=404, detail="客户不存在")
+        
+        # 解析日期范围
+        date_start = None
+        date_end = None
+        if start_date:
+            try:
+                date_start = datetime.strptime(start_date, "%Y-%m-%d")
+            except:
+                pass
+        if end_date:
+            try:
+                date_end = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            except:
+                pass
+        
+        transactions = []
+        
+        # ========== 1. 销售结算记录 ==========
+        settlement_query = db.query(SettlementOrder).join(SalesOrder).filter(
+            SalesOrder.customer_id == customer_id,
+            SettlementOrder.status.in_(['confirmed', 'printed'])
+        )
+        if date_start:
+            settlement_query = settlement_query.filter(SettlementOrder.create_time >= date_start)
+        if date_end:
+            settlement_query = settlement_query.filter(SettlementOrder.create_time <= date_end)
+        
+        settlements = settlement_query.all()
+        
+        for s in settlements:
+            # 足金：结料时的应付金料重量
+            gold_amount = 0.0
+            if s.payment_method == 'physical_gold':
+                gold_amount = s.physical_gold_weight or 0.0
+            
+            # 欠款金额：结价时的应收金额
+            cash_amount = 0.0
+            if s.payment_method == 'cash_price':
+                cash_amount = s.total_amount or 0.0
+            elif s.payment_method == 'mixed':
+                cash_amount = s.cash_payment_weight or 0.0  # 混合支付的现金部分
+            
+            transactions.append({
+                "id": f"settlement_{s.id}",
+                "date": s.create_time.strftime("%Y-%m-%d") if s.create_time else None,
+                "datetime": s.create_time.isoformat() if s.create_time else None,
+                "type": "销售结算",
+                "order_no": s.settlement_no,
+                "gold_amount": round(gold_amount, 3),  # 正数=客户欠料
+                "cash_amount": round(cash_amount, 2),  # 正数=客户欠款
+                "remark": s.remark or ""
+            })
+        
+        # ========== 2. 客户来料记录 ==========
+        receipt_query = db.query(GoldReceipt).filter(
+            GoldReceipt.customer_id == customer_id,
+            GoldReceipt.status == 'received'
+        )
+        if date_start:
+            receipt_query = receipt_query.filter(GoldReceipt.created_at >= date_start)
+        if date_end:
+            receipt_query = receipt_query.filter(GoldReceipt.created_at <= date_end)
+        
+        receipts = receipt_query.all()
+        
+        for r in receipts:
+            transactions.append({
+                "id": f"receipt_{r.id}",
+                "date": r.received_at.strftime("%Y-%m-%d") if r.received_at else (r.created_at.strftime("%Y-%m-%d") if r.created_at else None),
+                "datetime": r.received_at.isoformat() if r.received_at else (r.created_at.isoformat() if r.created_at else None),
+                "type": "客户来料",
+                "order_no": r.receipt_no,
+                "gold_amount": round(-(r.gold_weight or 0), 3),  # 负数=客户给料
+                "cash_amount": 0.0,
+                "remark": f"{r.gold_fineness or ''} {r.remark or ''}".strip()
+            })
+        
+        # ========== 3. 客户来款记录 ==========
+        payment_query = db.query(PaymentRecord).filter(
+            PaymentRecord.customer_id == customer_id
+        )
+        if date_start:
+            payment_query = payment_query.filter(PaymentRecord.payment_date >= date_start.date())
+        if date_end:
+            payment_query = payment_query.filter(PaymentRecord.payment_date <= date_end.date())
+        
+        payments = payment_query.all()
+        
+        for p in payments:
+            payment_method_label = {
+                'bank_transfer': '银行转账',
+                'cash': '现金',
+                'wechat': '微信',
+                'alipay': '支付宝',
+                'card': '刷卡'
+            }.get(p.payment_method, p.payment_method)
+            
+            transactions.append({
+                "id": f"payment_{p.id}",
+                "date": p.payment_date.strftime("%Y-%m-%d") if p.payment_date else None,
+                "datetime": p.create_time.isoformat() if p.create_time else None,
+                "type": "客户来款",
+                "order_no": p.payment_no or f"SK{p.id}",
+                "gold_amount": 0.0,
+                "cash_amount": round(-(p.amount or 0), 2),  # 负数=客户付款
+                "remark": f"{payment_method_label} {p.remark or ''}".strip()
+            })
+        
+        # ========== 按日期排序 ==========
+        transactions.sort(key=lambda x: x.get("datetime") or "0000-00-00")
+        
+        # ========== 计算合计 ==========
+        total_gold = sum(t["gold_amount"] for t in transactions)
+        total_cash = sum(t["cash_amount"] for t in transactions)
+        
+        # 添加序号
+        for i, t in enumerate(transactions, 1):
+            t["seq"] = i
+        
+        return {
+            "success": True,
+            "customer": {
+                "id": customer.id,
+                "name": customer.name,
+                "customer_no": customer.customer_no
+            },
+            "date_range": {
+                "start": start_date,
+                "end": end_date
+            },
+            "transactions": transactions,
+            "summary": {
+                "total_gold": round(total_gold, 3),  # 正数=客户欠料，负数=客户存料
+                "total_cash": round(total_cash, 2),  # 正数=客户欠款，负数=预收款
+                "count": len(transactions)
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取客户往来账明细失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取往来账明细失败: {str(e)}")

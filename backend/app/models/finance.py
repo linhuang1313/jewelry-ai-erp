@@ -53,11 +53,14 @@ class AccountReceivable(Base):
 
 
 class PaymentRecord(Base):
-    """收款记录表"""
+    """收款记录表 - 记录客户的每一笔来款"""
     __tablename__ = "payment_records"
     
     id = Column(Integer, primary_key=True, index=True)
-    account_receivable_id = Column(Integer, ForeignKey("account_receivables.id"), nullable=False)
+    # 收款单号
+    payment_no = Column(String(50), unique=True, index=True)  # 收款单号 (SK+时间戳)
+    # 关联信息（account_receivable_id 改为可选，因为一笔收款可能冲抵多笔应收）
+    account_receivable_id = Column(Integer, ForeignKey("account_receivables.id"), nullable=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
     
     # 收款信息

@@ -197,12 +197,13 @@ async def record_payment_from_chat(
     """
     从聊天界面登记收款
     
-    自动查找客户最旧的未付清应收账款进行冲抵
+    创建一笔完整的收款记录，然后FIFO方式更新应收账款余额
     """
     try:
         from ..models.finance import AccountReceivable, PaymentRecord
         from ..models import Customer
         from datetime import date, datetime
+        from ..timezone_utils import china_now
         
         # 验证客户存在
         customer = db.query(Customer).filter(Customer.id == customer_id).first()
@@ -221,122 +222,87 @@ async def record_payment_from_chat(
         else:
             pay_date = date.today()
         
-        # 查找客户所有应收账款（按日期升序，先冲抵最旧的）
-        # 包括未付清的和已付清的（用于记录预收款）
+        # 生成收款单号 SK + 时间戳
+        now = china_now()
+        payment_no = f"SK{now.strftime('%Y%m%d%H%M%S')}"
+        
+        # ========== 创建一笔完整的收款记录 ==========
+        payment = PaymentRecord(
+            payment_no=payment_no,
+            account_receivable_id=None,  # 不关联具体应收账款
+            customer_id=customer_id,
+            payment_date=pay_date,
+            amount=amount,  # 实际收款金额
+            payment_method=payment_method,
+            remark=remark or "收款登记",
+            operator="财务"
+        )
+        db.add(payment)
+        db.flush()
+        
+        # ========== FIFO方式更新应收账款余额 ==========
         unpaid_receivables = db.query(AccountReceivable).filter(
             AccountReceivable.customer_id == customer_id,
             AccountReceivable.status.in_(["unpaid", "overdue"]),
             AccountReceivable.unpaid_amount > 0
         ).order_by(AccountReceivable.credit_start_date.asc()).all()
         
-        # 获取最新的一笔应收账款记录（用于记录预收款）
-        latest_receivable = db.query(AccountReceivable).filter(
-            AccountReceivable.customer_id == customer_id
-        ).order_by(AccountReceivable.credit_start_date.desc()).first()
-        
-        # 如果客户没有任何应收账款记录，创建一个用于记录预收款
-        if not latest_receivable and not unpaid_receivables:
-            latest_receivable = AccountReceivable(
-                customer_id=customer_id,
-                sales_order_id=None,
-                total_amount=0,
-                received_amount=0,
-                unpaid_amount=0,
-                credit_start_date=pay_date,
-                due_date=pay_date,
-                status="paid"
-            )
-            db.add(latest_receivable)
-            db.flush()
-        
         remaining_amount = amount
-        created_payments = []
+        offset_details = []  # 冲抵明细
         
-        # FIFO方式冲抵未付清的应收账款
         for receivable in unpaid_receivables:
             if remaining_amount <= 0:
                 break
             
             # 计算本次可冲抵金额
-            pay_amount = min(remaining_amount, receivable.unpaid_amount)
-            
-            # 创建收款记录
-            payment = PaymentRecord(
-                account_receivable_id=receivable.id,
-                customer_id=customer_id,
-                payment_date=pay_date,
-                amount=pay_amount,
-                payment_method=payment_method,
-                remark=remark or f"聊天收款登记",
-                operator="财务"
-            )
-            db.add(payment)
+            offset_amount = min(remaining_amount, receivable.unpaid_amount)
             
             # 更新应收账款
-            receivable.received_amount += pay_amount
+            receivable.received_amount += offset_amount
             receivable.unpaid_amount = receivable.total_amount - receivable.received_amount
             
             # 更新状态
             if receivable.unpaid_amount <= 0:
                 receivable.status = "paid"
             
-            created_payments.append({
+            offset_details.append({
                 "receivable_id": receivable.id,
-                "amount": pay_amount
+                "amount": offset_amount
             })
             
-            remaining_amount -= pay_amount
+            remaining_amount -= offset_amount
         
-        # 如果还有剩余金额（超额收款/预收款），记录在最新的应收账款中
-        if remaining_amount > 0 and latest_receivable:
-            # 创建预收款记录
-            payment = PaymentRecord(
-                account_receivable_id=latest_receivable.id,
-                customer_id=customer_id,
-                payment_date=pay_date,
-                amount=remaining_amount,
-                payment_method=payment_method,
-                remark=(remark or "聊天收款登记") + " (预收款)",
-                operator="财务"
-            )
-            db.add(payment)
+        # 如果还有剩余金额（预收款），更新最新一笔应收账款的余额
+        prepayment = 0
+        if remaining_amount > 0:
+            latest_receivable = db.query(AccountReceivable).filter(
+                AccountReceivable.customer_id == customer_id
+            ).order_by(AccountReceivable.credit_start_date.desc()).first()
             
-            # 更新应收账款（余额变为负数表示预收款）
-            latest_receivable.received_amount += remaining_amount
-            latest_receivable.unpaid_amount = latest_receivable.total_amount - latest_receivable.received_amount
-            # 状态保持为 paid，但余额为负数
-            if latest_receivable.status != "paid":
-                latest_receivable.status = "paid"
-            
-            created_payments.append({
-                "receivable_id": latest_receivable.id,
-                "amount": remaining_amount,
-                "is_prepayment": True
-            })
-            
-            logger.info(f"预收款记录: 客户={customer.name}, 金额={remaining_amount}")
-            remaining_amount = 0
+            if latest_receivable:
+                latest_receivable.received_amount += remaining_amount
+                latest_receivable.unpaid_amount = latest_receivable.total_amount - latest_receivable.received_amount
+                prepayment = remaining_amount
+                logger.info(f"预收款: 客户={customer.name}, 金额={remaining_amount}")
         
         db.commit()
+        db.refresh(payment)
         
-        total_paid = amount
-        prepayment = sum(p.get("amount", 0) for p in created_payments if p.get("is_prepayment"))
-        
-        message = f"收款登记成功，共冲抵{len([p for p in created_payments if not p.get('is_prepayment')])}笔应收账款"
+        message = f"收款登记成功，收款单号：{payment_no}，金额：¥{amount:.2f}"
         if prepayment > 0:
-            message += f"，预收款¥{prepayment:.2f}"
-        message += f"，合计¥{total_paid:.2f}"
+            message += f"（含预收款¥{prepayment:.2f}）"
         
-        logger.info(f"聊天收款成功: 客户={customer.name}, 金额={total_paid}, 冲抵记录数={len(created_payments)}")
+        logger.info(f"收款成功: 客户={customer.name}, 单号={payment_no}, 金额={amount}, 冲抵{len(offset_details)}笔应收账款")
         
         return ApiResponse(
             success=True,
             data={
-                "payment_count": len(created_payments),
-                "total_paid": total_paid,
-                "remaining": 0,
+                "payment_id": payment.id,
+                "payment_no": payment_no,
+                "total_paid": amount,
                 "prepayment": prepayment,
-                "payments": created_payments,
+                "offset_count": len(offset_details),
+                "offset_details": offset_details,
                 "message": message
             },
             message="收款登记成功"
