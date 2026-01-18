@@ -3355,7 +3355,7 @@ function App() {
 
         {currentPage === 'warehouse' && (
           <div className="flex-1 overflow-y-auto">
-            <WarehousePage />
+            <WarehousePage userRole={selectedRole} />
           </div>
         )}
 

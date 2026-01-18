@@ -113,7 +113,17 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   );
 };
 
-export const WarehousePage: React.FC = () => {
+// 角色与负责仓库的映射
+const ROLE_LOCATION_MAP: Record<string, string> = {
+  'counter': '展厅',        // 柜员负责展厅
+  'product': '商品部仓库',   // 商品专员负责商品部仓库
+};
+
+interface WarehousePageProps {
+  userRole?: string;
+}
+
+export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'product' }) => {
   const [activeTab, setActiveTab] = useState<'inventory' | 'transfer' | 'receive'>('inventory');
   const [locations, setLocations] = useState<Location[]>([]);
   const [inventorySummary, setInventorySummary] = useState<InventorySummary[]>([]);
@@ -229,7 +239,21 @@ export const WarehousePage: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         setTransfers(data);
-        setPendingTransfers(data.filter((t: InventoryTransfer) => t.status === 'pending'));
+        
+        // 根据角色过滤待接收的转移单
+        // 只显示目标仓库属于当前角色管辖的转移单
+        const myResponsibleLocation = ROLE_LOCATION_MAP[userRole];
+        if (myResponsibleLocation) {
+          // 有明确的责任仓库，只显示目标是该仓库的待接收单
+          setPendingTransfers(
+            data.filter((t: InventoryTransfer) => 
+              t.status === 'pending' && t.to_location_name === myResponsibleLocation
+            )
+          );
+        } else {
+          // 管理员等角色可以看到所有待接收
+          setPendingTransfers(data.filter((t: InventoryTransfer) => t.status === 'pending'));
+        }
       }
     } catch (error) {
       console.error('加载转移单失败:', error);
