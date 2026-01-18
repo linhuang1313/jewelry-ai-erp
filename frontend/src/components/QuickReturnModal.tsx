@@ -21,8 +21,8 @@ interface Location {
 interface InventoryItem {
   id: number;
   product_name: string;
-  total_weight: number;
-  quantity?: number;
+  weight: number;
+  location_name?: string;
 }
 
 interface ReturnResult {
@@ -436,7 +436,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                     className="w-full px-4 py-2.5 text-left text-sm hover:bg-red-50 flex items-center justify-between border-b border-gray-50 last:border-b-0"
                   >
                     <span className="text-gray-700">{item.product_name}</span>
-                    <span className="font-mono text-orange-500 text-xs">库存: {item.total_weight?.toFixed(2) || 0}克</span>
+                    <span className="font-mono text-orange-500 text-xs">库存: {item.weight?.toFixed(2) || 0}克</span>
                   </button>
                 ))}
                 {inventoryItems.length === 0 && (
