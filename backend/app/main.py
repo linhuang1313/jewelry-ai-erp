@@ -5063,3 +5063,68 @@ async def sync_inventory_to_location(db: Session = Depends(get_db)):
         "message": f"同步完成，共调整 {len(sync_results)} 项商品库存",
         "sync_results": sync_results
     }
+
+
+# ==================== 数据库迁移API ====================
+
+@app.post("/api/migrate/add-payment-no")
+async def migrate_add_payment_no(db: Session = Depends(get_db)):
+    """
+    数据库迁移：为 payment_records 表添加 payment_no 字段
+    """
+    from sqlalchemy import text
+    
+    try:
+        # 检查列是否已存在
+        check_sql = text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'payment_records' AND column_name = 'payment_no'
+        """)
+        result = db.execute(check_sql).fetchone()
+        
+        if result:
+            return {
+                "success": True,
+                "message": "payment_no 列已存在，无需迁移"
+            }
+        
+        # 添加 payment_no 列
+        alter_sql = text("""
+            ALTER TABLE payment_records 
+            ADD COLUMN payment_no VARCHAR(50)
+        """)
+        db.execute(alter_sql)
+        
+        # 修改 account_receivable_id 为可空
+        alter_nullable_sql = text("""
+            ALTER TABLE payment_records 
+            ALTER COLUMN account_receivable_id DROP NOT NULL
+        """)
+        try:
+            db.execute(alter_nullable_sql)
+        except Exception as e:
+            logger.warning(f"修改 account_receivable_id 可空失败（可能已是可空）: {e}")
+        
+        # 为现有记录生成 payment_no
+        update_sql = text("""
+            UPDATE payment_records 
+            SET payment_no = 'SK' || TO_CHAR(create_time, 'YYYYMMDDHH24MISS') || id::text
+            WHERE payment_no IS NULL
+        """)
+        db.execute(update_sql)
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "迁移成功：已添加 payment_no 列并更新现有记录"
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"迁移失败: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e)
+        }
