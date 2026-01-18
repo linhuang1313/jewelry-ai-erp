@@ -145,6 +145,151 @@ async def suggest_salesperson(customer_name: str, db: Session = Depends(get_db))
         return {"success": False, "salesperson": None, "error": str(e)}
 
 
+# ============= 客户欠款查询 API =============
+# 注意：此路由必须在 /{customer_id} 之前定义，否则会被错误匹配
+
+@router.get("/debt-summary")
+async def get_customer_debt_summary(
+    search: Optional[str] = Query(None, description="搜索客户名称"),
+    sort_by: str = Query("total_debt", description="排序字段: cash_debt/gold_debt/total_debt/name"),
+    sort_order: str = Query("desc", description="排序方向: asc/desc"),
+    hide_zero: bool = Query(True, description="隐藏无欠款客户"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    user_role: str = Query(default="sales", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    获取客户欠款汇总列表
+    
+    返回所有客户的现金欠款和金料欠款情况，支持搜索和排序。
+    业务员和结算专员都可以查询所有客户。
+    """
+    from ..middleware.permissions import has_permission
+    # 业务员和结算专员都可以查询
+    can_view = (
+        has_permission(user_role, 'can_view_customers') or 
+        has_permission(user_role, 'can_query_customer_sales') or
+        has_permission(user_role, 'can_create_settlement')
+    )
+    if not can_view:
+        raise HTTPException(status_code=403, detail="权限不足：您没有查看客户欠款的权限")
+    
+    try:
+        # 查询所有活跃客户
+        query = db.query(Customer).filter(Customer.status == "active")
+        
+        if search:
+            query = query.filter(Customer.name.contains(search))
+        
+        customers = query.all()
+        
+        # 构建欠款数据
+        debt_list = []
+        total_cash_debt = 0.0
+        total_gold_debt = 0.0
+        
+        for customer in customers:
+            # 现金欠款 - 从应收账款表汇总
+            cash_debt = 0.0
+            try:
+                receivables = db.query(AccountReceivable).filter(
+                    AccountReceivable.customer_id == customer.id,
+                    AccountReceivable.status.in_(["unpaid", "overdue"])
+                ).all()
+                cash_debt = sum(r.unpaid_amount or 0 for r in receivables)
+            except Exception as e:
+                logger.warning(f"查询客户 {customer.id} 现金欠款出错: {e}")
+            
+            # 金料欠款 - 从客户往来账获取最新记录
+            gold_debt = 0.0
+            try:
+                latest_tx = db.query(CustomerTransaction).filter(
+                    CustomerTransaction.customer_id == customer.id,
+                    CustomerTransaction.status == "active"
+                ).order_by(desc(CustomerTransaction.created_at)).first()
+                if latest_tx:
+                    gold_debt = latest_tx.gold_due_after or 0.0
+            except Exception as e:
+                logger.warning(f"查询客户 {customer.id} 金料欠款出错: {e}")
+            
+            # 存料余额
+            gold_deposit = 0.0
+            try:
+                deposit = db.query(CustomerGoldDeposit).filter(
+                    CustomerGoldDeposit.customer_id == customer.id
+                ).first()
+                if deposit:
+                    gold_deposit = deposit.current_balance or 0.0
+            except Exception as e:
+                logger.warning(f"查询客户 {customer.id} 存料余额出错: {e}")
+            
+            # 最后交易时间
+            last_transaction_date = None
+            try:
+                last_order = db.query(SalesOrder).filter(
+                    SalesOrder.customer_name == customer.name
+                ).order_by(desc(SalesOrder.create_time)).first()
+                if last_order and last_order.create_time:
+                    last_transaction_date = last_order.create_time.strftime("%Y-%m-%d")
+            except Exception as e:
+                logger.warning(f"查询客户 {customer.id} 最后交易时间出错: {e}")
+            
+            # 如果隐藏无欠款客户
+            if hide_zero and cash_debt <= 0 and gold_debt <= 0:
+                continue
+            
+            debt_list.append({
+                "customer_id": customer.id,
+                "customer_no": customer.customer_no,
+                "customer_name": customer.name,
+                "phone": customer.phone,
+                "cash_debt": round(cash_debt, 2),
+                "gold_debt": round(gold_debt, 3),
+                "gold_deposit": round(gold_deposit, 3),
+                "total_debt": round(cash_debt, 2),  # 用于排序（现金欠款）
+                "last_transaction_date": last_transaction_date
+            })
+            
+            total_cash_debt += cash_debt
+            total_gold_debt += gold_debt
+        
+        # 排序
+        reverse = sort_order == "desc"
+        if sort_by == "cash_debt":
+            debt_list.sort(key=lambda x: x["cash_debt"], reverse=reverse)
+        elif sort_by == "gold_debt":
+            debt_list.sort(key=lambda x: x["gold_debt"], reverse=reverse)
+        elif sort_by == "name":
+            debt_list.sort(key=lambda x: x["customer_name"], reverse=reverse)
+        else:  # total_debt
+            debt_list.sort(key=lambda x: (x["cash_debt"], x["gold_debt"]), reverse=reverse)
+        
+        # 分页
+        total = len(debt_list)
+        debt_list = debt_list[skip:skip + limit]
+        
+        return {
+            "success": True,
+            "items": debt_list,
+            "total": total,
+            "summary": {
+                "total_cash_debt": round(total_cash_debt, 2),
+                "total_gold_debt": round(total_gold_debt, 3),
+                "customer_count": total
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"查询客户欠款汇总失败: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"查询失败: {str(e)}",
+            "items": [],
+            "total": 0
+        }
+
+
 @router.get("/{customer_id}")
 async def get_customer(
     customer_id: int,
@@ -645,150 +790,6 @@ async def batch_import_customers(
             "success": False,
             "message": f"批量导入失败: {str(e)}",
             "results": results
-        }
-
-
-# ============= 客户欠款查询 API =============
-
-@router.get("/debt-summary")
-async def get_customer_debt_summary(
-    search: Optional[str] = Query(None, description="搜索客户名称"),
-    sort_by: str = Query("total_debt", description="排序字段: cash_debt/gold_debt/total_debt/name"),
-    sort_order: str = Query("desc", description="排序方向: asc/desc"),
-    hide_zero: bool = Query(True, description="隐藏无欠款客户"),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
-    user_role: str = Query(default="sales", description="用户角色"),
-    db: Session = Depends(get_db)
-):
-    """
-    获取客户欠款汇总列表
-    
-    返回所有客户的现金欠款和金料欠款情况，支持搜索和排序。
-    业务员和结算专员都可以查询所有客户。
-    """
-    from ..middleware.permissions import has_permission
-    # 业务员和结算专员都可以查询
-    can_view = (
-        has_permission(user_role, 'can_view_customers') or 
-        has_permission(user_role, 'can_query_customer_sales') or
-        has_permission(user_role, 'can_create_settlement')
-    )
-    if not can_view:
-        raise HTTPException(status_code=403, detail="权限不足：您没有查看客户欠款的权限")
-    
-    try:
-        # 查询所有活跃客户
-        query = db.query(Customer).filter(Customer.status == "active")
-        
-        if search:
-            query = query.filter(Customer.name.contains(search))
-        
-        customers = query.all()
-        
-        # 构建欠款数据
-        debt_list = []
-        total_cash_debt = 0.0
-        total_gold_debt = 0.0
-        
-        for customer in customers:
-            # 现金欠款 - 从应收账款表汇总
-            cash_debt = 0.0
-            try:
-                receivables = db.query(AccountReceivable).filter(
-                    AccountReceivable.customer_id == customer.id,
-                    AccountReceivable.status.in_(["unpaid", "overdue"])
-                ).all()
-                cash_debt = sum(r.unpaid_amount or 0 for r in receivables)
-            except Exception as e:
-                logger.warning(f"查询客户 {customer.id} 现金欠款出错: {e}")
-            
-            # 金料欠款 - 从客户往来账获取最新记录
-            gold_debt = 0.0
-            try:
-                latest_tx = db.query(CustomerTransaction).filter(
-                    CustomerTransaction.customer_id == customer.id,
-                    CustomerTransaction.status == "active"
-                ).order_by(desc(CustomerTransaction.created_at)).first()
-                if latest_tx:
-                    gold_debt = latest_tx.gold_due_after or 0.0
-            except Exception as e:
-                logger.warning(f"查询客户 {customer.id} 金料欠款出错: {e}")
-            
-            # 存料余额
-            gold_deposit = 0.0
-            try:
-                deposit = db.query(CustomerGoldDeposit).filter(
-                    CustomerGoldDeposit.customer_id == customer.id
-                ).first()
-                if deposit:
-                    gold_deposit = deposit.current_balance or 0.0
-            except Exception as e:
-                logger.warning(f"查询客户 {customer.id} 存料余额出错: {e}")
-            
-            # 最后交易时间
-            last_transaction_date = None
-            try:
-                last_order = db.query(SalesOrder).filter(
-                    SalesOrder.customer_name == customer.name
-                ).order_by(desc(SalesOrder.create_time)).first()
-                if last_order and last_order.create_time:
-                    last_transaction_date = last_order.create_time.strftime("%Y-%m-%d")
-            except Exception as e:
-                logger.warning(f"查询客户 {customer.id} 最后交易时间出错: {e}")
-            
-            # 如果隐藏无欠款客户
-            if hide_zero and cash_debt <= 0 and gold_debt <= 0:
-                continue
-            
-            debt_list.append({
-                "customer_id": customer.id,
-                "customer_no": customer.customer_no,
-                "customer_name": customer.name,
-                "phone": customer.phone,
-                "cash_debt": round(cash_debt, 2),
-                "gold_debt": round(gold_debt, 3),
-                "gold_deposit": round(gold_deposit, 3),
-                "total_debt": round(cash_debt, 2),  # 用于排序（现金欠款）
-                "last_transaction_date": last_transaction_date
-            })
-            
-            total_cash_debt += cash_debt
-            total_gold_debt += gold_debt
-        
-        # 排序
-        reverse = sort_order == "desc"
-        if sort_by == "cash_debt":
-            debt_list.sort(key=lambda x: x["cash_debt"], reverse=reverse)
-        elif sort_by == "gold_debt":
-            debt_list.sort(key=lambda x: x["gold_debt"], reverse=reverse)
-        elif sort_by == "name":
-            debt_list.sort(key=lambda x: x["customer_name"], reverse=reverse)
-        else:  # total_debt
-            debt_list.sort(key=lambda x: (x["cash_debt"], x["gold_debt"]), reverse=reverse)
-        
-        # 分页
-        total = len(debt_list)
-        debt_list = debt_list[skip:skip + limit]
-        
-        return {
-            "success": True,
-            "items": debt_list,
-            "total": total,
-            "summary": {
-                "total_cash_debt": round(total_cash_debt, 2),
-                "total_gold_debt": round(total_gold_debt, 3),
-                "customer_count": total
-            }
-        }
-        
-    except Exception as e:
-        logger.error(f"查询客户欠款汇总失败: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"查询失败: {str(e)}",
-            "items": [],
-            "total": 0
         }
 
 
