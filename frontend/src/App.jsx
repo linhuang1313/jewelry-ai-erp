@@ -281,11 +281,11 @@ function App() {
   useEffect(() => {
     loadPendingTransferCount()
     loadPendingSalesCount()
-    // 每60秒刷新一次
+    // 每3秒刷新一次
     const interval = setInterval(() => {
       loadPendingTransferCount()
       loadPendingSalesCount()
-    }, 60000)
+    }, 3000)
     return () => clearInterval(interval)
   }, [userRole])
 
