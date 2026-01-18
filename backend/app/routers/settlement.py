@@ -887,24 +887,28 @@ async def download_settlement_order(
                     p.setFont(chinese_font, 7)
                 p.drawString(left_margin + 2, y, "【饰品出货】")
                 
-                # 表头
+                # 表头 - 8列简化版
                 y -= 12
-                col_widths = [12, 50, 18, 22, 22, 22, 18, 18, 22, 25, 25]  # mm
+                # 列宽：饰品名称(60), 数量(15), 重量(25), 出货方式(22), 金价(25), 工价(22), 工费小计(28), 销售金额(35)
+                col_widths = [60, 15, 25, 22, 25, 22, 28, 35]  # mm
+                table_width = sum(col_widths) * mm
                 col_x = [left_margin]
                 for w in col_widths[:-1]:
                     col_x.append(col_x[-1] + w*mm)
                 
-                headers = ["优惠", "饰品名称", "数量", "重量", "出货方式", "金价", "工价", "附工价", "工费小计", "销售金额", "备注"]
+                headers = ["饰品名称", "数量", "重量(g)", "出货方式", "金价", "工价", "工费小计", "销售金额"]
                 if chinese_font:
                     p.setFont(chinese_font, 6)
                 else:
                     p.setFont("Helvetica", 6)
                 
                 # 绘制表头边框和文字
-                p.line(left_margin, y + 8, right_margin, y + 8)
+                p.line(left_margin, y + 8, left_margin + table_width, y + 8)
                 for i, header in enumerate(headers):
-                    p.drawString(col_x[i] + 1, y, header)
-                p.line(left_margin, y - 2, right_margin, y - 2)
+                    # 表头居中
+                    col_center = col_x[i] + (col_widths[i] * mm) / 2
+                    p.drawCentredString(col_center, y, header)
+                p.line(left_margin, y - 2, left_margin + table_width, y - 2)
                 
                 # 表格数据行
                 y -= 10
@@ -926,72 +930,72 @@ async def download_settlement_order(
                     total_labor += total_labor_cost
                     total_sales += sales_amount
                     
-                    product_name = detail.product_name[:14] if len(detail.product_name) > 14 else detail.product_name
+                    product_name = detail.product_name[:18] if len(detail.product_name) > 18 else detail.product_name
                     
                     if chinese_font:
                         p.setFont(chinese_font, 6)
-                    p.drawString(col_x[0] + 1, y, "")  # 优惠
-                    p.drawString(col_x[1] + 1, y, product_name)
+                    p.drawString(col_x[0] + 2, y, product_name)
                     p.setFont("Helvetica", 6)
-                    p.drawRightString(col_x[2] + 16*mm, y, "1")
-                    p.drawRightString(col_x[3] + 20*mm, y, f"{weight:.2f}")
+                    p.drawCentredString(col_x[1] + col_widths[1]*mm/2, y, "1")
+                    p.drawRightString(col_x[2] + col_widths[2]*mm - 2, y, f"{weight:.2f}")
                     if chinese_font:
                         p.setFont(chinese_font, 6)
-                    p.drawString(col_x[4] + 2, y, "重量")
+                    p.drawCentredString(col_x[3] + col_widths[3]*mm/2, y, "重量")
                     p.setFont("Helvetica", 6)
-                    p.drawRightString(col_x[5] + 20*mm, y, f"{gold_price:.2f}")
-                    p.drawRightString(col_x[6] + 16*mm, y, f"{labor_cost:.2f}")
-                    p.drawRightString(col_x[7] + 16*mm, y, "")  # 附工价
-                    p.drawRightString(col_x[8] + 20*mm, y, f"{total_labor_cost:.2f}")
-                    p.drawRightString(col_x[9] + 23*mm, y, f"{sales_amount:.2f}")
+                    p.drawRightString(col_x[4] + col_widths[4]*mm - 2, y, f"{gold_price:.2f}")
+                    p.drawRightString(col_x[5] + col_widths[5]*mm - 2, y, f"{labor_cost:.2f}")
+                    p.drawRightString(col_x[6] + col_widths[6]*mm - 2, y, f"{total_labor_cost:.2f}")
+                    p.drawRightString(col_x[7] + col_widths[7]*mm - 2, y, f"{sales_amount:,.2f}")
                     
                     y -= 8
                     if y < 25 * mm:  # 防止超出页面
                         break
                 
                 # 总计行
-                p.line(left_margin, y + 6, right_margin, y + 6)
+                p.line(left_margin, y + 6, left_margin + table_width, y + 6)
                 if chinese_font:
                     p.setFont(chinese_font, 6)
-                p.drawRightString(col_x[1] + 48*mm, y, "总 计")
+                p.drawString(col_x[0] + 2, y, "总 计")
                 p.setFont("Helvetica", 6)
-                p.drawRightString(col_x[2] + 16*mm, y, str(total_qty))
-                p.drawRightString(col_x[3] + 20*mm, y, f"{total_weight:.2f}")
-                p.drawRightString(col_x[8] + 20*mm, y, f"{total_labor:.2f}")
-                p.drawRightString(col_x[9] + 23*mm, y, f"{total_sales:.2f}")
-                p.line(left_margin, y - 2, right_margin, y - 2)
+                p.drawCentredString(col_x[1] + col_widths[1]*mm/2, y, str(total_qty))
+                p.drawRightString(col_x[2] + col_widths[2]*mm - 2, y, f"{total_weight:.2f}")
+                p.drawRightString(col_x[6] + col_widths[6]*mm - 2, y, f"{total_labor:.2f}")
+                p.drawRightString(col_x[7] + col_widths[7]*mm - 2, y, f"{total_sales:,.2f}")
+                p.line(left_margin, y - 2, left_margin + table_width, y - 2)
                 
                 # 汇总行
-                y -= 10
+                y -= 12
                 if chinese_font:
                     p.setFont(chinese_font, 7)
-                p.drawRightString(right_margin - 80*mm, y, f"优惠额：0.00")
-                p.drawRightString(right_margin - 40*mm, y, f"结算金额：{settlement.total_amount:.2f}")
-                p.drawRightString(right_margin, y, f"本单应收：{settlement.total_amount:.2f}")
+                p.drawRightString(right_margin - 100*mm, y, f"优惠额：0.00")
+                p.drawRightString(right_margin - 50*mm, y, f"结算金额：{settlement.total_amount:,.2f}")
+                p.drawRightString(right_margin, y, f"本单应收：{settlement.total_amount:,.2f}")
                 
                 # === 结算汇总表 ===
-                y -= 12
+                y -= 14
                 p.setFillColorRGB(0.9, 0.9, 0.9)
-                p.rect(left_margin, y - 2, right_margin - left_margin, 10, fill=1)
+                p.rect(left_margin, y - 2, table_width, 10, fill=1)
                 p.setFillColorRGB(0, 0, 0)
                 if chinese_font:
                     p.setFont(chinese_font, 7)
                 p.drawString(left_margin + 2, y, "【结算汇总】")
                 
                 y -= 12
-                # 汇总表头
+                # 汇总表头 - 9列
                 sum_headers = ["序号", "结算项目", "上次结存", "本次结算", "本次结退", "本次客来", "欠料结价", "本次结存", "本次汇总"]
-                sum_widths = [12, 25, 28, 28, 25, 25, 25, 28, 28]
+                sum_widths = [14, 28, 28, 28, 24, 24, 24, 28, 28]  # mm
+                sum_table_width = sum(sum_widths) * mm
                 sum_x = [left_margin]
                 for w in sum_widths[:-1]:
                     sum_x.append(sum_x[-1] + w*mm)
                 
                 if chinese_font:
                     p.setFont(chinese_font, 6)
-                p.line(left_margin, y + 8, right_margin, y + 8)
+                p.line(left_margin, y + 8, left_margin + sum_table_width, y + 8)
                 for i, h in enumerate(sum_headers):
-                    p.drawString(sum_x[i] + 1, y, h)
-                p.line(left_margin, y - 2, right_margin, y - 2)
+                    col_center = sum_x[i] + (sum_widths[i] * mm) / 2
+                    p.drawCentredString(col_center, y, h)
+                p.line(left_margin, y - 2, left_margin + sum_table_width, y - 2)
                 
                 # 汇总数据
                 prev_cash = settlement.previous_cash_debt or 0
@@ -1002,27 +1006,27 @@ async def download_settlement_order(
                 new_gold = prev_gold + current_gold
                 
                 y -= 9
-                p.drawString(sum_x[0] + 3, y, "1")
+                p.drawCentredString(sum_x[0] + sum_widths[0]*mm/2, y, "1")
                 if chinese_font:
                     p.setFont(chinese_font, 6)
-                p.drawString(sum_x[1] + 1, y, "欠款(元)")
+                p.drawString(sum_x[1] + 2, y, "欠款(元)")
                 p.setFont("Helvetica", 6)
-                p.drawRightString(sum_x[2] + 26*mm, y, f"{prev_cash:,.2f}")
-                p.drawRightString(sum_x[3] + 26*mm, y, f"{current_cash:,.2f}")
-                p.drawRightString(sum_x[7] + 26*mm, y, f"{new_cash:,.2f}")
-                p.drawRightString(sum_x[8] + 26*mm, y, f"{new_cash:,.2f}")
+                p.drawRightString(sum_x[2] + sum_widths[2]*mm - 2, y, f"{prev_cash:,.2f}")
+                p.drawRightString(sum_x[3] + sum_widths[3]*mm - 2, y, f"{current_cash:,.2f}")
+                p.drawRightString(sum_x[7] + sum_widths[7]*mm - 2, y, f"{new_cash:,.2f}")
+                p.drawRightString(sum_x[8] + sum_widths[8]*mm - 2, y, f"{new_cash:,.2f}")
                 
-                y -= 8
-                p.drawString(sum_x[0] + 3, y, "2")
+                y -= 9
+                p.drawCentredString(sum_x[0] + sum_widths[0]*mm/2, y, "2")
                 if chinese_font:
                     p.setFont(chinese_font, 6)
-                p.drawString(sum_x[1] + 1, y, "足金(克)")
+                p.drawString(sum_x[1] + 2, y, "足金(克)")
                 p.setFont("Helvetica", 6)
-                p.drawRightString(sum_x[2] + 26*mm, y, f"{prev_gold:.3f}")
-                p.drawRightString(sum_x[3] + 26*mm, y, f"{current_gold:.3f}")
-                p.drawRightString(sum_x[7] + 26*mm, y, f"{new_gold:.3f}")
-                p.drawRightString(sum_x[8] + 26*mm, y, f"{new_gold:.3f}")
-                p.line(left_margin, y - 2, right_margin, y - 2)
+                p.drawRightString(sum_x[2] + sum_widths[2]*mm - 2, y, f"{prev_gold:.3f}")
+                p.drawRightString(sum_x[3] + sum_widths[3]*mm - 2, y, f"{current_gold:.3f}")
+                p.drawRightString(sum_x[7] + sum_widths[7]*mm - 2, y, f"{new_gold:.3f}")
+                p.drawRightString(sum_x[8] + sum_widths[8]*mm - 2, y, f"{new_gold:.3f}")
+                p.line(left_margin, y - 2, left_margin + sum_table_width, y - 2)
                 
                 # === 敬告客户 ===
                 y -= 14
@@ -1106,17 +1110,14 @@ async def download_settlement_order(
                 
                 detail_rows_html += f'''
                 <tr>
-                    <td></td>
                     <td class="left">{detail.product_name}</td>
                     <td class="center">1</td>
-                    <td class="right">{weight:.2f}</td>
+                    <td>{weight:.2f}</td>
                     <td class="center">{delivery_method}</td>
-                    <td class="right">{gold_price:.2f}</td>
-                    <td class="right">{labor_cost:.2f}</td>
-                    <td class="right"></td>
-                    <td class="right">{total_labor:.2f}</td>
-                    <td class="right">{sales_amount:.2f}</td>
-                    <td></td>
+                    <td>{gold_price:.2f}</td>
+                    <td>{labor_cost:.2f}</td>
+                    <td>{total_labor:.2f}</td>
+                    <td>{sales_amount:,.2f}</td>
                 </tr>'''
             
             # 结算明细表格（结料/结价部分）
@@ -1221,125 +1222,154 @@ async def download_settlement_order(
             background: #fff;
         }}
         .page {{
-            width: 241mm;
+            width: 210mm;
             min-height: 140mm;
-            padding: 8mm 10mm;
+            padding: 10mm 12mm;
             margin: 0 auto;
             background: white;
         }}
         .header {{
             text-align: center;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
         }}
         .company-name {{
-            font-size: 18px;
+            font-size: 20px;
             font-weight: bold;
-            letter-spacing: 2px;
+            letter-spacing: 3px;
+            color: #1a5490;
         }}
         .doc-title {{
             font-size: 16px;
             font-weight: bold;
-            margin: 5px 0;
-            text-decoration: underline;
+            margin: 6px 0;
+            color: #1a5490;
         }}
         .header-info {{
-            display: flex;
-            justify-content: space-between;
+            display: table;
+            width: 100%;
             font-size: 11px;
-            margin-bottom: 5px;
+            margin-bottom: 6px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 6px;
+        }}
+        .header-info-row {{
+            display: table-row;
+        }}
+        .header-info-cell {{
+            display: table-cell;
+            width: 25%;
+            padding: 2px 0;
         }}
         .info-row {{
             display: flex;
             font-size: 11px;
-            margin-bottom: 3px;
+            margin-bottom: 4px;
         }}
         .info-row .item {{
-            margin-right: 20px;
+            margin-right: 40px;
         }}
         .section-title {{
             font-weight: bold;
-            background: #f0f0f0;
-            padding: 2px 5px;
-            margin: 8px 0 3px 0;
+            background: linear-gradient(to right, #e8e8e8, #f5f5f5);
+            padding: 3px 8px;
+            margin: 10px 0 4px 0;
             font-size: 11px;
+            border-left: 3px solid #1a5490;
         }}
         table {{
             width: 100%;
             border-collapse: collapse;
             font-size: 10px;
+            table-layout: fixed;
         }}
         table th, table td {{
-            border: 1px solid #333;
-            padding: 2px 4px;
-            text-align: center;
+            border: 1px solid #666;
+            padding: 4px 6px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }}
         table th {{
-            background: #f8f8f8;
-            font-weight: normal;
+            background: #f0f0f0;
+            font-weight: bold;
+            text-align: center;
         }}
-        .left {{ text-align: left; }}
-        .right {{ text-align: right; }}
-        .center {{ text-align: center; }}
+        table td {{
+            text-align: right;
+        }}
+        table td.left {{ text-align: left; }}
+        table td.center {{ text-align: center; }}
         .total-row {{
             font-weight: bold;
             background: #f8f8f8;
         }}
+        .total-row td {{
+            border-top: 2px solid #333;
+        }}
         .summary-row {{
             display: flex;
             justify-content: flex-end;
-            gap: 30px;
-            margin: 5px 0;
+            gap: 40px;
+            margin: 8px 0;
             font-size: 11px;
+            padding-right: 10px;
+        }}
+        .summary-row b {{
+            color: #c00;
         }}
         .notice {{
             font-size: 10px;
-            margin: 10px 0;
-            padding: 5px;
-            border: 1px solid #ccc;
+            margin: 12px 0;
+            padding: 6px 10px;
+            background: #fffef0;
+            border: 1px solid #e0d080;
+            border-radius: 3px;
         }}
         .notice-title {{
             font-weight: bold;
+            color: #c00;
         }}
         .signature-row {{
             display: flex;
             justify-content: space-between;
-            margin-top: 15px;
+            margin-top: 20px;
             font-size: 11px;
+            padding: 0 20px;
         }}
         .signature-item {{
-            display: flex;
-            gap: 50px;
+            min-width: 150px;
         }}
         .page-num {{
             text-align: right;
             font-size: 10px;
-            margin-top: 5px;
+            margin-top: 10px;
+            color: #666;
         }}
         .print-btn {{
             display: block;
             margin: 20px auto;
             padding: 10px 30px;
-            background: #3498db;
+            background: #1a5490;
             color: white;
             border: none;
             border-radius: 5px;
             font-size: 14px;
             cursor: pointer;
         }}
-        .print-btn:hover {{ background: #2980b9; }}
+        .print-btn:hover {{ background: #0d3a6a; }}
         @media print {{
             body {{ background: white; }}
             .page {{ 
-                width: 241mm;
+                width: 210mm;
                 min-height: 140mm;
-                padding: 5mm 8mm;
+                padding: 8mm 10mm;
                 margin: 0;
             }}
             .print-btn {{ display: none; }}
         }}
         @media screen {{
-            body {{ background: #f5f5f5; padding: 20px; }}
-            .page {{ box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+            body {{ background: #f0f0f0; padding: 20px; }}
+            .page {{ box-shadow: 0 2px 15px rgba(0,0,0,0.15); }}
         }}
     </style>
 </head>
@@ -1353,119 +1383,113 @@ async def download_settlement_order(
         
         <!-- 基本信息 -->
         <div class="header-info">
-            <span>结算单号：{settlement.settlement_no}</span>
-            <span>结算时间：{settlement_date}</span>
-            <span>打 印 人：{salesperson}</span>
-            <span>打印日期：{print_time}</span>
+            <div class="header-info-row">
+                <span class="header-info-cell">结算单号：{settlement.settlement_no}</span>
+                <span class="header-info-cell">结算时间：{settlement_date}</span>
+                <span class="header-info-cell">打印人：{salesperson}</span>
+                <span class="header-info-cell">打印日期：{print_time}</span>
+            </div>
         </div>
         <div class="info-row">
             <span class="item">结算客户：{customer_name}</span>
             <span class="item">客户电话：{customer_phone}</span>
-        </div>
-        <div class="info-row">
             <span class="item">结算备注：{settlement.remark or store_code or ''}</span>
         </div>
         
         <!-- 饰品出货表 -->
         <div class="section-title">【饰品出货】</div>
         <table>
+            <colgroup>
+                <col style="width: 28%;">
+                <col style="width: 6%;">
+                <col style="width: 10%;">
+                <col style="width: 8%;">
+                <col style="width: 10%;">
+                <col style="width: 8%;">
+                <col style="width: 12%;">
+                <col style="width: 18%;">
+            </colgroup>
             <thead>
                 <tr>
-                    <th style="width:30px">优惠</th>
-                    <th style="width:auto">饰品名称</th>
-                    <th style="width:35px">数量</th>
-                    <th style="width:50px">重量</th>
-                    <th style="width:50px">出货方式</th>
-                    <th style="width:55px">金价</th>
-                    <th style="width:45px">工价</th>
-                    <th style="width:45px">附工价</th>
-                    <th style="width:55px">工费小计</th>
-                    <th style="width:60px">销售金额</th>
-                    <th style="width:60px">销售小备注</th>
+                    <th>饰品名称</th>
+                    <th>数量</th>
+                    <th>重量(g)</th>
+                    <th>出货方式</th>
+                    <th>金价</th>
+                    <th>工价</th>
+                    <th>工费小计</th>
+                    <th>销售金额</th>
                 </tr>
             </thead>
             <tbody>
                 {detail_rows_html}
                 <tr class="total-row">
-                    <td colspan="2" class="right">总 计</td>
+                    <td class="left">总 计</td>
                     <td class="center">{total_quantity}</td>
-                    <td class="right">{total_weight:.2f}</td>
-                    <td colspan="4"></td>
-                    <td class="right">{total_labor_cost:.2f}</td>
-                    <td class="right">{total_sales_amount:.2f}</td>
+                    <td>{total_weight:.2f}</td>
                     <td></td>
+                    <td></td>
+                    <td></td>
+                    <td>{total_labor_cost:.2f}</td>
+                    <td>{total_sales_amount:.2f}</td>
                 </tr>
             </tbody>
         </table>
         <div class="summary-row">
             <span>优惠额：0.00</span>
-            <span>结算金额：<b>{settlement.total_amount:.2f}</b></span>
-            <span>本单应收：<b>{settlement.total_amount:.2f}</b></span>
+            <span>结算金额：<b>{settlement.total_amount:,.2f}</b></span>
+            <span>本单应收：<b>{settlement.total_amount:,.2f}</b></span>
         </div>
-        
-        <!-- 结算明细表 -->
-        <div class="section-title">【结算明细】</div>
-        <table>
-            <thead>
-                <tr>
-                    <th style="width:25px">序</th>
-                    <th style="width:60px">结算项目</th>
-                    <th style="width:40px">成色</th>
-                    <th style="width:50px">重量</th>
-                    <th style="width:50px">结算成色</th>
-                    <th style="width:55px">应结重量</th>
-                    <th style="width:55px">结料重量</th>
-                    <th style="width:55px">结价重量</th>
-                    <th style="width:50px">金价</th>
-                    <th style="width:60px">结料金额</th>
-                    <th style="width:45px">工价</th>
-                    <th style="width:45px">附工价</th>
-                    <th style="width:55px">工费小计</th>
-                </tr>
-            </thead>
-            <tbody>
-                {settlement_detail_rows}
-            </tbody>
-        </table>
         
         <!-- 结算汇总表 -->
         <div class="section-title">【结算汇总】</div>
         <table>
+            <colgroup>
+                <col style="width: 6%;">
+                <col style="width: 12%;">
+                <col style="width: 14%;">
+                <col style="width: 14%;">
+                <col style="width: 10%;">
+                <col style="width: 10%;">
+                <col style="width: 10%;">
+                <col style="width: 12%;">
+                <col style="width: 12%;">
+            </colgroup>
             <thead>
                 <tr>
-                    <th style="width:30px">序号</th>
-                    <th style="width:60px">结算项目</th>
-                    <th style="width:70px">上次结存</th>
-                    <th style="width:70px">本次结算</th>
-                    <th style="width:55px">本次结退</th>
-                    <th style="width:55px">本次客来</th>
-                    <th style="width:55px">欠料结价</th>
-                    <th style="width:70px">本次结存</th>
-                    <th style="width:70px">本次汇总</th>
+                    <th>序号</th>
+                    <th>结算项目</th>
+                    <th>上次结存</th>
+                    <th>本次结算</th>
+                    <th>本次结退</th>
+                    <th>本次客来</th>
+                    <th>欠料结价</th>
+                    <th>本次结存</th>
+                    <th>本次汇总</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
                     <td class="center">1</td>
-                    <td>欠款（元）</td>
-                    <td class="right">{prev_cash:,.2f}元</td>
-                    <td class="right">{current_cash:,.2f}元</td>
-                    <td class="right">元</td>
-                    <td class="right">元</td>
-                    <td class="right">元</td>
-                    <td class="right">{new_cash_balance:,.2f}元</td>
-                    <td class="right">{new_cash_balance:,.2f}元</td>
+                    <td class="left">欠款(元)</td>
+                    <td>{prev_cash:,.2f}</td>
+                    <td>{current_cash:,.2f}</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td>{new_cash_balance:,.2f}</td>
+                    <td>{new_cash_balance:,.2f}</td>
                 </tr>
                 <tr>
                     <td class="center">2</td>
-                    <td>足金（克）</td>
-                    <td class="right">{prev_gold:.3f}克</td>
-                    <td class="right">{current_gold:.3f}克</td>
-                    <td class="right">克</td>
-                    <td class="right">克</td>
-                    <td class="right">克</td>
-                    <td class="right">{new_gold_balance:.3f}克</td>
-                    <td class="right">{new_gold_balance:.3f}克</td>
+                    <td class="left">足金(克)</td>
+                    <td>{prev_gold:.3f}</td>
+                    <td>{current_gold:.3f}</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td>{new_gold_balance:.3f}</td>
+                    <td>{new_gold_balance:.3f}</td>
                 </tr>
             </tbody>
         </table>
@@ -1473,14 +1497,14 @@ async def download_settlement_order(
         <!-- 敬告客户 -->
         <div class="notice">
             <span class="notice-title">【敬告客户】</span>
-            我公司所售饰品均通过严格检测。为了保障您的利益，请将以上饰品送当地检测部门检测后再上柜销售。如发现成色不足由我公司负责免费调换；未经当地检测部门检测就直接上柜销售的饰品，如发生经济纠纷与我公司无关。
+            我公司所售饰品均通过严格检测。为了保障您的利益，请将以上饰品送当地检测部门检测后再上柜销售。
         </div>
         
         <!-- 签名区 -->
         <div class="signature-row">
-            <span>制单人：{salesperson}</span>
-            <span>复核人：{settlement.confirmed_by or ''}</span>
-            <span>客户确认：</span>
+            <span class="signature-item">制单人：{salesperson}</span>
+            <span class="signature-item">复核人：{settlement.confirmed_by or '结算专员'}</span>
+            <span class="signature-item">客户确认：</span>
         </div>
         
         <div class="page-num">第 1-1 页</div>
