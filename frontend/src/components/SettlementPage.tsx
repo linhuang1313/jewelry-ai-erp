@@ -424,6 +424,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
             customer_name: confirmingSettlement.sales_order?.customer_name || '未知',
             salesperson: confirmingSettlement.sales_order?.salesperson || '未知',
             payment_method: confirmingSettlement.payment_method,
+            gold_price: confirmingSettlement.gold_price,
             total_weight: confirmingSettlement.total_weight,
             labor_amount: confirmingSettlement.labor_amount,
             material_amount: confirmingSettlement.material_amount || 0,

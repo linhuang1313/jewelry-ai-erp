@@ -3484,6 +3484,7 @@ ${itemsList}
 📊 **汇总**：
 - 总克重：${data.total_weight.toFixed(2)}克
 - 工费合计：¥${data.labor_amount.toFixed(2)}
+${data.gold_price ? `- 金价：${data.gold_price.toFixed(2)} 元/克` : ''}
 ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(2)}` : ''}
 - **应收总计：¥${data.total_amount.toFixed(2)}**
 
