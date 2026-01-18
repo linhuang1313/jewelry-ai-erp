@@ -427,8 +427,8 @@ class FinanceService:
             settlements = self.db.query(SettlementOrder).join(SalesOrder).filter(
                 SalesOrder.customer_id == statement_data.customer_id,
                 SettlementOrder.status.in_(['confirmed', 'printed']),
-                SettlementOrder.create_time >= datetime.combine(period_start, datetime.min.time()),
-                SettlementOrder.create_time <= datetime.combine(period_end, datetime.max.time())
+                SettlementOrder.created_at >= datetime.combine(period_start, datetime.min.time()),
+                SettlementOrder.created_at <= datetime.combine(period_end, datetime.max.time())
             ).all()
             
             for s in settlements:
@@ -443,8 +443,8 @@ class FinanceService:
                     cash_amount = s.cash_payment_weight or 0.0
                 
                 transactions.append({
-                    "date": s.create_time.strftime("%Y-%m-%d") if s.create_time else None,
-                    "datetime": s.create_time.isoformat() if s.create_time else None,
+                    "date": s.created_at.strftime("%Y-%m-%d") if s.created_at else None,
+                    "datetime": s.created_at.isoformat() if s.created_at else None,
                     "type": "销售结算",
                     "order_no": s.settlement_no,
                     "gold_amount": round(gold_amount, 3),
@@ -593,7 +593,7 @@ class FinanceService:
                 SalesOrder.customer_id == customer_id,
                 SettlementOrder.payment_method == 'physical_gold',
                 SettlementOrder.status.in_(['confirmed', 'printed']),
-                SettlementOrder.create_time < datetime.combine(period_start, datetime.min.time())
+                SettlementOrder.created_at < datetime.combine(period_start, datetime.min.time())
             )
         ).scalar() or 0
         
