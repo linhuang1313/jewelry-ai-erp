@@ -18,10 +18,11 @@ interface Location {
   location_type: string;
 }
 
-interface ProductCode {
-  code: string;
-  name: string;
-  code_type: string;
+interface InventoryItem {
+  id: number;
+  product_name: string;
+  total_weight: number;
+  quantity?: number;
 }
 
 interface ReturnResult {
@@ -51,7 +52,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
 }) => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
-  const [productCodes, setProductCodes] = useState<ProductCode[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
@@ -96,16 +97,22 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
   // 创建成功后的退货单信息
   const [createdReturn, setCreatedReturn] = useState<any>(null);
 
-  // 加载供应商、位置列表和商品编码
+  // 加载供应商和位置列表
   useEffect(() => {
     if (isOpen) {
       if (returnConfig.needSupplier) {
         fetchSuppliers();
       }
       fetchLocations();
-      fetchProductCodes();
     }
   }, [isOpen]);
+  
+  // 位置确定后加载该位置的库存
+  useEffect(() => {
+    if (isOpen && formData.from_location_id) {
+      fetchLocationInventory(formData.from_location_id);
+    }
+  }, [isOpen, formData.from_location_id]);
 
   // 根据角色自动设置固定位置（每次弹窗打开时）
   useEffect(() => {
@@ -144,14 +151,16 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
     }
   };
 
-  const fetchProductCodes = async () => {
+  const fetchLocationInventory = async (locationId: string) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/product-codes`);
+      const res = await fetch(`${API_BASE_URL}/api/warehouse/inventory?location_id=${locationId}`);
       const data = await res.json();
-      const codeList = Array.isArray(data) ? data : (data.codes || []);
-      setProductCodes(codeList);
+      // 处理返回格式，可能是数组或包含 items 字段的对象
+      const items = Array.isArray(data) ? data : (data.items || data.inventory || []);
+      setInventoryItems(items);
     } catch (error) {
-      console.error('获取商品编码失败:', error);
+      console.error('获取位置库存失败:', error);
+      setInventoryItems([]);
     }
   };
 
@@ -408,32 +417,31 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                 </svg>
               </button>
             </div>
-            {/* 下拉选择框 */}
+            {/* 下拉选择框 - 从当前位置库存中选择 */}
             {showProductDropdown && (
               <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-60 overflow-auto">
                 {(formData.product_name.trim() 
-                  ? productCodes.filter(pc => 
-                      pc.name.includes(formData.product_name) ||
-                      pc.code.toUpperCase().includes(formData.product_name.toUpperCase())
+                  ? inventoryItems.filter(item => 
+                      item.product_name.includes(formData.product_name)
                     )
-                  : productCodes
-                ).slice(0, 15).map((pc) => (
+                  : inventoryItems
+                ).slice(0, 20).map((item) => (
                   <button
-                    key={pc.code}
+                    key={item.id}
                     type="button"
                     onClick={() => {
-                      setFormData({ ...formData, product_name: pc.name });
+                      setFormData({ ...formData, product_name: item.product_name });
                       setShowProductDropdown(false);
                     }}
-                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-red-50 flex items-center gap-2 border-b border-gray-50 last:border-b-0"
+                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-red-50 flex items-center justify-between border-b border-gray-50 last:border-b-0"
                   >
-                    <span className="text-gray-700">{pc.name}</span>
-                    <span className="font-mono text-red-500 text-xs">({pc.code})</span>
+                    <span className="text-gray-700">{item.product_name}</span>
+                    <span className="font-mono text-orange-500 text-xs">库存: {item.total_weight?.toFixed(2) || 0}克</span>
                   </button>
                 ))}
-                {productCodes.length === 0 && (
+                {inventoryItems.length === 0 && (
                   <div className="px-4 py-4 text-center text-gray-400 text-sm">
-                    暂无商品编码
+                    当前位置暂无库存商品
                   </div>
                 )}
               </div>
