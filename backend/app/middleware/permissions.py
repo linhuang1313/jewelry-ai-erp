@@ -55,7 +55,7 @@ ROLE_PERMISSIONS = {
         'can_transfer': False,
         'can_receive_transfer': False,
         'can_manage_customers': False,
-        'can_view_customers': False,       # 不能查看客户
+        'can_view_customers': True,        # 可以查看客户（查询欠款信息）
         'can_manage_suppliers': False,
         'can_manage_salespersons': False,
         'can_view_analytics': False,
