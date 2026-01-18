@@ -122,7 +122,7 @@ const INITIAL_PAYMENT_FORM = {
 // ==================== 组件 ====================
 
 export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
-  const [activeTab, setActiveTab] = useState<'ledger' | 'receipts' | 'payments' | 'balance' | 'withdrawals' | 'transfers' | 'pending-receipts' | 'daily-summary'>('ledger');
+  const [activeTab, setActiveTab] = useState<'ledger' | 'receipts' | 'payments' | 'balance' | 'withdrawals' | 'transfers' | 'pending-receipts' | 'daily-summary' | 'supplier-debt'>('ledger');
   
   // 台账数据
   const [ledger, setLedger] = useState<LedgerDay[]>([]);
@@ -196,6 +196,13 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
   
   // 客户列表（用于取料单和转料单）
   const [customers, setCustomers] = useState<Customer[]>([]);
+  
+  // 供应商欠料统计
+  const [supplierDebt, setSupplierDebt] = useState<{
+    summary: { total_inbound_weight: number; total_paid_weight: number; total_debt_weight: number; supplier_count: number };
+    suppliers: Array<{ supplier_id: number; supplier_name: string; supplier_no: string; inbound_weight: number; paid_weight: number; debt_weight: number }>;
+  } | null>(null);
+  const [supplierDebtLoading, setSupplierDebtLoading] = useState(false);
 
   // ==================== API 调用函数 ====================
 
@@ -446,6 +453,24 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
     setTransfersLoading(false);
   }, [userRole]);
 
+  // 加载供应商欠料统计
+  const loadSupplierDebt = useCallback(async () => {
+    setSupplierDebtLoading(true);
+    const data = await apiGet<{
+      success: boolean;
+      summary: { total_inbound_weight: number; total_paid_weight: number; total_debt_weight: number; supplier_count: number };
+      suppliers: Array<{ supplier_id: number; supplier_name: string; supplier_no: string; inbound_weight: number; paid_weight: number; debt_weight: number }>;
+    }>(
+      `/api/suppliers/debt-summary?user_role=${userRole}`,
+      { showErrorToast: false }
+    );
+    
+    if (data?.success) {
+      setSupplierDebt({ summary: data.summary, suppliers: data.suppliers });
+    }
+    setSupplierDebtLoading(false);
+  }, [userRole]);
+
   // 创建取料单
   const createWithdrawal = async () => {
     if (!withdrawalFormData.customer_id || !withdrawalFormData.gold_weight) {
@@ -615,10 +640,11 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
       loadPayments();
       loadBalance();
       loadSuppliers();
+      loadSupplierDebt();
     } else if (userRole === 'settlement') {
       loadReceipts();
     }
-  }, [userRole, loadPendingReceipts, loadPayments, loadBalance, loadSuppliers, loadReceipts, loadCustomers, loadWithdrawals, loadTransfers]);
+  }, [userRole, loadPendingReceipts, loadPayments, loadBalance, loadSuppliers, loadSupplierDebt, loadReceipts, loadCustomers, loadWithdrawals, loadTransfers]);
 
   // 初始化后加载台账（需要等日期设置完成）
   useEffect(() => {
@@ -643,6 +669,8 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
     } else if (activeTab === 'balance') {
       loadBalance();
       loadInitialBalance();
+    } else if (activeTab === 'supplier-debt') {
+      loadSupplierDebt();
     } else if (activeTab === 'withdrawals') {
       loadWithdrawals();
       loadCustomers();
@@ -835,6 +863,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                   {renderTabButton('receipts', '待确认收料')}
                   {renderTabButton('payments', '付料单')}
                   {renderTabButton('withdrawals', '待发取料', withdrawals.filter(w => w.status === 'pending').length)}
+                  {renderTabButton('supplier-debt', '供应商欠料')}
                   {renderTabButton('balance', '金料库存')}
                 </>
               )}
@@ -1395,6 +1424,86 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                   <div className="text-sm text-gray-600 mb-2">当前余额</div>
                   <div className="text-2xl font-bold text-green-600">{balance.current_balance.toFixed(2)} 克</div>
                 </div>
+              </div>
+            ) : renderEmpty()}
+          </div>
+        )}
+
+        {/* 供应商欠料统计 */}
+        {activeTab === 'supplier-debt' && userRole === 'material' && (
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold">供应商欠料统计</h2>
+              <button
+                onClick={() => loadSupplierDebt()}
+                className="px-3 py-1.5 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
+              >
+                刷新
+              </button>
+            </div>
+            
+            {/* 汇总卡片 */}
+            {supplierDebt && (
+              <div className="grid grid-cols-4 gap-4 mb-6">
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <div className="text-sm text-gray-600 mb-1">入库总重量</div>
+                  <div className="text-xl font-bold text-blue-600">{supplierDebt.summary.total_inbound_weight.toFixed(2)} 克</div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-4">
+                  <div className="text-sm text-gray-600 mb-1">已付料总重量</div>
+                  <div className="text-xl font-bold text-green-600">{supplierDebt.summary.total_paid_weight.toFixed(2)} 克</div>
+                </div>
+                <div className="bg-red-50 rounded-lg p-4">
+                  <div className="text-sm text-gray-600 mb-1">欠料总重量</div>
+                  <div className="text-xl font-bold text-red-600">{supplierDebt.summary.total_debt_weight.toFixed(2)} 克</div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="text-sm text-gray-600 mb-1">供应商数量</div>
+                  <div className="text-xl font-bold text-gray-700">{supplierDebt.summary.supplier_count} 家</div>
+                </div>
+              </div>
+            )}
+            
+            {/* 供应商欠料列表 */}
+            {supplierDebtLoading ? renderLoading() : supplierDebt && supplierDebt.suppliers.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-medium text-gray-600">供应商</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-600">入库重量 (克)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-600">已付料 (克)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-600">欠料 (克)</th>
+                      <th className="px-4 py-3 text-center font-medium text-gray-600">状态</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {supplierDebt.suppliers.map((s) => (
+                      <tr key={s.supplier_id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-gray-900">{s.supplier_name}</div>
+                          <div className="text-xs text-gray-500">{s.supplier_no}</div>
+                        </td>
+                        <td className="px-4 py-3 text-right text-blue-600">{s.inbound_weight.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right text-green-600">{s.paid_weight.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right font-semibold">
+                          <span className={s.debt_weight > 0 ? 'text-red-600' : s.debt_weight < 0 ? 'text-green-600' : 'text-gray-600'}>
+                            {s.debt_weight > 0 ? '+' : ''}{s.debt_weight.toFixed(2)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {s.debt_weight > 0 ? (
+                            <span className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-full">欠料</span>
+                          ) : s.debt_weight < 0 ? (
+                            <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">多付</span>
+                          ) : (
+                            <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">结清</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             ) : renderEmpty()}
           </div>

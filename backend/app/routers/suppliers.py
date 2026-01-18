@@ -3,13 +3,13 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from datetime import datetime
 from ..timezone_utils import china_now
 import logging
 
 from ..database import get_db
-from ..models import Supplier
+from ..models import Supplier, InboundDetail, GoldMaterialTransaction
 from ..schemas import SupplierCreate, SupplierResponse
 
 logger = logging.getLogger(__name__)
@@ -205,4 +205,75 @@ async def delete_supplier(
         logger.error(f"删除供应商失败: {e}", exc_info=True)
         db.rollback()
         return {"success": False, "message": f"删除供应商失败: {str(e)}"}
+
+
+@router.get("/debt-summary")
+async def get_supplier_debt_summary(
+    user_role: str = Query(default="material", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    获取供应商欠料统计
+    
+    计算逻辑：
+    - 入库重量：从 InboundDetail 按 supplier_id 汇总
+    - 已付料重量：从 GoldMaterialTransaction (expense 类型，已确认) 按 supplier_id 汇总
+    - 欠料 = 入库重量 - 已付料重量
+    """
+    try:
+        # 获取所有活跃供应商
+        suppliers = db.query(Supplier).filter(Supplier.status == "active").all()
+        
+        result = []
+        total_inbound = 0.0
+        total_paid = 0.0
+        total_debt = 0.0
+        
+        for supplier in suppliers:
+            # 入库重量（按供应商汇总）
+            inbound_weight = db.query(func.sum(InboundDetail.weight)).filter(
+                InboundDetail.supplier_id == supplier.id
+            ).scalar() or 0.0
+            
+            # 已付料重量（expense 类型，已确认状态）
+            paid_weight = db.query(func.sum(GoldMaterialTransaction.gold_weight)).filter(
+                GoldMaterialTransaction.supplier_id == supplier.id,
+                GoldMaterialTransaction.transaction_type == 'expense',
+                GoldMaterialTransaction.status == 'confirmed'
+            ).scalar() or 0.0
+            
+            # 欠料 = 入库 - 已付
+            debt_weight = inbound_weight - paid_weight
+            
+            # 只显示有入库记录的供应商
+            if inbound_weight > 0 or paid_weight > 0:
+                result.append({
+                    "supplier_id": supplier.id,
+                    "supplier_name": supplier.name,
+                    "supplier_no": supplier.supplier_no,
+                    "inbound_weight": round(inbound_weight, 2),
+                    "paid_weight": round(paid_weight, 2),
+                    "debt_weight": round(debt_weight, 2)
+                })
+                
+                total_inbound += inbound_weight
+                total_paid += paid_weight
+                total_debt += debt_weight
+        
+        # 按欠料重量降序排列
+        result.sort(key=lambda x: x["debt_weight"], reverse=True)
+        
+        return {
+            "success": True,
+            "summary": {
+                "total_inbound_weight": round(total_inbound, 2),
+                "total_paid_weight": round(total_paid, 2),
+                "total_debt_weight": round(total_debt, 2),
+                "supplier_count": len(result)
+            },
+            "suppliers": result
+        }
+    except Exception as e:
+        logger.error(f"获取供应商欠料统计失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e), "suppliers": []}
 
