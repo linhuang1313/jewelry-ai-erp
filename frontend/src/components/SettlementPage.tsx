@@ -825,9 +825,18 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                         </button>
                       )}
                       {settlement.status === 'printed' && (
-                        <span className="flex-1 text-center text-sm text-green-600 py-2">
-                          ✓ 已打印
-                        </span>
+                        <>
+                          <span className="text-center text-sm text-green-600 py-2">
+                            ✓ 已打印
+                          </span>
+                          <button
+                            onClick={() => window.open(`${API_ENDPOINTS.API_BASE_URL}/api/settlement/orders/${settlement.id}/download?format=html`, '_blank')}
+                            className="flex items-center justify-center space-x-1 px-3 py-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors text-sm"
+                          >
+                            <Printer className="w-4 h-4" />
+                            <span>打印</span>
+                          </button>
+                        </>
                       )}
                       {/* 下载按钮 - 已确认/已打印时显示 */}
                       {(settlement.status === 'confirmed' || settlement.status === 'printed') && (
