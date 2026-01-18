@@ -183,57 +183,84 @@ async def get_customer_debt_summary(
             query = query.filter(Customer.name.contains(search))
         
         customers = query.all()
+        customer_ids = [c.id for c in customers]
+        customer_names = [c.name for c in customers]
         
-        # 构建欠款数据
+        # ========== 批量查询优化：4次查询代替 N*4 次查询 ==========
+        
+        # 1. 批量查询现金欠款（按 customer_id 聚合）
+        cash_debt_map = {}
+        if customer_ids:
+            cash_results = db.query(
+                AccountReceivable.customer_id,
+                func.sum(AccountReceivable.unpaid_amount).label('total_debt')
+            ).filter(
+                AccountReceivable.customer_id.in_(customer_ids),
+                AccountReceivable.status.in_(["unpaid", "overdue"])
+            ).group_by(AccountReceivable.customer_id).all()
+            
+            for row in cash_results:
+                cash_debt_map[row.customer_id] = float(row.total_debt or 0)
+        
+        # 2. 批量查询金料欠款（获取每个客户最新的交易记录）
+        gold_debt_map = {}
+        if customer_ids:
+            # 使用子查询获取每个客户的最新交易
+            from sqlalchemy import and_
+            subquery = db.query(
+                CustomerTransaction.customer_id,
+                func.max(CustomerTransaction.created_at).label('max_date')
+            ).filter(
+                CustomerTransaction.customer_id.in_(customer_ids),
+                CustomerTransaction.status == "active"
+            ).group_by(CustomerTransaction.customer_id).subquery()
+            
+            latest_txs = db.query(CustomerTransaction).join(
+                subquery,
+                and_(
+                    CustomerTransaction.customer_id == subquery.c.customer_id,
+                    CustomerTransaction.created_at == subquery.c.max_date
+                )
+            ).all()
+            
+            for tx in latest_txs:
+                gold_debt_map[tx.customer_id] = float(tx.gold_due_after or 0)
+        
+        # 3. 批量查询存料余额
+        gold_deposit_map = {}
+        if customer_ids:
+            deposits = db.query(CustomerGoldDeposit).filter(
+                CustomerGoldDeposit.customer_id.in_(customer_ids)
+            ).all()
+            
+            for deposit in deposits:
+                gold_deposit_map[deposit.customer_id] = float(deposit.current_balance or 0)
+        
+        # 4. 批量查询最后交易时间（按客户名称）
+        last_tx_map = {}
+        if customer_names:
+            # 使用子查询获取每个客户名称的最后交易时间
+            last_orders = db.query(
+                SalesOrder.customer_name,
+                func.max(SalesOrder.create_time).label('last_time')
+            ).filter(
+                SalesOrder.customer_name.in_(customer_names)
+            ).group_by(SalesOrder.customer_name).all()
+            
+            for row in last_orders:
+                if row.last_time:
+                    last_tx_map[row.customer_name] = row.last_time.strftime("%Y-%m-%d")
+        
+        # ========== 构建欠款数据 ==========
         debt_list = []
         total_cash_debt = 0.0
         total_gold_debt = 0.0
         
         for customer in customers:
-            # 现金欠款 - 从应收账款表汇总
-            cash_debt = 0.0
-            try:
-                receivables = db.query(AccountReceivable).filter(
-                    AccountReceivable.customer_id == customer.id,
-                    AccountReceivable.status.in_(["unpaid", "overdue"])
-                ).all()
-                cash_debt = sum(r.unpaid_amount or 0 for r in receivables)
-            except Exception as e:
-                logger.warning(f"查询客户 {customer.id} 现金欠款出错: {e}")
-            
-            # 金料欠款 - 从客户往来账获取最新记录
-            gold_debt = 0.0
-            try:
-                latest_tx = db.query(CustomerTransaction).filter(
-                    CustomerTransaction.customer_id == customer.id,
-                    CustomerTransaction.status == "active"
-                ).order_by(desc(CustomerTransaction.created_at)).first()
-                if latest_tx:
-                    gold_debt = latest_tx.gold_due_after or 0.0
-            except Exception as e:
-                logger.warning(f"查询客户 {customer.id} 金料欠款出错: {e}")
-            
-            # 存料余额
-            gold_deposit = 0.0
-            try:
-                deposit = db.query(CustomerGoldDeposit).filter(
-                    CustomerGoldDeposit.customer_id == customer.id
-                ).first()
-                if deposit:
-                    gold_deposit = deposit.current_balance or 0.0
-            except Exception as e:
-                logger.warning(f"查询客户 {customer.id} 存料余额出错: {e}")
-            
-            # 最后交易时间
-            last_transaction_date = None
-            try:
-                last_order = db.query(SalesOrder).filter(
-                    SalesOrder.customer_name == customer.name
-                ).order_by(desc(SalesOrder.create_time)).first()
-                if last_order and last_order.create_time:
-                    last_transaction_date = last_order.create_time.strftime("%Y-%m-%d")
-            except Exception as e:
-                logger.warning(f"查询客户 {customer.id} 最后交易时间出错: {e}")
+            cash_debt = cash_debt_map.get(customer.id, 0.0)
+            gold_debt = gold_debt_map.get(customer.id, 0.0)
+            gold_deposit = gold_deposit_map.get(customer.id, 0.0)
+            last_transaction_date = last_tx_map.get(customer.name)
             
             # 如果隐藏无欠款客户
             if hide_zero and cash_debt <= 0 and gold_debt <= 0:
