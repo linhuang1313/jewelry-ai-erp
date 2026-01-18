@@ -353,21 +353,15 @@ export async function generateReconciliationStatement(
   endDate: Date
 ): Promise<ReconciliationGenerateResponse> {
   try {
-    const params = new URLSearchParams({
-      customer_id: customerId.toString(),
-      start_date: startDate.toISOString().split('T')[0],
-      end_date: endDate.toISOString().split('T')[0],
-    });
-    
-    const response = await fetch(`${API_BASE_URL}/api/finance/statement?${params}`, {
+    const response = await fetch(`${API_BASE_URL}/api/finance/statement`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         customer_id: customerId,
-        start_date: startDate.toISOString().split('T')[0],
-        end_date: endDate.toISOString().split('T')[0],
+        period_start_date: startDate.toISOString().split('T')[0],
+        period_end_date: endDate.toISOString().split('T')[0],
       }),
     });
     
