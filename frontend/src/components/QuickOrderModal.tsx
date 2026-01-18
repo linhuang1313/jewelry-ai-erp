@@ -275,8 +275,22 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
       return;
     }
 
+    // 提交前检查：有件工费但没件数的项
+    const itemsWithInvalidPieceCost = items.filter(
+      item => item.piece_labor_cost && !item.piece_count && item.product_name.trim()
+    );
+
+    if (itemsWithInvalidPieceCost.length > 0) {
+      const productNames = itemsWithInvalidPieceCost.map(i => i.product_name || '未命名商品').join('、');
+      const confirmed = window.confirm(
+        `以下商品输入了件工费但未输入件数，件工费将不会被计算：\n${productNames}\n\n是否继续提交？`
+      );
+      if (!confirmed) return;
+    }
+
     setSubmitting(true);
     try {
+      // 构建提交数据时，无件数的项自动清除件工费
       const validItems = items
         .filter(item => item.product_name.trim() && item.weight && item.labor_cost)
         .map(item => ({
@@ -284,7 +298,10 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
           weight: parseFloat(item.weight),
           labor_cost: parseFloat(item.labor_cost),
           piece_count: item.piece_count ? parseInt(item.piece_count) : null,
-          piece_labor_cost: item.piece_labor_cost ? parseFloat(item.piece_labor_cost) : null
+          // 只有当件数存在时，件工费才有效
+          piece_labor_cost: (item.piece_count && item.piece_labor_cost) 
+            ? parseFloat(item.piece_labor_cost) 
+            : null
         }));
 
       const response = await fetch(`${API_BASE_URL}/api/sales/orders`, {
