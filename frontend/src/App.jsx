@@ -111,6 +111,8 @@ function App() {
   
   // 待处理转移单数量（用于分仓库存按钮badge）
   const [pendingTransferCount, setPendingTransferCount] = useState(0)
+  // 待结算销售单数量（用于结算管理按钮badge）
+  const [pendingSalesCount, setPendingSalesCount] = useState(0)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -257,11 +259,33 @@ function App() {
     }
   }
 
-  // 角色变化时加载待处理转移单数量
+  // 加载待结算销售单数量（结算专员需要看到柜台开的销售单）
+  const loadPendingSalesCount = async () => {
+    // 只有结算专员和管理层需要看到待结算销售单数量
+    if (!['settlement', 'manager'].includes(userRole)) {
+      setPendingSalesCount(0)
+      return
+    }
+    try {
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/settlement/pending-sales`)
+      if (response.ok) {
+        const sales = await response.json()
+        setPendingSalesCount(sales.length)
+      }
+    } catch (error) {
+      console.error('加载待结算销售单数量失败:', error)
+    }
+  }
+
+  // 角色变化时加载待处理数量
   useEffect(() => {
     loadPendingTransferCount()
+    loadPendingSalesCount()
     // 每60秒刷新一次
-    const interval = setInterval(loadPendingTransferCount, 60000)
+    const interval = setInterval(() => {
+      loadPendingTransferCount()
+      loadPendingSalesCount()
+    }, 60000)
     return () => clearInterval(interval)
   }, [userRole])
 
@@ -1847,12 +1871,20 @@ function App() {
                   {hasPermission(userRole, 'canCreateSettlement') && (
                     <button
                       onClick={() => setCurrentPage('settlement')}
-                      className="flex items-center space-x-2 px-4 py-2 bg-cyan-500 text-white rounded-xl 
+                      className="relative flex items-center space-x-2 px-4 py-2 bg-cyan-500 text-white rounded-xl 
                                  hover:bg-cyan-600 transition-all duration-200 font-medium text-[15px] 
                                  shadow-sm hover:shadow-md"
                     >
                       <Calculator className="w-4 h-4" />
                       <span>结算管理</span>
+                      {/* 待结算销售单数量badge */}
+                      {pendingSalesCount > 0 && (
+                        <span className="absolute -top-2 -right-2 min-w-[20px] h-5 flex items-center justify-center 
+                                         bg-red-500 text-white text-xs font-bold rounded-full px-1.5 
+                                         shadow-lg animate-pulse">
+                          {pendingSalesCount > 99 ? '99+' : pendingSalesCount}
+                        </span>
+                      )}
                     </button>
                   )}
                   {/* 快捷开单按钮 - 使用权限检查 */}
