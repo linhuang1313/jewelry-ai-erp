@@ -429,6 +429,21 @@ async def generate_statement(
         )
 
 
+@router.options("/statement/excel")
+async def export_statement_excel_options():
+    """处理CORS预检请求"""
+    from fastapi.responses import Response
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Max-Age": "3600",
+        }
+    )
+
+
 @router.post("/statement/excel")
 async def export_statement_excel(
     customer_id: int = Query(..., description="客户ID"),
@@ -642,7 +657,13 @@ async def export_statement_excel(
         return StreamingResponse(
             output,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"}
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{filename}",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Expose-Headers": "Content-Disposition",
+            }
         )
         
     except Exception as e:
