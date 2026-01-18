@@ -1341,8 +1341,17 @@ async def get_gold_ledger(
     except ValueError:
         raise HTTPException(status_code=400, detail="日期格式错误，请使用 YYYY-MM-DD 格式")
     
-    # 查询所有已确认的金料流转记录
-    transactions = db.query(GoldMaterialTransaction).filter(
+    # ========== 收料记录（从新系统 GoldReceipt 读取）==========
+    from ..models.finance import GoldReceipt
+    
+    gold_receipts = db.query(GoldReceipt).filter(
+        func.date(GoldReceipt.created_at) >= start_dt,
+        func.date(GoldReceipt.created_at) <= end_dt
+    ).order_by(GoldReceipt.created_at).all()
+    
+    # ========== 付料记录（从 GoldMaterialTransaction 读取）==========
+    expense_transactions = db.query(GoldMaterialTransaction).filter(
+        GoldMaterialTransaction.transaction_type == 'expense',
         GoldMaterialTransaction.status == 'confirmed',
         func.date(GoldMaterialTransaction.confirmed_at) >= start_dt,
         func.date(GoldMaterialTransaction.confirmed_at) <= end_dt
@@ -1352,41 +1361,64 @@ async def get_gold_ledger(
     from collections import defaultdict
     ledger_by_date: Dict[str, Dict] = defaultdict(lambda: {
         "date": None,
-        "income": 0.0,  # 收入
-        "expense": 0.0,  # 支出
+        "income": 0.0,  # 收入（收料）
+        "expense": 0.0,  # 支出（付料）
         "net": 0.0,  # 净额
         "transactions": []
     })
     
-    for t in transactions:
+    # 处理收料记录（收入）
+    for r in gold_receipts:
+        if not r.created_at:
+            continue
+        
+        date_str = r.created_at.date().strftime('%Y-%m-%d')
+        ledger_by_date[date_str]["date"] = date_str
+        ledger_by_date[date_str]["income"] += r.gold_weight or 0
+        
+        # 获取客户名称
+        customer_name = db.query(Customer.name).filter(Customer.id == r.customer_id).scalar() or "未知客户"
+        
+        ledger_by_date[date_str]["transactions"].append({
+            "id": r.id,
+            "transaction_no": r.receipt_no,
+            "transaction_type": "income",
+            "gold_weight": r.gold_weight,
+            "customer_name": customer_name,
+            "supplier_name": None,
+            "confirmed_at": r.created_at.isoformat() if r.created_at else None,
+            "source": "gold_receipt"  # 标记来源
+        })
+    
+    # 处理付料记录（支出）
+    for t in expense_transactions:
         if not t.confirmed_at:
             continue
         
         date_str = t.confirmed_at.date().strftime('%Y-%m-%d')
         ledger_by_date[date_str]["date"] = date_str
-        
-        if t.transaction_type == 'income':
-            ledger_by_date[date_str]["income"] += t.gold_weight
-        elif t.transaction_type == 'expense':
-            ledger_by_date[date_str]["expense"] += t.gold_weight
-        
-        ledger_by_date[date_str]["net"] = (
-            ledger_by_date[date_str]["income"] - ledger_by_date[date_str]["expense"]
-        )
+        ledger_by_date[date_str]["expense"] += t.gold_weight or 0
         
         ledger_by_date[date_str]["transactions"].append({
             "id": t.id,
             "transaction_no": t.transaction_no,
-            "transaction_type": t.transaction_type,
+            "transaction_type": "expense",
             "gold_weight": t.gold_weight,
             "customer_name": t.customer_name,
             "supplier_name": t.supplier_name,
-            "confirmed_at": t.confirmed_at.isoformat() if t.confirmed_at else None
+            "confirmed_at": t.confirmed_at.isoformat() if t.confirmed_at else None,
+            "source": "gold_material_transaction"
         })
+    
+    # 计算每日净额
+    for date_str in ledger_by_date:
+        ledger_by_date[date_str]["net"] = (
+            ledger_by_date[date_str]["income"] - ledger_by_date[date_str]["expense"]
+        )
     
     # 转换为列表并排序
     ledger_list = sorted(
-        ledger_by_date.values(),
+        [v for v in ledger_by_date.values() if v["date"]],
         key=lambda x: x["date"],
         reverse=True
     )
@@ -2848,6 +2880,14 @@ async def get_gold_daily_summary(
         GoldReceipt.customer_id, Customer.name
     ).all()
     
+    # 收料每笔明细（新增）
+    receipt_details = db.query(GoldReceipt).join(
+        Customer, GoldReceipt.customer_id == Customer.id
+    ).filter(
+        func.date(GoldReceipt.created_at) >= start_date,
+        func.date(GoldReceipt.created_at) <= end_date
+    ).order_by(GoldReceipt.created_at.desc()).all()
+    
     # ========== 付料统计（使用 GoldMaterialTransaction）==========
     payment_stats = db.query(
         func.count(GoldMaterialTransaction.id).label("count"),
@@ -2893,6 +2933,20 @@ async def get_gold_daily_summary(
                     "total_weight": float(r.total_weight or 0)
                 }
                 for r in receipt_by_customer
+            ],
+            "receipts": [
+                {
+                    "id": r.id,
+                    "receipt_no": r.receipt_no,
+                    "customer_id": r.customer_id,
+                    "customer_name": db.query(Customer.name).filter(Customer.id == r.customer_id).scalar() or "未知",
+                    "gold_weight": float(r.gold_weight or 0),
+                    "gold_fineness": r.gold_fineness,
+                    "status": r.status,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                    "remark": r.remark
+                }
+                for r in receipt_details
             ]
         },
         "payment_summary": {
