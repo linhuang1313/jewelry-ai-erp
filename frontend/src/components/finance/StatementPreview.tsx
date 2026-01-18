@@ -223,7 +223,7 @@ export const StatementPreview: React.FC<StatementPreviewProps> = ({ data }) => {
             day: '2-digit',
             hour: '2-digit',
             minute: '2-digit',
-          }).format(data.generatedAt)}
+          }).format(typeof data.generatedAt === 'string' ? new Date(data.generatedAt) : data.generatedAt)}
         </p>
       </div>
     </div>

@@ -23,7 +23,7 @@ export interface PaymentSubmitResponse {
 
 export interface StatementData {
   customer: { id: number; name: string; phone?: string; customerNo: string };
-  period: { start: Date; end: Date };
+  period: { start: Date | string; end: Date | string };
   summary: {
     openingBalance: number;
     totalSales: number;
@@ -31,18 +31,18 @@ export interface StatementData {
     closingBalance: number;
   };
   salesDetails: Array<{
-    date: Date;
+    date: Date | string;
     orderNo: string;
     amount: number;
     salesperson?: string;
   }>;
   paymentDetails: Array<{
-    date: Date;
+    date: Date | string;
     amount: number;
     method: string;
     relatedOrderNo?: string;
   }>;
-  generatedAt: Date;
+  generatedAt: Date | string;
   statementNo: string;
 }
 
@@ -367,10 +367,45 @@ export async function generateReconciliationStatement(
     
     const result = await response.json();
     
-    if (result.success) {
+    if (result.success && result.data) {
+      // 将后端返回的数据转换为前端期望的格式
+      const rawData = result.data;
+      const transformedData: StatementData = {
+        statementNo: rawData.statement_no,
+        customer: {
+          id: rawData.customer?.id,
+          name: rawData.customer?.name,
+          phone: rawData.customer?.phone,
+          customerNo: rawData.customer?.customer_no,
+        },
+        period: {
+          start: rawData.period?.start,
+          end: rawData.period?.end,
+        },
+        summary: {
+          openingBalance: rawData.summary?.openingBalance ?? 0,
+          totalSales: rawData.summary?.totalSales ?? 0,
+          totalPayments: rawData.summary?.totalPayments ?? 0,
+          closingBalance: rawData.summary?.closingBalance ?? 0,
+        },
+        salesDetails: (rawData.salesDetails || []).map((item: any) => ({
+          date: item.sales_date || item.date,
+          orderNo: item.sales_order_no || item.orderNo,
+          amount: item.sales_amount || item.amount || 0,
+          salesperson: item.salesperson,
+        })),
+        paymentDetails: (rawData.paymentDetails || []).map((item: any) => ({
+          date: item.payment_date || item.date,
+          amount: item.payment_amount || item.amount || 0,
+          method: item.payment_method || item.method || '',
+          relatedOrderNo: item.related_order_no || item.relatedOrderNo,
+        })),
+        generatedAt: rawData.generatedAt,
+      };
+      
       return {
         success: true,
-        data: result.data,
+        data: transformedData,
         message: '对账单生成成功',
       };
     } else {
