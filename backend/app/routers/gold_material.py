@@ -126,11 +126,21 @@ def build_transaction_response(transaction: GoldMaterialTransaction, db: Session
 
 def get_gold_balance_internal(db: Session) -> dict:
     """内部函数：获取金料库存余额"""
-    # 计算总收入（已确认的收料单）
-    total_income = db.query(func.sum(GoldMaterialTransaction.gold_weight)).filter(
+    from ..models.finance import GoldReceipt
+    
+    # 计算总收入 - 来自两个来源：
+    # 1. 旧系统 GoldMaterialTransaction 中的 income 记录（如期初金料）
+    old_income = db.query(func.sum(GoldMaterialTransaction.gold_weight)).filter(
         GoldMaterialTransaction.transaction_type == 'income',
         GoldMaterialTransaction.status == 'confirmed'
     ).scalar() or 0.0
+    
+    # 2. 新系统 GoldReceipt 中的收料记录
+    new_income = db.query(func.sum(GoldReceipt.gold_weight)).filter(
+        GoldReceipt.status == 'received'
+    ).scalar() or 0.0
+    
+    total_income = old_income + new_income
     
     # 计算总支出（已确认的付料单）
     total_expense = db.query(func.sum(GoldMaterialTransaction.gold_weight)).filter(
