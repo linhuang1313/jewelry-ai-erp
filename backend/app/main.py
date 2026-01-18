@@ -3324,8 +3324,8 @@ async def handle_payment_registration(ai_response, db: Session) -> Dict[str, Any
                 "credit_start_date": r.credit_start_date.strftime("%Y-%m-%d") if r.credit_start_date else None
             })
         
-        # 计算收款后余额
-        balance_after = max(0, total_debt - amount)
+        # 计算收款后余额（可以是负数，表示预收款/客户有余额）
+        balance_after = total_debt - amount
         
         return {
             "success": True,

@@ -2322,7 +2322,12 @@ function App() {
                           </div>
                           <div className="border-t border-gray-200 pt-2 flex justify-between text-sm">
                             <span className="text-gray-600">收款后欠款</span>
-                            <span className="font-medium text-green-600">¥{pd.balance_after?.toFixed(2)}</span>
+                            <span className={`font-medium ${(pd.balance_after || 0) >= 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                              {(pd.balance_after || 0) >= 0 
+                                ? `¥${pd.balance_after?.toFixed(2)}` 
+                                : `-¥${Math.abs(pd.balance_after || 0).toFixed(2)} (预收款)`
+                              }
+                            </span>
                           </div>
                         </div>
                         
@@ -2346,9 +2351,12 @@ function App() {
                                 )
                                 if (result.success) {
                                   // 更新消息为成功状态
+                                  const balanceText = (pd.balance_after || 0) >= 0 
+                                    ? `¥${pd.balance_after.toFixed(2)}` 
+                                    : `-¥${Math.abs(pd.balance_after || 0).toFixed(2)} (预收款)`
                                   setMessages(prev => prev.map(m => 
                                     m.id === msg.id 
-                                      ? { ...m, type: 'system', content: `✅ 收款登记成功！\n\n客户：${pd.customer.name}\n收款金额：¥${pd.payment_amount.toFixed(2)}\n收款方式：${pd.payment_method}\n收款后欠款：¥${pd.balance_after.toFixed(2)}` }
+                                      ? { ...m, type: 'system', content: `✅ 收款登记成功！\n\n客户：${pd.customer.name}\n收款金额：¥${pd.payment_amount.toFixed(2)}\n收款方式：${pd.payment_method}\n收款后欠款：${balanceText}` }
                                       : m
                                   ))
                                 } else {
