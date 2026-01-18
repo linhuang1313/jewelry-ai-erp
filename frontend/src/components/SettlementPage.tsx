@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '../config';
 import {
   FileText, Check, Printer, Clock, AlertCircle, ChevronRight, 
-  RefreshCw, X, DollarSign, Package, User, Calendar
+  RefreshCw, X, DollarSign, Package, User, Calendar, Download
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -828,6 +828,16 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                         <span className="flex-1 text-center text-sm text-green-600 py-2">
                           ✓ 已打印
                         </span>
+                      )}
+                      {/* 下载按钮 - 已确认/已打印时显示 */}
+                      {(settlement.status === 'confirmed' || settlement.status === 'printed') && (
+                        <button
+                          onClick={() => window.open(`${API_ENDPOINTS.API_BASE_URL}/api/settlement/orders/${settlement.id}/download?format=pdf`, '_blank')}
+                          className="flex items-center justify-center space-x-1 px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors text-sm"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>下载</span>
+                        </button>
                       )}
                       {/* 开具收料单按钮 - 只在支付方式包含金料且已确认/已打印时显示 */}
                       {needsGoldReceipt(settlement) && (settlement.status === 'confirmed' || settlement.status === 'printed') && (
