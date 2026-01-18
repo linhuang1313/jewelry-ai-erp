@@ -2467,7 +2467,15 @@ async def confirm_gold_receipt(
     received_by: str = "料部专员",
     db: Session = Depends(get_db)
 ):
-    """料部确认接收金料"""
+    """
+    料部确认接收金料
+    
+    确认时会自动：
+    1. 查询该客户的未结清欠料（结料方式的结算单）
+    2. 如有欠料，自动抵扣
+    3. 剩余部分存入客户存料余额
+    4. 创建往来账记录
+    """
     receipt = db.query(GoldReceipt).filter(GoldReceipt.id == receipt_id).first()
     
     if not receipt:
@@ -2476,25 +2484,112 @@ async def confirm_gold_receipt(
     if receipt.status == "received":
         raise HTTPException(status_code=400, detail="该收料单已接收")
     
-    # 更新状态
+    customer_id = receipt.customer_id
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    customer_name = customer.name if customer else "未知客户"
+    gold_weight = receipt.gold_weight
+    
+    # ========== 查询客户未结清的金料欠款 ==========
+    # 从结算单中查询：payment_method = 'physical_gold' 且未完全收料的结算单
+    pending_settlements = db.query(SettlementOrder).join(SalesOrder).filter(
+        SalesOrder.customer_id == customer_id,
+        SettlementOrder.payment_method == 'physical_gold',
+        SettlementOrder.status.in_(['pending', 'confirmed', 'printed'])
+    ).all()
+    
+    # 计算总欠料
+    total_due = 0.0
+    total_received = 0.0
+    for settlement in pending_settlements:
+        total_due += settlement.physical_gold_weight or 0.0
+        # 查询该结算单已收到的金料
+        received = db.query(func.sum(GoldReceipt.gold_weight)).filter(
+            GoldReceipt.settlement_id == settlement.id,
+            GoldReceipt.status == 'received',
+            GoldReceipt.id != receipt_id  # 排除当前这条
+        ).scalar() or 0.0
+        total_received += received
+    
+    remaining_due = max(0.0, total_due - total_received)  # 客户还欠我们多少料
+    
+    # ========== 计算抵扣和存料 ==========
+    if gold_weight <= remaining_due:
+        # 本次来料 <= 欠料，全部用于抵扣
+        deduct_amount = gold_weight
+        deposit_amount = 0.0
+    else:
+        # 本次来料 > 欠料，部分抵扣，部分存料
+        deduct_amount = remaining_due
+        deposit_amount = gold_weight - remaining_due
+    
+    new_remaining_due = max(0.0, remaining_due - gold_weight)
+    
+    # ========== 更新状态 ==========
     receipt.status = "received"
     receipt.received_by = received_by
     receipt.received_at = china_now()
     
+    # ========== 创建客户往来账记录 ==========
+    remark_parts = [f"收料单：{receipt.receipt_no}"]
+    if deduct_amount > 0:
+        remark_parts.append(f"抵扣欠料：{deduct_amount:.2f}克")
+    if deposit_amount > 0:
+        remark_parts.append(f"存入存料：{deposit_amount:.2f}克")
+    
+    customer_tx = CustomerTransaction(
+        customer_id=customer_id,
+        customer_name=customer_name,
+        transaction_type='gold_receipt',
+        gold_weight=gold_weight,
+        gold_due_before=remaining_due,
+        gold_due_after=new_remaining_due,
+        status='active',
+        remark="，".join(remark_parts)
+    )
+    db.add(customer_tx)
+    
+    # ========== 更新存料余额（如果有剩余）==========
+    if deposit_amount > 0:
+        deposit = get_or_create_customer_deposit(customer_id, customer_name, db)
+        balance_before = deposit.current_balance
+        deposit.current_balance += deposit_amount
+        deposit.total_deposited += deposit_amount
+        deposit.last_transaction_at = china_now()
+        
+        # 创建存料交易记录
+        deposit_tx = CustomerGoldDepositTransaction(
+            customer_id=customer_id,
+            customer_name=customer_name,
+            transaction_type='deposit',
+            amount=deposit_amount,
+            balance_before=balance_before,
+            balance_after=deposit.current_balance,
+            created_by=received_by,
+            remark=f"收料单：{receipt.receipt_no}，来料存入"
+        )
+        db.add(deposit_tx)
+        
+        logger.info(f"客户存料更新: 客户={customer_name}, 存入={deposit_amount:.2f}克, 新余额={deposit.current_balance:.2f}克")
+    
     db.commit()
     db.refresh(receipt)
     
-    logger.info(f"收料单已接收: {receipt.receipt_no}, 接收人={received_by}")
+    logger.info(f"收料单已接收: {receipt.receipt_no}, 接收人={received_by}, "
+                f"来料={gold_weight}克, 抵扣欠料={deduct_amount:.2f}克, 存入存料={deposit_amount:.2f}克")
     
     return {
         "success": True,
-        "message": "收料确认成功",
+        "message": f"收料确认成功！抵扣欠料 {deduct_amount:.2f} 克" + (f"，存入存料 {deposit_amount:.2f} 克" if deposit_amount > 0 else ""),
         "data": {
             "id": receipt.id,
             "receipt_no": receipt.receipt_no,
             "status": receipt.status,
             "received_by": receipt.received_by,
-            "received_at": receipt.received_at.isoformat() if receipt.received_at else None
+            "received_at": receipt.received_at.isoformat() if receipt.received_at else None,
+            "gold_weight": gold_weight,
+            "deduct_amount": round(deduct_amount, 2),
+            "deposit_amount": round(deposit_amount, 2),
+            "remaining_due": round(new_remaining_due, 2)
         }
     }
 
@@ -2973,4 +3068,110 @@ async def get_gold_daily_summary(
             ]
         }
     }
+
+
+# ==================== 数据修复：同步 GoldReceipt 到往来账 ====================
+
+@router.post("/fix-receipt-transactions")
+async def fix_receipt_transactions(
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    修复已确认的 GoldReceipt 数据：为缺失往来账记录的收料单补充记录
+    
+    - 查询所有 status='received' 但没有对应 CustomerTransaction 的 GoldReceipt
+    - 为每条补充 CustomerTransaction 和 CustomerGoldDeposit 记录
+    """
+    if user_role != 'manager':
+        raise HTTPException(status_code=403, detail="只有管理员可以执行数据修复")
+    
+    try:
+        # 查询所有已接收的 GoldReceipt
+        received_receipts = db.query(GoldReceipt).filter(
+            GoldReceipt.status == 'received'
+        ).all()
+        
+        fixed_count = 0
+        skipped_count = 0
+        results = []
+        
+        for receipt in received_receipts:
+            # 检查是否已有对应的 CustomerTransaction
+            existing_tx = db.query(CustomerTransaction).filter(
+                CustomerTransaction.remark.contains(receipt.receipt_no)
+            ).first()
+            
+            if existing_tx:
+                skipped_count += 1
+                continue
+            
+            customer_id = receipt.customer_id
+            customer = db.query(Customer).filter(Customer.id == customer_id).first()
+            customer_name = customer.name if customer else "未知客户"
+            gold_weight = receipt.gold_weight
+            
+            # 查询客户当时的欠料情况（简化处理：全部存入存料）
+            # 因为历史欠料状态难以准确还原，这里将所有来料作为存料处理
+            deposit_amount = gold_weight
+            
+            # 创建往来账记录
+            customer_tx = CustomerTransaction(
+                customer_id=customer_id,
+                customer_name=customer_name,
+                transaction_type='gold_receipt',
+                gold_weight=gold_weight,
+                gold_due_before=0,
+                gold_due_after=0,
+                status='active',
+                remark=f"收料单：{receipt.receipt_no}（数据修复），存入存料：{deposit_amount:.2f}克",
+                created_at=receipt.received_at or receipt.created_at
+            )
+            db.add(customer_tx)
+            
+            # 更新存料余额
+            deposit = get_or_create_customer_deposit(customer_id, customer_name, db)
+            balance_before = deposit.current_balance
+            deposit.current_balance += deposit_amount
+            deposit.total_deposited += deposit_amount
+            
+            # 创建存料交易记录
+            deposit_tx = CustomerGoldDepositTransaction(
+                customer_id=customer_id,
+                customer_name=customer_name,
+                transaction_type='deposit',
+                amount=deposit_amount,
+                balance_before=balance_before,
+                balance_after=deposit.current_balance,
+                created_by="系统修复",
+                remark=f"收料单：{receipt.receipt_no}（数据修复）",
+                created_at=receipt.received_at or receipt.created_at
+            )
+            db.add(deposit_tx)
+            
+            fixed_count += 1
+            results.append({
+                "receipt_no": receipt.receipt_no,
+                "customer_name": customer_name,
+                "gold_weight": gold_weight,
+                "action": "存入存料"
+            })
+            
+            logger.info(f"数据修复: 收料单 {receipt.receipt_no}, 客户={customer_name}, "
+                       f"金料={gold_weight}克 存入存料")
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": f"数据修复完成：修复 {fixed_count} 条，跳过 {skipped_count} 条（已有记录）",
+            "fixed_count": fixed_count,
+            "skipped_count": skipped_count,
+            "details": results
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"数据修复失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"数据修复失败: {str(e)}")
 
