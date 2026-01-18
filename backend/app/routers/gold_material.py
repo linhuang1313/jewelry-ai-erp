@@ -2804,7 +2804,6 @@ async def get_gold_daily_summary(
     """
     from datetime import timedelta
     from sqlalchemy import func, cast, Date
-    from .finance import GoldReceipt
     
     now = china_now()
     today = now.date()
