@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Download, Send, Printer, User, Loader2, X, Copy } from 'lucide-react';
+import { FileText, Download, Send, Printer, User, Loader2, X, Copy, FileSpreadsheet } from 'lucide-react';
 import { CustomerReference } from '../../types/finance';
 import { generateReconciliationStatement, StatementData } from '../../services/financeService';
 import { toast } from 'react-hot-toast';
@@ -86,6 +86,62 @@ export const ReconciliationGenerator: React.FC<ReconciliationGeneratorProps> = (
     } catch (error) {
       console.error('PDF导出失败:', error);
       toast.error('PDF导出失败，请重试');
+    }
+  };
+
+  // 导出Excel
+  const handleExportExcel = async () => {
+    if (!selectedCustomerId) return;
+    
+    let startDate: Date;
+    let endDate: Date;
+    const now = new Date();
+
+    if (periodType === 'this_month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    } else if (periodType === 'last_month') {
+      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      endDate = new Date(now.getFullYear(), now.getMonth(), 0);
+    } else {
+      if (!customStartDate || !customEndDate) {
+        toast.error('请选择自定义日期范围');
+        return;
+      }
+      startDate = new Date(customStartDate);
+      endDate = new Date(customEndDate);
+    }
+    
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+      const params = new URLSearchParams({
+        customer_id: selectedCustomerId.toString(),
+        start_date: startDate.toISOString().split('T')[0],
+        end_date: endDate.toISOString().split('T')[0],
+      });
+      
+      const response = await fetch(`${API_BASE_URL}/api/finance/statement/excel?${params}`, {
+        method: 'POST',
+      });
+      
+      if (!response.ok) {
+        throw new Error('导出失败');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `客户往来账_${selectedCustomer?.name || ''}_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast.success('Excel导出成功');
+    } catch (error) {
+      console.error('Excel导出失败:', error);
+      toast.error('Excel导出失败，请重试');
     }
   };
 
@@ -269,6 +325,13 @@ export const ReconciliationGenerator: React.FC<ReconciliationGeneratorProps> = (
               >
                 <Download className="w-4 h-4" />
                 <span>导出PDF</span>
+              </button>
+              <button
+                onClick={handleExportExcel}
+                className="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>导出Excel</span>
               </button>
               <button
                 onClick={handleSendToCustomer}

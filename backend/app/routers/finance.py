@@ -429,6 +429,227 @@ async def generate_statement(
         )
 
 
+@router.post("/statement/excel")
+async def export_statement_excel(
+    customer_id: int = Query(..., description="客户ID"),
+    start_date: str = Query(..., description="开始日期 YYYY-MM-DD"),
+    end_date: str = Query(..., description="结束日期 YYYY-MM-DD"),
+    db: Session = Depends(get_db)
+):
+    """
+    导出对账单为 Excel 文件
+    """
+    from fastapi.responses import StreamingResponse
+    from io import BytesIO
+    from datetime import datetime
+    
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+        from openpyxl.utils import get_column_letter
+    except ImportError:
+        return ApiResponse(success=False, error="服务器未安装 openpyxl 库")
+    
+    try:
+        from ..models import Customer, SalesOrder, SettlementOrder
+        from ..models.finance import GoldReceipt, PaymentRecord
+        
+        # 验证客户
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        if not customer:
+            return ApiResponse(success=False, error="客户不存在")
+        
+        # 解析日期
+        period_start = datetime.strptime(start_date, "%Y-%m-%d").date()
+        period_end = datetime.strptime(end_date, "%Y-%m-%d").date()
+        
+        # ========== 获取往来明细 ==========
+        transactions = []
+        
+        # 1. 销售结算记录
+        settlements = db.query(SettlementOrder).join(SalesOrder).filter(
+            SalesOrder.customer_id == customer_id,
+            SettlementOrder.status.in_(['confirmed', 'printed']),
+            SettlementOrder.created_at >= datetime.combine(period_start, datetime.min.time()),
+            SettlementOrder.created_at <= datetime.combine(period_end, datetime.max.time())
+        ).all()
+        
+        for s in settlements:
+            gold_amount = 0.0
+            cash_amount = 0.0
+            if s.payment_method == 'physical_gold':
+                gold_amount = s.physical_gold_weight or 0.0
+            elif s.payment_method == 'cash_price':
+                cash_amount = s.total_amount or 0.0
+            elif s.payment_method == 'mixed':
+                gold_amount = s.gold_payment_weight or 0.0
+                cash_amount = s.cash_payment_weight or 0.0
+            
+            remark_parts = []
+            if s.sales_order and s.sales_order.salesperson:
+                remark_parts.append(s.sales_order.salesperson)
+            if s.sales_order and s.sales_order.store_code:
+                remark_parts.append(s.sales_order.store_code)
+            
+            transactions.append({
+                "date": s.created_at.strftime("%Y-%m-%d") if s.created_at else "",
+                "type": "销售结算",
+                "order_no": s.settlement_no,
+                "gold_amount": round(gold_amount, 3),
+                "cash_amount": round(cash_amount, 2),
+                "remark": ' '.join(remark_parts)
+            })
+        
+        # 2. 客户来料记录
+        receipts = db.query(GoldReceipt).filter(
+            GoldReceipt.customer_id == customer_id,
+            GoldReceipt.status == 'received',
+            GoldReceipt.created_at >= datetime.combine(period_start, datetime.min.time()),
+            GoldReceipt.created_at <= datetime.combine(period_end, datetime.max.time())
+        ).all()
+        
+        for r in receipts:
+            transactions.append({
+                "date": r.received_at.strftime("%Y-%m-%d") if r.received_at else (r.created_at.strftime("%Y-%m-%d") if r.created_at else ""),
+                "type": "客户来料",
+                "order_no": r.receipt_no or "",
+                "gold_amount": round(-(r.gold_weight or 0), 3),
+                "cash_amount": 0.0,
+                "remark": r.gold_fineness or ""
+            })
+        
+        # 3. 客户来款记录
+        payments = db.query(PaymentRecord).filter(
+            PaymentRecord.customer_id == customer_id,
+            PaymentRecord.payment_date >= period_start,
+            PaymentRecord.payment_date <= period_end
+        ).all()
+        
+        for p in payments:
+            payment_method_label = {
+                'bank_transfer': '银行转账',
+                'cash': '现金',
+                'wechat': '微信',
+                'alipay': '支付宝',
+                'card': '刷卡'
+            }.get(p.payment_method, p.payment_method or "")
+            
+            transactions.append({
+                "date": p.payment_date.strftime("%Y-%m-%d") if p.payment_date else "",
+                "type": "客户来款",
+                "order_no": p.payment_no or f"SK{p.id}",
+                "gold_amount": 0.0,
+                "cash_amount": round(-(p.amount or 0), 2),
+                "remark": payment_method_label
+            })
+        
+        # 按日期排序
+        transactions.sort(key=lambda x: x.get("date") or "0000-00-00")
+        
+        # 计算合计
+        total_gold = sum(t["gold_amount"] for t in transactions)
+        total_cash = sum(t["cash_amount"] for t in transactions)
+        
+        # ========== 创建 Excel ==========
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "客户往来账明细表"
+        
+        # 样式
+        header_font = Font(bold=True, size=16, color="006400")
+        title_font = Font(bold=True, size=11)
+        header_fill = PatternFill(start_color="E0E0E0", end_color="E0E0E0", fill_type="solid")
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        center_align = Alignment(horizontal='center', vertical='center')
+        right_align = Alignment(horizontal='right', vertical='center')
+        
+        # 标题
+        ws.merge_cells('A1:G1')
+        ws['A1'] = "客户往来账明细表"
+        ws['A1'].font = header_font
+        ws['A1'].alignment = center_align
+        
+        # 信息行
+        ws['A3'] = f"统计日期：{start_date} 到 {end_date}"
+        ws['E3'] = f"打印日期：{datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        ws['A4'] = f"往来客户：{customer.name}"
+        ws['E4'] = f"客户编号：{customer.customer_no or ''}"
+        
+        # 表头
+        headers = ['序号', '发生日期', '往来类型', '往来单号', '足金', '欠款金额', '单据备注']
+        col_widths = [8, 12, 12, 20, 12, 15, 25]
+        
+        for col, (header, width) in enumerate(zip(headers, col_widths), 1):
+            cell = ws.cell(row=6, column=col, value=header)
+            cell.font = title_font
+            cell.fill = header_fill
+            cell.border = thin_border
+            cell.alignment = center_align
+            ws.column_dimensions[get_column_letter(col)].width = width
+        
+        # 数据行
+        row = 7
+        for i, tx in enumerate(transactions, 1):
+            ws.cell(row=row, column=1, value=i).border = thin_border
+            ws.cell(row=row, column=2, value=tx["date"]).border = thin_border
+            ws.cell(row=row, column=3, value=tx["type"]).border = thin_border
+            ws.cell(row=row, column=4, value=tx["order_no"]).border = thin_border
+            
+            gold_cell = ws.cell(row=row, column=5, value=tx["gold_amount"] if tx["gold_amount"] != 0 else "")
+            gold_cell.border = thin_border
+            gold_cell.alignment = right_align
+            if tx["gold_amount"] < 0:
+                gold_cell.font = Font(color="0000FF")
+            elif tx["gold_amount"] > 0:
+                gold_cell.font = Font(color="FF8C00")
+            
+            cash_cell = ws.cell(row=row, column=6, value=tx["cash_amount"] if tx["cash_amount"] != 0 else "")
+            cash_cell.border = thin_border
+            cash_cell.alignment = right_align
+            if tx["cash_amount"] < 0:
+                cash_cell.font = Font(color="008000")
+            elif tx["cash_amount"] > 0:
+                cash_cell.font = Font(color="FF0000")
+            
+            ws.cell(row=row, column=7, value=tx["remark"]).border = thin_border
+            row += 1
+        
+        # 合计行
+        ws.cell(row=row, column=1, value="合计").border = thin_border
+        ws.cell(row=row, column=2, value="").border = thin_border
+        ws.cell(row=row, column=3, value="").border = thin_border
+        ws.cell(row=row, column=4, value="").border = thin_border
+        ws.cell(row=row, column=5, value=round(total_gold, 3)).border = thin_border
+        ws.cell(row=row, column=6, value=round(total_cash, 2)).border = thin_border
+        ws.cell(row=row, column=7, value="").border = thin_border
+        
+        for col in range(1, 8):
+            ws.cell(row=row, column=col).font = title_font
+            ws.cell(row=row, column=col).fill = header_fill
+        
+        # 保存到内存
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        filename = f"客户往来账_{customer.name}_{start_date}_{end_date}.xlsx"
+        
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"}
+        )
+        
+    except Exception as e:
+        logger.error(f"导出Excel失败: {e}", exc_info=True)
+        return ApiResponse(success=False, error=f"导出失败: {str(e)}")
+
+
 @router.get("/statistics", response_model=StatisticsResponse)
 async def get_statistics(db: Session = Depends(get_db)):
     """
