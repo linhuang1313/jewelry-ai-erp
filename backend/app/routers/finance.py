@@ -652,13 +652,16 @@ async def export_statement_excel(
         wb.save(output)
         output.seek(0)
         
+        # 使用 URL 编码处理中文文件名
+        from urllib.parse import quote
         filename = f"客户往来账_{customer.name}_{start_date}_{end_date}.xlsx"
+        encoded_filename = quote(filename)
         
         return StreamingResponse(
             output,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={
-                "Content-Disposition": f"attachment; filename*=UTF-8''{filename}",
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Methods": "POST, OPTIONS",
                 "Access-Control-Allow-Headers": "*",
