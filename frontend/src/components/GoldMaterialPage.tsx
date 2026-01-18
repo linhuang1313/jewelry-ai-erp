@@ -946,7 +946,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                     <div className="text-sm text-gray-500 mb-3">
                       共 {summaryData.receipt_summary?.total_count || 0} 笔收料
                     </div>
-                    {/* 收料明细 */}
+                    {/* 客户汇总 */}
                     {summaryData.receipt_summary?.by_customer?.length > 0 && (
                       <div className="border-t border-green-200 pt-3 space-y-2">
                         <div className="text-xs text-gray-500 font-medium">客户明细</div>
@@ -954,6 +954,26 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                           <div key={item.customer_id} className="flex justify-between text-sm">
                             <span className="text-gray-700">{item.customer_name}</span>
                             <span className="font-medium text-green-600">{item.total_weight?.toFixed(2)} 克 ({item.count}笔)</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* 每笔收料明细 */}
+                    {summaryData.receipt_summary?.receipts?.length > 0 && (
+                      <div className="border-t border-green-200 pt-3 mt-3 space-y-2">
+                        <div className="text-xs text-gray-500 font-medium">收料明细</div>
+                        {summaryData.receipt_summary.receipts.map((receipt: any) => (
+                          <div key={receipt.id} className="flex justify-between items-center text-sm bg-green-50 rounded-lg px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500 text-xs">
+                                {receipt.created_at ? new Date(receipt.created_at).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }) : '-'}
+                              </span>
+                              <span className="text-gray-700">{receipt.customer_name}</span>
+                              {receipt.gold_fineness && (
+                                <span className="text-xs text-yellow-600 bg-yellow-100 px-1.5 py-0.5 rounded">{receipt.gold_fineness}</span>
+                              )}
+                            </div>
+                            <span className="font-medium text-green-600">{receipt.gold_weight?.toFixed(2)} 克</span>
                           </div>
                         ))}
                       </div>
