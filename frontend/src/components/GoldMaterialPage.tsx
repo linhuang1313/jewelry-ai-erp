@@ -56,10 +56,6 @@ interface Supplier {
   name: string;
 }
 
-interface InboundOrder {
-  id: number;
-  order_no: string;
-}
 
 interface GoldMaterialPageProps {
   userRole: string;
@@ -119,7 +115,6 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 
 const INITIAL_PAYMENT_FORM = {
   supplier_id: '',
-  inbound_order_id: '',
   gold_weight: '',
   remark: ''
 };
@@ -155,7 +150,6 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentFormData, setPaymentFormData] = useState(INITIAL_PAYMENT_FORM);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [inboundOrders, setInboundOrders] = useState<InboundOrder[]>([]);
   
   // 金料库存
   const [balance, setBalance] = useState<GoldBalance | null>(null);
@@ -408,18 +402,6 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
     }
   }, []);
 
-  // 加载入库单列表
-  const loadInboundOrders = useCallback(async () => {
-    const data = await apiGet<{ orders: any[] }>(
-      '/api/inbound/orders?limit=100',
-      { showErrorToast: false }
-    );
-    
-    if (data?.orders) {
-      setInboundOrders(data.orders.map((o: any) => ({ id: o.id, order_no: o.order_no })));
-    }
-  }, []);
-
   // 加载客户列表
   const loadCustomers = useCallback(async () => {
     const data = await apiGet<{ customers: Customer[] }>(
@@ -633,11 +615,10 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
       loadPayments();
       loadBalance();
       loadSuppliers();
-      loadInboundOrders();
     } else if (userRole === 'settlement') {
       loadReceipts();
     }
-  }, [userRole, loadPendingReceipts, loadPayments, loadBalance, loadSuppliers, loadInboundOrders, loadReceipts, loadCustomers, loadWithdrawals, loadTransfers]);
+  }, [userRole, loadPendingReceipts, loadPayments, loadBalance, loadSuppliers, loadReceipts, loadCustomers, loadWithdrawals, loadTransfers]);
 
   // 初始化后加载台账（需要等日期设置完成）
   useEffect(() => {
@@ -712,7 +693,6 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
       `/api/gold-material/payments?user_role=${userRole}&created_by=料部`,
       {
         supplier_id: parseInt(paymentFormData.supplier_id),
-        inbound_order_id: paymentFormData.inbound_order_id ? parseInt(paymentFormData.inbound_order_id) : null,
         gold_weight: parseFloat(paymentFormData.gold_weight),
         remark: paymentFormData.remark || null,
       },
@@ -1354,7 +1334,6 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                         </div>
                         <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
                           <div>供应商：{payment.supplier_name || '-'}</div>
-                          <div>入库单号：{payment.inbound_order_no || '-'}</div>
                           <div>金料重量：{payment.gold_weight.toFixed(2)} 克</div>
                           <div>创建时间：{new Date(payment.created_at).toLocaleString('zh-CN')}</div>
                         </div>
@@ -1510,19 +1489,6 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                     <option value="">请选择供应商</option>
                     {suppliers.map((s) => (
                       <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">入库单号（可选）</label>
-                  <select
-                    value={paymentFormData.inbound_order_id}
-                    onChange={(e) => setPaymentFormData({ ...paymentFormData, inbound_order_id: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  >
-                    <option value="">请选择入库单</option>
-                    {inboundOrders.map((o) => (
-                      <option key={o.id} value={o.id}>{o.order_no}</option>
                     ))}
                   </select>
                 </div>
