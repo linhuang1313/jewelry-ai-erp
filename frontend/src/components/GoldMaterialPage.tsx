@@ -143,6 +143,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
   const [ledgerStartDate, setLedgerStartDate] = useState('');
   const [ledgerEndDate, setLedgerEndDate] = useState('');
   const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
   
   // 收料单数据
   const [receipts, setReceipts] = useState<GoldTransaction[]>([]);
@@ -1085,18 +1086,73 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {ledger.map((day) => (
-                      <tr key={day.date} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{day.date}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">{day.income.toFixed(2)}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">{day.expense.toFixed(2)}</td>
-                        <td className={`px-6 py-4 whitespace-nowrap text-sm text-right font-medium ${
-                          day.net >= 0 ? 'text-green-600' : 'text-red-600'
-                        }`}>
-                          {day.net.toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
+                    {ledger.map((day) => {
+                      const isExpanded = expandedDates.has(day.date);
+                      const hasTransactions = day.transactions && day.transactions.length > 0;
+                      return (
+                        <React.Fragment key={day.date}>
+                          <tr 
+                            className={`hover:bg-gray-50 ${hasTransactions ? 'cursor-pointer' : ''}`}
+                            onClick={() => {
+                              if (hasTransactions) {
+                                setExpandedDates(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(day.date)) {
+                                    next.delete(day.date);
+                                  } else {
+                                    next.add(day.date);
+                                  }
+                                  return next;
+                                });
+                              }
+                            }}
+                          >
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              <div className="flex items-center gap-2">
+                                {hasTransactions && (
+                                  <span className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+                                )}
+                                {day.date}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">{day.income.toFixed(2)}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">{day.expense.toFixed(2)}</td>
+                            <td className={`px-6 py-4 whitespace-nowrap text-sm text-right font-medium ${
+                              day.net >= 0 ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {day.net.toFixed(2)}
+                            </td>
+                          </tr>
+                          {/* 展开的交易明细 */}
+                          {isExpanded && day.transactions?.map((tx, idx) => (
+                            <tr key={`${day.date}-${tx.id || idx}`} className="bg-gray-50">
+                              <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-600" colSpan={1}>
+                                <div className="flex items-center gap-2 pl-8">
+                                  <span className="text-gray-300">└─</span>
+                                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                    tx.transaction_type === 'income' 
+                                      ? 'bg-green-100 text-green-700' 
+                                      : 'bg-orange-100 text-orange-700'
+                                  }`}>
+                                    {tx.transaction_type === 'income' ? '收料' : '付料'}
+                                  </span>
+                                  <span className="text-gray-700">{tx.customer_name || tx.supplier_name || '-'}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-green-600">
+                                {tx.transaction_type === 'income' ? tx.gold_weight?.toFixed(2) : '-'}
+                              </td>
+                              <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-orange-600">
+                                {tx.transaction_type === 'expense' ? tx.gold_weight?.toFixed(2) : '-'}
+                              </td>
+                              <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-400">
+                                {tx.confirmed_at ? new Date(tx.confirmed_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                              </td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      );
+                    })}
                     {ledger.length === 0 && renderEmpty(4)}
                   </tbody>
                 </table>
