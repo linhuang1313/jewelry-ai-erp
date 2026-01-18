@@ -24,6 +24,7 @@ from ..models import (
 from ..schemas import (
     SettlementOrderCreate,
     SettlementOrderConfirm,
+    SettlementOrderUpdate,
     SettlementOrderResponse,
     SalesOrderResponse,
     SalesDetailResponse,
@@ -468,6 +469,155 @@ async def create_settlement_order(
         gold_received=0.0,
         gold_remaining_due=actual_gold_due if data.payment_method in ["physical_gold", "mixed"] else None,
         deposit_used=deposit_used if deposit_used > 0 else None
+    )
+
+
+@router.put("/orders/{settlement_id}", response_model=SettlementOrderResponse)
+async def update_settlement_order(
+    settlement_id: int,
+    data: SettlementOrderUpdate,
+    user_role: str = Query(default="settlement", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    修改结算单（仅待确认状态可修改）
+    
+    可修改内容：
+    - 支付方式（结料/结价/混合）
+    - 金价
+    - 混合支付的克重分配
+    - 备注
+    """
+    # 权限检查
+    from ..middleware.permissions import has_permission
+    if not has_permission(user_role, 'can_create_settlement'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【修改结算单】的权限")
+    
+    # 查找结算单
+    settlement = db.query(SettlementOrder).filter(SettlementOrder.id == settlement_id).first()
+    if not settlement:
+        raise HTTPException(status_code=404, detail="结算单不存在")
+    
+    # 只能修改待确认状态的结算单
+    if settlement.status != "pending":
+        raise HTTPException(status_code=400, detail=f"结算单状态为 {settlement.status}，只有待确认状态可修改")
+    
+    # 获取关联的销售单
+    sales_order = db.query(SalesOrder).filter(SalesOrder.id == settlement.sales_order_id).first()
+    if not sales_order:
+        raise HTTPException(status_code=400, detail="关联的销售单不存在")
+    
+    # 更新支付方式
+    if data.payment_method is not None:
+        if data.payment_method not in ["cash_price", "physical_gold", "mixed"]:
+            raise HTTPException(status_code=400, detail="无效的支付方式")
+        settlement.payment_method = data.payment_method
+    
+    # 更新金价
+    if data.gold_price is not None:
+        settlement.gold_price = data.gold_price
+    
+    # 更新备注
+    if data.remark is not None:
+        settlement.remark = data.remark
+    
+    # 根据新的支付方式重新计算金额
+    payment_method = settlement.payment_method
+    gold_price = settlement.gold_price or 0
+    total_weight = sales_order.total_weight
+    labor_amount = sales_order.total_labor_cost or 0
+    
+    if payment_method == "cash_price":
+        # 结价：料价 = 克重 × 金价，总额 = 料价 + 工费
+        material_amount = total_weight * gold_price
+        total_amount = material_amount + labor_amount
+        settlement.physical_gold_weight = None
+        settlement.gold_payment_weight = None
+        settlement.cash_payment_weight = None
+        
+    elif payment_method == "physical_gold":
+        # 结料：需要客户提供的金料重量
+        physical_gold_weight = data.physical_gold_weight if data.physical_gold_weight is not None else settlement.physical_gold_weight
+        if not physical_gold_weight:
+            physical_gold_weight = total_weight  # 默认等于销售单总克重
+        settlement.physical_gold_weight = physical_gold_weight
+        material_amount = total_weight * gold_price
+        total_amount = material_amount + labor_amount
+        settlement.gold_payment_weight = None
+        settlement.cash_payment_weight = None
+        
+    elif payment_method == "mixed":
+        # 混合支付
+        gold_payment_weight = data.gold_payment_weight if data.gold_payment_weight is not None else (settlement.gold_payment_weight or 0)
+        cash_payment_weight = data.cash_payment_weight if data.cash_payment_weight is not None else (settlement.cash_payment_weight or 0)
+        
+        # 验证克重分配
+        if gold_payment_weight + cash_payment_weight <= 0:
+            raise HTTPException(status_code=400, detail="混合支付必须指定结料和结价的克重")
+        
+        settlement.gold_payment_weight = gold_payment_weight
+        settlement.cash_payment_weight = cash_payment_weight
+        settlement.physical_gold_weight = gold_payment_weight  # 结料部分
+        
+        # 计算金额
+        material_amount = total_weight * gold_price
+        total_amount = material_amount + labor_amount
+    else:
+        material_amount = settlement.material_amount or 0
+        total_amount = settlement.total_amount or 0
+    
+    settlement.material_amount = material_amount
+    settlement.total_amount = total_amount
+    
+    # 重新计算支付差额
+    payment_difference = 0.0
+    if payment_method == "mixed":
+        total_input = (settlement.gold_payment_weight or 0) + (settlement.cash_payment_weight or 0)
+        payment_difference = total_input - total_weight
+    elif payment_method == "physical_gold":
+        if settlement.physical_gold_weight:
+            payment_difference = settlement.physical_gold_weight - total_weight
+    
+    if payment_difference > 0.01:
+        settlement.payment_status = "overpaid"
+    elif payment_difference < -0.01:
+        settlement.payment_status = "underpaid"
+    else:
+        settlement.payment_status = "full"
+    settlement.payment_difference = payment_difference
+    
+    db.commit()
+    db.refresh(settlement)
+    
+    logger.info(f"修改结算单: {settlement.settlement_no}, 新支付方式: {settlement.payment_method}")
+    
+    return SettlementOrderResponse(
+        id=settlement.id,
+        settlement_no=settlement.settlement_no,
+        sales_order_id=settlement.sales_order_id,
+        payment_method=settlement.payment_method,
+        gold_price=settlement.gold_price,
+        physical_gold_weight=settlement.physical_gold_weight,
+        total_weight=settlement.total_weight,
+        material_amount=settlement.material_amount,
+        labor_amount=settlement.labor_amount,
+        total_amount=settlement.total_amount,
+        gold_payment_weight=settlement.gold_payment_weight,
+        cash_payment_weight=settlement.cash_payment_weight,
+        previous_cash_debt=settlement.previous_cash_debt or 0.0,
+        previous_gold_debt=settlement.previous_gold_debt or 0.0,
+        gold_deposit_balance=settlement.gold_deposit_balance or 0.0,
+        cash_deposit_balance=settlement.cash_deposit_balance or 0.0,
+        payment_difference=settlement.payment_difference or 0.0,
+        payment_status=settlement.payment_status or 'full',
+        status=settlement.status,
+        created_by=settlement.created_by,
+        confirmed_by=settlement.confirmed_by,
+        confirmed_at=settlement.confirmed_at,
+        printed_at=settlement.printed_at,
+        remark=settlement.remark,
+        created_at=settlement.created_at,
+        sales_order=None
     )
 
 

@@ -148,6 +148,17 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
   // 确认结算单
   const [confirmingSettlement, setConfirmingSettlement] = useState<SettlementOrder | null>(null);
   
+  // 编辑结算单
+  const [editingSettlement, setEditingSettlement] = useState<SettlementOrder | null>(null);
+  const [editForm, setEditForm] = useState({
+    payment_method: 'cash_price',
+    gold_price: '',
+    physical_gold_weight: '',
+    gold_payment_weight: '',
+    cash_payment_weight: '',
+    remark: ''
+  });
+  
   // 少付确认对话框
   const [showUnderpayConfirm, setShowUnderpayConfirm] = useState(false);
   const [underpayData, setUnderpayData] = useState<{
@@ -434,6 +445,65 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
       }
     } catch (error) {
       toast.error('确认失败');
+    }
+  };
+
+  // 打开编辑结算单弹窗
+  const handleOpenEdit = (settlement: SettlementOrder) => {
+    setEditingSettlement(settlement);
+    setEditForm({
+      payment_method: settlement.payment_method,
+      gold_price: settlement.gold_price?.toString() || '',
+      physical_gold_weight: settlement.physical_gold_weight?.toString() || '',
+      gold_payment_weight: settlement.gold_payment_weight?.toString() || '',
+      cash_payment_weight: settlement.cash_payment_weight?.toString() || '',
+      remark: settlement.remark || ''
+    });
+  };
+
+  // 保存编辑结算单
+  const handleSaveEdit = async () => {
+    if (!editingSettlement) return;
+
+    try {
+      const payload: any = {
+        payment_method: editForm.payment_method,
+        remark: editForm.remark || null
+      };
+
+      if (editForm.gold_price) {
+        payload.gold_price = parseFloat(editForm.gold_price);
+      }
+
+      if (editForm.payment_method === 'physical_gold' && editForm.physical_gold_weight) {
+        payload.physical_gold_weight = parseFloat(editForm.physical_gold_weight);
+      }
+
+      if (editForm.payment_method === 'mixed') {
+        if (editForm.gold_payment_weight) {
+          payload.gold_payment_weight = parseFloat(editForm.gold_payment_weight);
+        }
+        if (editForm.cash_payment_weight) {
+          payload.cash_payment_weight = parseFloat(editForm.cash_payment_weight);
+        }
+      }
+
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/settlement/orders/${editingSettlement.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        toast.success('结算单已更新');
+        setEditingSettlement(null);
+        loadSettlements();
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || '更新失败');
+      }
+    } catch (error) {
+      toast.error('更新失败');
     }
   };
 
@@ -807,13 +877,22 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                     {/* 操作按钮 */}
                     <div className="flex space-x-2 mt-3">
                       {settlement.status === 'pending' && (
-                        <button
-                          onClick={() => setConfirmingSettlement(settlement)}
-                          className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors text-sm"
-                        >
-                          <Check className="w-4 h-4" />
-                          <span>确认</span>
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleOpenEdit(settlement)}
+                            className="flex items-center justify-center space-x-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+                          >
+                            <FileText className="w-4 h-4" />
+                            <span>编辑</span>
+                          </button>
+                          <button
+                            onClick={() => setConfirmingSettlement(settlement)}
+                            className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors text-sm"
+                          >
+                            <Check className="w-4 h-4" />
+                            <span>确认</span>
+                          </button>
+                        </>
                       )}
                       {settlement.status === 'confirmed' && (
                         <button
@@ -1240,6 +1319,148 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                   className="flex-1 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors"
                 >
                   确认结算
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 编辑结算单弹窗 */}
+        {editingSettlement && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">编辑结算单</h3>
+                <button onClick={() => setEditingSettlement(null)} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">结算单号</span>
+                  <span className="font-mono">{editingSettlement.settlement_no}</span>
+                </div>
+                <div className="flex justify-between mt-1">
+                  <span className="text-gray-500">销售单</span>
+                  <span>{editingSettlement.sales_order?.order_no || '-'}</span>
+                </div>
+                <div className="flex justify-between mt-1">
+                  <span className="text-gray-500">商品总克重</span>
+                  <span className="font-medium">{editingSettlement.total_weight?.toFixed(2)}g</span>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {/* 支付方式 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">支付方式</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: 'cash_price', label: '结价' },
+                      { value: 'physical_gold', label: '结料' },
+                      { value: 'mixed', label: '混合' }
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setEditForm(prev => ({ ...prev, payment_method: opt.value }))}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          editForm.payment_method === opt.value
+                            ? 'bg-cyan-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 金价 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">金价 (元/克)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editForm.gold_price}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, gold_price: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                    placeholder="请输入当日金价"
+                  />
+                </div>
+
+                {/* 结料克重 - 仅结料时显示 */}
+                {editForm.payment_method === 'physical_gold' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">结料克重 (克)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editForm.physical_gold_weight}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, physical_gold_weight: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                      placeholder={`建议与商品克重一致 (${editingSettlement.total_weight?.toFixed(2)}g)`}
+                    />
+                  </div>
+                )}
+
+                {/* 混合支付 - 克重分配 */}
+                {editForm.payment_method === 'mixed' && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">结料部分 (克)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editForm.gold_payment_weight}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, gold_payment_weight: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                        placeholder="用金料支付的克重"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">结价部分 (克)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editForm.cash_payment_weight}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, cash_payment_weight: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                        placeholder="用现金支付的克重"
+                      />
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      合计: {(parseFloat(editForm.gold_payment_weight || '0') + parseFloat(editForm.cash_payment_weight || '0')).toFixed(2)}g
+                      {' '}(商品: {editingSettlement.total_weight?.toFixed(2)}g)
+                    </div>
+                  </div>
+                )}
+
+                {/* 备注 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+                  <input
+                    type="text"
+                    value={editForm.remark}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, remark: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                    placeholder="可选"
+                  />
+                </div>
+              </div>
+
+              <div className="flex space-x-3 mt-6">
+                <button
+                  onClick={() => setEditingSettlement(null)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  className="flex-1 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors"
+                >
+                  保存修改
                 </button>
               </div>
             </div>

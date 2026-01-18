@@ -319,6 +319,17 @@ class SettlementOrderConfirm(BaseModel):
     confirmed_by: str  # 确认人
 
 
+class SettlementOrderUpdate(BaseModel):
+    """修改结算单（仅待确认状态可修改）"""
+    payment_method: Optional[str] = None  # 'cash_price' 结价 / 'physical_gold' 结料 / 'mixed' 混合支付
+    gold_price: Optional[float] = None  # 当日金价
+    physical_gold_weight: Optional[float] = None  # 结料支付：客户提供的黄金重量
+    # 混合支付专用参数
+    gold_payment_weight: Optional[float] = None  # 混合支付：结料部分的克重
+    cash_payment_weight: Optional[float] = None  # 混合支付：结价部分的克重
+    remark: Optional[str] = None
+
+
 class SettlementOrderResponse(BaseModel):
     """结算单响应"""
     model_config = ConfigDict(from_attributes=True)
