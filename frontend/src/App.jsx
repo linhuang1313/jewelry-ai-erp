@@ -2579,12 +2579,12 @@ function App() {
                                 下载
                               </button>
                               {/* 重新结算按钮 - 仅结算专员和管理层可见 */}
-                              {(selectedRole === 'settlement' || selectedRole === 'manager') && (
+                              {(userRole === 'settlement' || userRole === 'manager') && (
                                 <button
                                   onClick={async () => {
                                     if (!confirm('确定要撤销此结算单吗？撤销后可以重新选择支付方式进行结算。')) return
                                     try {
-                                      const response = await fetch(`${API_BASE_URL}/api/settlement/orders/${settlementId}/revert?user_role=${selectedRole}`, {
+                                      const response = await fetch(`${API_BASE_URL}/api/settlement/orders/${settlementId}/revert?user_role=${userRole}`, {
                                         method: 'POST'
                                       })
                                       if (response.ok) {
@@ -3386,7 +3386,7 @@ function App() {
 
         {currentPage === 'warehouse' && (
           <div className="flex-1 overflow-y-auto">
-            <WarehousePage userRole={selectedRole} />
+            <WarehousePage userRole={userRole} />
           </div>
         )}
 
