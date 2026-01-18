@@ -1096,3 +1096,66 @@ async def download_settlement_order(
         logger.error(f"生成结算单失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"生成结算单失败: {str(e)}")
 
+
+@router.post("/orders/{settlement_id}/revert")
+async def revert_settlement_order(
+    settlement_id: int,
+    user_role: str = Query(default="settlement", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    撤销结算单（重新结算）
+    - 将结算单状态改回 pending
+    - 删除已创建的应收账款记录
+    - 保留原结算单号
+    """
+    # 权限检查：仅 settlement 和 manager 可以操作
+    if user_role not in ["settlement", "manager"]:
+        raise HTTPException(status_code=403, detail="权限不足：只有结算专员和管理层可以撤销结算单")
+    
+    # 查询结算单
+    settlement = db.query(SettlementOrder).filter(SettlementOrder.id == settlement_id).first()
+    if not settlement:
+        raise HTTPException(status_code=404, detail="结算单不存在")
+    
+    # 只能撤销已确认的结算单
+    if settlement.status not in ["confirmed", "printed"]:
+        raise HTTPException(status_code=400, detail=f"结算单状态为 {settlement.status}，无法撤销")
+    
+    try:
+        # 1. 删除关联的应收账款记录
+        from ..models.finance import AccountReceivable
+        
+        deleted_count = db.query(AccountReceivable).filter(
+            AccountReceivable.sales_order_id == settlement.sales_order_id
+        ).delete(synchronize_session=False)
+        
+        logger.info(f"撤销结算单 {settlement.settlement_no}：删除了 {deleted_count} 条应收账款记录")
+        
+        # 2. 将结算单状态改回 pending
+        old_status = settlement.status
+        settlement.status = "pending"
+        settlement.confirmed_by = None
+        settlement.confirmed_at = None
+        
+        # 3. 销售单状态改回待结算
+        sales_order = db.query(SalesOrder).filter(SalesOrder.id == settlement.sales_order_id).first()
+        if sales_order:
+            sales_order.status = "待结算"
+        
+        db.commit()
+        
+        logger.info(f"结算单 {settlement.settlement_no} 撤销成功: {old_status} -> pending")
+        
+        return {
+            "success": True,
+            "message": f"结算单 {settlement.settlement_no} 已撤销，可以重新选择支付方式进行结算",
+            "settlement_id": settlement.id,
+            "settlement_no": settlement.settlement_no
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"撤销结算单失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"撤销结算单失败: {str(e)}")
+

@@ -839,6 +839,34 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                           <span>收料单</span>
                         </button>
                       )}
+                      {/* 重新结算按钮 - 已确认/已打印时显示 */}
+                      {(settlement.status === 'confirmed' || settlement.status === 'printed') && (
+                        <button
+                          onClick={async () => {
+                            if (!confirm('确定要撤销此结算单吗？撤销后可以重新选择支付方式进行结算。')) return
+                            try {
+                              const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/settlement/orders/${settlement.id}/revert?user_role=settlement`, {
+                                method: 'POST'
+                              })
+                              if (response.ok) {
+                                const result = await response.json()
+                                toast.success(result.message || '结算单已撤销')
+                                loadSettlements()
+                              } else {
+                                const error = await response.json()
+                                toast.error('撤销失败：' + (error.detail || '未知错误'))
+                              }
+                            } catch (error) {
+                              console.error('撤销结算单失败:', error)
+                              toast.error('撤销失败')
+                            }
+                          }}
+                          className="flex items-center justify-center space-x-1 px-3 py-2 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors text-sm"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          <span>重新结算</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

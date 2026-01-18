@@ -2578,6 +2578,37 @@ function App() {
                                 </svg>
                                 下载
                               </button>
+                              {/* 重新结算按钮 - 仅结算专员和管理层可见 */}
+                              {(selectedRole === 'settlement' || selectedRole === 'manager') && (
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm('确定要撤销此结算单吗？撤销后可以重新选择支付方式进行结算。')) return
+                                    try {
+                                      const response = await fetch(`${API_BASE_URL}/api/settlement/orders/${settlementId}/revert?user_role=${selectedRole}`, {
+                                        method: 'POST'
+                                      })
+                                      if (response.ok) {
+                                        const result = await response.json()
+                                        alert(result.message || '结算单已撤销')
+                                        // 跳转到结算管理页面
+                                        setCurrentPage('settlement')
+                                      } else {
+                                        const error = await response.json()
+                                        alert('撤销失败：' + (error.detail || '未知错误'))
+                                      }
+                                    } catch (error) {
+                                      console.error('撤销结算单失败:', error)
+                                      alert('撤销失败：' + error.message)
+                                    }
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 transition-colors"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                  </svg>
+                                  重新结算
+                                </button>
+                              )}
                             </div>
                           )
                         })()}
