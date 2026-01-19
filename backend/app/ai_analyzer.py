@@ -365,9 +365,13 @@ class AIAnalyzer:
                 total_weight = 0
                 total_items = 0
                 for order in data["inbound_orders"]:
-                    text += f"\n入库单号：{order['order_no']}，时间：{order.get('create_time', 'N/A')}\n"
+                    order_date = order.get('create_time', 'N/A')
+                    # 格式化日期，只保留日期部分
+                    if order_date and order_date != 'N/A':
+                        order_date = order_date.split(' ')[0] if ' ' in order_date else order_date.split('T')[0] if 'T' in order_date else order_date
+                    text += f"\n入库单号：{order['order_no']}，日期：{order_date}\n"
                     for detail in order.get('details', []):
-                        text += f"  • 【{order['order_no']}】{detail['product_name']}：{detail['weight']}克，供应商：{detail['supplier']}\n"
+                        text += f"  • 【{order['order_no']}】{detail['product_name']}：{detail['weight']}克，供应商：{detail['supplier']}，日期：{order_date}\n"
                         total_weight += detail['weight']
                         total_items += 1
                 text += f"\n总计：{len(data['inbound_orders'])}个入库单，{total_items}件商品，总重量{total_weight:.2f}克\n"
@@ -566,18 +570,19 @@ class AIAnalyzer:
 请基于这些数据，详细列出符合条件的入库单明细。**必须按以下格式展示每个入库商品**：
 
 格式要求（每个商品一行）：
-• 【入库单号】商品名称：XX克，供应商：XXX
+• 【入库单号】商品名称：XX克，供应商：XXX，日期：YYYY-MM-DD
 
 示例：
-• 【RK123456】足金3D硬金吊坠：11克，供应商：环冠珠宝
-• 【RK123456】足金3D硬金耳饰：22克，供应商：环冠珠宝
-• 【RK789012】古法手镯：50克，供应商：金源珠宝
+• 【RK123456】足金3D硬金吊坠：11克，供应商：环冠珠宝，日期：2026-01-19
+• 【RK123456】足金3D硬金耳饰：22克，供应商：环冠珠宝，日期：2026-01-19
+• 【RK789012】古法手镯：50克，供应商：金源珠宝，日期：2026-01-18
 
 要求：
 1. **入库单号必须显示**：每个商品前面都要显示它所属的入库单号
 2. **供应商必须显示**：每个商品后面都要显示供应商名称
-3. **按入库单分组**：同一入库单的商品放在一起
-4. **汇总统计**：最后给出总计（共X个入库单，X件商品，总重量Xg）
+3. **日期必须显示**：每个商品后面都要显示入库日期（从入库单的创建时间获取）
+4. **按入库单分组**：同一入库单的商品放在一起
+5. **汇总统计**：最后给出总计（共X个入库单，X件商品，总重量Xg）
 
 如果没有符合条件的入库单，友好地告知用户。"""
         elif is_specific_sales_query:
@@ -872,21 +877,22 @@ class AIAnalyzer:
 请基于这些数据，详细列出符合条件的入库单明细。**必须按以下格式展示每个入库商品**：
 
 格式要求（每个商品一行）：
-• 【入库单号】商品名称：XX克，供应商：XXX
+• 【入库单号】商品名称：XX克，供应商：XXX，日期：YYYY-MM-DD
 
 示例：
-• 【RK123456】足金3D硬金吊坠：11克，供应商：环冠珠宝
-• 【RK123456】足金3D硬金耳饰：22克，供应商：环冠珠宝
-• 【RK789012】古法手镯：50克，供应商：金源珠宝
+• 【RK123456】足金3D硬金吊坠：11克，供应商：环冠珠宝，日期：2026-01-19
+• 【RK123456】足金3D硬金耳饰：22克，供应商：环冠珠宝，日期：2026-01-19
+• 【RK789012】古法手镯：50克，供应商：金源珠宝，日期：2026-01-18
 
 要求：
 1. **入库单号必须显示**：每个商品前面都要显示它所属的入库单号
 2. **供应商必须显示**：每个商品后面都要显示供应商名称
-3. **按入库单分组**：同一入库单的商品放在一起
-4. **汇总统计**：最后给出总计（共X个入库单，X件商品，总重量Xg）
+3. **日期必须显示**：每个商品后面都要显示入库日期（从入库单的创建时间获取）
+4. **按入库单分组**：同一入库单的商品放在一起
+5. **汇总统计**：最后给出总计（共X个入库单，X件商品，总重量Xg）
 
 如果没有符合条件的入库单，友好地告知用户。"""
-            system_prompt = "你是珠宝ERP系统AI助手。对于入库单列表查询，必须按要求格式展示每个商品，包括入库单号、克重和供应商名称。"
+            system_prompt = "你是珠宝ERP系统AI助手。对于入库单列表查询，必须按要求格式展示每个商品，包括入库单号、克重、供应商名称和入库日期。"
         elif is_specific_sales_query:
             # 查询特定销售单的提示词（流式版本）
             prompt = f"""你是一个专业的珠宝ERP系统AI分析专家。用户要查询特定销售单的详细信息。
