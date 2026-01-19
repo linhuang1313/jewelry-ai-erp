@@ -90,15 +90,48 @@ async def get_pending_sales_orders(
 @router.get("/orders", response_model=List[SettlementOrderResponse])
 async def get_settlement_orders(
     status: Optional[str] = None,
+    settlement_no: Optional[str] = Query(None, description="结算单号（模糊匹配）"),
+    sales_order_no: Optional[str] = Query(None, description="销售单号（模糊匹配）"),
+    customer_name: Optional[str] = Query(None, description="客户名称（模糊匹配）"),
+    start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+    limit: int = Query(100, description="返回数量限制"),
     db: Session = Depends(get_db)
 ):
-    """获取结算单列表"""
+    """获取结算单列表（支持搜索筛选）"""
     query = db.query(SettlementOrder)
     
+    # 状态筛选
     if status:
         query = query.filter(SettlementOrder.status == status)
     
-    orders = query.order_by(SettlementOrder.created_at.desc()).all()
+    # 结算单号模糊匹配
+    if settlement_no:
+        query = query.filter(SettlementOrder.settlement_no.contains(settlement_no))
+    
+    # 销售单号或客户名称筛选需要关联销售单
+    if sales_order_no or customer_name:
+        query = query.join(SalesOrder, SettlementOrder.sales_order_id == SalesOrder.id)
+        if sales_order_no:
+            query = query.filter(SalesOrder.order_no.contains(sales_order_no))
+        if customer_name:
+            query = query.filter(SalesOrder.customer_name.contains(customer_name))
+    
+    # 日期范围筛选
+    if start_date:
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            query = query.filter(SettlementOrder.created_at >= start_dt)
+        except:
+            pass
+    if end_date:
+        try:
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            query = query.filter(SettlementOrder.created_at <= end_dt)
+        except:
+            pass
+    
+    orders = query.order_by(SettlementOrder.created_at.desc()).limit(limit).all()
     
     result = []
     for order in orders:
@@ -1750,4 +1783,110 @@ async def revert_settlement_order(
         db.rollback()
         logger.error(f"撤销结算单失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"撤销结算单失败: {str(e)}")
+
+
+@router.post("/orders/{settlement_id}/refund")
+async def refund_settlement_order(
+    settlement_id: int,
+    return_reason: str = Query(default="客户退货", description="退货原因"),
+    reason_detail: Optional[str] = Query(None, description="退货详细说明"),
+    user_role: str = Query(default="settlement", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    结算单销退（客户退货）
+    - 创建退货单（退回展厅/商品部）
+    - 更新库存
+    - 结算单状态保持不变，仅记录退货
+    """
+    from ..models import ReturnOrder, Location, LocationInventory
+    from ..middleware.permissions import has_permission
+    
+    # 权限检查
+    if not has_permission(user_role, 'can_refund_settlement'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有销退权限")
+    
+    # 查询结算单
+    settlement = db.query(SettlementOrder).filter(SettlementOrder.id == settlement_id).first()
+    if not settlement:
+        raise HTTPException(status_code=404, detail="结算单不存在")
+    
+    # 只能对已确认/已打印的结算单进行销退
+    if settlement.status not in ["confirmed", "printed"]:
+        raise HTTPException(status_code=400, detail=f"结算单状态为 {settlement.status}，无法销退")
+    
+    # 获取关联的销售单和商品明细
+    sales_order = db.query(SalesOrder).filter(SalesOrder.id == settlement.sales_order_id).first()
+    if not sales_order:
+        raise HTTPException(status_code=404, detail="关联的销售单不存在")
+    
+    details = db.query(SalesDetail).filter(SalesDetail.order_id == sales_order.id).all()
+    if not details:
+        raise HTTPException(status_code=400, detail="销售单没有商品明细")
+    
+    # 获取展厅位置
+    showroom = db.query(Location).filter(Location.code == "showroom").first()
+    if not showroom:
+        raise HTTPException(status_code=500, detail="系统配置错误：未找到展厅位置")
+    
+    try:
+        now = china_now()
+        return_orders = []
+        
+        # 为每个商品创建退货单
+        for detail in details:
+            # 生成退货单号
+            count = db.query(ReturnOrder).filter(
+                ReturnOrder.return_no.like(f"TH{now.strftime('%Y%m%d')}%")
+            ).count()
+            return_no = f"TH{now.strftime('%Y%m%d')}{count + 1:03d}"
+            
+            # 创建退货单
+            return_order = ReturnOrder(
+                return_no=return_no,
+                return_type="to_warehouse",  # 退给商品部
+                product_name=detail.product_name,
+                return_weight=detail.weight,
+                from_location_id=showroom.id,  # 从展厅退回
+                return_reason=return_reason,
+                reason_detail=reason_detail or f"结算单 {settlement.settlement_no} 销退",
+                status="completed",  # 直接完成
+                created_by=user_role,
+                completed_by=user_role,
+                completed_at=now,
+                remark=f"关联结算单: {settlement.settlement_no}, 销售单: {sales_order.order_no}"
+            )
+            db.add(return_order)
+            
+            # 更新展厅库存（扣减）
+            inventory = db.query(LocationInventory).filter(
+                LocationInventory.location_id == showroom.id,
+                LocationInventory.product_name == detail.product_name
+            ).first()
+            if inventory and inventory.weight >= detail.weight:
+                inventory.weight -= detail.weight
+            
+            return_orders.append({
+                "return_no": return_no,
+                "product_name": detail.product_name,
+                "weight": detail.weight
+            })
+        
+        db.commit()
+        
+        logger.info(f"结算单 {settlement.settlement_no} 销退成功，创建了 {len(return_orders)} 个退货单")
+        
+        return {
+            "success": True,
+            "message": f"销退成功！已创建 {len(return_orders)} 个退货单",
+            "settlement_id": settlement.id,
+            "settlement_no": settlement.settlement_no,
+            "customer_name": sales_order.customer_name,
+            "return_orders": return_orders
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"销退失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"销退失败: {str(e)}")
 

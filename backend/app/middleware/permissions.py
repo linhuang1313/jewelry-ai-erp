@@ -76,6 +76,7 @@ ROLE_PERMISSIONS = {
         'can_complete_withdrawal': False,  # 不能完成取料（料部职责）
         'can_create_transfer': True,       # 可以创建转料单
         'can_confirm_transfer': False,     # 不能确认转料（料部职责）
+        'can_refund_settlement': True,     # 可以执行销退操作
     },
     
     # 业务员 - 只能查询客户相关信息
@@ -190,6 +191,8 @@ ROLE_PERMISSIONS = {
         'can_confirm_transfer': True,
         # 商品编码管理
         'can_manage_product_codes': True,
+        # 结算销退权限
+        'can_refund_settlement': True,     # 可以执行销退操作
     }
 }
 
@@ -227,6 +230,8 @@ PERMISSION_NAMES = {
     # 付料/退料权限区分
     'can_gold_payment_to_supplier': '付料给供应商',
     'can_gold_refund_to_customer': '退料给客户',
+    # 结算销退权限
+    'can_refund_settlement': '销退操作',
 }
 
 # AI操作到权限的映射

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '../config';
 import {
   FileText, Check, Printer, Clock, AlertCircle, ChevronRight, 
-  RefreshCw, X, DollarSign, Package, User, Calendar, Download
+  RefreshCw, X, DollarSign, Package, User, Calendar, Download,
+  Search, RotateCcw, Filter
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -187,6 +188,21 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
   });
   const [customerSearch, setCustomerSearch] = useState('');
 
+  // 搜索筛选
+  const [showSearchPanel, setShowSearchPanel] = useState(false);
+  const [searchFilters, setSearchFilters] = useState({
+    settlement_no: '',
+    sales_order_no: '',
+    customer_name: '',
+    start_date: '',
+    end_date: ''
+  });
+
+  // 销退弹窗
+  const [showRefundConfirm, setShowRefundConfirm] = useState(false);
+  const [refundingSettlement, setRefundingSettlement] = useState<SettlementOrder | null>(null);
+  const [refundReason, setRefundReason] = useState('客户退货');
+
   // 加载数据
   useEffect(() => {
     loadPendingSales();
@@ -285,7 +301,16 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
   const loadSettlements = async () => {
     setLoading(true);
     try {
-      const response = await fetch(API_ENDPOINTS.SETTLEMENT_ORDERS);
+      // 构建查询参数
+      const params = new URLSearchParams();
+      if (searchFilters.settlement_no) params.append('settlement_no', searchFilters.settlement_no);
+      if (searchFilters.sales_order_no) params.append('sales_order_no', searchFilters.sales_order_no);
+      if (searchFilters.customer_name) params.append('customer_name', searchFilters.customer_name);
+      if (searchFilters.start_date) params.append('start_date', searchFilters.start_date);
+      if (searchFilters.end_date) params.append('end_date', searchFilters.end_date);
+      
+      const url = `${API_ENDPOINTS.SETTLEMENT_ORDERS}?${params.toString()}`;
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         setSettlements(data);
@@ -294,6 +319,55 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
       console.error('加载结算单失败:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 搜索处理
+  const handleSearch = () => {
+    loadSettlements();
+  };
+
+  // 重置搜索
+  const handleResetSearch = () => {
+    setSearchFilters({
+      settlement_no: '',
+      sales_order_no: '',
+      customer_name: '',
+      start_date: '',
+      end_date: ''
+    });
+    // 重置后立即加载
+    setTimeout(() => loadSettlements(), 0);
+  };
+
+  // 销退处理
+  const handleRefund = async () => {
+    if (!refundingSettlement) return;
+    
+    try {
+      const params = new URLSearchParams({
+        return_reason: refundReason,
+        user_role: 'settlement'
+      });
+      
+      const response = await fetch(
+        `${API_ENDPOINTS.API_BASE_URL}/api/settlement/orders/${refundingSettlement.id}/refund?${params}`,
+        { method: 'POST' }
+      );
+      
+      if (response.ok) {
+        const result = await response.json();
+        toast.success(result.message || '销退成功');
+        setShowRefundConfirm(false);
+        setRefundingSettlement(null);
+        loadSettlements();
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || '销退失败');
+      }
+    } catch (error) {
+      console.error('销退失败:', error);
+      toast.error('销退失败');
     }
   };
 
@@ -750,28 +824,112 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
           </div>
         </div>
 
-        {/* Tab 切换 */}
-        <div className="flex space-x-3 mb-6">
-          <TabButton
-            active={activeTab === 'pending'}
-            onClick={() => setActiveTab('pending')}
-            icon={<Clock className="w-4 h-4" />}
-            label="待确认"
-            count={pendingCount}
-          />
-          <TabButton
-            active={activeTab === 'confirmed'}
-            onClick={() => setActiveTab('confirmed')}
-            icon={<Check className="w-4 h-4" />}
-            label="已确认"
-          />
-          <TabButton
-            active={activeTab === 'all'}
-            onClick={() => setActiveTab('all')}
-            icon={<FileText className="w-4 h-4" />}
-            label="全部"
-          />
+        {/* Tab 切换和搜索按钮 */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex space-x-3">
+            <TabButton
+              active={activeTab === 'pending'}
+              onClick={() => setActiveTab('pending')}
+              icon={<Clock className="w-4 h-4" />}
+              label="待确认"
+              count={pendingCount}
+            />
+            <TabButton
+              active={activeTab === 'confirmed'}
+              onClick={() => setActiveTab('confirmed')}
+              icon={<Check className="w-4 h-4" />}
+              label="已确认"
+            />
+            <TabButton
+              active={activeTab === 'all'}
+              onClick={() => setActiveTab('all')}
+              icon={<FileText className="w-4 h-4" />}
+              label="全部"
+            />
+          </div>
+          <button
+            onClick={() => setShowSearchPanel(!showSearchPanel)}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all ${
+              showSearchPanel 
+                ? 'bg-cyan-100 text-cyan-700' 
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <Search className="w-4 h-4" />
+            <span>搜索</span>
+          </button>
         </div>
+
+        {/* 搜索面板 */}
+        {showSearchPanel && (
+          <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">结算单号</label>
+                <input
+                  type="text"
+                  value={searchFilters.settlement_no}
+                  onChange={(e) => setSearchFilters({...searchFilters, settlement_no: e.target.value})}
+                  placeholder="JS..."
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">销售单号</label>
+                <input
+                  type="text"
+                  value={searchFilters.sales_order_no}
+                  onChange={(e) => setSearchFilters({...searchFilters, sales_order_no: e.target.value})}
+                  placeholder="XS..."
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">客户名称</label>
+                <input
+                  type="text"
+                  value={searchFilters.customer_name}
+                  onChange={(e) => setSearchFilters({...searchFilters, customer_name: e.target.value})}
+                  placeholder="客户姓名"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">开始日期</label>
+                <input
+                  type="date"
+                  value={searchFilters.start_date}
+                  onChange={(e) => setSearchFilters({...searchFilters, start_date: e.target.value})}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">结束日期</label>
+                <input
+                  type="date"
+                  value={searchFilters.end_date}
+                  onChange={(e) => setSearchFilters({...searchFilters, end_date: e.target.value})}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-4">
+              <button
+                onClick={handleResetSearch}
+                className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                重置
+              </button>
+              <button
+                onClick={handleSearch}
+                className="px-4 py-2 text-sm text-white bg-cyan-600 rounded-lg hover:bg-cyan-700 transition-colors flex items-center space-x-2"
+              >
+                <Search className="w-4 h-4" />
+                <span>搜索</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* 左侧：待结算销售单 */}
@@ -936,6 +1094,20 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                         >
                           <Package className="w-4 h-4" />
                           <span>收料单</span>
+                        </button>
+                      )}
+                      {/* 销退按钮 - 已确认/已打印时显示 */}
+                      {(settlement.status === 'confirmed' || settlement.status === 'printed') && (
+                        <button
+                          onClick={() => {
+                            setRefundingSettlement(settlement);
+                            setRefundReason('客户退货');
+                            setShowRefundConfirm(true);
+                          }}
+                          className="flex items-center justify-center space-x-1 px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors text-sm"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                          <span>销退</span>
                         </button>
                       )}
                       {/* 重新结算按钮 - 已确认/已打印时显示 */}
@@ -1675,6 +1847,99 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* 销退确认弹窗 */}
+        {showRefundConfirm && refundingSettlement && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold flex items-center">
+                  <RotateCcw className="w-5 h-5 mr-2 text-red-500" />
+                  销退确认
+                </h3>
+                <button onClick={() => setShowRefundConfirm(false)} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* 结算单信息 */}
+              <div className="bg-red-50 rounded-lg p-4 mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-500">结算单号</span>
+                  <span className="font-mono text-sm">{refundingSettlement.settlement_no}</span>
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-500">销售单号</span>
+                  <span className="font-mono text-sm">{refundingSettlement.sales_order?.order_no || '-'}</span>
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-500">客户</span>
+                  <span className="font-medium">{refundingSettlement.sales_order?.customer_name || '-'}</span>
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-500">总克重</span>
+                  <span className="font-medium">{refundingSettlement.total_weight?.toFixed(2)}g</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-500">金额</span>
+                  <span className="font-bold text-red-600">¥{refundingSettlement.total_amount?.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* 商品明细 */}
+              {refundingSettlement.sales_order?.details && refundingSettlement.sales_order.details.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">商品明细</h4>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {refundingSettlement.sales_order.details.map((d, i) => (
+                      <div key={i} className="flex justify-between text-sm bg-gray-50 px-3 py-2 rounded">
+                        <span>{d.product_name}</span>
+                        <span className="text-gray-500">{d.weight}g</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 退货原因 */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">退货原因</label>
+                <select
+                  value={refundReason}
+                  onChange={(e) => setRefundReason(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  <option value="客户退货">客户退货</option>
+                  <option value="质量问题">质量问题</option>
+                  <option value="款式不符">款式不符</option>
+                  <option value="尺寸不合">尺寸不合</option>
+                  <option value="其他">其他</option>
+                </select>
+              </div>
+
+              <div className="flex items-center text-red-600 bg-red-50 rounded-lg p-3 mb-4">
+                <AlertCircle className="w-5 h-5 mr-2" />
+                <span className="text-sm">确认后将创建退货单，商品将退回展厅</span>
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setShowRefundConfirm(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleRefund}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center space-x-2"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>确认销退</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
