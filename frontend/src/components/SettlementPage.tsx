@@ -1037,12 +1037,6 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                     
                     {/* 操作按钮 */}
                     <div className="flex space-x-2 mt-3">
-                      {/* 已销退状态 - 不显示操作按钮 */}
-                      {settlement.status === 'refunded' && (
-                        <span className="text-center text-sm text-red-600 py-2 w-full">
-                          ✕ 已销退，无可用操作
-                        </span>
-                      )}
                       {settlement.status === 'pending' && (
                         <>
                           <button
