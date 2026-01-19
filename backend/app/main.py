@@ -1774,11 +1774,20 @@ async def get_inbound_orders(
     end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
     supplier: Optional[str] = Query(None, description="供应商名称"),
     order_no: Optional[str] = Query(None, description="单号搜索"),
+    product_name: Optional[str] = Query(None, description="商品名称（模糊匹配）"),
+    product_code: Optional[str] = Query(None, description="商品编码/条码号（模糊匹配）"),
+    weight_min: Optional[float] = Query(None, description="最小重量（克）"),
+    weight_max: Optional[float] = Query(None, description="最大重量（克）"),
+    labor_cost_min: Optional[float] = Query(None, description="最小克工费（元/克）"),
+    labor_cost_max: Optional[float] = Query(None, description="最大克工费（元/克）"),
+    total_cost_min: Optional[float] = Query(None, description="最小总成本（元）"),
+    total_cost_max: Optional[float] = Query(None, description="最大总成本（元）"),
+    operator: Optional[str] = Query(None, description="操作员"),
     limit: int = Query(100, description="返回数量"),
     offset: int = Query(0, description="偏移量"),
     db: Session = Depends(get_db)
 ):
-    """获取入库单列表（支持筛选）"""
+    """获取入库单列表（支持高级筛选）"""
     try:
         query = db.query(InboundOrder).order_by(InboundOrder.create_time.desc())
         
@@ -1800,25 +1809,68 @@ async def get_inbound_orders(
         if order_no:
             query = query.filter(InboundOrder.order_no.contains(order_no))
         
-        # 获取总数
-        total = query.count()
+        # 操作员筛选
+        if operator:
+            query = query.filter(InboundOrder.operator.contains(operator))
         
-        # 分页
+        # 获取总数（基于主表筛选）
+        base_total = query.count()
+        
+        # 分页获取入库单
         orders = query.offset(offset).limit(limit).all()
         
-        # 获取每个入库单的明细汇总
+        # 获取每个入库单的明细并应用明细级别筛选
         result = []
         for order in orders:
-            details = db.query(InboundDetail).filter(InboundDetail.order_id == order.id).all()
+            details_query = db.query(InboundDetail).filter(InboundDetail.order_id == order.id)
             
-            # 统计明细
+            # 供应商筛选（明细级别）
+            if supplier:
+                details_query = details_query.filter(InboundDetail.supplier.contains(supplier))
+            
+            # 商品名称筛选
+            if product_name:
+                details_query = details_query.filter(InboundDetail.product_name.contains(product_name))
+            
+            # 商品编码筛选
+            if product_code:
+                details_query = details_query.filter(InboundDetail.product_code.contains(product_code))
+            
+            # 重量范围筛选
+            if weight_min is not None:
+                details_query = details_query.filter(InboundDetail.weight >= weight_min)
+            if weight_max is not None:
+                details_query = details_query.filter(InboundDetail.weight <= weight_max)
+            
+            # 克工费范围筛选
+            if labor_cost_min is not None:
+                details_query = details_query.filter(InboundDetail.labor_cost >= labor_cost_min)
+            if labor_cost_max is not None:
+                details_query = details_query.filter(InboundDetail.labor_cost <= labor_cost_max)
+            
+            # 总成本范围筛选
+            if total_cost_min is not None:
+                details_query = details_query.filter(InboundDetail.total_cost >= total_cost_min)
+            if total_cost_max is not None:
+                details_query = details_query.filter(InboundDetail.total_cost <= total_cost_max)
+            
+            details = details_query.all()
+            
+            # 如果有明细级别筛选条件但没有匹配的明细，跳过这个入库单
+            has_detail_filters = any([supplier, product_name, product_code, 
+                                      weight_min, weight_max, labor_cost_min, labor_cost_max,
+                                      total_cost_min, total_cost_max])
+            if has_detail_filters and len(details) == 0:
+                continue
+            
+            # 如果没有明细级别筛选，获取所有明细
+            if not has_detail_filters:
+                details = db.query(InboundDetail).filter(InboundDetail.order_id == order.id).all()
+            
+            # 统计
             item_count = len(details)
             total_weight = sum(d.weight or 0 for d in details)
-            suppliers = list(set(d.supplier for d in details if d.supplier))
-            
-            # 筛选供应商
-            if supplier and supplier not in suppliers:
-                continue
+            suppliers_list = list(set(d.supplier for d in details if d.supplier))
             
             result.append({
                 "id": order.id,
@@ -1828,9 +1880,10 @@ async def get_inbound_orders(
                 "status": order.status,
                 "item_count": item_count,
                 "total_weight": round(total_weight, 2),
-                "suppliers": suppliers,
+                "suppliers": suppliers_list,
                 "details": [{
                     "id": d.id,
+                    "product_code": d.product_code,
                     "product_name": d.product_name,
                     "product_category": d.product_category,
                     "weight": d.weight,
@@ -1845,7 +1898,8 @@ async def get_inbound_orders(
         return {
             "success": True,
             "data": result,
-            "total": total,
+            "total": len(result),  # 筛选后的实际数量
+            "base_total": base_total,  # 基础查询数量（不含明细筛选）
             "limit": limit,
             "offset": offset
         }

@@ -9,6 +9,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 interface InboundDetail {
   id: number;
+  product_code?: string;
   product_name: string;
   product_category?: string;
   weight: number;
@@ -47,9 +48,19 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
     startDate: '',
     endDate: '',
     supplier: '',
-    orderNo: ''
+    orderNo: '',
+    productName: '',
+    productCode: '',
+    weightMin: '',
+    weightMax: '',
+    laborCostMin: '',
+    laborCostMax: '',
+    totalCostMin: '',
+    totalCostMax: '',
+    operator: ''
   });
   const [showFilters, setShowFilters] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   // 加载入库单列表
   const loadOrders = async () => {
@@ -60,6 +71,15 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
       if (filters.endDate) params.append('end_date', filters.endDate);
       if (filters.supplier) params.append('supplier', filters.supplier);
       if (filters.orderNo) params.append('order_no', filters.orderNo);
+      if (filters.productName) params.append('product_name', filters.productName);
+      if (filters.productCode) params.append('product_code', filters.productCode);
+      if (filters.weightMin) params.append('weight_min', filters.weightMin);
+      if (filters.weightMax) params.append('weight_max', filters.weightMax);
+      if (filters.laborCostMin) params.append('labor_cost_min', filters.laborCostMin);
+      if (filters.laborCostMax) params.append('labor_cost_max', filters.laborCostMax);
+      if (filters.totalCostMin) params.append('total_cost_min', filters.totalCostMin);
+      if (filters.totalCostMax) params.append('total_cost_max', filters.totalCostMax);
+      if (filters.operator) params.append('operator', filters.operator);
       params.append('limit', '200');
 
       const res = await fetch(`${API_BASE_URL}/api/inbound-orders?${params}`);
@@ -163,9 +183,31 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
       startDate: '',
       endDate: '',
       supplier: '',
-      orderNo: ''
+      orderNo: '',
+      productName: '',
+      productCode: '',
+      weightMin: '',
+      weightMax: '',
+      laborCostMin: '',
+      laborCostMax: '',
+      totalCostMin: '',
+      totalCostMax: '',
+      operator: ''
     });
   };
+
+  // 导出Excel
+  const handleExportExcel = () => {
+    const params = new URLSearchParams();
+    if (filters.startDate) params.append('date_start', filters.startDate);
+    if (filters.endDate) params.append('date_end', filters.endDate);
+    if (filters.supplier) params.append('supplier', filters.supplier);
+    if (filters.productName) params.append('product', filters.productName);
+    window.open(`${API_BASE_URL}/api/export/inbound-query?${params}`, '_blank');
+  };
+
+  // 检查是否有活动的筛选
+  const hasActiveFilters = Object.values(filters).some(v => v !== '');
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -197,8 +239,8 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
         >
           <div className="flex items-center space-x-2">
             <Filter className="w-5 h-5 text-gray-500" />
-            <span className="font-medium text-gray-700">筛选条件</span>
-            {(filters.startDate || filters.endDate || filters.supplier || filters.orderNo) && (
+            <span className="font-medium text-gray-700">高级查询</span>
+            {hasActiveFilters && (
               <span className="px-2 py-0.5 bg-orange-100 text-orange-600 text-xs rounded-full">
                 已筛选
               </span>
@@ -209,7 +251,18 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
         
         {showFilters && (
           <div className="px-6 pb-4 border-t border-gray-100 pt-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* 基础筛选 */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">入库单号</label>
+                <input
+                  type="text"
+                  value={filters.orderNo}
+                  onChange={(e) => setFilters({ ...filters, orderNo: e.target.value })}
+                  placeholder="输入入库单号"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">开始日期</label>
                 <input
@@ -238,31 +291,143 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">单号搜索</label>
-                <input
-                  type="text"
-                  value={filters.orderNo}
-                  onChange={(e) => setFilters({ ...filters, orderNo: e.target.value })}
-                  placeholder="输入入库单号"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                />
-              </div>
             </div>
-            <div className="flex justify-end space-x-3 mt-4">
+
+            {/* 展开更多筛选按钮 */}
+            <button
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className="text-sm text-orange-600 hover:text-orange-700 mb-4 flex items-center space-x-1"
+            >
+              {showAdvancedFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              <span>{showAdvancedFilters ? '收起高级筛选' : '展开高级筛选'}</span>
+            </button>
+
+            {/* 高级筛选 */}
+            {showAdvancedFilters && (
+              <div className="space-y-4 mb-4 p-4 bg-gray-50 rounded-lg">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">商品名称</label>
+                    <input
+                      type="text"
+                      value={filters.productName}
+                      onChange={(e) => setFilters({ ...filters, productName: e.target.value })}
+                      placeholder="模糊匹配"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">商品编码</label>
+                    <input
+                      type="text"
+                      value={filters.productCode}
+                      onChange={(e) => setFilters({ ...filters, productCode: e.target.value })}
+                      placeholder="条码号"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">操作员</label>
+                    <input
+                      type="text"
+                      value={filters.operator}
+                      onChange={(e) => setFilters({ ...filters, operator: e.target.value })}
+                      placeholder="输入操作员"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">重量范围（克）</label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="number"
+                        value={filters.weightMin}
+                        onChange={(e) => setFilters({ ...filters, weightMin: e.target.value })}
+                        placeholder="最小"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      />
+                      <span className="text-gray-400">-</span>
+                      <input
+                        type="number"
+                        value={filters.weightMax}
+                        onChange={(e) => setFilters({ ...filters, weightMax: e.target.value })}
+                        placeholder="最大"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">克工费范围（元/克）</label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="number"
+                        value={filters.laborCostMin}
+                        onChange={(e) => setFilters({ ...filters, laborCostMin: e.target.value })}
+                        placeholder="最小"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      />
+                      <span className="text-gray-400">-</span>
+                      <input
+                        type="number"
+                        value={filters.laborCostMax}
+                        onChange={(e) => setFilters({ ...filters, laborCostMax: e.target.value })}
+                        placeholder="最大"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">总成本范围（元）</label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="number"
+                        value={filters.totalCostMin}
+                        onChange={(e) => setFilters({ ...filters, totalCostMin: e.target.value })}
+                        placeholder="最小"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      />
+                      <span className="text-gray-400">-</span>
+                      <input
+                        type="number"
+                        value={filters.totalCostMax}
+                        onChange={(e) => setFilters({ ...filters, totalCostMax: e.target.value })}
+                        placeholder="最大"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 操作按钮 */}
+            <div className="flex justify-between items-center">
               <button
-                onClick={resetFilters}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                onClick={handleExportExcel}
+                disabled={orders.length === 0}
+                className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                重置
+                <Download className="w-4 h-4" />
+                <span>导出Excel</span>
               </button>
-              <button
-                onClick={handleSearch}
-                className="flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
-              >
-                <Search className="w-4 h-4" />
-                <span>搜索</span>
-              </button>
+              <div className="flex space-x-3">
+                <button
+                  onClick={resetFilters}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  重置
+                </button>
+                <button
+                  onClick={handleSearch}
+                  className="flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                >
+                  <Search className="w-4 h-4" />
+                  <span>查询</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
