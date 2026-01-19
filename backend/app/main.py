@@ -707,6 +707,24 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                             # 返回错误信息
                             yield f"data: {json.dumps({'type': 'complete', 'data': result}, ensure_ascii=False)}\n\n"
                             return
+                    elif ai_response.action == "付料":
+                        # 付料：返回确认卡片数据
+                        result = await handle_gold_payment(ai_response, db)
+                        if result.get("success"):
+                            yield f"data: {json.dumps({'type': 'payment_confirm', 'data': result}, ensure_ascii=False)}\n\n"
+                            return
+                        else:
+                            yield f"data: {json.dumps({'type': 'complete', 'data': result}, ensure_ascii=False)}\n\n"
+                            return
+                    elif ai_response.action == "批量转移":
+                        # 批量转移：返回确认卡片数据
+                        result = await handle_batch_transfer(ai_response, db)
+                        if result.get("success"):
+                            yield f"data: {json.dumps({'type': 'batch_transfer_confirm', 'data': result}, ensure_ascii=False)}\n\n"
+                            return
+                        else:
+                            yield f"data: {json.dumps({'type': 'complete', 'data': result}, ensure_ascii=False)}\n\n"
+                            return
                     
                     # 【上下文工程】记录成功操作（Append-Only）
                     action_desc = f"{ai_response.action}"
@@ -3602,6 +3620,171 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
         return {
             "success": False,
             "message": f"收料失败: {str(e)}"
+        }
+
+
+async def handle_gold_payment(ai_response, db: Session) -> Dict[str, Any]:
+    """处理付料：返回确认数据供前端显示确认卡片"""
+    try:
+        supplier_name = ai_response.gold_payment_supplier
+        gold_weight = ai_response.gold_payment_weight
+        remark = ai_response.gold_payment_remark or ""
+        
+        # 验证必填信息
+        if not supplier_name:
+            return {
+                "success": False,
+                "message": "请提供供应商名称，例如：付20克给金源珠宝"
+            }
+        
+        if not gold_weight or gold_weight <= 0:
+            return {
+                "success": False,
+                "message": "请提供付料克重，例如：付20克给金源珠宝"
+            }
+        
+        # 模糊查询供应商
+        from .models import Supplier
+        
+        supplier = db.query(Supplier).filter(
+            Supplier.name.ilike(f"%{supplier_name}%")
+        ).first()
+        
+        if not supplier:
+            return {
+                "success": False,
+                "message": f"未找到供应商【{supplier_name}】，请确认供应商名称是否正确"
+            }
+        
+        # 检查金料余额
+        from .routers.gold_material import get_gold_balance_internal
+        balance = get_gold_balance_internal(db)
+        
+        if gold_weight > balance["current_balance"]:
+            return {
+                "success": False,
+                "message": f"金料库存不足。当前余额：{balance['current_balance']:.2f}克，需要支付：{gold_weight:.2f}克"
+            }
+        
+        return {
+            "success": True,
+            "action": "付料",
+            "confirm_required": True,
+            "supplier": {
+                "id": supplier.id,
+                "name": supplier.name
+            },
+            "gold_weight": round(gold_weight, 2),
+            "remark": remark,
+            "current_balance": round(balance["current_balance"], 2),
+            "balance_after": round(balance["current_balance"] - gold_weight, 2),
+            "message": f"确认付料给【{supplier.name}】：{gold_weight:.2f}克？\n当前余额：{balance['current_balance']:.2f}克，付料后余额：{balance['current_balance'] - gold_weight:.2f}克"
+        }
+        
+    except Exception as e:
+        logger.error(f"处理付料失败: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"付料失败: {str(e)}"
+        }
+
+
+async def handle_batch_transfer(ai_response, db: Session) -> Dict[str, Any]:
+    """处理批量转移：返回入库单商品列表供确认"""
+    try:
+        order_no = ai_response.batch_transfer_order_no
+        to_location_name = ai_response.batch_transfer_to_location or "展厅"
+        
+        # 验证必填信息
+        if not order_no:
+            return {
+                "success": False,
+                "message": "请提供入库单号，例如：把入库单RK123的商品转到展厅"
+            }
+        
+        # 查询入库单
+        inbound_order = db.query(InboundOrder).filter(
+            InboundOrder.order_no.contains(order_no)
+        ).first()
+        
+        if not inbound_order:
+            return {
+                "success": False,
+                "message": f"未找到入库单【{order_no}】，请确认单号是否正确"
+            }
+        
+        # 查询入库单明细
+        details = db.query(InboundDetail).filter(
+            InboundDetail.order_id == inbound_order.id
+        ).all()
+        
+        if not details:
+            return {
+                "success": False,
+                "message": f"入库单【{order_no}】没有商品明细"
+            }
+        
+        # 查询目标位置
+        from .models import Location
+        to_location = db.query(Location).filter(
+            Location.name.contains(to_location_name)
+        ).first()
+        
+        if not to_location:
+            # 如果找不到，尝试用 code 匹配
+            if to_location_name == "展厅":
+                to_location = db.query(Location).filter(Location.code == "showroom").first()
+            elif "仓库" in to_location_name or "商品部" in to_location_name:
+                to_location = db.query(Location).filter(Location.code == "product_warehouse").first()
+        
+        if not to_location:
+            return {
+                "success": False,
+                "message": f"未找到目标位置【{to_location_name}】"
+            }
+        
+        # 默认发出位置是商品部仓库
+        from_location = db.query(Location).filter(Location.code == "product_warehouse").first()
+        if not from_location:
+            return {
+                "success": False,
+                "message": "系统配置错误：未找到商品部仓库"
+            }
+        
+        # 构建商品列表
+        items = []
+        for detail in details:
+            items.append({
+                "id": detail.id,
+                "product_name": detail.product_name,
+                "weight": detail.weight,
+                "transfer_weight": detail.weight,  # 默认转移全部
+                "selected": True
+            })
+        
+        return {
+            "success": True,
+            "action": "批量转移",
+            "confirm_required": True,
+            "order_no": inbound_order.order_no,
+            "from_location": {
+                "id": from_location.id,
+                "name": from_location.name
+            },
+            "to_location": {
+                "id": to_location.id,
+                "name": to_location.name
+            },
+            "items": items,
+            "total_weight": round(sum(d.weight for d in details), 2),
+            "message": f"入库单【{inbound_order.order_no}】共{len(items)}件商品，总重量{sum(d.weight for d in details):.2f}克，确认转移到【{to_location.name}】？"
+        }
+        
+    except Exception as e:
+        logger.error(f"处理批量转移失败: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"批量转移失败: {str(e)}"
         }
 
 

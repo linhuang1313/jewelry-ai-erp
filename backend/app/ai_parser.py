@@ -68,6 +68,8 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
 14. **登记收款**：财务登记客户收款（如"张老板收到5000元"、"李总打了3000块"、"收到王老板2000"）
 15. **销售数据查询**：查询销售统计数据（如"今天卖了多少钱"、"这个月销售额"、"哪个商品卖得最好"、"业务员业绩排行"）
 16. **收料**：客户交料（如"张老板交料5克"、"李老板存料3.5克足金9999"、"王总交了2克金料"）
+17. **付料**：付料给供应商（如"付20克给金源珠宝"、"付料金源珠宝10克"、"给金源付5克"）
+18. **批量转移**：按入库单号批量转移商品（如"把入库单RK123的商品转到展厅"、"RK123转移到展厅"）
 
 **关键词优先级识别（非常重要）**：
 - "退"、"退货"、"退给"、"退回"、"退库"、"我要退" → 优先识别为"退货"操作，而不是入库！
@@ -95,6 +97,8 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
   - "登记收款"：财务要登记客户收款（如"张老板收到5000元"、"李总打了3000块"、"收到王老板2000"、"测试客户1 收款8000"等）
   - "销售数据查询"：用户要查询销售统计数据（如"今天卖了多少钱"、"这个月销售额"、"本月业绩"、"哪个商品卖得最好"、"业务员业绩"、"销售排行"、"和上月比怎么样"等）
   - "收料"：客户交料/存料（如"张老板交料5克"、"李老板存料3.5克足金9999"、"王总交了2克金料"、"收张老板5克"等）
+  - "付料"：付料给供应商（如"付20克给金源珠宝"、"付料金源珠宝10克"、"给金源付5克"等）
+  - "批量转移"：按入库单号批量转移商品（如"把入库单RK123的商品转到展厅"、"RK123转移到展厅"等）
   - "其他"：无法识别的意图
 
 **关于"退货"和"入库"的区分（极其重要）**：
@@ -173,6 +177,13 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
 - receipt_gold_fineness: 成色（当action为"收料"时可选，默认"足金999"，可选值：足金999/足金9999/Au999/Au9999/18K/22K/其他）
 - receipt_remark: 备注（当action为"收料"时可选）
 
+- gold_payment_supplier: 付料供应商名称（当action为"付料"时必填，如"金源珠宝"、"深圳金源"等）
+- gold_payment_weight: 付料克重（当action为"付料"时必填，数字，单位克）
+- gold_payment_remark: 付料备注（当action为"付料"时可选）
+
+- batch_transfer_order_no: 入库单号（当action为"批量转移"时必填，如"RK1768047147249"）
+- batch_transfer_to_location: 目标位置（当action为"批量转移"时可选，如"展厅"、"商品部仓库"，默认"展厅"）
+
 重要提示：
 1. **意图识别要灵活**：
    - "帮我入库"、"做个入库"、"入库"、"帮我做个入库" → action: "入库"
@@ -193,6 +204,8 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
    - "我要退库"、"退库"、"退给供应商"、"退货给金源珠宝"、"退库10克古法戒指给金源珠宝" → action: "退货"
    - "张老板的欠款"、"王总欠了多少"、"李老板的存料"、"刘老板1月份欠料情况"、"客户欠款查询"、"查一下张三的账务" → action: "查询客户账务"
    - "张老板收到5000元"、"李总打了3000块"、"收到王老板2000"、"测试客户1 收款8000"、"张老板付了5000" → action: "登记收款"
+   - "付20克给金源珠宝"、"给金源付5克"、"付料金源珠宝10克" → action: "付料"
+   - "把入库单RK123的商品转到展厅"、"RK123转移到展厅"、"把RK123的商品全部转移" → action: "批量转移"
    - "今天卖了多少"、"这个月销售额"、"本月业绩"、"哪个商品卖得最好"、"业务员业绩排行"、"销售排行"、"和上月比怎么样"、"张三业绩怎么样" → action: "销售数据查询"
 
 2. **入库操作必填字段**（仅当action为"入库"时）：
@@ -864,6 +877,67 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
 {{
   "action": "销售数据查询",
   "sales_query_type": "compare",
+  "products": null
+}}
+
+示例40（付料 - 基本）：
+用户输入："付20克给金源珠宝"
+说明：用户要付料给供应商，提取供应商名称和克重
+{{
+  "action": "付料",
+  "gold_payment_supplier": "金源珠宝",
+  "gold_payment_weight": 20,
+  "products": null
+}}
+
+示例41（付料 - 另一种表达）：
+用户输入："给深圳金源付10克"
+说明：用户要付料给供应商，语序不同但意图相同
+{{
+  "action": "付料",
+  "gold_payment_supplier": "深圳金源",
+  "gold_payment_weight": 10,
+  "products": null
+}}
+
+示例42（付料 - 带备注）：
+用户输入："付料金源珠宝15克 12月份欠料"
+说明：用户付料并提供备注信息
+{{
+  "action": "付料",
+  "gold_payment_supplier": "金源珠宝",
+  "gold_payment_weight": 15,
+  "gold_payment_remark": "12月份欠料",
+  "products": null
+}}
+
+示例43（批量转移 - 基本）：
+用户输入："把入库单RK1768047147249的商品转到展厅"
+说明：用户要把某个入库单的商品批量转移到展厅
+{{
+  "action": "批量转移",
+  "batch_transfer_order_no": "RK1768047147249",
+  "batch_transfer_to_location": "展厅",
+  "products": null
+}}
+
+示例44（批量转移 - 简写）：
+用户输入："RK1768047147249转移到展厅"
+说明：用户直接输入入库单号和目标位置
+{{
+  "action": "批量转移",
+  "batch_transfer_order_no": "RK1768047147249",
+  "batch_transfer_to_location": "展厅",
+  "products": null
+}}
+
+示例45（批量转移 - 默认位置）：
+用户输入："把RK123的商品全部转移"
+说明：用户没有指定目标位置，默认为展厅
+{{
+  "action": "批量转移",
+  "batch_transfer_order_no": "RK123",
+  "batch_transfer_to_location": "展厅",
   "products": null
 }}
 """

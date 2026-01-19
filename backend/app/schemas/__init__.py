@@ -110,6 +110,13 @@ class AIResponse(BaseModel):
     inbound_product: Optional[str] = None  # 按商品名称筛选入库单
     inbound_date_start: Optional[str] = None  # 入库单开始日期
     inbound_date_end: Optional[str] = None  # 入库单结束日期
+    # 付料相关字段
+    gold_payment_supplier: Optional[str] = None  # 付料供应商名称
+    gold_payment_weight: Optional[float] = None  # 付料克重
+    gold_payment_remark: Optional[str] = None  # 付料备注
+    # 批量转移相关字段
+    batch_transfer_order_no: Optional[str] = None  # 批量转移的入库单号
+    batch_transfer_to_location: Optional[str] = None  # 批量转移目标位置
 
 
 # ============= 入库相关 Schema =============
