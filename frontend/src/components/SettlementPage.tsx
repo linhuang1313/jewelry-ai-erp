@@ -203,6 +203,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
   const [showRefundConfirm, setShowRefundConfirm] = useState(false);
   const [refundingSettlement, setRefundingSettlement] = useState<SettlementOrder | null>(null);
   const [refundReason, setRefundReason] = useState('客户退货');
+  const [refundDestination, setRefundDestination] = useState<'showroom' | 'warehouse'>('showroom');
 
   // 加载数据
   useEffect(() => {
@@ -348,7 +349,8 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
     try {
       const params = new URLSearchParams({
         return_reason: refundReason,
-        user_role: 'settlement'
+        user_role: 'settlement',
+        return_to: refundDestination
       });
       
       const response = await fetch(
@@ -1924,9 +1926,48 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                 </select>
               </div>
 
-              <div className="flex items-center text-red-600 bg-red-50 rounded-lg p-3 mb-4">
+              {/* 退货目的地 */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">退货目的地</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setRefundDestination('showroom')}
+                    className={`p-3 rounded-lg border-2 transition-colors ${
+                      refundDestination === 'showroom'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="font-medium">🏪 退到柜台</div>
+                    <div className="text-xs text-gray-500 mt-1">商品返回展厅，可重新销售</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRefundDestination('warehouse')}
+                    className={`p-3 rounded-lg border-2 transition-colors ${
+                      refundDestination === 'warehouse'
+                        ? 'border-orange-500 bg-orange-50 text-orange-700'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="font-medium">🏭 退到商品部</div>
+                    <div className="text-xs text-gray-500 mt-1">商品返回仓库，需开退货单</div>
+                  </button>
+                </div>
+              </div>
+
+              <div className={`flex items-center rounded-lg p-3 mb-4 ${
+                refundDestination === 'showroom' 
+                  ? 'text-blue-600 bg-blue-50' 
+                  : 'text-orange-600 bg-orange-50'
+              }`}>
                 <AlertCircle className="w-5 h-5 mr-2" />
-                <span className="text-sm">确认后将创建退货单，商品将退回展厅</span>
+                <span className="text-sm">
+                  {refundDestination === 'showroom' 
+                    ? '确认后将创建退货单，商品将退回展厅' 
+                    : '确认后将创建退货单，商品将退回商品部仓库'}
+                </span>
               </div>
 
               <div className="flex space-x-3">

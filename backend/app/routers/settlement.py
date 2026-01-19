@@ -1791,13 +1791,14 @@ async def refund_settlement_order(
     return_reason: str = Query(default="客户退货", description="退货原因"),
     reason_detail: Optional[str] = Query(None, description="退货详细说明"),
     user_role: str = Query(default="settlement", description="用户角色"),
+    return_to: str = Query(default="showroom", description="退货目的地: showroom(展厅) 或 warehouse(商品部)"),
     db: Session = Depends(get_db)
 ):
     """
     结算单销退（客户退货）
     - 创建退货单（退回展厅/商品部）
     - 更新库存
-    - 结算单状态保持不变，仅记录退货
+    - 结算单状态变回待确认
     """
     from ..models import ReturnOrder, Location, LocationInventory
     from ..middleware.permissions import has_permission
@@ -1805,6 +1806,10 @@ async def refund_settlement_order(
     # 权限检查
     if not has_permission(user_role, 'can_refund_settlement'):
         raise HTTPException(status_code=403, detail="权限不足：您没有销退权限")
+    
+    # 验证 return_to 参数
+    if return_to not in ["showroom", "warehouse"]:
+        raise HTTPException(status_code=400, detail="退货目的地必须是 showroom 或 warehouse")
     
     # 查询结算单
     settlement = db.query(SettlementOrder).filter(SettlementOrder.id == settlement_id).first()
@@ -1824,10 +1829,18 @@ async def refund_settlement_order(
     if not details:
         raise HTTPException(status_code=400, detail="销售单没有商品明细")
     
-    # 获取展厅位置
-    showroom = db.query(Location).filter(Location.code == "showroom").first()
-    if not showroom:
-        raise HTTPException(status_code=500, detail="系统配置错误：未找到展厅位置")
+    # 根据退货目的地获取对应位置
+    if return_to == "showroom":
+        target_location = db.query(Location).filter(Location.code == "showroom").first()
+        location_name = "展厅"
+        return_type = "to_showroom"
+    else:
+        target_location = db.query(Location).filter(Location.code == "warehouse").first()
+        location_name = "商品部仓库"
+        return_type = "to_warehouse"
+    
+    if not target_location:
+        raise HTTPException(status_code=500, detail=f"系统配置错误：未找到{location_name}位置")
     
     try:
         now = china_now()
@@ -1844,32 +1857,41 @@ async def refund_settlement_order(
             # 创建退货单
             return_order = ReturnOrder(
                 return_no=return_no,
-                return_type="to_warehouse",  # 退给商品部
+                return_type=return_type,
                 product_name=detail.product_name,
                 return_weight=detail.weight,
-                from_location_id=showroom.id,  # 从展厅退回
+                from_location_id=target_location.id,
                 return_reason=return_reason,
-                reason_detail=reason_detail or f"结算单 {settlement.settlement_no} 销退",
+                reason_detail=reason_detail or f"结算单 {settlement.settlement_no} 销退至{location_name}",
                 status="completed",  # 直接完成
                 created_by=user_role,
                 completed_by=user_role,
                 completed_at=now,
-                remark=f"关联结算单: {settlement.settlement_no}, 销售单: {sales_order.order_no}"
+                remark=f"关联结算单: {settlement.settlement_no}, 销售单: {sales_order.order_no}, 退至: {location_name}"
             )
             db.add(return_order)
             
-            # 更新展厅库存（扣减）
+            # 更新目标位置库存（增加）
             inventory = db.query(LocationInventory).filter(
-                LocationInventory.location_id == showroom.id,
+                LocationInventory.location_id == target_location.id,
                 LocationInventory.product_name == detail.product_name
             ).first()
-            if inventory and inventory.weight >= detail.weight:
-                inventory.weight -= detail.weight
+            if inventory:
+                inventory.weight += detail.weight
+            else:
+                # 如果库存记录不存在，创建新记录
+                new_inventory = LocationInventory(
+                    location_id=target_location.id,
+                    product_name=detail.product_name,
+                    weight=detail.weight
+                )
+                db.add(new_inventory)
             
             return_orders.append({
                 "return_no": return_no,
                 "product_name": detail.product_name,
-                "weight": detail.weight
+                "weight": detail.weight,
+                "return_to": location_name
             })
         
         # 更新结算单状态为"待确认"（需要重新确认）
@@ -1882,14 +1904,15 @@ async def refund_settlement_order(
         
         db.commit()
         
-        logger.info(f"结算单 {settlement.settlement_no} 销退成功，创建了 {len(return_orders)} 个退货单")
+        logger.info(f"结算单 {settlement.settlement_no} 销退成功，商品退至{location_name}，创建了 {len(return_orders)} 个退货单")
         
         return {
             "success": True,
-            "message": f"销退成功！已创建 {len(return_orders)} 个退货单，结算单状态已更新",
+            "message": f"销退成功！商品已退至{location_name}，创建了 {len(return_orders)} 个退货单",
             "settlement_id": settlement.id,
             "settlement_no": settlement.settlement_no,
             "customer_name": sales_order.customer_name,
+            "return_to": location_name,
             "return_orders": return_orders
         }
         
