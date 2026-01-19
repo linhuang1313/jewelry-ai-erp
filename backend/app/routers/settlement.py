@@ -1872,13 +1872,19 @@ async def refund_settlement_order(
                 "weight": detail.weight
             })
         
+        # 更新结算单状态为"已销退"
+        settlement.status = "refunded"
+        
+        # 更新销售单状态为"已销退"
+        sales_order.status = "已销退"
+        
         db.commit()
         
         logger.info(f"结算单 {settlement.settlement_no} 销退成功，创建了 {len(return_orders)} 个退货单")
         
         return {
             "success": True,
-            "message": f"销退成功！已创建 {len(return_orders)} 个退货单",
+            "message": f"销退成功！已创建 {len(return_orders)} 个退货单，结算单状态已更新",
             "settlement_id": settlement.id,
             "settlement_no": settlement.settlement_no,
             "customer_name": sales_order.customer_name,

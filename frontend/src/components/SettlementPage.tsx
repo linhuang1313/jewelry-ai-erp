@@ -65,6 +65,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     pending: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: '待确认' },
     confirmed: { bg: 'bg-blue-100', text: 'text-blue-700', label: '已确认' },
     printed: { bg: 'bg-green-100', text: 'text-green-700', label: '已打印' },
+    refunded: { bg: 'bg-red-100', text: 'text-red-700', label: '已销退' },
     '待结算': { bg: 'bg-orange-100', text: 'text-orange-700', label: '待结算' },
   };
   const { bg, text, label } = config[status] || { bg: 'bg-gray-100', text: 'text-gray-700', label: status };
@@ -670,6 +671,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
   const filteredSettlements = settlements.filter(s => {
     if (activeTab === 'pending') return s.status === 'pending';
     if (activeTab === 'confirmed') return s.status === 'confirmed' || s.status === 'printed';
+    // 全部Tab显示所有记录（包括已销退）
     return true;
   });
 
@@ -1035,6 +1037,12 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                     
                     {/* 操作按钮 */}
                     <div className="flex space-x-2 mt-3">
+                      {/* 已销退状态 - 不显示操作按钮 */}
+                      {settlement.status === 'refunded' && (
+                        <span className="text-center text-sm text-red-600 py-2 w-full">
+                          ✕ 已销退，无可用操作
+                        </span>
+                      )}
                       {settlement.status === 'pending' && (
                         <>
                           <button
