@@ -811,7 +811,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                 🎨 珐琅产品批量生成
               </h4>
               
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
                 {/* 编码类型选择 */}
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">编码类型</label>
