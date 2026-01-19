@@ -1,0 +1,470 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Package, Search, Calendar, Filter, Edit2, Save, X, 
+  ChevronDown, ChevronUp, Download, Printer, RefreshCw
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+interface InboundDetail {
+  id: number;
+  product_name: string;
+  weight: number;
+  labor_cost: number;
+  supplier: string;
+  remark?: string;
+}
+
+interface InboundOrder {
+  id: number;
+  order_no: string;
+  create_time: string;
+  operator: string;
+  status: string;
+  item_count: number;
+  total_weight: number;
+  suppliers: string[];
+  details: InboundDetail[];
+}
+
+interface InboundOrdersPageProps {
+  userRole?: string;
+}
+
+export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole = 'product' }) => {
+  const [orders, setOrders] = useState<InboundOrder[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
+  const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
+  const [editingDetails, setEditingDetails] = useState<InboundDetail[]>([]);
+  
+  // 筛选条件
+  const [filters, setFilters] = useState({
+    startDate: '',
+    endDate: '',
+    supplier: '',
+    orderNo: ''
+  });
+  const [showFilters, setShowFilters] = useState(false);
+
+  // 加载入库单列表
+  const loadOrders = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filters.startDate) params.append('start_date', filters.startDate);
+      if (filters.endDate) params.append('end_date', filters.endDate);
+      if (filters.supplier) params.append('supplier', filters.supplier);
+      if (filters.orderNo) params.append('order_no', filters.orderNo);
+      params.append('limit', '200');
+
+      const res = await fetch(`${API_BASE_URL}/api/inbound-orders?${params}`);
+      const data = await res.json();
+      
+      if (data.success) {
+        setOrders(data.data || []);
+      } else {
+        toast.error(data.error || '加载失败');
+      }
+    } catch (error) {
+      console.error('加载入库单失败:', error);
+      toast.error('加载入库单失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOrders();
+  }, []);
+
+  // 格式化日期
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // 展开/折叠明细
+  const toggleExpand = (orderId: number) => {
+    setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
+  };
+
+  // 开始编辑
+  const startEdit = (order: InboundOrder) => {
+    setEditingOrderId(order.id);
+    setEditingDetails([...order.details]);
+    setExpandedOrderId(order.id);
+  };
+
+  // 取消编辑
+  const cancelEdit = () => {
+    setEditingOrderId(null);
+    setEditingDetails([]);
+  };
+
+  // 保存编辑
+  const saveEdit = async (orderId: number) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/inbound-orders/${orderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ details: editingDetails })
+      });
+      
+      const data = await res.json();
+      if (data.success) {
+        toast.success('保存成功');
+        setEditingOrderId(null);
+        setEditingDetails([]);
+        loadOrders();
+      } else {
+        toast.error(data.error || '保存失败');
+      }
+    } catch (error) {
+      toast.error('保存失败');
+    }
+  };
+
+  // 更新编辑中的明细
+  const updateEditingDetail = (detailId: number, field: string, value: any) => {
+    setEditingDetails(prev => 
+      prev.map(d => d.id === detailId ? { ...d, [field]: value } : d)
+    );
+  };
+
+  // 打印/下载
+  const handlePrint = (orderId: number) => {
+    window.open(`${API_BASE_URL}/api/inbound-orders/${orderId}/download?format=html`, '_blank');
+  };
+
+  const handleDownload = (orderId: number) => {
+    window.open(`${API_BASE_URL}/api/inbound-orders/${orderId}/download?format=pdf`, '_blank');
+  };
+
+  // 搜索
+  const handleSearch = () => {
+    loadOrders();
+  };
+
+  // 重置筛选
+  const resetFilters = () => {
+    setFilters({
+      startDate: '',
+      endDate: '',
+      supplier: '',
+      orderNo: ''
+    });
+  };
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto">
+      {/* 标题 */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center space-x-3">
+          <div className="p-2 bg-orange-100 rounded-xl">
+            <Package className="w-6 h-6 text-orange-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">入库单据一览表</h1>
+            <p className="text-sm text-gray-500">查看、搜索和修改入库单据</p>
+          </div>
+        </div>
+        <button
+          onClick={loadOrders}
+          className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          <span>刷新</span>
+        </button>
+      </div>
+
+      {/* 筛选条件 */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 overflow-hidden">
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center space-x-2">
+            <Filter className="w-5 h-5 text-gray-500" />
+            <span className="font-medium text-gray-700">筛选条件</span>
+            {(filters.startDate || filters.endDate || filters.supplier || filters.orderNo) && (
+              <span className="px-2 py-0.5 bg-orange-100 text-orange-600 text-xs rounded-full">
+                已筛选
+              </span>
+            )}
+          </div>
+          {showFilters ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+        </button>
+        
+        {showFilters && (
+          <div className="px-6 pb-4 border-t border-gray-100 pt-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">开始日期</label>
+                <input
+                  type="date"
+                  value={filters.startDate}
+                  onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">结束日期</label>
+                <input
+                  type="date"
+                  value={filters.endDate}
+                  onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">供应商</label>
+                <input
+                  type="text"
+                  value={filters.supplier}
+                  onChange={(e) => setFilters({ ...filters, supplier: e.target.value })}
+                  placeholder="输入供应商名称"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">单号搜索</label>
+                <input
+                  type="text"
+                  value={filters.orderNo}
+                  onChange={(e) => setFilters({ ...filters, orderNo: e.target.value })}
+                  placeholder="输入入库单号"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-4">
+              <button
+                onClick={resetFilters}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                重置
+              </button>
+              <button
+                onClick={handleSearch}
+                className="flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+              >
+                <Search className="w-4 h-4" />
+                <span>搜索</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 入库单列表 */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <RefreshCw className="w-8 h-8 text-orange-500 animate-spin" />
+          </div>
+        ) : orders.length === 0 ? (
+          <div className="text-center py-20 text-gray-500">
+            <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <p>暂无入库单据</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {orders.map((order) => (
+              <div key={order.id} className="hover:bg-gray-50 transition-colors">
+                {/* 入库单主信息 */}
+                <div className="flex items-center justify-between px-6 py-4">
+                  <div className="flex items-center space-x-6">
+                    <button
+                      onClick={() => toggleExpand(order.id)}
+                      className="p-1 hover:bg-gray-200 rounded transition-colors"
+                    >
+                      {expandedOrderId === order.id ? (
+                        <ChevronUp className="w-5 h-5 text-gray-500" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-gray-500" />
+                      )}
+                    </button>
+                    <div>
+                      <div className="font-mono font-semibold text-gray-900">{order.order_no}</div>
+                      <div className="text-sm text-gray-500">{formatDate(order.create_time)}</div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-8">
+                    <div className="text-center">
+                      <div className="text-sm text-gray-500">商品数</div>
+                      <div className="font-semibold text-gray-900">{order.item_count}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm text-gray-500">总重量</div>
+                      <div className="font-semibold text-orange-600">{order.total_weight}克</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm text-gray-500">供应商</div>
+                      <div className="font-semibold text-gray-900 max-w-32 truncate">
+                        {order.suppliers.join(', ') || '-'}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm text-gray-500">状态</div>
+                      <span className="px-2 py-0.5 bg-green-100 text-green-700 text-sm rounded-full">
+                        {order.status}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      {editingOrderId === order.id ? (
+                        <>
+                          <button
+                            onClick={() => saveEdit(order.id)}
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                            title="保存"
+                          >
+                            <Save className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="取消"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => startEdit(order)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="编辑"
+                          >
+                            <Edit2 className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => handlePrint(order.id)}
+                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="打印"
+                          >
+                            <Printer className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => handleDownload(order.id)}
+                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="下载"
+                          >
+                            <Download className="w-5 h-5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 明细展开 */}
+                {expandedOrderId === order.id && (
+                  <div className="bg-gray-50 px-6 py-4 border-t border-gray-100">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-gray-500">
+                          <th className="pb-2 font-medium">商品名称</th>
+                          <th className="pb-2 font-medium">重量(克)</th>
+                          <th className="pb-2 font-medium">工费(元/克)</th>
+                          <th className="pb-2 font-medium">供应商</th>
+                          <th className="pb-2 font-medium">备注</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {(editingOrderId === order.id ? editingDetails : order.details).map((detail) => (
+                          <tr key={detail.id}>
+                            <td className="py-2">
+                              {editingOrderId === order.id ? (
+                                <input
+                                  type="text"
+                                  value={detail.product_name}
+                                  onChange={(e) => updateEditingDetail(detail.id, 'product_name', e.target.value)}
+                                  className="w-full px-2 py-1 border border-gray-300 rounded"
+                                />
+                              ) : (
+                                detail.product_name
+                              )}
+                            </td>
+                            <td className="py-2">
+                              {editingOrderId === order.id ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={detail.weight}
+                                  onChange={(e) => updateEditingDetail(detail.id, 'weight', e.target.value)}
+                                  className="w-24 px-2 py-1 border border-gray-300 rounded"
+                                />
+                              ) : (
+                                detail.weight
+                              )}
+                            </td>
+                            <td className="py-2">
+                              {editingOrderId === order.id ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={detail.labor_cost}
+                                  onChange={(e) => updateEditingDetail(detail.id, 'labor_cost', e.target.value)}
+                                  className="w-24 px-2 py-1 border border-gray-300 rounded"
+                                />
+                              ) : (
+                                detail.labor_cost
+                              )}
+                            </td>
+                            <td className="py-2">
+                              {editingOrderId === order.id ? (
+                                <input
+                                  type="text"
+                                  value={detail.supplier || ''}
+                                  onChange={(e) => updateEditingDetail(detail.id, 'supplier', e.target.value)}
+                                  className="w-32 px-2 py-1 border border-gray-300 rounded"
+                                />
+                              ) : (
+                                detail.supplier || '-'
+                              )}
+                            </td>
+                            <td className="py-2">
+                              {editingOrderId === order.id ? (
+                                <input
+                                  type="text"
+                                  value={detail.remark || ''}
+                                  onChange={(e) => updateEditingDetail(detail.id, 'remark', e.target.value)}
+                                  className="w-full px-2 py-1 border border-gray-300 rounded"
+                                />
+                              ) : (
+                                detail.remark || '-'
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 统计信息 */}
+      <div className="mt-4 text-sm text-gray-500 text-right">
+        共 {orders.length} 条入库单据
+      </div>
+    </div>
+  );
+};
+
+export default InboundOrdersPage;
+

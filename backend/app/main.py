@@ -1680,6 +1680,148 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
             "error": str(e)
         }
 
+# ==================== 入库单据管理API ====================
+
+@app.get("/api/inbound-orders")
+async def get_inbound_orders(
+    start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+    supplier: Optional[str] = Query(None, description="供应商名称"),
+    order_no: Optional[str] = Query(None, description="单号搜索"),
+    limit: int = Query(100, description="返回数量"),
+    offset: int = Query(0, description="偏移量"),
+    db: Session = Depends(get_db)
+):
+    """获取入库单列表（支持筛选）"""
+    try:
+        query = db.query(InboundOrder).order_by(InboundOrder.create_time.desc())
+        
+        # 日期筛选
+        if start_date:
+            try:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+                query = query.filter(InboundOrder.create_time >= start_dt)
+            except:
+                pass
+        if end_date:
+            try:
+                end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+                query = query.filter(InboundOrder.create_time <= end_dt)
+            except:
+                pass
+        
+        # 单号搜索
+        if order_no:
+            query = query.filter(InboundOrder.order_no.contains(order_no))
+        
+        # 获取总数
+        total = query.count()
+        
+        # 分页
+        orders = query.offset(offset).limit(limit).all()
+        
+        # 获取每个入库单的明细汇总
+        result = []
+        for order in orders:
+            details = db.query(InboundDetail).filter(InboundDetail.order_id == order.id).all()
+            
+            # 统计明细
+            item_count = len(details)
+            total_weight = sum(d.weight or 0 for d in details)
+            suppliers = list(set(d.supplier for d in details if d.supplier))
+            
+            # 筛选供应商
+            if supplier and supplier not in suppliers:
+                continue
+            
+            result.append({
+                "id": order.id,
+                "order_no": order.order_no,
+                "create_time": order.create_time.isoformat() if order.create_time else None,
+                "operator": order.operator,
+                "status": order.status,
+                "item_count": item_count,
+                "total_weight": round(total_weight, 2),
+                "suppliers": suppliers,
+                "details": [{
+                    "id": d.id,
+                    "product_name": d.product_name,
+                    "weight": d.weight,
+                    "labor_cost": d.labor_cost,
+                    "supplier": d.supplier,
+                    "remark": d.remark
+                } for d in details]
+            })
+        
+        return {
+            "success": True,
+            "data": result,
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        }
+        
+    except Exception as e:
+        logger.error(f"获取入库单列表失败: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@app.put("/api/inbound-orders/{order_id}")
+async def update_inbound_order(
+    order_id: int,
+    updates: dict,
+    db: Session = Depends(get_db)
+):
+    """修改入库单"""
+    try:
+        order = db.query(InboundOrder).filter(InboundOrder.id == order_id).first()
+        if not order:
+            return {"success": False, "error": "入库单不存在"}
+        
+        # 更新入库单主表字段
+        if "operator" in updates:
+            order.operator = updates["operator"]
+        if "status" in updates:
+            order.status = updates["status"]
+        
+        # 更新明细
+        if "details" in updates and isinstance(updates["details"], list):
+            for detail_update in updates["details"]:
+                detail_id = detail_update.get("id")
+                if detail_id:
+                    detail = db.query(InboundDetail).filter(InboundDetail.id == detail_id).first()
+                    if detail:
+                        if "product_name" in detail_update:
+                            detail.product_name = detail_update["product_name"]
+                        if "weight" in detail_update:
+                            detail.weight = float(detail_update["weight"])
+                        if "labor_cost" in detail_update:
+                            detail.labor_cost = float(detail_update["labor_cost"])
+                        if "supplier" in detail_update:
+                            detail.supplier = detail_update["supplier"]
+                        if "remark" in detail_update:
+                            detail.remark = detail_update["remark"]
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "入库单更新成功",
+            "order_id": order_id
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"更新入库单失败: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 @app.post("/api/inbound-orders")
 async def create_inbound_order(card_data: InboundOrderCreate, db: Session = Depends(get_db)):
     """创建入库单（从卡片数据确认入库）"""

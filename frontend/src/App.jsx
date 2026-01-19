@@ -23,6 +23,7 @@ import { SupplierPage } from './components/SupplierPage'
 import ReturnPage from './components/ReturnPage'
 import GoldMaterialPage from './components/GoldMaterialPage'
 import ProductCodePage from './components/ProductCodePage'
+import InboundOrdersPage from './components/InboundOrdersPage'
 import LineNumberedTextarea from './components/LineNumberedTextarea'
 import { USER_ROLES } from './constants/roles'
 import { DollarSign, ArrowLeft, ChevronDown, BarChart3, Download, Warehouse, Users, UserPlus, FileText, History, Building2, RotateCcw, Package, Calculator, Scale, TrendingUp } from 'lucide-react'
@@ -1959,6 +1960,18 @@ function App() {
                       <span>商品编码</span>
                     </button>
                   )}
+                  {/* 入库单据按钮 - 商品专员和管理层可见 */}
+                  {(userRole === 'product' || userRole === 'manager') && (
+                    <button
+                      onClick={() => setCurrentPage('inbound-orders')}
+                      className="flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-xl 
+                                 hover:bg-orange-600 transition-all duration-200 font-medium text-[15px] 
+                                 shadow-sm hover:shadow-md"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span>入库单据</span>
+                    </button>
+                  )}
                   {/* 财务对账按钮 - 使用权限检查 */}
                   {hasPermission(userRole, 'canViewFinance') && (
                     <button
@@ -3570,6 +3583,12 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
         {currentPage === 'product-codes' && (
           <div className="flex-1 overflow-y-auto">
             <ProductCodePage userRole={userRole} />
+          </div>
+        )}
+
+        {currentPage === 'inbound-orders' && (
+          <div className="flex-1 overflow-y-auto">
+            <InboundOrdersPage userRole={userRole} />
           </div>
         )}
 
