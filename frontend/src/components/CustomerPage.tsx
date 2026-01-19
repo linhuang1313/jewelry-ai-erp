@@ -5,7 +5,7 @@ import {
   Users, Plus, Trash2, Edit2, Check, X, RefreshCw, User,
   MapPin, Search, UserPlus, Eye, ShoppingBag, RotateCcw, 
   Wallet, FileText, ChevronRight, ArrowLeft, Upload, 
-  CreditCard, TrendingDown, ArrowUpDown, Clock
+  CreditCard, TrendingDown, ArrowUpDown, Clock, Download
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -628,7 +628,20 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                 {/* 往来账目 */}
                 {detailTab === 'transactions' && (
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">往来账目</h3>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-800">往来账目</h3>
+                      <button
+                        onClick={() => {
+                          if (selectedCustomer) {
+                            window.open(`${API_BASE_URL}/api/export/customer-transactions/${selectedCustomer.id}`, '_blank');
+                          }
+                        }}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>导出Excel</span>
+                      </button>
+                    </div>
                     {customerDetail?.transactions && customerDetail.transactions.length > 0 ? (
                       <div className="space-y-3">
                         {customerDetail.transactions.map((tx) => (
