@@ -315,7 +315,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     
     setBatchLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/inbound-orders?order_no=${encodeURIComponent(batchOrderNo)}&limit=1`);
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/inbound-orders?order_no=${encodeURIComponent(batchOrderNo)}&limit=1`);
       const data = await response.json();
       
       if (data.success && data.data && data.data.length > 0) {
@@ -369,7 +369,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     
     setBatchLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/warehouse/transfers/batch?user_role=${userRole}`, {
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/warehouse/transfers/batch?user_role=${userRole}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
