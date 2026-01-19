@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from typing import List, Optional
 from datetime import datetime
+from pydantic import BaseModel
 import logging
 
 from ..database import get_db
@@ -355,6 +356,99 @@ async def create_transfer(
         weight_diff=None,
         diff_reason=None
     )
+
+
+class BatchTransferItem(BaseModel):
+    """批量转移单项"""
+    product_name: str
+    weight: float
+    
+class BatchTransferCreate(BaseModel):
+    """批量创建转移单请求"""
+    items: List[BatchTransferItem]
+    from_location_id: int
+    to_location_id: int
+    remark: Optional[str] = None
+
+
+@router.post("/transfers/batch")
+async def create_batch_transfers(
+    data: BatchTransferCreate,
+    created_by: str = Query(default="系统管理员", description="创建人"),
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """批量创建货品转移单"""
+    from ..middleware.permissions import has_permission
+    if not has_permission(user_role, 'can_transfer'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【发起库存转移】的权限")
+    
+    # 验证位置
+    from_location = db.query(Location).filter(Location.id == data.from_location_id).first()
+    to_location = db.query(Location).filter(Location.id == data.to_location_id).first()
+    
+    if not from_location:
+        raise HTTPException(status_code=404, detail="发出位置不存在")
+    if not to_location:
+        raise HTTPException(status_code=404, detail="目标位置不存在")
+    if data.from_location_id == data.to_location_id:
+        raise HTTPException(status_code=400, detail="发出位置和目标位置不能相同")
+    
+    if not data.items or len(data.items) == 0:
+        raise HTTPException(status_code=400, detail="转移商品列表不能为空")
+    
+    created_transfers = []
+    errors = []
+    
+    for item in data.items:
+        try:
+            # 检查库存
+            inventory = db.query(LocationInventory).filter(
+                LocationInventory.location_id == data.from_location_id,
+                LocationInventory.product_name == item.product_name
+            ).first()
+            
+            if not inventory or inventory.weight < item.weight:
+                errors.append(f"{item.product_name}: 库存不足")
+                continue
+            
+            # 扣减库存
+            inventory.weight -= item.weight
+            inventory.updated_at = china_now()
+            
+            # 生成转移单号
+            transfer_no = f"ZY{datetime.now().strftime('%Y%m%d%H%M%S')}{len(created_transfers):03d}"
+            
+            # 创建转移单
+            new_transfer = InventoryTransfer(
+                transfer_no=transfer_no,
+                product_name=item.product_name,
+                weight=item.weight,
+                from_location_id=data.from_location_id,
+                to_location_id=data.to_location_id,
+                status="pending",
+                created_by=created_by,
+                created_at=china_now(),
+                remark=data.remark
+            )
+            db.add(new_transfer)
+            created_transfers.append({
+                "product_name": item.product_name,
+                "weight": item.weight,
+                "transfer_no": transfer_no
+            })
+        except Exception as e:
+            errors.append(f"{item.product_name}: {str(e)}")
+    
+    db.commit()
+    
+    return {
+        "success": True,
+        "created_count": len(created_transfers),
+        "created_transfers": created_transfers,
+        "errors": errors,
+        "message": f"成功创建 {len(created_transfers)} 个转移单" + (f"，{len(errors)} 个失败" if errors else "")
+    }
 
 
 @router.post("/transfers/{transfer_id}/receive", response_model=InventoryTransferResponse)

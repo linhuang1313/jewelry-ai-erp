@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '../config';
 import {
   Package, MapPin, ArrowRight, ArrowLeft, Check, X, Clock, RefreshCw,
-  Plus, Send, Inbox, AlertTriangle, ChevronDown, Search, Filter
+  Plus, Send, Inbox, AlertTriangle, ChevronDown, Search, Filter, FileText
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -124,7 +124,7 @@ interface WarehousePageProps {
 }
 
 export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'product' }) => {
-  const [activeTab, setActiveTab] = useState<'inventory' | 'transfer' | 'receive'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'transfer' | 'batch' | 'receive'>('inventory');
   const [locations, setLocations] = useState<Location[]>([]);
   const [inventorySummary, setInventorySummary] = useState<InventorySummary[]>([]);
   const [transfers, setTransfers] = useState<InventoryTransfer[]>([]);
@@ -157,6 +157,17 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     actual_weight: '',
     diff_reason: ''
   });
+
+  // 批量转移相关状态
+  const [batchOrderNo, setBatchOrderNo] = useState('');
+  const [batchItems, setBatchItems] = useState<Array<{
+    id: number;
+    product_name: string;
+    weight: number;
+    transfer_weight: number;
+    selected: boolean;
+  }>>([]);
+  const [batchLoading, setBatchLoading] = useState(false);
 
   // 加载数据
   useEffect(() => {
@@ -292,6 +303,101 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       }
     } catch (error) {
       toast.error('初始化失败');
+    }
+  };
+
+  // 根据入库单号查询商品
+  const handleSearchByOrderNo = async () => {
+    if (!batchOrderNo.trim()) {
+      toast.error('请输入入库单号');
+      return;
+    }
+    
+    setBatchLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/inbound-orders?order_no=${encodeURIComponent(batchOrderNo)}&limit=1`);
+      const data = await response.json();
+      
+      if (data.success && data.data && data.data.length > 0) {
+        const order = data.data[0];
+        const items = order.details.map((d: any, idx: number) => ({
+          id: idx,
+          product_name: d.product_name,
+          weight: d.weight,
+          transfer_weight: d.weight,
+          selected: true
+        }));
+        setBatchItems(items);
+        toast.success(`找到 ${items.length} 个商品`);
+      } else {
+        toast.error('未找到该入库单');
+        setBatchItems([]);
+      }
+    } catch (error) {
+      toast.error('查询失败');
+      setBatchItems([]);
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
+  // 批量创建转移单
+  const handleBatchTransfer = async () => {
+    const selectedItems = batchItems.filter(item => item.selected && item.transfer_weight > 0);
+    
+    if (selectedItems.length === 0) {
+      toast.error('请选择要转移的商品');
+      return;
+    }
+    
+    // 获取默认位置
+    const productLoc = locations.find(l => l.name === '商品部仓库');
+    const showroomLoc = locations.find(l => l.name === '展厅');
+    
+    let fromLocationId = productLoc?.id;
+    let toLocationId = showroomLoc?.id;
+    
+    if (userRole === 'counter') {
+      fromLocationId = showroomLoc?.id;
+      toLocationId = productLoc?.id;
+    }
+    
+    if (!fromLocationId || !toLocationId) {
+      toast.error('位置配置错误');
+      return;
+    }
+    
+    setBatchLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/warehouse/transfers/batch?user_role=${userRole}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: selectedItems.map(item => ({
+            product_name: item.product_name,
+            weight: item.transfer_weight
+          })),
+          from_location_id: fromLocationId,
+          to_location_id: toLocationId,
+          remark: `来自入库单 ${batchOrderNo}`
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        toast.success(result.message);
+        setBatchOrderNo('');
+        setBatchItems([]);
+        loadTransfers();
+        loadInventorySummary();
+      } else {
+        toast.error(result.detail || '批量转移失败');
+      }
+    } catch (error) {
+      toast.error('批量转移失败');
+    } finally {
+      setBatchLoading(false);
     }
   };
 
@@ -463,6 +569,12 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
             onClick={() => setActiveTab('transfer')}
             icon={<Send className="w-4 h-4" />}
             label="发起转移"
+          />
+          <TabButton
+            active={activeTab === 'batch'}
+            onClick={() => setActiveTab('batch')}
+            icon={<FileText className="w-4 h-4" />}
+            label="按单号转移"
           />
           <TabButton
             active={activeTab === 'receive'}
@@ -947,6 +1059,116 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       </tbody>
                     </table>
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 按单号转移 */}
+          {activeTab === 'batch' && (
+            <div className="space-y-6">
+              {/* 入库单号输入 */}
+              <div className="bg-gray-50 rounded-lg p-6">
+                <h3 className="text-lg font-semibold mb-4">根据入库单号批量转移</h3>
+                <div className="flex items-center space-x-4">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      value={batchOrderNo}
+                      onChange={(e) => setBatchOrderNo(e.target.value)}
+                      placeholder="输入入库单号（如 RK20260119...）"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <button
+                    onClick={handleSearchByOrderNo}
+                    disabled={batchLoading}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 flex items-center space-x-2"
+                  >
+                    <Search className="w-4 h-4" />
+                    <span>{batchLoading ? '查询中...' : '查询'}</span>
+                  </button>
+                </div>
+                <p className="text-sm text-gray-500 mt-2">
+                  输入入库单号后，系统会自动获取该入库单的所有商品，您可以选择需要转移的商品
+                </p>
+              </div>
+
+              {/* 商品列表 */}
+              {batchItems.length > 0 && (
+                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                    <h4 className="font-medium">商品列表（共 {batchItems.length} 个）</h4>
+                    <div className="flex items-center space-x-4">
+                      <label className="flex items-center space-x-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={batchItems.every(item => item.selected)}
+                          onChange={(e) => {
+                            setBatchItems(batchItems.map(item => ({ ...item, selected: e.target.checked })));
+                          }}
+                          className="w-4 h-4 text-blue-600 rounded"
+                        />
+                        <span>全选</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {batchItems.map((item, index) => (
+                      <div key={item.id} className={`px-6 py-4 flex items-center space-x-4 ${item.selected ? 'bg-blue-50' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={item.selected}
+                          onChange={(e) => {
+                            const newItems = [...batchItems];
+                            newItems[index].selected = e.target.checked;
+                            setBatchItems(newItems);
+                          }}
+                          className="w-4 h-4 text-blue-600 rounded"
+                        />
+                        <div className="flex-1">
+                          <span className="font-medium">{item.product_name}</span>
+                          <span className="text-gray-500 ml-2">（入库重量：{item.weight}克）</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm text-gray-500">转移重量：</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={item.transfer_weight}
+                            onChange={(e) => {
+                              const newItems = [...batchItems];
+                              newItems[index].transfer_weight = parseFloat(e.target.value) || 0;
+                              setBatchItems(newItems);
+                            }}
+                            className="w-24 px-3 py-1 border border-gray-300 rounded text-right"
+                          />
+                          <span className="text-sm text-gray-500">克</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+                    <div className="text-sm text-gray-600">
+                      已选择 {batchItems.filter(i => i.selected).length} 个商品，
+                      总重量 {batchItems.filter(i => i.selected).reduce((sum, i) => sum + i.transfer_weight, 0).toFixed(2)} 克
+                    </div>
+                    <button
+                      onClick={handleBatchTransfer}
+                      disabled={batchLoading || batchItems.filter(i => i.selected).length === 0}
+                      className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400"
+                    >
+                      {batchLoading ? '转移中...' : '确认批量转移'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 空状态 */}
+              {batchItems.length === 0 && !batchLoading && (
+                <div className="text-center py-12 text-gray-500">
+                  <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>输入入库单号并点击查询，即可批量转移商品</p>
                 </div>
               )}
             </div>
