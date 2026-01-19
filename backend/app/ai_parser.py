@@ -638,13 +638,38 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
   "products": null
 }}
 
-示例18-5（查询入库单 - 组合筛选）：
+示例18-5（查询入库单 - 组合筛选：供应商+日期）：
 用户输入："查询本周金源珠宝的入库单"
 说明：用户要查询特定时间段和供应商的入库单，同时提取日期和供应商
 {{
   "action": "查询入库单",
   "order_no": null,
   "inbound_supplier": "金源珠宝",
+  "inbound_date_start": "2026-01-13",
+  "inbound_date_end": "2026-01-19",
+  "products": null
+}}
+
+示例18-5-2（查询入库单 - 组合筛选：商品+日期）：
+用户输入："今天所有的足金3D硬金吊坠的入库明细"
+说明：用户要查询今天入库的特定商品，同时提取日期和商品名称
+{{
+  "action": "查询入库单",
+  "order_no": null,
+  "inbound_product": "足金3D硬金吊坠",
+  "inbound_date_start": "2026-01-19",
+  "inbound_date_end": "2026-01-19",
+  "products": null
+}}
+
+示例18-5-3（查询入库单 - 组合筛选：商品+供应商+日期）：
+用户输入："本周金源珠宝的古法手镯入库"
+说明：用户要查询特定时间段、供应商和商品的入库单
+{{
+  "action": "查询入库单",
+  "order_no": null,
+  "inbound_supplier": "金源珠宝",
+  "inbound_product": "古法手镯",
   "inbound_date_start": "2026-01-13",
   "inbound_date_end": "2026-01-19",
   "products": null

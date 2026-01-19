@@ -354,14 +354,33 @@ class AIAnalyzer:
         
         # 最近的入库单（如果没有指定入库单号，或作为补充信息）
         if data.get("inbound_orders") and not (order_no and target_order):
-            text += f"=== 最近入库单（显示最近{min(10, len(data['inbound_orders']))}个）===\n"
-            for idx, order in enumerate(data["inbound_orders"][:10], 1):
-                text += f"{idx}. 入库单号：{order['order_no']}，时间：{order.get('create_time', 'N/A')}\n"
-                for detail in order.get('details', [])[:3]:  # 只显示前3个商品
-                    text += f"   - {detail['product_name']}：{detail['weight']}克，工费{detail['labor_cost']}元/克，供应商：{detail['supplier']}\n"
-                if len(order.get('details', [])) > 3:
-                    text += f"   ... 还有{len(order['details']) - 3}个商品\n"
-                text += "\n"
+            # 检查是否有筛选条件
+            inbound_filters = data.get("inbound_filters", {})
+            has_filters = any([inbound_filters.get("date_start"), inbound_filters.get("date_end"), 
+                              inbound_filters.get("supplier"), inbound_filters.get("product")])
+            
+            if has_filters:
+                # 有筛选条件时，显示完整的入库单列表（用于入库单列表查询）
+                text += f"=== 符合条件的入库单（共{len(data['inbound_orders'])}个）===\n"
+                total_weight = 0
+                total_items = 0
+                for order in data["inbound_orders"]:
+                    text += f"\n入库单号：{order['order_no']}，时间：{order.get('create_time', 'N/A')}\n"
+                    for detail in order.get('details', []):
+                        text += f"  • 【{order['order_no']}】{detail['product_name']}：{detail['weight']}克，供应商：{detail['supplier']}\n"
+                        total_weight += detail['weight']
+                        total_items += 1
+                text += f"\n总计：{len(data['inbound_orders'])}个入库单，{total_items}件商品，总重量{total_weight:.2f}克\n"
+            else:
+                # 没有筛选条件时，只显示简要信息
+                text += f"=== 最近入库单（显示最近{min(10, len(data['inbound_orders']))}个）===\n"
+                for idx, order in enumerate(data["inbound_orders"][:10], 1):
+                    text += f"{idx}. 入库单号：{order['order_no']}，时间：{order.get('create_time', 'N/A')}\n"
+                    for detail in order.get('details', [])[:3]:  # 只显示前3个商品
+                        text += f"   - {detail['product_name']}：{detail['weight']}克，工费{detail['labor_cost']}元/克，供应商：{detail['supplier']}\n"
+                    if len(order.get('details', [])) > 3:
+                        text += f"   ... 还有{len(order['details']) - 3}个商品\n"
+                    text += "\n"
         
         # 最近的销售单
         if data.get("sales_orders"):
@@ -483,6 +502,8 @@ class AIAnalyzer:
         # 检查是否是查询入库单（RK开头）
         order_no = data.get("context", {}).get("order_no")
         is_specific_inbound_query = intent == "查询入库单" and order_no
+        # 查询入库单列表（没有指定单号，但有日期或商品筛选）
+        is_inbound_list_query = intent == "查询入库单" and not order_no
         
         # 检查是否是查询销售单（XS开头）
         sales_order_no = data.get("context", {}).get("sales_order_no")
@@ -518,6 +539,47 @@ class AIAnalyzer:
 其中 [order_id] 是入库单的ID（从数据中的 order_id 字段获取），[order_no] 是入库单号。
 
 请用自然、专业的语言回答，直接展示入库单的详细信息。"""
+        elif is_inbound_list_query:
+            # 查询入库单列表的提示词（没有指定单号，按日期/商品筛选）
+            inbound_filters = data.get("inbound_filters", {})
+            filter_desc = []
+            if inbound_filters.get("date_start"):
+                filter_desc.append(f"日期从 {inbound_filters['date_start']}")
+            if inbound_filters.get("date_end"):
+                filter_desc.append(f"到 {inbound_filters['date_end']}")
+            if inbound_filters.get("supplier"):
+                filter_desc.append(f"供应商包含 {inbound_filters['supplier']}")
+            if inbound_filters.get("product"):
+                filter_desc.append(f"商品包含 {inbound_filters['product']}")
+            filter_text = "，".join(filter_desc) if filter_desc else "最近的入库单"
+            
+            prompt = f"""你是一个专业的珠宝ERP系统AI分析专家。用户要查询入库单列表。
+
+**用户问题：** {user_message}
+**用户意图：** {intent}
+**筛选条件：** {filter_text}
+
+以下是系统数据库中符合条件的入库单数据：
+
+{data_text}
+
+请基于这些数据，详细列出符合条件的入库单明细。**必须按以下格式展示每个入库商品**：
+
+格式要求（每个商品一行）：
+• 【入库单号】商品名称：XX克，供应商：XXX
+
+示例：
+• 【RK123456】足金3D硬金吊坠：11克，供应商：环冠珠宝
+• 【RK123456】足金3D硬金耳饰：22克，供应商：环冠珠宝
+• 【RK789012】古法手镯：50克，供应商：金源珠宝
+
+要求：
+1. **入库单号必须显示**：每个商品前面都要显示它所属的入库单号
+2. **供应商必须显示**：每个商品后面都要显示供应商名称
+3. **按入库单分组**：同一入库单的商品放在一起
+4. **汇总统计**：最后给出总计（共X个入库单，X件商品，总重量Xg）
+
+如果没有符合条件的入库单，友好地告知用户。"""
         elif is_specific_sales_query:
             # 查询特定销售单的提示词
             prompt = f"""你是一个专业的珠宝ERP系统AI分析专家。用户要查询特定销售单的详细信息。
@@ -746,6 +808,7 @@ class AIAnalyzer:
         order_no = data.get("context", {}).get("order_no")
         sales_order_no = data.get("context", {}).get("sales_order_no")
         is_specific_inbound_query = intent == "查询入库单" and order_no
+        is_inbound_list_query = intent == "查询入库单" and not order_no
         is_specific_sales_query = intent == "查询销售单" and sales_order_no
         
         # 主动检测是否需要详细分析（不依赖AI判断）
@@ -782,6 +845,48 @@ class AIAnalyzer:
 
 请用自然、专业的语言回答，直接展示入库单的详细信息。"""
             system_prompt = "你是珠宝ERP系统AI助手，请专业、准确地回答用户问题。对于入库单查询，必须显示完整的商品信息，包括供应商名称、克工费、件数和件工费（如果有）。"
+        elif is_inbound_list_query:
+            # 查询入库单列表的提示词（流式版本 - 没有指定单号，按日期/商品筛选）
+            inbound_filters = data.get("inbound_filters", {})
+            filter_desc = []
+            if inbound_filters.get("date_start"):
+                filter_desc.append(f"日期从 {inbound_filters['date_start']}")
+            if inbound_filters.get("date_end"):
+                filter_desc.append(f"到 {inbound_filters['date_end']}")
+            if inbound_filters.get("supplier"):
+                filter_desc.append(f"供应商包含 {inbound_filters['supplier']}")
+            if inbound_filters.get("product"):
+                filter_desc.append(f"商品包含 {inbound_filters['product']}")
+            filter_text = "，".join(filter_desc) if filter_desc else "最近的入库单"
+            
+            prompt = f"""你是一个专业的珠宝ERP系统AI分析专家。用户要查询入库单列表。
+
+**用户问题：** {user_message}
+**用户意图：** {intent}
+**筛选条件：** {filter_text}
+
+以下是系统数据库中符合条件的入库单数据：
+
+{data_text}
+
+请基于这些数据，详细列出符合条件的入库单明细。**必须按以下格式展示每个入库商品**：
+
+格式要求（每个商品一行）：
+• 【入库单号】商品名称：XX克，供应商：XXX
+
+示例：
+• 【RK123456】足金3D硬金吊坠：11克，供应商：环冠珠宝
+• 【RK123456】足金3D硬金耳饰：22克，供应商：环冠珠宝
+• 【RK789012】古法手镯：50克，供应商：金源珠宝
+
+要求：
+1. **入库单号必须显示**：每个商品前面都要显示它所属的入库单号
+2. **供应商必须显示**：每个商品后面都要显示供应商名称
+3. **按入库单分组**：同一入库单的商品放在一起
+4. **汇总统计**：最后给出总计（共X个入库单，X件商品，总重量Xg）
+
+如果没有符合条件的入库单，友好地告知用户。"""
+            system_prompt = "你是珠宝ERP系统AI助手。对于入库单列表查询，必须按要求格式展示每个商品，包括入库单号、克重和供应商名称。"
         elif is_specific_sales_query:
             # 查询特定销售单的提示词（流式版本）
             prompt = f"""你是一个专业的珠宝ERP系统AI分析专家。用户要查询特定销售单的详细信息。
