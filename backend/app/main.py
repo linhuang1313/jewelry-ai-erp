@@ -708,8 +708,8 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                             yield f"data: {json.dumps({'type': 'complete', 'data': result}, ensure_ascii=False)}\n\n"
                             return
                     elif ai_response.action == "付料":
-                        # 付料：返回确认卡片数据
-                        result = await handle_gold_payment(ai_response, db)
+                        # 付料：根据角色判断是付给供应商还是客户
+                        result = await handle_gold_payment(ai_response, db, user_role=user_role)
                         if result.get("success"):
                             yield f"data: {json.dumps({'type': 'payment_confirm', 'data': result}, ensure_ascii=False)}\n\n"
                             return
@@ -3623,37 +3623,115 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
         }
 
 
-async def handle_gold_payment(ai_response, db: Session) -> Dict[str, Any]:
-    """处理付料：返回确认数据供前端显示确认卡片"""
+async def handle_gold_payment(ai_response, db: Session, user_role: str = "material") -> Dict[str, Any]:
+    """处理付料：根据角色判断是付给供应商还是客户
+    
+    - 料部 (material)：付料给供应商
+    - 结算 (settlement)：退料给客户
+    - 管理层 (manager)：先搜供应商，再搜客户
+    - 其他角色：无权限
+    """
     try:
-        supplier_name = ai_response.gold_payment_supplier
+        from .middleware.permissions import has_permission
+        from .models import Supplier, Customer
+        
+        target_name = ai_response.gold_payment_supplier  # 目标名称（供应商或客户）
         gold_weight = ai_response.gold_payment_weight
         remark = ai_response.gold_payment_remark or ""
         
         # 验证必填信息
-        if not supplier_name:
-            return {
-                "success": False,
-                "message": "请提供供应商名称，例如：付20克给金源珠宝"
-            }
+        if not target_name:
+            if user_role == "material":
+                return {
+                    "success": False,
+                    "message": "请提供供应商名称，例如：付20克给金源珠宝"
+                }
+            elif user_role == "settlement":
+                return {
+                    "success": False,
+                    "message": "请提供客户名称，例如：退20克给张老板"
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "请提供付料对象名称"
+                }
         
         if not gold_weight or gold_weight <= 0:
             return {
                 "success": False,
-                "message": "请提供付料克重，例如：付20克给金源珠宝"
+                "message": "请提供付料克重，例如：付20克给XX"
             }
         
-        # 模糊查询供应商
-        from .models import Supplier
+        # 根据角色判断搜索范围和权限
+        target = None
+        target_type = None
+        action_label = None
         
-        supplier = db.query(Supplier).filter(
-            Supplier.name.ilike(f"%{supplier_name}%")
-        ).first()
-        
-        if not supplier:
+        if user_role == "material":
+            # 料部：只能付料给供应商
+            if not has_permission(user_role, 'can_gold_payment_to_supplier'):
+                return {
+                    "success": False,
+                    "message": "您没有【付料给供应商】的权限"
+                }
+            target = db.query(Supplier).filter(
+                Supplier.name.ilike(f"%{target_name}%")
+            ).first()
+            target_type = "supplier"
+            action_label = "付料"
+            
+            if not target:
+                return {
+                    "success": False,
+                    "message": f"未找到供应商【{target_name}】，请确认供应商名称是否正确"
+                }
+                
+        elif user_role == "settlement":
+            # 结算：只能退料给客户
+            if not has_permission(user_role, 'can_gold_refund_to_customer'):
+                return {
+                    "success": False,
+                    "message": "您没有【退料给客户】的权限"
+                }
+            target = db.query(Customer).filter(
+                Customer.name.ilike(f"%{target_name}%")
+            ).first()
+            target_type = "customer"
+            action_label = "退料"
+            
+            if not target:
+                return {
+                    "success": False,
+                    "message": f"未找到客户【{target_name}】，请确认客户名称是否正确"
+                }
+                
+        elif user_role == "manager":
+            # 管理层：先搜供应商，再搜客户
+            target = db.query(Supplier).filter(
+                Supplier.name.ilike(f"%{target_name}%")
+            ).first()
+            if target:
+                target_type = "supplier"
+                action_label = "付料"
+            else:
+                target = db.query(Customer).filter(
+                    Customer.name.ilike(f"%{target_name}%")
+                ).first()
+                if target:
+                    target_type = "customer"
+                    action_label = "退料"
+                    
+            if not target:
+                return {
+                    "success": False,
+                    "message": f"未找到供应商或客户【{target_name}】，请确认名称是否正确"
+                }
+        else:
+            # 其他角色无权限
             return {
                 "success": False,
-                "message": f"未找到供应商【{supplier_name}】，请确认供应商名称是否正确"
+                "message": "您没有执行付料操作的权限。料部可付料给供应商，结算可退料给客户。"
             }
         
         # 检查金料余额
@@ -3666,19 +3744,23 @@ async def handle_gold_payment(ai_response, db: Session) -> Dict[str, Any]:
                 "message": f"金料库存不足。当前余额：{balance['current_balance']:.2f}克，需要支付：{gold_weight:.2f}克"
             }
         
+        # 构建返回结果
+        target_label = "供应商" if target_type == "supplier" else "客户"
+        
         return {
             "success": True,
-            "action": "付料",
+            "action": action_label,
             "confirm_required": True,
-            "supplier": {
-                "id": supplier.id,
-                "name": supplier.name
+            "target_type": target_type,  # supplier 或 customer
+            "target": {
+                "id": target.id,
+                "name": target.name
             },
             "gold_weight": round(gold_weight, 2),
             "remark": remark,
             "current_balance": round(balance["current_balance"], 2),
             "balance_after": round(balance["current_balance"] - gold_weight, 2),
-            "message": f"确认付料给【{supplier.name}】：{gold_weight:.2f}克？\n当前余额：{balance['current_balance']:.2f}克，付料后余额：{balance['current_balance'] - gold_weight:.2f}克"
+            "message": f"确认{action_label}给{target_label}【{target.name}】：{gold_weight:.2f}克？\n当前余额：{balance['current_balance']:.2f}克，{action_label}后余额：{balance['current_balance'] - gold_weight:.2f}克"
         }
         
     except Exception as e:
