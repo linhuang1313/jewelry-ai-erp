@@ -71,12 +71,14 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
   // 筛选选项（用于下拉框）
   const [filterOptions, setFilterOptions] = useState<{
     product_names: string[];
+    product_codes: string[];
     suppliers: string[];
     fineness: string[];
     crafts: string[];
     styles: string[];
   }>({
     product_names: [],
+    product_codes: [],
     suppliers: [],
     fineness: [],
     crafts: [],
@@ -373,11 +375,17 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                     <label className="block text-sm font-medium text-gray-600 mb-1">商品编码</label>
                     <input
                       type="text"
+                      list="product-code-options"
                       value={filters.productCode}
                       onChange={(e) => setFilters({ ...filters, productCode: e.target.value })}
-                      placeholder="条码号"
+                      placeholder="输入或选择编码"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
+                    <datalist id="product-code-options">
+                      {filterOptions.product_codes.map((c, i) => (
+                        <option key={i} value={c} />
+                      ))}
+                    </datalist>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">操作员</label>

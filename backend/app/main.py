@@ -1774,11 +1774,19 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
 @app.get("/api/inbound-orders/filter-options")
 async def get_inbound_filter_options(db: Session = Depends(get_db)):
     """获取入库单高级搜索的筛选选项"""
+    from .models import ProductAttribute
+    
     try:
         # 获取所有唯一的商品名称
         product_names = db.query(InboundDetail.product_name).distinct().filter(
             InboundDetail.product_name.isnot(None),
             InboundDetail.product_name != ''
+        ).all()
+        
+        # 获取所有唯一的商品编码
+        product_codes = db.query(InboundDetail.product_code).distinct().filter(
+            InboundDetail.product_code.isnot(None),
+            InboundDetail.product_code != ''
         ).all()
         
         # 获取所有唯一的供应商
@@ -1787,32 +1795,52 @@ async def get_inbound_filter_options(db: Session = Depends(get_db)):
             InboundDetail.supplier != ''
         ).all()
         
-        # 获取所有唯一的成色
-        fineness_list = db.query(InboundDetail.fineness).distinct().filter(
+        # 从 ProductAttribute 表获取预设的成色/工艺/款式选项
+        fineness_attrs = db.query(ProductAttribute.value).filter(
+            ProductAttribute.category == 'fineness',
+            ProductAttribute.is_active == True
+        ).order_by(ProductAttribute.sort_order).all()
+        
+        craft_attrs = db.query(ProductAttribute.value).filter(
+            ProductAttribute.category == 'craft',
+            ProductAttribute.is_active == True
+        ).order_by(ProductAttribute.sort_order).all()
+        
+        style_attrs = db.query(ProductAttribute.value).filter(
+            ProductAttribute.category == 'style',
+            ProductAttribute.is_active == True
+        ).order_by(ProductAttribute.sort_order).all()
+        
+        # 如果预设表没有数据，也从入库明细中获取已有的值
+        fineness_from_details = db.query(InboundDetail.fineness).distinct().filter(
             InboundDetail.fineness.isnot(None),
             InboundDetail.fineness != ''
         ).all()
         
-        # 获取所有唯一的工艺
-        crafts = db.query(InboundDetail.craft).distinct().filter(
+        crafts_from_details = db.query(InboundDetail.craft).distinct().filter(
             InboundDetail.craft.isnot(None),
             InboundDetail.craft != ''
         ).all()
         
-        # 获取所有唯一的款式
-        styles = db.query(InboundDetail.style).distinct().filter(
+        styles_from_details = db.query(InboundDetail.style).distinct().filter(
             InboundDetail.style.isnot(None),
             InboundDetail.style != ''
         ).all()
+        
+        # 合并预设选项和已有数据（去重）
+        fineness_set = set([f[0] for f in fineness_attrs if f[0]]) | set([f[0] for f in fineness_from_details if f[0]])
+        crafts_set = set([c[0] for c in craft_attrs if c[0]]) | set([c[0] for c in crafts_from_details if c[0]])
+        styles_set = set([s[0] for s in style_attrs if s[0]]) | set([s[0] for s in styles_from_details if s[0]])
         
         return {
             "success": True,
             "data": {
                 "product_names": sorted([p[0] for p in product_names if p[0]]),
+                "product_codes": sorted([p[0] for p in product_codes if p[0]]),
                 "suppliers": sorted([s[0] for s in suppliers if s[0]]),
-                "fineness": sorted([f[0] for f in fineness_list if f[0]]),
-                "crafts": sorted([c[0] for c in crafts if c[0]]),
-                "styles": sorted([s[0] for s in styles if s[0]])
+                "fineness": sorted(list(fineness_set)),
+                "crafts": sorted(list(crafts_set)),
+                "styles": sorted(list(styles_set))
             }
         }
     except Exception as e:
