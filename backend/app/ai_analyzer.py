@@ -584,8 +584,8 @@ class AIAnalyzer:
 4. **按入库单分组**：同一入库单的商品放在一起
 5. **汇总统计**：最后给出总计（共X个入库单，X件商品，总重量Xg）
 
-**重要**：在回答的最后，必须添加一行隐藏标记（用于前端显示导出按钮）：
-<!-- EXPORT_INBOUND:{inbound_filters.get('date_start', '')}:{inbound_filters.get('date_end', '')}:{inbound_filters.get('supplier', '')}:{inbound_filters.get('product', '')} -->
+**重要**：在回答的最后，必须添加这一行隐藏标记（用于前端显示导出按钮），原样输出不要修改：
+<!-- EXPORT_INBOUND:{inbound_filters.get('date_start') or ''}:{inbound_filters.get('date_end') or ''}:{inbound_filters.get('supplier') or ''}:{inbound_filters.get('product') or ''} -->
 
 如果没有符合条件的入库单，友好地告知用户（此时不需要添加导出标记）。"""
         elif is_specific_sales_query:
@@ -894,8 +894,8 @@ class AIAnalyzer:
 4. **按入库单分组**：同一入库单的商品放在一起
 5. **汇总统计**：最后给出总计（共X个入库单，X件商品，总重量Xg）
 
-**重要**：在回答的最后，必须添加一行隐藏标记（用于前端显示导出按钮）：
-<!-- EXPORT_INBOUND:{inbound_filters.get('date_start', '')}:{inbound_filters.get('date_end', '')}:{inbound_filters.get('supplier', '')}:{inbound_filters.get('product', '')} -->
+**重要**：在回答的最后，必须添加这一行隐藏标记（用于前端显示导出按钮），原样输出不要修改：
+<!-- EXPORT_INBOUND:{inbound_filters.get('date_start') or ''}:{inbound_filters.get('date_end') or ''}:{inbound_filters.get('supplier') or ''}:{inbound_filters.get('product') or ''} -->
 
 如果没有符合条件的入库单，友好地告知用户（此时不需要添加导出标记）。"""
             system_prompt = "你是珠宝ERP系统AI助手。对于入库单列表查询，必须按要求格式展示每个商品，包括入库单号、克重、供应商名称和入库日期。"
