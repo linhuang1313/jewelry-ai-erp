@@ -1551,18 +1551,20 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                   </div>
                 </div>
 
-                {/* 金价 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">金价 (元/克)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={editForm.gold_price}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, gold_price: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-                    placeholder="请输入当日金价"
-                  />
-                </div>
+                {/* 金价 - 仅结价或混合时显示 */}
+                {editForm.payment_method !== 'physical_gold' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">金价 (元/克)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editForm.gold_price}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, gold_price: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                      placeholder="请输入当日金价"
+                    />
+                  </div>
+                )}
 
                 {/* 结料克重 - 仅结料时显示 */}
                 {editForm.payment_method === 'physical_gold' && (
