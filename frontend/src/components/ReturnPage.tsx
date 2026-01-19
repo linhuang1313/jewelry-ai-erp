@@ -78,6 +78,7 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
   const [stats, setStats] = useState<ReturnStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [locationInventory, setLocationInventory] = useState<Array<{ product_name: string; weight: number }>>([]);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState<ReturnOrder | null>(null);
   
@@ -136,6 +137,13 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
     }
   }, [locations, userRole]);
 
+  // 当位置变化时加载该位置的库存
+  useEffect(() => {
+    if (formData.from_location_id) {
+      fetchLocationInventory(formData.from_location_id);
+    }
+  }, [formData.from_location_id]);
+
   const fetchReturns = async () => {
     setLoading(true);
     try {
@@ -175,6 +183,27 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
       }
     } catch (error) {
       console.error('获取供应商失败:', error);
+    }
+  };
+
+  // 根据位置加载库存商品
+  const fetchLocationInventory = async (locationId: string) => {
+    if (!locationId) {
+      setLocationInventory([]);
+      return;
+    }
+    try {
+      const res = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/warehouse/inventory?location_id=${locationId}`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setLocationInventory(data.map((item: any) => ({
+          product_name: item.product_name,
+          weight: item.weight || item.total_weight || 0
+        })));
+      }
+    } catch (error) {
+      console.error('获取库存失败:', error);
+      setLocationInventory([]);
     }
   };
 
@@ -547,13 +576,18 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
               
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '13px' }}>商品名称 *</label>
-                <input
-                  type="text"
+                <select
                   value={formData.product_name}
                   onChange={(e) => setFormData({ ...formData, product_name: e.target.value })}
-                  placeholder="输入商品名称"
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid #475569', color: '#e2e8f0', boxSizing: 'border-box' }}
-                />
+                >
+                  <option value="">选择商品</option>
+                  {locationInventory.map((item, idx) => (
+                    <option key={idx} value={item.product_name}>
+                      {item.product_name} ({item.weight}g)
+                    </option>
+                  ))}
+                </select>
               </div>
               
               <div>
