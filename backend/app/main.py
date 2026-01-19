@@ -1771,6 +1771,58 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
 
 # ==================== 入库单据管理API ====================
 
+@app.get("/api/inbound-orders/filter-options")
+async def get_inbound_filter_options(db: Session = Depends(get_db)):
+    """获取入库单高级搜索的筛选选项"""
+    try:
+        # 获取所有唯一的商品名称
+        product_names = db.query(InboundDetail.product_name).distinct().filter(
+            InboundDetail.product_name.isnot(None),
+            InboundDetail.product_name != ''
+        ).all()
+        
+        # 获取所有唯一的供应商
+        suppliers = db.query(InboundDetail.supplier).distinct().filter(
+            InboundDetail.supplier.isnot(None),
+            InboundDetail.supplier != ''
+        ).all()
+        
+        # 获取所有唯一的成色
+        fineness_list = db.query(InboundDetail.fineness).distinct().filter(
+            InboundDetail.fineness.isnot(None),
+            InboundDetail.fineness != ''
+        ).all()
+        
+        # 获取所有唯一的工艺
+        crafts = db.query(InboundDetail.craft).distinct().filter(
+            InboundDetail.craft.isnot(None),
+            InboundDetail.craft != ''
+        ).all()
+        
+        # 获取所有唯一的款式
+        styles = db.query(InboundDetail.style).distinct().filter(
+            InboundDetail.style.isnot(None),
+            InboundDetail.style != ''
+        ).all()
+        
+        return {
+            "success": True,
+            "data": {
+                "product_names": sorted([p[0] for p in product_names if p[0]]),
+                "suppliers": sorted([s[0] for s in suppliers if s[0]]),
+                "fineness": sorted([f[0] for f in fineness_list if f[0]]),
+                "crafts": sorted([c[0] for c in crafts if c[0]]),
+                "styles": sorted([s[0] for s in styles if s[0]])
+            }
+        }
+    except Exception as e:
+        logger.error(f"获取筛选选项失败: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 @app.get("/api/inbound-orders")
 async def get_inbound_orders(
     start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),

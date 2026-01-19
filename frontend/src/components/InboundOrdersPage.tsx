@@ -67,6 +67,34 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
   });
   const [showFilters, setShowFilters] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  
+  // 筛选选项（用于下拉框）
+  const [filterOptions, setFilterOptions] = useState<{
+    product_names: string[];
+    suppliers: string[];
+    fineness: string[];
+    crafts: string[];
+    styles: string[];
+  }>({
+    product_names: [],
+    suppliers: [],
+    fineness: [],
+    crafts: [],
+    styles: []
+  });
+
+  // 加载筛选选项
+  const loadFilterOptions = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/inbound-orders/filter-options`);
+      const data = await res.json();
+      if (data.success) {
+        setFilterOptions(data.data);
+      }
+    } catch (error) {
+      console.error('加载筛选选项失败:', error);
+    }
+  };
 
   // 加载入库单列表
   const loadOrders = async () => {
@@ -109,6 +137,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
 
   useEffect(() => {
     loadOrders();
+    loadFilterOptions();
   }, []);
 
   // 格式化日期
@@ -297,11 +326,17 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                 <label className="block text-sm font-medium text-gray-600 mb-1">供应商</label>
                 <input
                   type="text"
+                  list="supplier-options"
                   value={filters.supplier}
                   onChange={(e) => setFilters({ ...filters, supplier: e.target.value })}
-                  placeholder="输入供应商名称"
+                  placeholder="输入或选择供应商"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 />
+                <datalist id="supplier-options">
+                  {filterOptions.suppliers.map((s, i) => (
+                    <option key={i} value={s} />
+                  ))}
+                </datalist>
               </div>
             </div>
 
@@ -322,11 +357,17 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                     <label className="block text-sm font-medium text-gray-600 mb-1">商品名称</label>
                     <input
                       type="text"
+                      list="product-name-options"
                       value={filters.productName}
                       onChange={(e) => setFilters({ ...filters, productName: e.target.value })}
-                      placeholder="模糊匹配"
+                      placeholder="输入或选择商品"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
+                    <datalist id="product-name-options">
+                      {filterOptions.product_names.map((p, i) => (
+                        <option key={i} value={p} />
+                      ))}
+                    </datalist>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">商品编码</label>
@@ -356,31 +397,49 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                     <label className="block text-sm font-medium text-gray-600 mb-1">成色</label>
                     <input
                       type="text"
+                      list="fineness-options"
                       value={filters.fineness}
                       onChange={(e) => setFilters({ ...filters, fineness: e.target.value })}
-                      placeholder="如：足金999"
+                      placeholder="输入或选择成色"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
+                    <datalist id="fineness-options">
+                      {filterOptions.fineness.map((f, i) => (
+                        <option key={i} value={f} />
+                      ))}
+                    </datalist>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">工艺</label>
                     <input
                       type="text"
+                      list="craft-options"
                       value={filters.craft}
                       onChange={(e) => setFilters({ ...filters, craft: e.target.value })}
-                      placeholder="如：3D硬金"
+                      placeholder="输入或选择工艺"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
+                    <datalist id="craft-options">
+                      {filterOptions.crafts.map((c, i) => (
+                        <option key={i} value={c} />
+                      ))}
+                    </datalist>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">款式</label>
                     <input
                       type="text"
+                      list="style-options"
                       value={filters.style}
                       onChange={(e) => setFilters({ ...filters, style: e.target.value })}
-                      placeholder="如：吊坠"
+                      placeholder="输入或选择款式"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
+                    <datalist id="style-options">
+                      {filterOptions.styles.map((s, i) => (
+                        <option key={i} value={s} />
+                      ))}
+                    </datalist>
                   </div>
                 </div>
                 
