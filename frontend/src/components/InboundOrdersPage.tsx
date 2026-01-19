@@ -335,7 +335,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 />
                 <datalist id="supplier-options">
-                  {filterOptions.suppliers.map((s, i) => (
+                  {(filterOptions.suppliers || []).map((s, i) => (
                     <option key={i} value={s} />
                   ))}
                 </datalist>
@@ -366,7 +366,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
                     <datalist id="product-name-options">
-                      {filterOptions.product_names.map((p, i) => (
+                      {(filterOptions.product_names || []).map((p, i) => (
                         <option key={i} value={p} />
                       ))}
                     </datalist>
@@ -382,7 +382,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
                     <datalist id="product-code-options">
-                      {filterOptions.product_codes.map((c, i) => (
+                      {(filterOptions.product_codes || []).map((c, i) => (
                         <option key={i} value={c} />
                       ))}
                     </datalist>
@@ -412,7 +412,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
                     <datalist id="fineness-options">
-                      {filterOptions.fineness.map((f, i) => (
+                      {(filterOptions.fineness || []).map((f, i) => (
                         <option key={i} value={f} />
                       ))}
                     </datalist>
@@ -428,7 +428,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
                     <datalist id="craft-options">
-                      {filterOptions.crafts.map((c, i) => (
+                      {(filterOptions.crafts || []).map((c, i) => (
                         <option key={i} value={c} />
                       ))}
                     </datalist>
@@ -444,7 +444,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
                     <datalist id="style-options">
-                      {filterOptions.styles.map((s, i) => (
+                      {(filterOptions.styles || []).map((s, i) => (
                         <option key={i} value={s} />
                       ))}
                     </datalist>
