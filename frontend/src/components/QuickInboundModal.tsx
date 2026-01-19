@@ -89,6 +89,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
   const [enamelCount, setEnamelCount] = useState<string>('10');
   const [enamelWeight, setEnamelWeight] = useState<string>('');
   const [enamelLaborCost, setEnamelLaborCost] = useState<string>('');
+  const [enamelPieceLaborCost, setEnamelPieceLaborCost] = useState<string>(''); // 件工费
   const [isGenerating, setIsGenerating] = useState(false);
   
   // 动态属性选项
@@ -320,7 +321,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
         weight: enamelWeight,
         laborCost: enamelLaborCost,
         pieceCount: '1', // 珐琅产品默认1件
-        pieceLaborCost: '',
+        pieceLaborCost: enamelPieceLaborCost, // 使用用户输入的件工费
       }));
       
       // 添加到表格（替换空行或追加）
@@ -911,13 +912,27 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                   />
                 </div>
                 
-                {/* 工费 */}
+                {/* 克工费 */}
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">克工费(元)</label>
                   <input
                     type="number"
                     value={enamelLaborCost}
                     onChange={(e) => setEnamelLaborCost(e.target.value)}
+                    min="0"
+                    step="0.01"
+                    placeholder="可选"
+                    className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+                
+                {/* 件工费 */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">件工费(元)</label>
+                  <input
+                    type="number"
+                    value={enamelPieceLaborCost}
+                    onChange={(e) => setEnamelPieceLaborCost(e.target.value)}
                     min="0"
                     step="0.01"
                     placeholder="可选"
