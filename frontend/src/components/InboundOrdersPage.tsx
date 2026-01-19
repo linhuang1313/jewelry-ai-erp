@@ -10,10 +10,13 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 interface InboundDetail {
   id: number;
   product_name: string;
+  product_category?: string;
   weight: number;
   labor_cost: number;
+  piece_count?: number;
+  piece_labor_cost?: number;
   supplier: string;
-  remark?: string;
+  total_cost?: number;
 }
 
 interface InboundOrder {
@@ -376,9 +379,11 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                         <tr className="text-left text-gray-500">
                           <th className="pb-2 font-medium">商品名称</th>
                           <th className="pb-2 font-medium">重量(克)</th>
-                          <th className="pb-2 font-medium">工费(元/克)</th>
+                          <th className="pb-2 font-medium">克工费</th>
+                          <th className="pb-2 font-medium">件数</th>
+                          <th className="pb-2 font-medium">件工费</th>
                           <th className="pb-2 font-medium">供应商</th>
-                          <th className="pb-2 font-medium">备注</th>
+                          <th className="pb-2 font-medium">总成本</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
@@ -416,7 +421,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                                   step="0.01"
                                   value={detail.labor_cost}
                                   onChange={(e) => updateEditingDetail(detail.id, 'labor_cost', e.target.value)}
-                                  className="w-24 px-2 py-1 border border-gray-300 rounded"
+                                  className="w-20 px-2 py-1 border border-gray-300 rounded"
                                 />
                               ) : (
                                 detail.labor_cost
@@ -425,26 +430,42 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                             <td className="py-2">
                               {editingOrderId === order.id ? (
                                 <input
-                                  type="text"
-                                  value={detail.supplier || ''}
-                                  onChange={(e) => updateEditingDetail(detail.id, 'supplier', e.target.value)}
-                                  className="w-32 px-2 py-1 border border-gray-300 rounded"
+                                  type="number"
+                                  value={detail.piece_count || ''}
+                                  onChange={(e) => updateEditingDetail(detail.id, 'piece_count', e.target.value)}
+                                  className="w-16 px-2 py-1 border border-gray-300 rounded"
                                 />
                               ) : (
-                                detail.supplier || '-'
+                                detail.piece_count || '-'
+                              )}
+                            </td>
+                            <td className="py-2">
+                              {editingOrderId === order.id ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={detail.piece_labor_cost || ''}
+                                  onChange={(e) => updateEditingDetail(detail.id, 'piece_labor_cost', e.target.value)}
+                                  className="w-20 px-2 py-1 border border-gray-300 rounded"
+                                />
+                              ) : (
+                                detail.piece_labor_cost || '-'
                               )}
                             </td>
                             <td className="py-2">
                               {editingOrderId === order.id ? (
                                 <input
                                   type="text"
-                                  value={detail.remark || ''}
-                                  onChange={(e) => updateEditingDetail(detail.id, 'remark', e.target.value)}
-                                  className="w-full px-2 py-1 border border-gray-300 rounded"
+                                  value={detail.supplier || ''}
+                                  onChange={(e) => updateEditingDetail(detail.id, 'supplier', e.target.value)}
+                                  className="w-28 px-2 py-1 border border-gray-300 rounded"
                                 />
                               ) : (
-                                detail.remark || '-'
+                                detail.supplier || '-'
                               )}
+                            </td>
+                            <td className="py-2 text-orange-600 font-medium">
+                              {detail.total_cost?.toFixed(2) || '-'}
                             </td>
                           </tr>
                         ))}

@@ -1746,10 +1746,13 @@ async def get_inbound_orders(
                 "details": [{
                     "id": d.id,
                     "product_name": d.product_name,
+                    "product_category": d.product_category,
                     "weight": d.weight,
                     "labor_cost": d.labor_cost,
+                    "piece_count": d.piece_count,
+                    "piece_labor_cost": d.piece_labor_cost,
                     "supplier": d.supplier,
-                    "remark": d.remark
+                    "total_cost": d.total_cost
                 } for d in details]
             })
         
@@ -1802,8 +1805,10 @@ async def update_inbound_order(
                             detail.labor_cost = float(detail_update["labor_cost"])
                         if "supplier" in detail_update:
                             detail.supplier = detail_update["supplier"]
-                        if "remark" in detail_update:
-                            detail.remark = detail_update["remark"]
+                        if "piece_count" in detail_update:
+                            detail.piece_count = int(detail_update["piece_count"]) if detail_update["piece_count"] else None
+                        if "piece_labor_cost" in detail_update:
+                            detail.piece_labor_cost = float(detail_update["piece_labor_cost"]) if detail_update["piece_labor_cost"] else None
         
         db.commit()
         
