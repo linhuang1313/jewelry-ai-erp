@@ -52,6 +52,9 @@ class InboundDetail(Base):
     supplier = Column(String(100))  # 保留字符串字段（向后兼容）
     supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=True)  # 关联供应商表
     total_cost = Column(Float, nullable=False)  # 总成本 = 克工费 + 件工费
+    fineness = Column(String(50), nullable=True)  # 成色（足金999、足金9999等）
+    craft = Column(String(50), nullable=True)  # 工艺（3D硬金、古法、珐琅等）
+    style = Column(String(50), nullable=True)  # 款式（吊坠、手镯、戒指等）
     
     order = relationship("InboundOrder", backref="details")
 

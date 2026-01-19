@@ -163,6 +163,9 @@ async def startup_event():
             ("product_code", "VARCHAR(20) NULL"),
             ("piece_count", "INTEGER DEFAULT 0"),
             ("piece_labor_cost", "FLOAT DEFAULT 0.0"),
+            ("fineness", "VARCHAR(50) NULL"),  # 成色
+            ("craft", "VARCHAR(50) NULL"),  # 工艺
+            ("style", "VARCHAR(50) NULL"),  # 款式
         ]
         
         for col_name, col_type in inbound_columns:
@@ -1783,6 +1786,9 @@ async def get_inbound_orders(
     total_cost_min: Optional[float] = Query(None, description="最小总成本（元）"),
     total_cost_max: Optional[float] = Query(None, description="最大总成本（元）"),
     operator: Optional[str] = Query(None, description="操作员"),
+    fineness: Optional[str] = Query(None, description="成色（如足金999）"),
+    craft: Optional[str] = Query(None, description="工艺（如3D硬金）"),
+    style: Optional[str] = Query(None, description="款式（如吊坠）"),
     limit: int = Query(100, description="返回数量"),
     offset: int = Query(0, description="偏移量"),
     db: Session = Depends(get_db)
@@ -1854,12 +1860,24 @@ async def get_inbound_orders(
             if total_cost_max is not None:
                 details_query = details_query.filter(InboundDetail.total_cost <= total_cost_max)
             
+            # 成色筛选
+            if fineness:
+                details_query = details_query.filter(InboundDetail.fineness.contains(fineness))
+            
+            # 工艺筛选
+            if craft:
+                details_query = details_query.filter(InboundDetail.craft.contains(craft))
+            
+            # 款式筛选
+            if style:
+                details_query = details_query.filter(InboundDetail.style.contains(style))
+            
             details = details_query.all()
             
             # 如果有明细级别筛选条件但没有匹配的明细，跳过这个入库单
             has_detail_filters = any([supplier, product_name, product_code, 
                                       weight_min, weight_max, labor_cost_min, labor_cost_max,
-                                      total_cost_min, total_cost_max])
+                                      total_cost_min, total_cost_max, fineness, craft, style])
             if has_detail_filters and len(details) == 0:
                 continue
             
@@ -1891,7 +1909,10 @@ async def get_inbound_orders(
                     "piece_count": d.piece_count,
                     "piece_labor_cost": d.piece_labor_cost,
                     "supplier": d.supplier,
-                    "total_cost": d.total_cost
+                    "total_cost": d.total_cost,
+                    "fineness": d.fineness,
+                    "craft": d.craft,
+                    "style": d.style
                 } for d in details]
             })
         

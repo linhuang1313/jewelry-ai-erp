@@ -18,6 +18,9 @@ interface InboundDetail {
   piece_labor_cost?: number;
   supplier: string;
   total_cost?: number;
+  fineness?: string;
+  craft?: string;
+  style?: string;
 }
 
 interface InboundOrder {
@@ -57,7 +60,10 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
     laborCostMax: '',
     totalCostMin: '',
     totalCostMax: '',
-    operator: ''
+    operator: '',
+    fineness: '',
+    craft: '',
+    style: ''
   });
   const [showFilters, setShowFilters] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -80,6 +86,9 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
       if (filters.totalCostMin) params.append('total_cost_min', filters.totalCostMin);
       if (filters.totalCostMax) params.append('total_cost_max', filters.totalCostMax);
       if (filters.operator) params.append('operator', filters.operator);
+      if (filters.fineness) params.append('fineness', filters.fineness);
+      if (filters.craft) params.append('craft', filters.craft);
+      if (filters.style) params.append('style', filters.style);
       params.append('limit', '200');
 
       const res = await fetch(`${API_BASE_URL}/api/inbound-orders?${params}`);
@@ -192,7 +201,10 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
       laborCostMax: '',
       totalCostMin: '',
       totalCostMax: '',
-      operator: ''
+      operator: '',
+      fineness: '',
+      craft: '',
+      style: ''
     });
   };
 
@@ -337,7 +349,42 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                     />
                   </div>
                 </div>
+
+                {/* 成色/工艺/款式筛选 */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">成色</label>
+                    <input
+                      type="text"
+                      value={filters.fineness}
+                      onChange={(e) => setFilters({ ...filters, fineness: e.target.value })}
+                      placeholder="如：足金999"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">工艺</label>
+                    <input
+                      type="text"
+                      value={filters.craft}
+                      onChange={(e) => setFilters({ ...filters, craft: e.target.value })}
+                      placeholder="如：3D硬金"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">款式</label>
+                    <input
+                      type="text"
+                      value={filters.style}
+                      onChange={(e) => setFilters({ ...filters, style: e.target.value })}
+                      placeholder="如：吊坠"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
                 
+                {/* 数值范围筛选 */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">重量范围（克）</label>
