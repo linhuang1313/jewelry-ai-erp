@@ -4189,6 +4189,133 @@ async def export_chat_logs(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============= 入库单查询结果导出 API =============
+
+@app.get("/api/export/inbound-query")
+async def export_inbound_query(
+    date_start: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
+    date_end: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+    supplier: Optional[str] = Query(None, description="供应商名称"),
+    product: Optional[str] = Query(None, description="商品名称"),
+    db: Session = Depends(get_db)
+):
+    """导出入库单查询结果为 Excel"""
+    try:
+        from urllib.parse import quote
+        
+        # 构建查询
+        query = db.query(InboundOrder).order_by(desc(InboundOrder.create_time))
+        
+        # 日期筛选
+        if date_start:
+            try:
+                start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+                query = query.filter(InboundOrder.create_time >= start_dt)
+            except:
+                pass
+        if date_end:
+            try:
+                end_dt = datetime.strptime(date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+                query = query.filter(InboundOrder.create_time <= end_dt)
+            except:
+                pass
+        
+        inbound_orders = query.limit(500).all()
+        
+        # 收集数据
+        export_data = []
+        for order in inbound_orders:
+            details = db.query(InboundDetail).filter(InboundDetail.order_id == order.id).all()
+            
+            # 供应商筛选
+            if supplier:
+                suppliers_in_order = [d.supplier for d in details if d.supplier]
+                if not any(supplier.lower() in (s or '').lower() for s in suppliers_in_order):
+                    continue
+            
+            # 商品筛选
+            if product:
+                products_in_order = [d.product_name for d in details if d.product_name]
+                if not any(product.lower() in (p or '').lower() for p in products_in_order):
+                    continue
+            
+            order_date = order.create_time.strftime("%Y-%m-%d") if order.create_time else ""
+            
+            for detail in details:
+                # 如果有商品筛选，只导出匹配的商品
+                if product and product.lower() not in (detail.product_name or '').lower():
+                    continue
+                    
+                export_data.append({
+                    "入库单号": order.order_no,
+                    "入库日期": order_date,
+                    "商品名称": detail.product_name,
+                    "重量(克)": detail.weight,
+                    "克工费(元/克)": detail.labor_cost,
+                    "件数": detail.piece_count or "",
+                    "件工费(元/件)": detail.piece_labor_cost or "",
+                    "供应商": detail.supplier,
+                    "总成本(元)": detail.total_cost
+                })
+        
+        if not export_data:
+            raise HTTPException(status_code=404, detail="没有符合条件的入库记录")
+        
+        # 创建 Excel
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "入库单明细"
+        
+        # 表头
+        headers = list(export_data[0].keys())
+        ws.append(headers)
+        style_header(ws)
+        
+        # 数据
+        for row in export_data:
+            ws.append(list(row.values()))
+        
+        auto_column_width(ws)
+        
+        # 生成文件名
+        date_desc = ""
+        if date_start and date_end:
+            if date_start == date_end:
+                date_desc = f"_{date_start}"
+            else:
+                date_desc = f"_{date_start}至{date_end}"
+        elif date_start:
+            date_desc = f"_{date_start}起"
+        elif date_end:
+            date_desc = f"_至{date_end}"
+        
+        filename = f"入库单明细{date_desc}_{datetime.now().strftime('%H%M%S')}.xlsx"
+        
+        # 返回 Excel 文件
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        encoded_filename = quote(filename)
+        headers = {
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Disposition"
+        }
+        
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers=headers
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"导出入库单查询结果失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============= 聊天历史回溯 API =============
 
 @app.get("/api/chat-sessions")

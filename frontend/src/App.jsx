@@ -2526,7 +2526,7 @@ function App() {
                       `}>
                         <div className="text-[15px] leading-relaxed whitespace-pre-wrap text-gray-800">
                           {/* 隐藏内容中的特殊标记 */}
-                          {msg.content?.replace(/\n*<!-- (RETURN_ORDER|INBOUND_ORDER|SALES_ORDER|SETTLEMENT_ORDER|CUSTOMER_DEBT):[^>]+ -->/g, '')}
+                          {msg.content?.replace(/\n*<!-- (RETURN_ORDER|INBOUND_ORDER|SALES_ORDER|SETTLEMENT_ORDER|CUSTOMER_DEBT|EXPORT_INBOUND):[^>]+ -->/g, '')}
                           {/* 流式生成时的闪烁光标 */}
                           {msg.isStreaming && (
                             <span className="inline-block w-0.5 h-4 bg-blue-500 ml-1 animate-pulse"></span>
@@ -2719,6 +2719,36 @@ function App() {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
                                 下载账务明细 (Excel)
+                              </button>
+                            </div>
+                          )
+                        })()}
+                        {/* 入库单查询导出按钮 - 从内容中解析隐藏标记 */}
+                        {(() => {
+                          if (!msg.content) return null
+                          const match = msg.content.match(/<!-- EXPORT_INBOUND:([^:]*):([^:]*):([^:]*):([^>]*) -->/)
+                          if (!match) return null
+                          const dateStart = match[1] || ''
+                          const dateEnd = match[2] || ''
+                          const supplier = match[3] || ''
+                          const product = match[4] || ''
+                          // 构建查询参数
+                          const params = new URLSearchParams()
+                          if (dateStart) params.append('date_start', dateStart)
+                          if (dateEnd) params.append('date_end', dateEnd)
+                          if (supplier) params.append('supplier', supplier)
+                          if (product) params.append('product', product)
+                          const queryString = params.toString()
+                          return (
+                            <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
+                              <button
+                                onClick={() => window.open(`${API_BASE_URL}/api/export/inbound-query${queryString ? '?' + queryString : ''}`, '_blank')}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                下载入库明细 (Excel)
                               </button>
                             </div>
                           )
