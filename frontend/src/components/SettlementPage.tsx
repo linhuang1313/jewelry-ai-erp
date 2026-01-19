@@ -1142,6 +1142,13 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                           <span>重新结算</span>
                         </button>
                       )}
+                      {/* 已销退状态 - 不显示操作按钮 */}
+                      {settlement.status === 'refunded' && (
+                        <span className="text-center text-sm text-red-600 py-2 w-full flex items-center justify-center space-x-1">
+                          <RotateCcw className="w-4 h-4" />
+                          <span>已销退，无可用操作</span>
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}

@@ -1894,13 +1894,11 @@ async def refund_settlement_order(
                 "return_to": location_name
             })
         
-        # 更新结算单状态为"待确认"（需要重新确认）
-        settlement.status = "pending"
-        settlement.confirmed_by = None
-        settlement.confirmed_at = None
+        # 更新结算单状态为"已销退"（不能再确认）
+        settlement.status = "refunded"
         
-        # 更新销售单状态为"待结算"
-        sales_order.status = "待结算"
+        # 更新销售单状态为"已销退"
+        sales_order.status = "已销退"
         
         db.commit()
         
