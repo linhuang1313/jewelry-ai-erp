@@ -168,12 +168,20 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     selected: boolean;
   }>>([]);
   const [batchLoading, setBatchLoading] = useState(false);
+  const [recentInboundOrders, setRecentInboundOrders] = useState<Array<{
+    id: number;
+    order_no: string;
+    create_time: string;
+    item_count: number;
+    total_weight: number;
+  }>>([]);
 
   // 加载数据
   useEffect(() => {
     loadLocations();
     loadInventorySummary();
     loadTransfers();
+    loadRecentInboundOrders();
   }, []);
 
   const loadLocations = async () => {
@@ -291,6 +299,25 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     }
   };
 
+  // 加载最近入库单（供批量转移选择）
+  const loadRecentInboundOrders = async () => {
+    try {
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/inbound-orders?limit=20`);
+      const data = await response.json();
+      if (data.success && data.data) {
+        setRecentInboundOrders(data.data.map((order: any) => ({
+          id: order.id,
+          order_no: order.order_no,
+          create_time: order.create_time,
+          item_count: order.item_count,
+          total_weight: order.total_weight
+        })));
+      }
+    } catch (error) {
+      console.error('加载入库单失败:', error);
+    }
+  };
+
   // 初始化默认位置
   const initDefaultLocations = async () => {
     try {
@@ -307,15 +334,20 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
   };
 
   // 根据入库单号查询商品
-  const handleSearchByOrderNo = async () => {
-    if (!batchOrderNo.trim()) {
+  const handleSearchByOrderNo = async (orderNoOverride?: string) => {
+    const orderNoToSearch = orderNoOverride || batchOrderNo.trim();
+    if (!orderNoToSearch) {
       toast.error('请输入入库单号');
       return;
     }
     
+    if (orderNoOverride) {
+      setBatchOrderNo(orderNoOverride);
+    }
+    
     setBatchLoading(true);
     try {
-      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/inbound-orders?order_no=${encodeURIComponent(batchOrderNo)}&limit=1`);
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/inbound-orders?order_no=${encodeURIComponent(orderNoToSearch)}&limit=1`);
       const data = await response.json();
       
       if (data.success && data.data && data.data.length > 0) {
@@ -1093,6 +1125,45 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                   输入入库单号后，系统会自动获取该入库单的所有商品，您可以选择需要转移的商品
                 </p>
               </div>
+
+              {/* 最近入库单快速选择 */}
+              {batchItems.length === 0 && recentInboundOrders.length > 0 && (
+                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                    <h4 className="font-medium">最近入库单（点击快速选择）</h4>
+                  </div>
+                  <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+                    {recentInboundOrders.map((order) => (
+                      <div 
+                        key={order.id}
+                        onClick={() => handleSearchByOrderNo(order.order_no)}
+                        className="px-6 py-3 hover:bg-blue-50 cursor-pointer flex items-center justify-between transition-colors"
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className="p-2 bg-orange-100 rounded-lg">
+                            <FileText className="w-4 h-4 text-orange-600" />
+                          </div>
+                          <div>
+                            <div className="font-mono text-sm font-medium">{order.order_no}</div>
+                            <div className="text-xs text-gray-500">
+                              {order.create_time ? new Date(order.create_time).toLocaleDateString('zh-CN', {
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              }) : ''}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-medium text-gray-900">{order.item_count} 个商品</div>
+                          <div className="text-xs text-orange-600">{order.total_weight} 克</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* 商品列表 */}
               {batchItems.length > 0 && (
