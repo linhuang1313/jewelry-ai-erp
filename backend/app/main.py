@@ -454,7 +454,11 @@ async def chat(request: AIRequest, db: Session = Depends(get_db)):
                 db,
                 order_no=ai_response.order_no,  # RK开头的入库单号
                 sales_order_no=ai_response.sales_order_no,  # XS开头的销售单号
-                user_role=user_role  # 传入用户角色以确定显示哪个仓位的库存
+                user_role=user_role,  # 传入用户角色以确定显示哪个仓位的库存
+                inbound_supplier=ai_response.inbound_supplier,  # 入库单供应商筛选
+                inbound_product=ai_response.inbound_product,  # 入库单商品筛选
+                inbound_date_start=ai_response.inbound_date_start,  # 入库单开始日期
+                inbound_date_end=ai_response.inbound_date_end  # 入库单结束日期
             )
             
             # 使用AI进行分析
@@ -973,8 +977,13 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             yield f"data: {json.dumps({'type': 'thinking', 'step': '数据收集', 'message': '正在收集订单数据...', 'progress': 65}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0.05)
             
-            # 收集入库单数据（如果指定了入库单号，只查询该入库单）
+            # 收集入库单数据（支持筛选条件）
             order_no = ai_response.order_no if hasattr(ai_response, 'order_no') else None
+            inbound_supplier = getattr(ai_response, 'inbound_supplier', None)
+            inbound_product = getattr(ai_response, 'inbound_product', None)
+            inbound_date_start = getattr(ai_response, 'inbound_date_start', None)
+            inbound_date_end = getattr(ai_response, 'inbound_date_end', None)
+            
             if order_no:
                 # 精确查询指定入库单
                 order = db.query(InboundOrder).filter(InboundOrder.order_no == order_no).first()
@@ -1002,12 +1011,49 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     # 入库单不存在
                     data['inbound_orders'] = []
             else:
-                # 查询最近的入库单（最多50个）
-                inbound_orders = db.query(InboundOrder).order_by(desc(InboundOrder.create_time)).limit(50).all()
+                # 查询入库单（支持筛选）
+                inbound_query = db.query(InboundOrder).order_by(desc(InboundOrder.create_time))
+                
+                # 按日期筛选
+                if inbound_date_start:
+                    try:
+                        start_dt = datetime.strptime(inbound_date_start, "%Y-%m-%d")
+                        inbound_query = inbound_query.filter(InboundOrder.create_time >= start_dt)
+                    except:
+                        pass
+                if inbound_date_end:
+                    try:
+                        end_dt = datetime.strptime(inbound_date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+                        inbound_query = inbound_query.filter(InboundOrder.create_time <= end_dt)
+                    except:
+                        pass
+                
+                inbound_orders = inbound_query.limit(100).all()
                 data['inbound_orders'] = []
+                data['inbound_filters'] = {
+                    'supplier': inbound_supplier,
+                    'product': inbound_product,
+                    'date_start': inbound_date_start,
+                    'date_end': inbound_date_end
+                }
+                
                 for order in inbound_orders:
                     details = db.query(InboundDetail).filter(InboundDetail.order_id == order.id).all()
+                    
+                    # 按供应商筛选
+                    if inbound_supplier:
+                        suppliers_in_order = [d.supplier for d in details if d.supplier]
+                        if not any(inbound_supplier.lower() in (s or '').lower() for s in suppliers_in_order):
+                            continue
+                    
+                    # 按商品名称筛选
+                    if inbound_product:
+                        products_in_order = [d.product_name for d in details if d.product_name]
+                        if not any(inbound_product.lower() in (p or '').lower() for p in products_in_order):
+                            continue
+                    
                     data['inbound_orders'].append({
+                        'order_id': order.id,
                         'order_no': order.order_no,
                         'create_time': str(order.create_time) if order.create_time else None,
                         'status': order.status,

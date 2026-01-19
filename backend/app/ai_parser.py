@@ -108,6 +108,12 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
 - order_no: 入库单号（字符串，仅当action为"查询入库单"且用户提供了RK开头的入库单号时需要，如"RK1768047147249"）
 - sales_order_no: 销售单号（字符串，仅当action为"查询销售单"且用户提供了XS开头的销售单号时需要，如"XS20260111162534"）
 
+- 入库单筛选字段（仅当action为"查询入库单"时使用）：
+  - inbound_supplier: 按供应商筛选（如"查询金源珠宝的入库单"则为"金源珠宝"）
+  - inbound_product: 按商品名称筛选（如"查询有古法戒指的入库单"则为"古法戒指"）
+  - inbound_date_start: 入库单开始日期（YYYY-MM-DD格式，如"查询今天的入库单"则为今天日期）
+  - inbound_date_end: 入库单结束日期（YYYY-MM-DD格式）
+
 - products: 商品列表（数组，仅当action为"入库"时需要），每个商品包含：
   - product_name: 商品名称（必填）
   - weight: 重量/金重（克，必须是数字，必填）
@@ -571,6 +577,69 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
 示例18（查询入库单 - 不指定入库单号）：
 用户输入："查询入库单"
 说明：用户要查询入库单，但没有指定具体的入库单号，应该识别为查询入库单，order_no设为null
+{{
+  "action": "查询入库单",
+  "order_no": null,
+  "products": null
+}}
+
+示例18-1（查询入库单 - 按供应商筛选）：
+用户输入："查询金源珠宝的入库单"
+说明：用户要查询特定供应商的入库单，提取供应商名称
+{{
+  "action": "查询入库单",
+  "order_no": null,
+  "inbound_supplier": "金源珠宝",
+  "products": null
+}}
+
+示例18-2（查询入库单 - 按日期筛选-今天）：
+用户输入："查询今天的入库单"
+说明：用户要查询今天的入库单，inbound_date_start和inbound_date_end都设为今天的日期
+{{
+  "action": "查询入库单",
+  "order_no": null,
+  "inbound_date_start": "2026-01-19",
+  "inbound_date_end": "2026-01-19",
+  "products": null
+}}
+
+示例18-3（查询入库单 - 按日期筛选-本周）：
+用户输入："查询本周的入库单"
+说明：用户要查询本周的入库单，计算本周的开始和结束日期
+{{
+  "action": "查询入库单",
+  "order_no": null,
+  "inbound_date_start": "2026-01-13",
+  "inbound_date_end": "2026-01-19",
+  "products": null
+}}
+
+示例18-4（查询入库单 - 按商品筛选）：
+用户输入："查询有古法戒指的入库单"
+说明：用户要查询包含特定商品的入库单，提取商品名称关键词
+{{
+  "action": "查询入库单",
+  "order_no": null,
+  "inbound_product": "古法戒指",
+  "products": null
+}}
+
+示例18-5（查询入库单 - 组合筛选）：
+用户输入："查询本周金源珠宝的入库单"
+说明：用户要查询特定时间段和供应商的入库单，同时提取日期和供应商
+{{
+  "action": "查询入库单",
+  "order_no": null,
+  "inbound_supplier": "金源珠宝",
+  "inbound_date_start": "2026-01-13",
+  "inbound_date_end": "2026-01-19",
+  "products": null
+}}
+
+示例18-6（查询入库单 - 最近的入库单）：
+用户输入："最近的入库单"
+说明：用户要查询最近的入库单列表
 {{
   "action": "查询入库单",
   "order_no": null,

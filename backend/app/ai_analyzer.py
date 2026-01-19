@@ -27,12 +27,16 @@ class AIAnalyzer:
             base_url="https://api.deepseek.com"
         )
     
-    def collect_all_data(self, intent: str, user_message: str, db: Session, order_no: Optional[str] = None, sales_order_no: Optional[str] = None, user_role: str = "manager") -> Dict[str, Any]:
+    def collect_all_data(self, intent: str, user_message: str, db: Session, order_no: Optional[str] = None, sales_order_no: Optional[str] = None, user_role: str = "manager", inbound_supplier: Optional[str] = None, inbound_product: Optional[str] = None, inbound_date_start: Optional[str] = None, inbound_date_end: Optional[str] = None) -> Dict[str, Any]:
         """根据用户意图智能收集所有相关数据
         
         Args:
             intent: 用户意图
             user_message: 用户消息
+            inbound_supplier: 入库单供应商筛选
+            inbound_product: 入库单商品筛选
+            inbound_date_start: 入库单开始日期筛选
+            inbound_date_end: 入库单结束日期筛选
             db: 数据库会话
             order_no: 入库单号（可选，RK开头，用于精确查询入库单）
             sales_order_no: 销售单号（可选，XS开头，用于精确查询销售单）
@@ -139,12 +143,49 @@ class AIAnalyzer:
             ).scalar() or 0
             supplier_data["product_count"] = product_count
         
-        # 收集入库单数据
-        inbound_orders = db.query(InboundOrder).order_by(desc(InboundOrder.create_time)).limit(50).all()
+        # 收集入库单数据（支持筛选）
+        inbound_query = db.query(InboundOrder).order_by(desc(InboundOrder.create_time))
+        
+        # 按日期筛选
+        if inbound_date_start:
+            try:
+                start_dt = datetime.strptime(inbound_date_start, "%Y-%m-%d")
+                inbound_query = inbound_query.filter(InboundOrder.create_time >= start_dt)
+            except:
+                pass
+        if inbound_date_end:
+            try:
+                end_dt = datetime.strptime(inbound_date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+                inbound_query = inbound_query.filter(InboundOrder.create_time <= end_dt)
+            except:
+                pass
+        
+        inbound_orders = inbound_query.limit(100).all()
         data["inbound_orders"] = []
+        data["inbound_filters"] = {
+            "supplier": inbound_supplier,
+            "product": inbound_product,
+            "date_start": inbound_date_start,
+            "date_end": inbound_date_end
+        }
+        
         for order in inbound_orders:
             details = db.query(InboundDetail).filter(InboundDetail.order_id == order.id).all()
+            
+            # 按供应商筛选
+            if inbound_supplier:
+                suppliers_in_order = [d.supplier for d in details if d.supplier]
+                if not any(inbound_supplier.lower() in (s or '').lower() for s in suppliers_in_order):
+                    continue
+            
+            # 按商品名称筛选
+            if inbound_product:
+                products_in_order = [d.product_name for d in details if d.product_name]
+                if not any(inbound_product.lower() in (p or '').lower() for p in products_in_order):
+                    continue
+            
             data["inbound_orders"].append({
+                "order_id": order.id,
                 "order_no": order.order_no,
                 "create_time": str(order.create_time) if order.create_time else None,
                 "status": order.status,

@@ -105,6 +105,11 @@ class AIResponse(BaseModel):
     receipt_gold_weight: Optional[float] = None  # 交料克重
     receipt_gold_fineness: Optional[str] = None  # 成色，默认足金999
     receipt_remark: Optional[str] = None  # 备注
+    # 入库单查询筛选字段
+    inbound_supplier: Optional[str] = None  # 按供应商筛选入库单
+    inbound_product: Optional[str] = None  # 按商品名称筛选入库单
+    inbound_date_start: Optional[str] = None  # 入库单开始日期
+    inbound_date_end: Optional[str] = None  # 入库单结束日期
 
 
 # ============= 入库相关 Schema =============
