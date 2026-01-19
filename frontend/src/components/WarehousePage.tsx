@@ -171,6 +171,26 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       if (response.ok) {
         const data = await response.json();
         setLocations(data);
+        
+        // 根据角色设置默认的发出位置和目标位置
+        const productLoc = data.find((l: Location) => l.name === '商品部仓库');
+        const showroomLoc = data.find((l: Location) => l.name === '展厅');
+        
+        if (userRole === 'product' && productLoc && showroomLoc) {
+          // 商品专员：发出位置默认商品部，目标位置默认展厅
+          setTransferForm(prev => ({
+            ...prev,
+            from_location_id: productLoc.id.toString(),
+            to_location_id: showroomLoc.id.toString()
+          }));
+        } else if (userRole === 'counter' && productLoc && showroomLoc) {
+          // 柜台：发出位置默认展厅，目标位置默认商品部
+          setTransferForm(prev => ({
+            ...prev,
+            from_location_id: showroomLoc.id.toString(),
+            to_location_id: productLoc.id.toString()
+          }));
+        }
       }
     } catch (error) {
       console.error('加载位置失败:', error);
@@ -300,7 +320,19 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       if (response.ok) {
         toast.success('转移单创建成功');
         setShowTransferForm(false);
-        setTransferForm({ product_name: '', weight: '', from_location_id: '', to_location_id: '', remark: '' });
+        // 重置表单但保留默认位置
+        const productLoc = locations.find(l => l.name === '商品部仓库');
+        const showroomLoc = locations.find(l => l.name === '展厅');
+        let defaultFrom = '';
+        let defaultTo = '';
+        if (userRole === 'product' && productLoc && showroomLoc) {
+          defaultFrom = productLoc.id.toString();
+          defaultTo = showroomLoc.id.toString();
+        } else if (userRole === 'counter' && productLoc && showroomLoc) {
+          defaultFrom = showroomLoc.id.toString();
+          defaultTo = productLoc.id.toString();
+        }
+        setTransferForm({ product_name: '', weight: '', from_location_id: defaultFrom, to_location_id: defaultTo, remark: '' });
         loadTransfers();
         loadInventorySummary();
       } else {
