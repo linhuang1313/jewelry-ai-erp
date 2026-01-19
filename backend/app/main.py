@@ -21,6 +21,8 @@ def to_china_time(dt: datetime) -> datetime:
         # 假设无时区的时间是UTC
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(CHINA_TZ)
+
+import random
 import tempfile
 import os
 import json
@@ -69,6 +71,28 @@ else:
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def generate_inbound_order_no(db) -> str:
+    """生成唯一入库单号：RK + 日期 + 4位随机数"""
+    date_str = china_now().strftime("%Y%m%d")
+    
+    for _ in range(10):
+        random_suffix = f"{random.randint(0, 9999):04d}"
+        order_no = f"RK{date_str}{random_suffix}"
+        
+        # 检查是否重复
+        exists = db.query(InboundOrder).filter(
+            InboundOrder.order_no == order_no
+        ).first()
+        
+        if not exists:
+            return order_no
+    
+    # 备用：使用6位随机数确保唯一性
+    random_suffix = f"{random.randint(0, 999999):06d}"
+    return f"RK{date_str}{random_suffix}"
+
 
 app = FastAPI(title="AI-ERP珠宝入库BETA测试")
 
@@ -1613,10 +1637,8 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
                 "error": "validation_failed"
             }
         
-        # 生成入库单号（使用中国时间）
-        pinyin_initials = to_pinyin_initials(product_name)
-        timestamp = china_now().strftime("%Y%m%d%H%M%S")
-        order_no = f"RK{pinyin_initials}{timestamp}"
+        # 生成入库单号（RK + 日期 + 4位随机数）
+        order_no = generate_inbound_order_no(db)
         
         # 创建入库单
         order = InboundOrder(order_no=order_no, create_time=china_now())
@@ -1928,10 +1950,8 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
         from .models import ProductCode as ProductCodeModel
         import uuid
         
-        # 生成唯一入库单号（使用UUID后缀确保唯一性）
-        timestamp = china_now().strftime("%Y%m%d%H%M%S")
-        unique_suffix = uuid.uuid4().hex[:4].upper()
-        order_no = f"RKPL{timestamp}{unique_suffix}"  # RKPL = 入库批量
+        # 生成入库单号（RK + 日期 + 4位随机数）
+        order_no = generate_inbound_order_no(db)
         
         # 创建入库单
         order = InboundOrder(order_no=order_no, create_time=china_now())
