@@ -70,6 +70,7 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
 16. **收料**：客户交料（如"张老板交料5克"、"李老板存料3.5克足金9999"、"王总交了2克金料"）
 17. **付料**：付料给供应商（如"付20克给金源珠宝"、"付料金源珠宝10克"、"给金源付5克"）
 18. **批量转移**：按入库单号批量转移商品（如"把入库单RK123的商品转到展厅"、"RK123转移到展厅"）
+19. **提料**：客户从存料中取走金料（如"张老板提5克"、"李总取料3克"、"王总提走2克金料"）
 
 **关键词优先级识别（非常重要）**：
 - "退"、"退货"、"退给"、"退回"、"退库"、"我要退" → 优先识别为"退货"操作，而不是入库！
@@ -99,6 +100,7 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
   - "收料"：客户交料/存料（如"张老板交料5克"、"李老板存料3.5克足金9999"、"王总交了2克金料"、"收张老板5克"等）
   - "付料"：付料给供应商（如"付20克给金源珠宝"、"付料金源珠宝10克"、"给金源付5克"等）
   - "批量转移"：按入库单号批量转移商品（如"把入库单RK123的商品转到展厅"、"RK123转移到展厅"等）
+  - "提料"：客户从存料中取走金料（如"张老板提5克"、"李总取料3克"、"王总提走2克"、"给张老板提3克"等）
   - "其他"：无法识别的意图
 
 **关于"退货"和"入库"的区分（极其重要）**：
@@ -183,6 +185,10 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
 
 - batch_transfer_order_no: 入库单号（当action为"批量转移"时必填，如"RK1768047147249"）
 - batch_transfer_to_location: 目标位置（当action为"批量转移"时可选，如"展厅"、"商品部仓库"，默认"展厅"）
+
+- withdrawal_customer_name: 提料客户名称（当action为"提料"时必填，如"张老板"、"李总"等）
+- withdrawal_gold_weight: 提料克重（当action为"提料"时必填，数字，单位克）
+- withdrawal_remark: 备注（当action为"提料"时可选）
 
 重要提示：
 1. **意图识别要灵活**：
@@ -963,6 +969,37 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
   "action": "批量转移",
   "batch_transfer_order_no": "RK123",
   "batch_transfer_to_location": "展厅",
+  "products": null
+}}
+
+示例46（提料 - 基本）：
+用户输入："张老板提5克"
+说明：客户要从存料中取走金料，提取客户名称和克重
+{{
+  "action": "提料",
+  "withdrawal_customer_name": "张老板",
+  "withdrawal_gold_weight": 5,
+  "products": null
+}}
+
+示例47（提料 - 取料表达）：
+用户输入："李总取料3克"
+说明：客户要取走金料，"取料"和"提料"意思相同
+{{
+  "action": "提料",
+  "withdrawal_customer_name": "李总",
+  "withdrawal_gold_weight": 3,
+  "products": null
+}}
+
+示例48（提料 - 带备注）：
+用户输入："给王老板提2克金料 送到深圳"
+说明：客户提料并指定送货信息
+{{
+  "action": "提料",
+  "withdrawal_customer_name": "王老板",
+  "withdrawal_gold_weight": 2,
+  "withdrawal_remark": "送到深圳",
   "products": null
 }}
 """

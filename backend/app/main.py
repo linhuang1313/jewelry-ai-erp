@@ -743,6 +743,15 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         else:
                             yield f"data: {json.dumps({'type': 'complete', 'data': result}, ensure_ascii=False)}\n\n"
                             return
+                    elif ai_response.action == "提料":
+                        # 提料：客户从存料中取走金料
+                        result = await handle_gold_withdrawal(ai_response, db)
+                        if result.get("success"):
+                            yield f"data: {json.dumps({'type': 'withdrawal_confirm', 'data': result}, ensure_ascii=False)}\n\n"
+                            return
+                        else:
+                            yield f"data: {json.dumps({'type': 'complete', 'data': result}, ensure_ascii=False)}\n\n"
+                            return
                     elif ai_response.action == "批量转移":
                         # 批量转移：返回确认卡片数据
                         result = await handle_batch_transfer(ai_response, db)
@@ -3943,6 +3952,78 @@ async def handle_gold_payment(ai_response, db: Session, user_role: str = "materi
         return {
             "success": False,
             "message": f"付料失败: {str(e)}"
+        }
+
+
+async def handle_gold_withdrawal(ai_response, db: Session) -> Dict[str, Any]:
+    """处理提料：客户从存料中取走金料，返回确认数据"""
+    try:
+        customer_name = ai_response.withdrawal_customer_name
+        gold_weight = ai_response.withdrawal_gold_weight
+        remark = ai_response.withdrawal_remark or ""
+        
+        # 验证必填信息
+        if not customer_name:
+            return {
+                "success": False,
+                "message": "请提供提料的客户名称，例如：张老板提5克"
+            }
+        
+        if not gold_weight or gold_weight <= 0:
+            return {
+                "success": False,
+                "message": "请提供提料克重，例如：张老板提5克"
+            }
+        
+        # 模糊查询客户
+        from .models import Customer, CustomerGoldDeposit
+        
+        customer = db.query(Customer).filter(
+            Customer.name.ilike(f"%{customer_name}%")
+        ).first()
+        
+        if not customer:
+            return {
+                "success": False,
+                "message": f"未找到客户【{customer_name}】，请确认客户姓名是否正确"
+            }
+        
+        # 查询客户存料余额
+        deposit = db.query(CustomerGoldDeposit).filter(
+            CustomerGoldDeposit.customer_id == customer.id
+        ).first()
+        
+        current_balance = deposit.current_balance if deposit else 0.0
+        
+        # 检查存料余额是否足够
+        if gold_weight > current_balance:
+            return {
+                "success": False,
+                "message": f"客户【{customer.name}】存料余额不足。\n当前存料：{current_balance:.2f}克，申请提料：{gold_weight:.2f}克"
+            }
+        
+        return {
+            "success": True,
+            "action": "提料",
+            "confirm_required": True,
+            "customer": {
+                "id": customer.id,
+                "name": customer.name,
+                "customer_no": customer.customer_no,
+                "phone": customer.phone
+            },
+            "gold_weight": round(gold_weight, 2),
+            "current_balance": round(current_balance, 2),
+            "balance_after": round(current_balance - gold_weight, 2),
+            "remark": remark,
+            "message": f"确认为【{customer.name}】创建提料单：{gold_weight:.2f}克？\n当前存料：{current_balance:.2f}克，提料后余额：{current_balance - gold_weight:.2f}克"
+        }
+        
+    except Exception as e:
+        logger.error(f"处理提料失败: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"提料失败: {str(e)}"
         }
 
 

@@ -117,6 +117,10 @@ class AIResponse(BaseModel):
     # 批量转移相关字段
     batch_transfer_order_no: Optional[str] = None  # 批量转移的入库单号
     batch_transfer_to_location: Optional[str] = None  # 批量转移目标位置
+    # 提料相关字段
+    withdrawal_customer_name: Optional[str] = None  # 提料客户名称
+    withdrawal_gold_weight: Optional[float] = None  # 提料克重
+    withdrawal_remark: Optional[str] = None  # 提料备注
 
 
 # ============= 入库相关 Schema =============
