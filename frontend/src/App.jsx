@@ -435,14 +435,15 @@ function App() {
         setSelectedCustomerDeposit(null)
         setQuickFormCustomerSearch('')
         
-        // 添加提料单记录到聊天框（使用文本格式，确保历史记录持久化）
-        const withdrawalMessage = `✅ 提料单已生成\n\n📋 单号：${result.withdrawal_no}\n👤 客户：${customerName}\n⚖️ 克重：${withdrawalWeight.toFixed(2)} 克${remarkText ? `\n📝 备注：${remarkText}` : ''}\n⏰ 时间：${new Date().toLocaleString('zh-CN')}`
+        // 添加提料单记录到聊天框（使用文本格式+隐藏标记，确保历史记录持久化）
+        const downloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${result.id}/download?format=html`
+        const withdrawalMessage = `✅ 提料单已生成\n\n📋 单号：${result.withdrawal_no}\n👤 客户：${customerName}\n⚖️ 克重：${withdrawalWeight.toFixed(2)} 克${remarkText ? `\n📝 备注：${remarkText}` : ''}\n⏰ 时间：${new Date().toLocaleString('zh-CN')}\n\n<!-- WITHDRAWAL_ORDER:${result.id}:${result.withdrawal_no} -->`
         setMessages(prev => [...prev, {
           id: Date.now(),
           type: 'system',
           content: withdrawalMessage,
           // 保留下载链接供按钮使用
-          withdrawalDownloadUrl: `${API_BASE_URL}/api/gold-material/withdrawals/${result.id}/download?format=html`,
+          withdrawalDownloadUrl: downloadUrl,
           withdrawalId: result.id
         }])
         
@@ -546,11 +547,25 @@ function App() {
       
       if (data.success && data.messages) {
         // 将后端消息格式转换为前端消息格式
-        const messages = data.messages.map(msg => ({
-          type: msg.message_type === 'user' ? 'user' : 'system',  // assistant 消息显示为 system 类型
-          content: msg.content || '',
-          id: msg.id
-        }))
+        const messages = data.messages.map(msg => {
+          const message = {
+            type: msg.message_type === 'user' ? 'user' : 'system',  // assistant 消息显示为 system 类型
+            content: msg.content || '',
+            id: msg.id
+          }
+          
+          // 解析提料单隐藏标记
+          if (msg.content) {
+            const withdrawalMatch = msg.content.match(/<!-- WITHDRAWAL_ORDER:(\d+):([^>]+) -->/)
+            if (withdrawalMatch) {
+              const withdrawalId = parseInt(withdrawalMatch[1])
+              message.withdrawalId = withdrawalId
+              message.withdrawalDownloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${withdrawalId}/download?format=html`
+            }
+          }
+          
+          return message
+        })
         
         // 从历史记录中获取对话标题
         const history = conversationHistory
@@ -579,7 +594,19 @@ function App() {
         const history = Array.isArray(parsedData) ? parsedData : []
         const conversation = history.find(c => c.id === conversationId)
         if (conversation && conversation.messages) {
-          setMessages(conversation.messages)
+          // 解析消息中的隐藏标记，恢复提料单下载链接
+          const messages = conversation.messages.map(msg => {
+            if (msg.content) {
+              const withdrawalMatch = msg.content.match(/<!-- WITHDRAWAL_ORDER:(\d+):([^>]+) -->/)
+              if (withdrawalMatch && !msg.withdrawalDownloadUrl) {
+                const withdrawalId = parseInt(withdrawalMatch[1])
+                msg.withdrawalId = withdrawalId
+                msg.withdrawalDownloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${withdrawalId}/download?format=html`
+              }
+            }
+            return msg
+          })
+          setMessages(messages)
           setCurrentConversationId(conversation.id)
           setConversationTitle(conversation.title)
           if (window.innerWidth < 1024) {
@@ -597,7 +624,19 @@ function App() {
       const history = Array.isArray(parsedData2) ? parsedData2 : []
       const conversation = history.find(c => c.id === conversationId)
       if (conversation && conversation.messages) {
-        setMessages(conversation.messages)
+        // 解析消息中的隐藏标记，恢复提料单下载链接
+        const messages = conversation.messages.map(msg => {
+          if (msg.content) {
+            const withdrawalMatch = msg.content.match(/<!-- WITHDRAWAL_ORDER:(\d+):([^>]+) -->/)
+            if (withdrawalMatch && !msg.withdrawalDownloadUrl) {
+              const withdrawalId = parseInt(withdrawalMatch[1])
+              msg.withdrawalId = withdrawalId
+              msg.withdrawalDownloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${withdrawalId}/download?format=html`
+            }
+          }
+          return msg
+        })
+        setMessages(messages)
         setCurrentConversationId(conversation.id)
         setConversationTitle(conversation.title)
         if (window.innerWidth < 1024) {
@@ -2927,20 +2966,33 @@ function App() {
                     />
                   </div>
                 )}
-                        {/* 提料单操作按钮 */}
-                        {msg.withdrawalDownloadUrl && (
-                          <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
-                            <button
-                              onClick={() => window.open(msg.withdrawalDownloadUrl, '_blank')}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                              </svg>
-                              打印提料单
-                            </button>
-                          </div>
-                        )}
+                        {/* 提料单操作按钮 - 支持从对象或从内容解析 */}
+                        {(() => {
+                          // 尝试从消息对象获取，或从内容中解析隐藏标记
+                          let withdrawalId = msg.withdrawalId
+                          let downloadUrl = msg.withdrawalDownloadUrl
+                          if (!withdrawalId && msg.content) {
+                            const match = msg.content.match(/<!-- WITHDRAWAL_ORDER:(\d+):/)
+                            if (match) {
+                              withdrawalId = parseInt(match[1])
+                              downloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${withdrawalId}/download?format=html`
+                            }
+                          }
+                          if (!withdrawalId) return null
+                          return (
+                            <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
+                              <button
+                                onClick={() => window.open(downloadUrl, '_blank')}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                </svg>
+                                打印提料单
+                              </button>
+                            </div>
+                          )
+                        })()}
                         {/* 退货单操作按钮 - 支持从对象或从内容解析 */}
                         {(() => {
                           // 尝试从消息对象获取，或从内容中解析隐藏标记
