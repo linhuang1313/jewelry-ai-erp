@@ -435,18 +435,15 @@ function App() {
         setSelectedCustomerDeposit(null)
         setQuickFormCustomerSearch('')
         
-        // 添加提料单记录到聊天框
+        // 添加提料单记录到聊天框（使用文本格式，确保历史记录持久化）
+        const withdrawalMessage = `✅ 提料单已生成\n\n📋 单号：${result.withdrawal_no}\n👤 客户：${customerName}\n⚖️ 克重：${withdrawalWeight.toFixed(2)} 克${remarkText ? `\n📝 备注：${remarkText}` : ''}\n⏰ 时间：${new Date().toLocaleString('zh-CN')}`
         setMessages(prev => [...prev, {
           id: Date.now(),
-          type: 'withdrawal_record',
-          withdrawalData: {
-            withdrawal_no: result.withdrawal_no,
-            customer_name: customerName,
-            gold_weight: withdrawalWeight,
-            remark: remarkText,
-            created_at: new Date().toLocaleString('zh-CN'),
-            download_url: `${API_BASE_URL}/api/gold-material/withdrawals/${result.id}/download?format=html`
-          }
+          type: 'system',
+          content: withdrawalMessage,
+          // 保留下载链接供按钮使用
+          withdrawalDownloadUrl: `${API_BASE_URL}/api/gold-material/withdrawals/${result.id}/download?format=html`,
+          withdrawalId: result.id
         }])
         
         // 自动打开打印页面
@@ -2930,6 +2927,20 @@ function App() {
                     />
                   </div>
                 )}
+                        {/* 提料单操作按钮 */}
+                        {msg.withdrawalDownloadUrl && (
+                          <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
+                            <button
+                              onClick={() => window.open(msg.withdrawalDownloadUrl, '_blank')}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                              </svg>
+                              打印提料单
+                            </button>
+                          </div>
+                        )}
                         {/* 退货单操作按钮 - 支持从对象或从内容解析 */}
                         {(() => {
                           // 尝试从消息对象获取，或从内容中解析隐藏标记
