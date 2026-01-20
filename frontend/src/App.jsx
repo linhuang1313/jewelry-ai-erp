@@ -2317,30 +2317,6 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 快捷收料卡片 - 结算专员可见 */}
-                  {(userRole === 'settlement' || userRole === 'manager') && (
-                    <div 
-                      onClick={openQuickReceiptModal}
-                      className="p-6 bg-gradient-to-br from-yellow-50 to-amber-50 rounded-2xl border border-yellow-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">📦</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">快捷收料</h3>
-                      <p className="text-sm text-gray-600">客户交料存入</p>
-                    </div>
-                  )}
-                  
-                  {/* 快捷提料卡片 - 结算专员可见 */}
-                  {(userRole === 'settlement' || userRole === 'manager') && (
-                    <div 
-                      onClick={openQuickWithdrawalModal}
-                      className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">⬆️</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">快捷提料</h3>
-                      <p className="text-sm text-gray-600">客户提取存料</p>
-                    </div>
-                  )}
-                  
                   {/* 财务对账卡片 - 需要财务权限 */}
                   {hasPermission(userRole, 'canViewFinance') && (
                     <div 
@@ -3755,6 +3731,26 @@ function App() {
               >
                 {uploading ? '📷 识别中...' : '📷'}
           </label>
+
+          {/* 快捷收料/提料按钮 - 结算专员和管理层可见 */}
+          {(userRole === 'settlement' || userRole === 'manager') && (
+            <>
+              <button
+                onClick={openQuickReceiptModal}
+                className="px-4 py-3 rounded-2xl h-[52px] flex items-center font-medium text-[15px] bg-gradient-to-r from-yellow-500 to-amber-500 text-white hover:from-yellow-600 hover:to-amber-600 shadow-sm hover:shadow-md transition-all duration-200"
+                title="快捷收料"
+              >
+                📦 收料
+              </button>
+              <button
+                onClick={openQuickWithdrawalModal}
+                className="px-4 py-3 rounded-2xl h-[52px] flex items-center font-medium text-[15px] bg-gradient-to-r from-blue-500 to-indigo-500 text-white hover:from-blue-600 hover:to-indigo-600 shadow-sm hover:shadow-md transition-all duration-200"
+                title="快捷提料"
+              >
+                ⬆️ 提料
+              </button>
+            </>
+          )}
 
               <div className="flex-1 relative">
           <textarea
