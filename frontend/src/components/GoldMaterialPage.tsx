@@ -113,6 +113,13 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   cancelled: { label: '已取消', color: '#6b7280' },
 };
 
+// 取料单专用状态映射
+const WITHDRAWAL_STATUS_MAP: Record<string, { label: string; color: string }> = {
+  pending: { label: '待取料', color: '#f59e0b' },
+  completed: { label: '已取', color: '#10b981' },
+  cancelled: { label: '已取消', color: '#6b7280' },
+};
+
 const INITIAL_PAYMENT_FORM = {
   supplier_id: '',
   gold_weight: '',
@@ -862,7 +869,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                   {renderTabButton('pending-receipts', '待接收金料', pendingGoldReceipts.length)}
                   {renderTabButton('receipts', '待确认收料')}
                   {renderTabButton('payments', '付料单')}
-                  {renderTabButton('withdrawals', '待发取料', withdrawals.filter(w => w.status === 'pending').length)}
+                  {renderTabButton('withdrawals', '待取料', withdrawals.filter(w => w.status === 'pending').length)}
                   {renderTabButton('supplier-debt', '供应商欠料')}
                   {renderTabButton('balance', '金料库存')}
                 </>
@@ -1686,7 +1693,22 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                         <td className="px-4 py-4 text-sm text-gray-600">
                           {w.destination_company || '-'}
                         </td>
-                        <td className="px-4 py-4 text-sm">{renderStatusBadge(w.status)}</td>
+                        <td className="px-4 py-4 text-sm">
+                          {(() => {
+                            const statusInfo = WITHDRAWAL_STATUS_MAP[w.status] || { label: w.status, color: '#6b7280' };
+                            return (
+                              <span
+                                className="px-2 py-1 rounded text-xs font-medium"
+                                style={{
+                                  backgroundColor: `${statusInfo.color}20`,
+                                  color: statusInfo.color
+                                }}
+                              >
+                                {statusInfo.label}
+                              </span>
+                            );
+                          })()}
+                        </td>
                         <td className="px-4 py-4 text-sm text-gray-600">
                           {new Date(w.created_at).toLocaleString('zh-CN')}
                         </td>
@@ -1697,12 +1719,17 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                               onClick: () => printWithdrawal(w.id),
                               color: 'blue'
                             },
+                            {
+                              label: '下载',
+                              onClick: () => window.open(`${API_BASE_URL}/api/gold-material/withdrawals/${w.id}/download?format=html`, '_blank'),
+                              color: 'gray'
+                            },
                             w.status === 'pending' && hasPermission(userRole, 'canCompleteWithdrawal') && {
-                              label: '完成',
+                              label: '确认已取',
                               onClick: () => completeWithdrawal(w.id),
                               color: 'green'
                             },
-                            w.status === 'pending' && {
+                            w.status === 'pending' && hasPermission(userRole, 'canCreateWithdrawal') && {
                               label: '取消',
                               onClick: () => cancelWithdrawal(w.id),
                               color: 'red'

@@ -1745,7 +1745,7 @@ async def create_customer_withdrawal(
     balance_before = deposit.current_balance
     balance_after = balance_before - data.gold_weight
     
-    # 创建取料单（直接完成状态）
+    # 创建取料单（待取料状态，余额已扣减）
     withdrawal = CustomerWithdrawal(
         withdrawal_no=withdrawal_no,
         customer_id=customer.id,
@@ -1756,10 +1756,8 @@ async def create_customer_withdrawal(
         destination_address=data.destination_address,
         authorized_person=data.authorized_person,
         authorized_phone=data.authorized_phone,
-        status="completed",  # 直接完成
+        status="pending",  # 待取料（业务员取走后料部确认）
         created_by=created_by,
-        completed_by=created_by,  # 创建人即完成人
-        completed_at=now,
         remark=data.remark
     )
     db.add(withdrawal)
@@ -1787,7 +1785,7 @@ async def create_customer_withdrawal(
     db.commit()
     db.refresh(withdrawal)
     
-    logger.info(f"创建并完成取料单: {withdrawal_no}, 客户: {customer.name}, 克重: {data.gold_weight}克, 余额: {balance_before:.2f} -> {balance_after:.2f}")
+    logger.info(f"创建取料单(待取): {withdrawal_no}, 客户: {customer.name}, 克重: {data.gold_weight}克, 余额: {balance_before:.2f} -> {balance_after:.2f}")
     
     return withdrawal
 
@@ -1830,11 +1828,51 @@ async def complete_customer_withdrawal(
     db: Session = Depends(get_db)
 ):
     """
-    完成取料单（料部确认发出）
+    确认取料单已取走（料部确认）
     
-    - 更新取料单状态为completed
-    - 扣减客户存料余额
-    - 创建存料交易记录
+    - 更新取料单状态为completed（已取）
+    - 注意：余额已在创建时扣减，此处只更新状态
+    """
+    # 权限检查
+    if not has_permission(user_role, 'can_complete_withdrawal'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【确认取料】的权限")
+    
+    withdrawal = db.query(CustomerWithdrawal).filter(
+        CustomerWithdrawal.id == withdrawal_id
+    ).first()
+    
+    if not withdrawal:
+        raise HTTPException(status_code=404, detail="取料单不存在")
+    
+    if withdrawal.status != "pending":
+        raise HTTPException(status_code=400, detail=f"取料单状态为 {withdrawal.status}，无法确认")
+    
+    # 更新取料单状态为已取
+    withdrawal.status = "completed"
+    withdrawal.completed_by = data.completed_by
+    withdrawal.completed_at = china_now()
+    
+    db.commit()
+    db.refresh(withdrawal)
+    
+    logger.info(f"确认取料单已取: {withdrawal.withdrawal_no}, 客户: {withdrawal.customer_name}, 克重: {withdrawal.gold_weight}克, 确认人: {data.completed_by}")
+    
+    return {
+        "success": True,
+        "message": f"取料单 {withdrawal.withdrawal_no} 已确认取走",
+        "withdrawal": CustomerWithdrawalResponse.model_validate(withdrawal)
+    }
+
+
+@router.post("/withdrawals/{withdrawal_id}/complete-old")
+async def complete_customer_withdrawal_old(
+    withdrawal_id: int,
+    data: CustomerWithdrawalComplete,
+    user_role: str = Query(default="material", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    [已废弃] 旧版完成取料单逻辑，保留用于兼容
     """
     # 权限检查
     if not has_permission(user_role, 'can_complete_withdrawal'):
