@@ -1764,20 +1764,18 @@ async def create_customer_withdrawal(
     
     # 扣减客户存料余额
     deposit.current_balance = balance_after
-    deposit.total_withdrawn += data.gold_weight
-    deposit.updated_at = now
+    deposit.total_used += data.gold_weight
+    deposit.last_transaction_at = now
     
     # 创建存料交易记录
     transaction = CustomerGoldDepositTransaction(
         customer_id=customer.id,
-        deposit_id=deposit.id,
-        transaction_type="withdrawal",
-        gold_weight=-data.gold_weight,  # 负数表示支出
+        customer_name=customer.name,
+        transaction_type="use",  # 使用存料
+        amount=-data.gold_weight,  # 负数表示支出
         balance_before=balance_before,
         balance_after=balance_after,
-        reference_no=withdrawal_no,
-        reference_type="withdrawal",
-        operator=created_by,
+        created_by=created_by,
         remark=f"提料单：{withdrawal_no}" + (f" - {data.remark}" if data.remark else "")
     )
     db.add(transaction)
