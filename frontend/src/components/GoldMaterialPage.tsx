@@ -1713,28 +1713,36 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                           {new Date(w.created_at).toLocaleString('zh-CN')}
                         </td>
                         <td className="px-4 py-4 text-right">
-                          {renderActionButtons([
-                            {
-                              label: '打印',
-                              onClick: () => printWithdrawal(w.id),
-                              color: 'blue'
-                            },
-                            {
-                              label: '下载',
-                              onClick: () => window.open(`${API_BASE_URL}/api/gold-material/withdrawals/${w.id}/download?format=html`, '_blank'),
-                              color: 'gray'
-                            },
-                            w.status === 'pending' && hasPermission(userRole, 'canCompleteWithdrawal') && {
-                              label: '确认已取',
-                              onClick: () => completeWithdrawal(w.id),
-                              color: 'green'
-                            },
-                            w.status === 'pending' && hasPermission(userRole, 'canCreateWithdrawal') && {
-                              label: '取消',
-                              onClick: () => cancelWithdrawal(w.id),
-                              color: 'red'
-                            }
-                          ].filter(Boolean) as Array<{label: string; onClick: () => void; color: string}>)}
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => printWithdrawal(w.id)}
+                              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                            >
+                              打印
+                            </button>
+                            <button
+                              onClick={() => window.open(`${API_BASE_URL}/api/gold-material/withdrawals/${w.id}/download?format=html`, '_blank')}
+                              className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+                            >
+                              下载
+                            </button>
+                            {w.status === 'pending' && hasPermission(userRole, 'canCompleteWithdrawal') && (
+                              <button
+                                onClick={() => completeWithdrawal(w.id)}
+                                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+                              >
+                                确认已取
+                              </button>
+                            )}
+                            {w.status === 'pending' && hasPermission(userRole, 'canCreateWithdrawal') && (
+                              <button
+                                onClick={() => cancelWithdrawal(w.id)}
+                                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                              >
+                                取消
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1789,13 +1797,14 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                           {new Date(t.created_at).toLocaleString('zh-CN')}
                         </td>
                         <td className="px-4 py-4 text-right">
-                          {renderActionButtons([
-                            {
-                              label: '打印',
-                              onClick: () => printTransfer(t.id),
-                              color: 'blue'
-                            }
-                          ])}
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => printTransfer(t.id)}
+                              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                            >
+                              打印
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
