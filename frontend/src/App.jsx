@@ -163,7 +163,8 @@ function App() {
       } else {
         // 如果API失败，从localStorage读取
         const historyKey = getHistoryKey(role)
-        const history = JSON.parse(localStorage.getItem(historyKey) || '[]')
+        const parsed = JSON.parse(localStorage.getItem(historyKey) || '[]')
+        const history = Array.isArray(parsed) ? parsed : []
         setConversationHistory(history)
         return history
       }
@@ -171,9 +172,15 @@ function App() {
       console.error('从后端加载历史记录失败，使用本地缓存:', error)
       // 如果API失败，从localStorage读取
       const historyKey = getHistoryKey(role)
-      const history = JSON.parse(localStorage.getItem(historyKey) || '[]')
-      setConversationHistory(history)
-      return history
+      try {
+        const parsed = JSON.parse(localStorage.getItem(historyKey) || '[]')
+        const history = Array.isArray(parsed) ? parsed : []
+        setConversationHistory(history)
+        return history
+      } catch {
+        setConversationHistory([])
+        return []
+      }
     }
   }
 
@@ -185,7 +192,8 @@ function App() {
       if (messages.length > 0) {
         // 直接保存到当前角色的历史记录（不使用延迟保存）
         const currentHistoryKey = getHistoryKey(userRole)
-        const currentHistory = JSON.parse(localStorage.getItem(currentHistoryKey) || '[]')
+        const parsedHistory = JSON.parse(localStorage.getItem(currentHistoryKey) || '[]')
+        const currentHistory = Array.isArray(parsedHistory) ? parsedHistory : []
         
         // 自动生成对话标题
         let title = conversationTitle
@@ -427,9 +435,9 @@ function App() {
     }
   }
 
-  // 筛选客户列表
-  const filteredQuickFormCustomers = quickFormCustomers.filter(c => 
-    c.name.toLowerCase().includes(quickFormCustomerSearch.toLowerCase()) ||
+  // 筛选客户列表（确保是数组）
+  const filteredQuickFormCustomers = (Array.isArray(quickFormCustomers) ? quickFormCustomers : []).filter(c => 
+    c.name && c.name.toLowerCase().includes(quickFormCustomerSearch.toLowerCase()) ||
     (c.phone && c.phone.includes(quickFormCustomerSearch))
   )
 
@@ -452,7 +460,8 @@ function App() {
     // 获取当前角色的历史记录key
     const historyKey = getHistoryKey(userRole)
     // 从localStorage获取当前角色的最新历史记录
-    const history = JSON.parse(localStorage.getItem(historyKey) || '[]')
+    const parsedData = JSON.parse(localStorage.getItem(historyKey) || '[]')
+    const history = Array.isArray(parsedData) ? parsedData : []
     
     // 自动生成对话标题（使用第一条用户消息的前20个字符）
     let title = conversationTitle
@@ -539,7 +548,8 @@ function App() {
       } else {
         // 如果API失败，尝试从localStorage加载
         const historyKey = getHistoryKey(userRole)
-        const history = JSON.parse(localStorage.getItem(historyKey) || '[]')
+        const parsedData = JSON.parse(localStorage.getItem(historyKey) || '[]')
+        const history = Array.isArray(parsedData) ? parsedData : []
         const conversation = history.find(c => c.id === conversationId)
         if (conversation && conversation.messages) {
           setMessages(conversation.messages)
@@ -556,7 +566,8 @@ function App() {
       console.error('加载对话失败，尝试从本地加载:', error)
       // 如果API失败，尝试从localStorage加载
       const historyKey = getHistoryKey(userRole)
-      const history = JSON.parse(localStorage.getItem(historyKey) || '[]')
+      const parsedData2 = JSON.parse(localStorage.getItem(historyKey) || '[]')
+      const history = Array.isArray(parsedData2) ? parsedData2 : []
       const conversation = history.find(c => c.id === conversationId)
       if (conversation && conversation.messages) {
         setMessages(conversation.messages)
@@ -596,7 +607,7 @@ function App() {
     e.stopPropagation()
     // 获取当前角色的历史记录key
     const historyKey = getHistoryKey(userRole)
-    const history = conversationHistory.filter(c => c.id !== conversationId)
+    const history = (Array.isArray(conversationHistory) ? conversationHistory : []).filter(c => c.id !== conversationId)
     localStorage.setItem(historyKey, JSON.stringify(history))
     setConversationHistory(history)
     if (currentConversationId === conversationId) {
