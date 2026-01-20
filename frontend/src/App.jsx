@@ -301,7 +301,8 @@ function App() {
       if (response.ok) {
         const data = await response.json()
         console.log('加载客户列表:', data)  // 调试日志
-        const customers = data.data || data || []
+        // API返回格式: { customers: [...], success: true }
+        const customers = data.customers || data.data || data || []
         setQuickFormCustomers(Array.isArray(customers) ? customers : [])
       } else {
         console.error('加载客户列表API失败:', response.status)
