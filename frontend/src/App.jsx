@@ -4214,7 +4214,10 @@ ${itemsList}
                     filteredQuickFormCustomers.slice(0, 10).map(customer => (
                       <div
                         key={customer.id}
-                        onClick={() => setQuickReceiptForm({ ...quickReceiptForm, customer_id: customer.id.toString() })}
+                        onClick={() => {
+                          setQuickReceiptForm({ ...quickReceiptForm, customer_id: customer.id.toString() })
+                          setQuickFormCustomerSearch(customer.name) // 设置搜索框为客户名，收起下拉
+                        }}
                         className={`p-3 cursor-pointer hover:bg-yellow-50 border-b last:border-b-0 flex justify-between items-center ${
                           quickReceiptForm.customer_id === customer.id.toString() ? 'bg-yellow-100' : ''
                         }`}
@@ -4305,6 +4308,7 @@ ${itemsList}
                         key={customer.id}
                         onClick={() => {
                           setQuickWithdrawalForm({ ...quickWithdrawalForm, customer_id: customer.id.toString() })
+                          setQuickFormCustomerSearch(customer.name) // 设置搜索框为客户名，收起下拉
                           fetchCustomerDeposit(customer.id.toString())
                         }}
                         className={`p-3 cursor-pointer hover:bg-blue-50 border-b last:border-b-0 flex justify-between items-center ${
