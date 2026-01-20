@@ -3,7 +3,7 @@ import { API_ENDPOINTS } from '../config';
 import {
   FileText, Check, Printer, Clock, AlertCircle, ChevronRight, 
   RefreshCw, X, DollarSign, Package, User, Calendar, Download,
-  Search, RotateCcw, Filter
+  Search, RotateCcw, Filter, ArrowUpRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -205,6 +205,20 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
   const [refundReason, setRefundReason] = useState('客户退货');
   const [refundDestination, setRefundDestination] = useState<'showroom' | 'warehouse'>('showroom');
 
+  // 快捷提料弹窗
+  const [showQuickWithdrawalForm, setShowQuickWithdrawalForm] = useState(false);
+  const [quickWithdrawalForm, setQuickWithdrawalForm] = useState({
+    customer_id: '',
+    gold_weight: '',
+    remark: ''
+  });
+  const [selectedCustomerDeposit, setSelectedCustomerDeposit] = useState<{
+    current_balance: number;
+    customer_name: string;
+  } | null>(null);
+  const [depositLoading, setDepositLoading] = useState(false);
+  const [withdrawalCustomerSearch, setWithdrawalCustomerSearch] = useState('');
+
   // 加载数据
   useEffect(() => {
     loadPendingSales();
@@ -287,6 +301,109 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
     c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
     (c.phone && c.phone.includes(customerSearch))
   );
+
+  // 筛选提料客户
+  const filteredWithdrawalCustomers = customers.filter(c => 
+    c.name.toLowerCase().includes(withdrawalCustomerSearch.toLowerCase()) ||
+    (c.phone && c.phone.includes(withdrawalCustomerSearch))
+  );
+
+  // 打开快捷提料弹窗
+  const openQuickWithdrawalForm = () => {
+    loadCustomers();
+    setQuickWithdrawalForm({
+      customer_id: '',
+      gold_weight: '',
+      remark: ''
+    });
+    setWithdrawalCustomerSearch('');
+    setSelectedCustomerDeposit(null);
+    setShowQuickWithdrawalForm(true);
+  };
+
+  // 查询客户存料余额
+  const fetchCustomerDeposit = async (customerId: string) => {
+    if (!customerId) {
+      setSelectedCustomerDeposit(null);
+      return;
+    }
+    setDepositLoading(true);
+    try {
+      const response = await fetch(
+        `${API_ENDPOINTS.API_BASE_URL}/api/gold-material/customers/${customerId}/deposit`
+      );
+      if (response.ok) {
+        const result = await response.json();
+        setSelectedCustomerDeposit({
+          current_balance: result.deposit.current_balance,
+          customer_name: result.customer_name
+        });
+      } else {
+        setSelectedCustomerDeposit({ current_balance: 0, customer_name: '' });
+      }
+    } catch (error) {
+      console.error('查询客户存料余额失败:', error);
+      setSelectedCustomerDeposit({ current_balance: 0, customer_name: '' });
+    } finally {
+      setDepositLoading(false);
+    }
+  };
+
+  // 创建快捷提料单
+  const handleCreateQuickWithdrawal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!quickWithdrawalForm.customer_id) {
+      toast.error('请选择客户');
+      return;
+    }
+    
+    const weight = parseFloat(quickWithdrawalForm.gold_weight);
+    if (!weight || weight <= 0) {
+      toast.error('请输入有效的提料克重');
+      return;
+    }
+    
+    if (weight > (selectedCustomerDeposit?.current_balance || 0)) {
+      toast.error(`提料克重不能超过客户存料余额（${selectedCustomerDeposit?.current_balance?.toFixed(2) || 0}克）`);
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams({
+        user_role: 'settlement',
+        created_by: '结算专员'
+      });
+
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/gold-material/withdrawals?${params}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id: parseInt(quickWithdrawalForm.customer_id),
+          gold_weight: weight,
+          withdrawal_type: 'self',
+          remark: quickWithdrawalForm.remark || '快捷提料'
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        toast.success(`提料单创建成功：${result.withdrawal_no}（待料部确认）`);
+        setShowQuickWithdrawalForm(false);
+        
+        // 打开打印页面
+        if (result.id) {
+          window.open(`${API_ENDPOINTS.API_BASE_URL}/api/gold-material/withdrawals/${result.id}/download?format=html`, '_blank');
+        }
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || '创建提料单失败');
+      }
+    } catch (error) {
+      console.error('创建提料单失败:', error);
+      toast.error('创建提料单失败');
+    }
+  };
 
   const loadPendingSales = async () => {
     try {
@@ -750,6 +867,15 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
             >
               <Package className="w-4 h-4" />
               <span>快捷收料</span>
+            </button>
+            <button
+              onClick={openQuickWithdrawalForm}
+              className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white 
+                rounded-xl shadow-lg shadow-blue-200/50 hover:from-blue-600 hover:to-indigo-600 
+                transition-all font-medium"
+            >
+              <ArrowUpRight className="w-4 h-4" />
+              <span>快捷提料</span>
             </button>
             <button
               onClick={() => { loadPendingSales(); loadSettlements(); }}
@@ -1854,6 +1980,143 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                   <button
                     type="submit"
                     className="flex-1 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>创建并打印</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* 快捷提料弹窗 */}
+        {showQuickWithdrawalForm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold flex items-center">
+                  <ArrowUpRight className="w-5 h-5 mr-2 text-blue-500" />
+                  快捷提料
+                </h3>
+                <button onClick={() => setShowQuickWithdrawalForm(false)} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateQuickWithdrawal} className="space-y-4">
+                {/* 客户搜索和选择 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">选择客户</label>
+                  <input
+                    type="text"
+                    placeholder="搜索客户姓名或电话..."
+                    value={withdrawalCustomerSearch}
+                    onChange={(e) => setWithdrawalCustomerSearch(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                  />
+                  <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
+                    {filteredWithdrawalCustomers.length === 0 ? (
+                      <div className="p-3 text-center text-gray-500 text-sm">暂无匹配客户</div>
+                    ) : (
+                      filteredWithdrawalCustomers.slice(0, 10).map(customer => (
+                        <div
+                          key={customer.id}
+                          onClick={() => {
+                            setQuickWithdrawalForm({ ...quickWithdrawalForm, customer_id: customer.id.toString() });
+                            fetchCustomerDeposit(customer.id.toString());
+                          }}
+                          className={`p-3 cursor-pointer hover:bg-blue-50 border-b last:border-b-0 flex justify-between items-center ${
+                            quickWithdrawalForm.customer_id === customer.id.toString() ? 'bg-blue-100' : ''
+                          }`}
+                        >
+                          <span className="font-medium">{customer.name}</span>
+                          <span className="text-sm text-gray-500">{customer.phone || '-'}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {quickWithdrawalForm.customer_id && (
+                    <div className="mt-2 text-sm text-green-600">
+                      已选择：{customers.find(c => c.id.toString() === quickWithdrawalForm.customer_id)?.name}
+                    </div>
+                  )}
+                </div>
+
+                {/* 存料余额显示 */}
+                {quickWithdrawalForm.customer_id && (
+                  <div className={`p-4 rounded-lg ${
+                    depositLoading ? 'bg-gray-100' : 
+                    (selectedCustomerDeposit?.current_balance || 0) > 0 ? 'bg-blue-50 border border-blue-200' : 'bg-red-50 border border-red-200'
+                  }`}>
+                    {depositLoading ? (
+                      <div className="flex items-center justify-center">
+                        <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                        <span className="text-gray-500">查询中...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">当前存料余额</span>
+                        <span className={`text-xl font-bold ${
+                          (selectedCustomerDeposit?.current_balance || 0) > 0 ? 'text-blue-600' : 'text-red-600'
+                        }`}>
+                          {selectedCustomerDeposit?.current_balance?.toFixed(2) || '0.00'} 克
+                        </span>
+                      </div>
+                    )}
+                    {!depositLoading && (selectedCustomerDeposit?.current_balance || 0) === 0 && (
+                      <div className="mt-2 text-xs text-red-600">
+                        ⚠️ 该客户暂无存料，无法提料
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">提料克重 (克)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={quickWithdrawalForm.gold_weight}
+                    onChange={(e) => setQuickWithdrawalForm({ ...quickWithdrawalForm, gold_weight: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="输入提料克重"
+                    max={selectedCustomerDeposit?.current_balance || 0}
+                    required
+                  />
+                  {quickWithdrawalForm.gold_weight && parseFloat(quickWithdrawalForm.gold_weight) > (selectedCustomerDeposit?.current_balance || 0) && (
+                    <div className="mt-1 text-xs text-red-600">
+                      ⚠️ 提料克重不能超过存料余额
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">备注（可选）</label>
+                  <textarea
+                    value={quickWithdrawalForm.remark}
+                    onChange={(e) => setQuickWithdrawalForm({ ...quickWithdrawalForm, remark: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows={2}
+                    placeholder="客户提料 / 其他说明"
+                  />
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickWithdrawalForm(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!quickWithdrawalForm.customer_id || 
+                      !quickWithdrawalForm.gold_weight || 
+                      parseFloat(quickWithdrawalForm.gold_weight) <= 0 ||
+                      parseFloat(quickWithdrawalForm.gold_weight) > (selectedCustomerDeposit?.current_balance || 0)}
+                    className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center space-x-2 disabled:bg-gray-300 disabled:cursor-not-allowed"
                   >
                     <Printer className="w-4 h-4" />
                     <span>创建并打印</span>
