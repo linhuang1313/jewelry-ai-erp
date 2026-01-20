@@ -425,11 +425,16 @@ function App() {
       })
       if (response.ok) {
         const result = await response.json()
-        alert(`提料单创建成功：${result.withdrawal_no}（待料部确认）`)
         setShowQuickWithdrawalModal(false)
+        // 重置表单
+        setQuickWithdrawalForm({ customer_id: '', gold_weight: '', remark: '' })
+        setSelectedCustomerDeposit(null)
+        setQuickFormCustomerSearch('')
+        // 自动打开打印页面
         if (result.id) {
           window.open(`${API_BASE_URL}/api/gold-material/withdrawals/${result.id}/download?format=html`, '_blank')
         }
+        alert(`提料单已生成：${result.withdrawal_no}\n已自动扣减客户存料余额，请打印后交给业务员取料。`)
       } else {
         const error = await response.json()
         alert('创建提料单失败：' + (error.detail || '未知错误'))

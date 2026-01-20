@@ -1709,7 +1709,9 @@ async def create_customer_withdrawal(
     创建客户取料单
     
     - 验证客户存料余额是否足够
-    - 创建取料单（待料部确认）
+    - 创建取料单（直接完成状态）
+    - 扣减客户存料余额
+    - 创建存料交易记录
     """
     # 权限检查
     if not has_permission(user_role, 'can_create_withdrawal'):
@@ -1739,7 +1741,11 @@ async def create_customer_withdrawal(
     ).count()
     withdrawal_no = f"QL{now.strftime('%Y%m%d')}{count + 1:03d}"
     
-    # 创建取料单
+    # 记录扣减前余额
+    balance_before = deposit.current_balance
+    balance_after = balance_before - data.gold_weight
+    
+    # 创建取料单（直接完成状态）
     withdrawal = CustomerWithdrawal(
         withdrawal_no=withdrawal_no,
         customer_id=customer.id,
@@ -1750,15 +1756,38 @@ async def create_customer_withdrawal(
         destination_address=data.destination_address,
         authorized_person=data.authorized_person,
         authorized_phone=data.authorized_phone,
-        status="pending",
+        status="completed",  # 直接完成
         created_by=created_by,
+        completed_by=created_by,  # 创建人即完成人
+        completed_at=now,
         remark=data.remark
     )
     db.add(withdrawal)
+    
+    # 扣减客户存料余额
+    deposit.current_balance = balance_after
+    deposit.total_withdrawn += data.gold_weight
+    deposit.updated_at = now
+    
+    # 创建存料交易记录
+    transaction = CustomerGoldDepositTransaction(
+        customer_id=customer.id,
+        deposit_id=deposit.id,
+        transaction_type="withdrawal",
+        gold_weight=-data.gold_weight,  # 负数表示支出
+        balance_before=balance_before,
+        balance_after=balance_after,
+        reference_no=withdrawal_no,
+        reference_type="withdrawal",
+        operator=created_by,
+        remark=f"提料单：{withdrawal_no}" + (f" - {data.remark}" if data.remark else "")
+    )
+    db.add(transaction)
+    
     db.commit()
     db.refresh(withdrawal)
     
-    logger.info(f"创建取料单: {withdrawal_no}, 客户: {customer.name}, 克重: {data.gold_weight}克")
+    logger.info(f"创建并完成取料单: {withdrawal_no}, 客户: {customer.name}, 克重: {data.gold_weight}克, 余额: {balance_before:.2f} -> {balance_after:.2f}")
     
     return withdrawal
 
