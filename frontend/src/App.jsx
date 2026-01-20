@@ -300,7 +300,11 @@ function App() {
       const response = await fetch(`${API_BASE_URL}/api/customers`)
       if (response.ok) {
         const data = await response.json()
-        setQuickFormCustomers(data.data || data || [])
+        console.log('加载客户列表:', data)  // 调试日志
+        const customers = data.data || data || []
+        setQuickFormCustomers(Array.isArray(customers) ? customers : [])
+      } else {
+        console.error('加载客户列表API失败:', response.status)
       }
     } catch (error) {
       console.error('加载客户列表失败:', error)
@@ -436,10 +440,12 @@ function App() {
   }
 
   // 筛选客户列表（确保是数组）
-  const filteredQuickFormCustomers = (Array.isArray(quickFormCustomers) ? quickFormCustomers : []).filter(c => 
-    c.name && c.name.toLowerCase().includes(quickFormCustomerSearch.toLowerCase()) ||
-    (c.phone && c.phone.includes(quickFormCustomerSearch))
-  )
+  const filteredQuickFormCustomers = (Array.isArray(quickFormCustomers) ? quickFormCustomers : []).filter(c => {
+    if (!quickFormCustomerSearch.trim()) return true; // 空搜索显示全部
+    const search = quickFormCustomerSearch.toLowerCase();
+    return (c.name && c.name.toLowerCase().includes(search)) ||
+           (c.phone && c.phone.includes(quickFormCustomerSearch));
+  })
 
   // 角色变化时加载待处理数量
   useEffect(() => {
