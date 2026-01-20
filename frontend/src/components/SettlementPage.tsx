@@ -432,10 +432,13 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
-        setSettlements(data);
+        setSettlements(Array.isArray(data) ? data : []);
+      } else {
+        setSettlements([]);
       }
     } catch (error) {
       console.error('加载结算单失败:', error);
+      setSettlements([]);
     } finally {
       setLoading(false);
     }
