@@ -3084,6 +3084,37 @@ async def get_gold_daily_summary(
         GoldMaterialTransaction.supplier_id, Supplier.name
     ).all()
     
+    # ========== 客户提料统计 ==========
+    # 提料总计
+    withdrawal_stats = db.query(
+        func.count(CustomerWithdrawal.id).label("count"),
+        func.coalesce(func.sum(CustomerWithdrawal.gold_weight), 0).label("total_weight")
+    ).filter(
+        func.date(CustomerWithdrawal.created_at) >= start_date,
+        func.date(CustomerWithdrawal.created_at) <= end_date
+    ).first()
+    
+    # 提料明细（按客户分组）
+    withdrawal_by_customer = db.query(
+        CustomerWithdrawal.customer_id,
+        Customer.name.label("customer_name"),
+        func.count(CustomerWithdrawal.id).label("count"),
+        func.sum(CustomerWithdrawal.gold_weight).label("total_weight")
+    ).join(
+        Customer, CustomerWithdrawal.customer_id == Customer.id
+    ).filter(
+        func.date(CustomerWithdrawal.created_at) >= start_date,
+        func.date(CustomerWithdrawal.created_at) <= end_date
+    ).group_by(
+        CustomerWithdrawal.customer_id, Customer.name
+    ).all()
+    
+    # 提料每笔明细
+    withdrawal_details = db.query(CustomerWithdrawal).filter(
+        func.date(CustomerWithdrawal.created_at) >= start_date,
+        func.date(CustomerWithdrawal.created_at) <= end_date
+    ).order_by(CustomerWithdrawal.created_at.desc()).all()
+    
     # 构建响应
     return {
         "success": True,
@@ -3130,6 +3161,32 @@ async def get_gold_daily_summary(
                     "total_weight": float(p.total_weight or 0)
                 }
                 for p in payment_by_supplier
+            ]
+        },
+        "withdrawal_summary": {
+            "total_count": withdrawal_stats.count or 0,
+            "total_weight": float(withdrawal_stats.total_weight or 0),
+            "by_customer": [
+                {
+                    "customer_id": w.customer_id,
+                    "customer_name": w.customer_name,
+                    "count": w.count,
+                    "total_weight": float(w.total_weight or 0)
+                }
+                for w in withdrawal_by_customer
+            ],
+            "withdrawals": [
+                {
+                    "id": w.id,
+                    "withdrawal_no": w.withdrawal_no,
+                    "customer_id": w.customer_id,
+                    "customer_name": w.customer_name,
+                    "gold_weight": float(w.gold_weight or 0),
+                    "status": w.status,
+                    "created_at": w.created_at.isoformat() if w.created_at else None,
+                    "remark": w.remark
+                }
+                for w in withdrawal_details
             ]
         }
     }

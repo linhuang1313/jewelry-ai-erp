@@ -1030,6 +1030,60 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                   </div>
                 </div>
 
+                {/* 客户提料汇总 */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mt-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11l5-5m0 0l5 5m-5-5v12" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600">客户提料统计</div>
+                      <div className="text-2xl font-bold text-blue-700">
+                        {summaryData.withdrawal_summary?.total_weight?.toFixed(2) || 0} 克
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-500 mb-3">
+                    共 {summaryData.withdrawal_summary?.total_count || 0} 笔提料
+                  </div>
+                  {/* 客户汇总 */}
+                  {summaryData.withdrawal_summary?.by_customer?.length > 0 && (
+                    <div className="border-t border-blue-200 pt-3 space-y-2">
+                      <div className="text-xs text-gray-500 font-medium">客户明细</div>
+                      {summaryData.withdrawal_summary.by_customer.map((item: any) => (
+                        <div key={item.customer_id} className="flex justify-between text-sm">
+                          <span className="text-gray-700">{item.customer_name}</span>
+                          <span className="font-medium text-blue-600">{item.total_weight?.toFixed(2)} 克 ({item.count}笔)</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* 每笔提料明细 */}
+                  {summaryData.withdrawal_summary?.withdrawals?.length > 0 && (
+                    <div className="border-t border-blue-200 pt-3 mt-3 space-y-2">
+                      <div className="text-xs text-gray-500 font-medium">提料明细</div>
+                      {summaryData.withdrawal_summary.withdrawals.map((w: any) => (
+                        <div key={w.id} className="flex justify-between items-center text-sm bg-blue-50 rounded-lg px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-500 text-xs">
+                              {w.created_at ? new Date(w.created_at).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }) : '-'}
+                            </span>
+                            <span className="text-gray-700">{w.customer_name}</span>
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${
+                              w.status === 'completed' ? 'text-green-600 bg-green-100' : 'text-yellow-600 bg-yellow-100'
+                            }`}>
+                              {w.status === 'completed' ? '已取' : '待取'}
+                            </span>
+                          </div>
+                          <span className="font-medium text-blue-600">{w.gold_weight?.toFixed(2)} 克</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 {/* 净收入/支出 */}
                 <div className="bg-gray-50 rounded-xl p-4 text-center">
                   <div className="text-sm text-gray-500 mb-1">净收入</div>
