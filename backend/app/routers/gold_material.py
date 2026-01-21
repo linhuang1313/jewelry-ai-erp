@@ -3321,3 +3321,165 @@ async def fix_receipt_transactions(
         logger.error(f"数据修复失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"数据修复失败: {str(e)}")
 
+
+# ==================== 供应商金料账户管理 ====================
+
+@router.get("/supplier-gold-accounts")
+async def get_supplier_gold_accounts(
+    supplier_id: Optional[int] = None,
+    supplier_name: Optional[str] = None,
+    user_role: str = Query(default="material", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    查询供应商金料账户列表（仅料部和管理层可查看）
+    
+    返回每个供应商的金料账户余额：
+    - 正数 = 我们欠供应商的料（供应商发货了，我们还没付料）
+    - 负数 = 供应商欠我们的料（我们付料了，供应商还没发货）
+    """
+    # 权限检查：仅料部和管理层可查看
+    if not has_permission(user_role, 'can_view_supplier_gold_account'):
+        raise HTTPException(
+            status_code=403, 
+            detail="权限不足：您没有查看供应商金料账户的权限。请联系料部或管理层。"
+        )
+    
+    from ..models import SupplierGoldAccount
+    
+    query = db.query(SupplierGoldAccount)
+    
+    if supplier_id:
+        query = query.filter(SupplierGoldAccount.supplier_id == supplier_id)
+    
+    if supplier_name:
+        query = query.filter(SupplierGoldAccount.supplier_name.ilike(f"%{supplier_name}%"))
+    
+    accounts = query.order_by(desc(SupplierGoldAccount.last_transaction_at)).all()
+    
+    result = []
+    total_balance = 0.0
+    
+    for account in accounts:
+        balance = account.current_balance or 0
+        total_balance += balance
+        
+        # 确定状态描述
+        if balance > 0:
+            status_text = f"我们欠供应商 {balance:.2f}克"
+        elif balance < 0:
+            status_text = f"供应商欠我们 {abs(balance):.2f}克"
+        else:
+            status_text = "已结清"
+        
+        result.append({
+            "id": account.id,
+            "supplier_id": account.supplier_id,
+            "supplier_name": account.supplier_name,
+            "current_balance": balance,
+            "total_received": account.total_received or 0,
+            "total_paid": account.total_paid or 0,
+            "status_text": status_text,
+            "last_transaction_at": account.last_transaction_at.isoformat() if account.last_transaction_at else None,
+            "created_at": account.created_at.isoformat() if account.created_at else None
+        })
+    
+    return {
+        "success": True,
+        "data": result,
+        "total": len(result),
+        "total_balance": total_balance,
+        "summary": {
+            "total_we_owe": sum(a["current_balance"] for a in result if a["current_balance"] > 0),
+            "total_they_owe": abs(sum(a["current_balance"] for a in result if a["current_balance"] < 0))
+        }
+    }
+
+
+@router.get("/supplier-gold-accounts/{supplier_id}")
+async def get_supplier_gold_account_detail(
+    supplier_id: int,
+    user_role: str = Query(default="material", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    查询单个供应商的金料账户明细（仅料部和管理层可查看）
+    """
+    # 权限检查：仅料部和管理层可查看
+    if not has_permission(user_role, 'can_view_supplier_gold_account'):
+        raise HTTPException(
+            status_code=403, 
+            detail="权限不足：您没有查看供应商金料账户的权限。请联系料部或管理层。"
+        )
+    
+    from ..models import SupplierGoldAccount, SupplierGoldTransaction
+    
+    # 查询账户
+    account = db.query(SupplierGoldAccount).filter(
+        SupplierGoldAccount.supplier_id == supplier_id
+    ).first()
+    
+    if not account:
+        # 查询供应商是否存在
+        supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+        if not supplier:
+            raise HTTPException(status_code=404, detail="供应商不存在")
+        
+        return {
+            "success": True,
+            "account": {
+                "supplier_id": supplier_id,
+                "supplier_name": supplier.name,
+                "current_balance": 0,
+                "total_received": 0,
+                "total_paid": 0,
+                "status_text": "无往来记录"
+            },
+            "transactions": []
+        }
+    
+    # 查询交易记录
+    transactions = db.query(SupplierGoldTransaction).filter(
+        SupplierGoldTransaction.supplier_id == supplier_id,
+        SupplierGoldTransaction.status == "active"
+    ).order_by(desc(SupplierGoldTransaction.created_at)).limit(100).all()
+    
+    tx_list = []
+    for tx in transactions:
+        tx_list.append({
+            "id": tx.id,
+            "transaction_type": tx.transaction_type,
+            "transaction_type_text": "供应商发货" if tx.transaction_type == "receive" else "我们付料",
+            "gold_weight": tx.gold_weight,
+            "balance_before": tx.balance_before,
+            "balance_after": tx.balance_after,
+            "inbound_order_id": tx.inbound_order_id,
+            "payment_transaction_id": tx.payment_transaction_id,
+            "remark": tx.remark,
+            "created_at": tx.created_at.isoformat() if tx.created_at else None,
+            "created_by": tx.created_by
+        })
+    
+    balance = account.current_balance or 0
+    if balance > 0:
+        status_text = f"我们欠供应商 {balance:.2f}克"
+    elif balance < 0:
+        status_text = f"供应商欠我们 {abs(balance):.2f}克"
+    else:
+        status_text = "已结清"
+    
+    return {
+        "success": True,
+        "account": {
+            "id": account.id,
+            "supplier_id": account.supplier_id,
+            "supplier_name": account.supplier_name,
+            "current_balance": balance,
+            "total_received": account.total_received or 0,
+            "total_paid": account.total_paid or 0,
+            "status_text": status_text,
+            "last_transaction_at": account.last_transaction_at.isoformat() if account.last_transaction_at else None
+        },
+        "transactions": tx_list
+    }
+

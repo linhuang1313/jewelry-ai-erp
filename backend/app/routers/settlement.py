@@ -95,6 +95,11 @@ async def check_sales_order_status(
     """
     检查销售单状态及其关联的结算单状态
     用于前端在操作销售单前进行验证
+    
+    流程说明：
+    - 已确认的结算单 → 必须先【撤销结算】（回滚账务）→ 变回 pending
+    - pending 的结算单 → 可以【取消】或【销退】
+    - 销退 = 商品退回库存
     """
     sales_order = db.query(SalesOrder).filter(SalesOrder.id == sales_order_id).first()
     if not sales_order:
@@ -107,6 +112,7 @@ async def check_sales_order_status(
     
     can_modify = False
     can_delete = False
+    can_refund = False  # 是否可以销退
     block_reason = None
     next_action = None
     
@@ -115,17 +121,18 @@ async def check_sales_order_status(
         can_modify = True
         can_delete = True
     elif settlement.status == "pending":
-        # 结算单待确认，需要先取消结算单
+        # 结算单待确认，可以取消结算单或销退
         block_reason = "该销售单已有待确认的结算单，请先取消结算单后再操作销售单"
         next_action = "cancel_settlement"
+        can_refund = True  # pending 状态可以直接销退
     elif settlement.status in ["confirmed", "printed"]:
-        # 结算单已确认，需要先销退
-        block_reason = "该销售单已有已确认的结算单，请先进行【销退】操作，待金料和现金账务回滚后，才能操作销售单"
-        next_action = "refund_settlement"
-    elif settlement.status == "refunded":
-        # 已销退，需要撤销结算单
-        block_reason = "该销售单的结算单已销退，请先撤销结算单后再操作销售单"
+        # 结算单已确认，需要先撤销结算
+        block_reason = "该销售单已有已确认的结算单。请先【撤销结算】将结算单变回待确认状态（会回滚现金欠款和金料账户），然后再做销退。"
         next_action = "revert_settlement"
+    elif settlement.status == "refunded":
+        # 已销退
+        block_reason = "该销售单已销退"
+        next_action = None
     elif settlement.status == "cancelled":
         # 结算单已取消，可以操作
         can_modify = True
@@ -141,6 +148,7 @@ async def check_sales_order_status(
         "settlement_status": settlement.status if settlement else None,
         "can_modify": can_modify,
         "can_delete": can_delete,
+        "can_refund": can_refund,
         "block_reason": block_reason,
         "next_action": next_action
     }
@@ -1764,7 +1772,7 @@ async def cancel_settlement_order(
     """
     取消结算单（仅限pending状态）
     - 只有pending状态的结算单可以取消
-    - 已确认的结算单必须先做销退
+    - 已确认的结算单必须先撤销结算
     """
     # 权限检查：仅 settlement 和 manager 可以操作
     if user_role not in ["settlement", "manager"]:
@@ -1776,16 +1784,13 @@ async def cancel_settlement_order(
         raise HTTPException(status_code=404, detail="结算单不存在")
     
     # ========== 流程控制：只有 pending 状态可以直接取消 ==========
-    if settlement.status == "confirmed" or settlement.status == "printed":
+    if settlement.status in ["confirmed", "printed"]:
         raise HTTPException(
             status_code=400, 
-            detail="已确认的结算单不能直接取消。请先进行【销退】操作，待金料和现金账务回滚后，才能取消结算单。"
+            detail="已确认的结算单不能直接取消。请先进行【撤销结算】操作，将结算单变回待确认状态后才能取消。"
         )
     
-    if settlement.status == "refunded":
-        # 已销退的结算单可以归档/删除
-        pass
-    elif settlement.status != "pending":
+    if settlement.status != "pending":
         raise HTTPException(status_code=400, detail=f"结算单状态为 {settlement.status}，无法取消")
     
     try:
@@ -1822,63 +1827,135 @@ async def revert_settlement_order(
     db: Session = Depends(get_db)
 ):
     """
-    撤销结算单确认（仅限已销退的结算单）
-    - 已销退的结算单才能撤销，允许重新操作销售单
-    - 已确认的结算单必须先销退
+    撤销结算（将已确认的结算单变回待确认状态）
+    - 回滚现金欠款（取消应收账款）
+    - 回滚金料账户（如果是结料/混合支付）
+    - 结算单状态 confirmed → pending
+    - 之后可以重新选择支付方式或取消结算单
     """
     # 权限检查：仅 settlement 和 manager 可以操作
     if user_role not in ["settlement", "manager"]:
-        raise HTTPException(status_code=403, detail="权限不足：只有结算专员和管理层可以撤销结算单")
+        raise HTTPException(status_code=403, detail="权限不足：只有结算专员和管理层可以撤销结算")
     
     # 查询结算单
     settlement = db.query(SettlementOrder).filter(SettlementOrder.id == settlement_id).first()
     if not settlement:
         raise HTTPException(status_code=404, detail="结算单不存在")
     
-    # ========== 流程控制 ==========
-    if settlement.status in ["confirmed", "printed"]:
-        raise HTTPException(
-            status_code=400, 
-            detail="已确认的结算单不能直接撤销。请先进行【销退】操作，待金料和现金账务回滚后，才能撤销结算单。"
-        )
-    
+    # ========== 流程控制：只有 confirmed/printed 可以撤销 ==========
     if settlement.status == "pending":
-        raise HTTPException(status_code=400, detail="待确认的结算单请使用【取消】操作")
+        raise HTTPException(status_code=400, detail="待确认的结算单无需撤销，可直接取消或修改")
     
-    if settlement.status != "refunded":
+    if settlement.status == "cancelled":
+        raise HTTPException(status_code=400, detail="结算单已取消，无需撤销")
+    
+    if settlement.status not in ["confirmed", "printed"]:
         raise HTTPException(status_code=400, detail=f"结算单状态为 {settlement.status}，无法撤销")
     
     try:
-        # 已销退的结算单：可以撤销，允许重新操作销售单
+        now = china_now()
+        sales_order = db.query(SalesOrder).filter(SalesOrder.id == settlement.sales_order_id).first()
+        if not sales_order:
+            raise HTTPException(status_code=404, detail="关联的销售单不存在")
+        
+        # ========== 回滚现金欠款（取消应收账款）==========
+        from ..models.finance import AccountReceivable
+        
+        receivables = db.query(AccountReceivable).filter(
+            AccountReceivable.sales_order_id == sales_order.id,
+            AccountReceivable.status.in_(["unpaid", "overdue"])
+        ).all()
+        
+        cancelled_cash = 0.0
+        for receivable in receivables:
+            cancelled_cash += receivable.unpaid_amount or 0
+            receivable.status = "cancelled"
+            receivable.remark = (receivable.remark or "") + f" | 撤销结算于 {now.strftime('%Y-%m-%d %H:%M')}"
+        
+        if cancelled_cash > 0:
+            logger.info(f"撤销结算：取消应收账款 ¥{cancelled_cash:.2f}")
+        
+        # ========== 回滚金料账户（如果是结料/混合支付）==========
+        rolled_back_gold = 0.0
+        customer_id = sales_order.customer_id
+        
+        if settlement.payment_method in ["physical_gold", "mixed"] and customer_id:
+            # 获取需要回滚的金料克重
+            if settlement.payment_method == "physical_gold":
+                gold_to_rollback = settlement.physical_gold_weight or settlement.total_weight or 0
+            else:  # mixed
+                gold_to_rollback = settlement.gold_payment_weight or 0
+            
+            if gold_to_rollback > 0:
+                from .gold_material import get_or_create_customer_deposit
+                customer_deposit = get_or_create_customer_deposit(customer_id, sales_order.customer_name, db)
+                
+                balance_before = customer_deposit.current_balance
+                customer_deposit.current_balance += gold_to_rollback  # 回滚：增加余额
+                customer_deposit.total_used -= gold_to_rollback  # 减少已使用
+                customer_deposit.last_transaction_at = now
+                
+                # 创建回滚记录
+                rollback_tx = CustomerGoldDepositTransaction(
+                    customer_id=customer_id,
+                    customer_name=sales_order.customer_name,
+                    transaction_type='refund',
+                    settlement_order_id=settlement.id,
+                    amount=gold_to_rollback,
+                    balance_before=balance_before,
+                    balance_after=customer_deposit.current_balance,
+                    created_by=user_role,
+                    remark=f"撤销结算回滚：结算单 {settlement.settlement_no}"
+                )
+                db.add(rollback_tx)
+                
+                rolled_back_gold = gold_to_rollback
+                logger.info(f"撤销结算：回滚金料账户 {gold_to_rollback:.2f}克，余额 {balance_before:.2f} -> {customer_deposit.current_balance:.2f}")
+        
+        # ========== 记录往来账（撤销结算记录）==========
+        if customer_id:
+            revert_tx = CustomerTransaction(
+                customer_id=customer_id,
+                customer_name=sales_order.customer_name,
+                transaction_type='revert',
+                settlement_order_id=settlement.id,
+                amount=-cancelled_cash,  # 负数表示减少应收
+                gold_weight=-rolled_back_gold,  # 负数表示回滚金料
+                status='active',
+                remark=f"撤销结算：结算单 {settlement.settlement_no}"
+            )
+            db.add(revert_tx)
+        
+        # ========== 更新结算单状态 ==========
         old_status = settlement.status
-        settlement.status = "cancelled"
+        settlement.status = "pending"
         settlement.confirmed_by = None
         settlement.confirmed_at = None
         
         # 销售单状态改回待结算
-        sales_order = db.query(SalesOrder).filter(SalesOrder.id == settlement.sales_order_id).first()
-        if sales_order:
-            sales_order.status = "待结算"
+        sales_order.status = "待结算"
         
         db.commit()
         
-        logger.info(f"结算单 {settlement.settlement_no} 撤销成功: {old_status} -> cancelled")
+        logger.info(f"结算单 {settlement.settlement_no} 撤销成功: {old_status} -> pending")
         
         return {
             "success": True,
-            "message": f"结算单 {settlement.settlement_no} 已撤销，销售单可以重新结算",
+            "message": f"结算单 {settlement.settlement_no} 已撤销结算，可以重新选择支付方式或取消",
             "settlement_id": settlement.id,
-            "settlement_no": settlement.settlement_no
+            "settlement_no": settlement.settlement_no,
+            "rolled_back_cash": cancelled_cash,
+            "rolled_back_gold": rolled_back_gold
         }
         
     except Exception as e:
         db.rollback()
-        logger.error(f"撤销结算单失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"撤销结算单失败: {str(e)}")
+        logger.error(f"撤销结算失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"撤销结算失败: {str(e)}")
 
 
 @router.post("/orders/{settlement_id}/refund")
-async def refund_settlement_order(
+async def refund_sales_order(
     settlement_id: int,
     return_reason: str = Query(default="客户退货", description="退货原因"),
     reason_detail: Optional[str] = Query(None, description="退货详细说明"),
@@ -1887,10 +1964,14 @@ async def refund_settlement_order(
     db: Session = Depends(get_db)
 ):
     """
-    结算单销退（客户退货）
-    - 创建退货单（退回展厅/商品部）
-    - 更新库存
-    - 结算单状态变回待确认
+    销售单销退（客户退货）
+    
+    流程：
+    1. 必须先撤销结算（revert），把结算单变回 pending 状态
+    2. 然后才能做销退，商品退回库存
+    3. 销售单标记为已销退
+    
+    注意：账务回滚已在撤销结算时完成，销退只做库存变动
     """
     from ..models import ReturnOrder, Location, LocationInventory
     from ..middleware.permissions import has_permission
@@ -1908,8 +1989,20 @@ async def refund_settlement_order(
     if not settlement:
         raise HTTPException(status_code=404, detail="结算单不存在")
     
-    # 只能对已确认/已打印的结算单进行销退
-    if settlement.status not in ["confirmed", "printed"]:
+    # ========== 流程控制：必须先撤销结算 ==========
+    if settlement.status in ["confirmed", "printed"]:
+        raise HTTPException(
+            status_code=400, 
+            detail="请先【撤销结算】，将结算单变回待确认状态后，才能执行销退。撤销结算会回滚账务（现金欠款、金料账户）。"
+        )
+    
+    if settlement.status == "cancelled":
+        raise HTTPException(status_code=400, detail="结算单已取消，无需销退")
+    
+    if settlement.status == "refunded":
+        raise HTTPException(status_code=400, detail="该销售单已销退")
+    
+    if settlement.status != "pending":
         raise HTTPException(status_code=400, detail=f"结算单状态为 {settlement.status}，无法销退")
     
     # 获取关联的销售单和商品明细
@@ -1954,12 +2047,12 @@ async def refund_settlement_order(
                 return_weight=detail.weight,
                 from_location_id=target_location.id,
                 return_reason=return_reason,
-                reason_detail=reason_detail or f"结算单 {settlement.settlement_no} 销退至{location_name}",
+                reason_detail=reason_detail or f"销售单 {sales_order.order_no} 销退至{location_name}",
                 status="completed",  # 直接完成
                 created_by=user_role,
                 completed_by=user_role,
                 completed_at=now,
-                remark=f"关联结算单: {settlement.settlement_no}, 销售单: {sales_order.order_no}, 退至: {location_name}"
+                remark=f"关联销售单: {sales_order.order_no}, 退至: {location_name}"
             )
             db.add(return_order)
             
@@ -1986,89 +2079,36 @@ async def refund_settlement_order(
                 "return_to": location_name
             })
         
-        # ========== 回滚现金欠款（取消应收账款）==========
-        from ..models.finance import AccountReceivable
-        
-        receivables = db.query(AccountReceivable).filter(
-            AccountReceivable.sales_order_id == sales_order.id,
-            AccountReceivable.status.in_(["unpaid", "overdue"])
-        ).all()
-        
-        cancelled_cash = 0.0
-        for receivable in receivables:
-            cancelled_cash += receivable.unpaid_amount or 0
-            receivable.status = "cancelled"
-            receivable.remark = (receivable.remark or "") + f" | 销退取消于 {now.strftime('%Y-%m-%d %H:%M')}"
-        
-        if cancelled_cash > 0:
-            logger.info(f"销退：取消应收账款 ¥{cancelled_cash:.2f}")
-        
-        # ========== 回滚金料账户（如果是结料/混合支付）==========
-        rolled_back_gold = 0.0
-        customer_id = sales_order.customer_id
-        
-        if settlement.payment_method in ["physical_gold", "mixed"] and customer_id:
-            # 获取需要回滚的金料克重
-            if settlement.payment_method == "physical_gold":
-                gold_to_rollback = settlement.physical_gold_weight or settlement.total_weight or 0
-            else:  # mixed
-                gold_to_rollback = settlement.gold_payment_weight or 0
-            
-            if gold_to_rollback > 0:
-                from .gold_material import get_or_create_customer_deposit
-                customer_deposit = get_or_create_customer_deposit(customer_id, sales_order.customer_name, db)
-                
-                balance_before = customer_deposit.current_balance
-                customer_deposit.current_balance += gold_to_rollback  # 回滚：增加余额
-                customer_deposit.total_used -= gold_to_rollback  # 减少已使用
-                customer_deposit.last_transaction_at = now
-                
-                # 创建回滚记录
-                rollback_tx = CustomerGoldDepositTransaction(
-                    customer_id=customer_id,
-                    customer_name=sales_order.customer_name,
-                    transaction_type='refund',
-                    settlement_order_id=settlement.id,
-                    amount=gold_to_rollback,
-                    balance_before=balance_before,
-                    balance_after=customer_deposit.current_balance,
-                    created_by=user_role,
-                    remark=f"销退回滚：结算单 {settlement.settlement_no}"
-                )
-                db.add(rollback_tx)
-                
-                rolled_back_gold = gold_to_rollback
-                logger.info(f"销退：回滚金料账户 {gold_to_rollback:.2f}克，余额 {balance_before:.2f} -> {customer_deposit.current_balance:.2f}")
-        
-        # ========== 记录往来账（销退记录）==========
-        if customer_id:
-            refund_tx = CustomerTransaction(
-                customer_id=customer_id,
-                customer_name=sales_order.customer_name,
-                transaction_type='refund',
-                settlement_order_id=settlement.id,
-                amount=-cancelled_cash,  # 负数表示减少应收
-                gold_weight=-rolled_back_gold,  # 负数表示回滚金料
-                status='active',
-                remark=f"销退：结算单 {settlement.settlement_no}，原因：{return_reason}"
-            )
-            db.add(refund_tx)
-        
-        # 更新结算单状态为"已销退"（不能再确认）
+        # 更新结算单状态为"已销退"
         settlement.status = "refunded"
         
         # 更新销售单状态为"已销退"
         sales_order.status = "已销退"
         
+        # 记录销退操作
+        if sales_order.customer_id:
+            refund_tx = CustomerTransaction(
+                customer_id=sales_order.customer_id,
+                customer_name=sales_order.customer_name,
+                transaction_type='sales_refund',
+                settlement_order_id=settlement.id,
+                amount=0,  # 账务已在撤销结算时回滚
+                gold_weight=0,  # 账务已在撤销结算时回滚
+                status='active',
+                remark=f"销退：销售单 {sales_order.order_no}，商品退至{location_name}，原因：{return_reason}"
+            )
+            db.add(refund_tx)
+        
         db.commit()
         
-        logger.info(f"结算单 {settlement.settlement_no} 销退成功，商品退至{location_name}，创建了 {len(return_orders)} 个退货单")
+        logger.info(f"销售单 {sales_order.order_no} 销退成功，商品退至{location_name}，创建了 {len(return_orders)} 个退货单")
         
         return {
             "success": True,
             "message": f"销退成功！商品已退至{location_name}，创建了 {len(return_orders)} 个退货单",
             "settlement_id": settlement.id,
             "settlement_no": settlement.settlement_no,
+            "sales_order_no": sales_order.order_no,
             "customer_name": sales_order.customer_name,
             "return_to": location_name,
             "return_orders": return_orders

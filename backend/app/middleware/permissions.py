@@ -25,6 +25,7 @@ ROLE_PERMISSIONS = {
         'can_return_to_supplier': False,   # 不能退货给供应商
         'can_return_to_warehouse': True,   # 可以退货给商品部
         'can_view_finance': False,         # 不能查看财务
+        'can_view_supplier_gold_account': False,  # 不能查看供应商金料账户
     },
     
     # 商品专员
@@ -45,6 +46,7 @@ ROLE_PERMISSIONS = {
         'can_return_to_warehouse': False,  # 不能退货给商品部
         'can_view_finance': False,         # 不能查看财务
         'can_manage_product_codes': True,  # 可以管理商品编码（F/FL编码）
+        'can_view_supplier_gold_account': False,  # 不能查看供应商金料账户
     },
     
     # 结算专员
@@ -77,6 +79,7 @@ ROLE_PERMISSIONS = {
         'can_create_transfer': True,       # 可以创建转料单
         'can_confirm_transfer': False,     # 不能确认转料（料部职责）
         'can_refund_settlement': True,     # 可以执行销退操作
+        'can_view_supplier_gold_account': False,  # 不能查看供应商金料账户
     },
     
     # 业务员 - 只能查询客户相关信息
@@ -102,6 +105,7 @@ ROLE_PERMISSIONS = {
         'can_query_customer_returns': True,      # 可以查询客户退货记录
         'can_query_customer_balance': True,      # 可以查询客户欠款/存料余额
         'can_query_customer_transactions': True, # 可以查询客户往来账目
+        'can_view_supplier_gold_account': False,  # 不能查看供应商金料账户
     },
     
     # 财务
@@ -122,6 +126,7 @@ ROLE_PERMISSIONS = {
         'can_return_to_warehouse': False,
         'can_view_finance': True,          # 可以查看财务
         'can_record_payment': True,        # 可以登记收款
+        'can_view_supplier_gold_account': False,  # 不能查看供应商金料账户
     },
     
     # 料部 - 管理金料的收发
@@ -155,6 +160,8 @@ ROLE_PERMISSIONS = {
         'can_complete_withdrawal': True,   # 可以完成取料（发出金料）
         'can_create_transfer': False,      # 不能创建转料单（结算职责）
         'can_confirm_transfer': True,      # 可以确认转料
+        # 供应商金料账户权限
+        'can_view_supplier_gold_account': True,   # 可以查看供应商金料账户（核心职责）
     },
     
     # 管理层 - 拥有所有权限
@@ -193,6 +200,8 @@ ROLE_PERMISSIONS = {
         'can_manage_product_codes': True,
         # 结算销退权限
         'can_refund_settlement': True,     # 可以执行销退操作
+        # 供应商金料账户权限
+        'can_view_supplier_gold_account': True,   # 可以查看供应商金料账户
     }
 }
 
@@ -232,6 +241,8 @@ PERMISSION_NAMES = {
     'can_gold_refund_to_customer': '退料给客户',
     # 结算销退权限
     'can_refund_settlement': '销退操作',
+    # 供应商金料账户权限
+    'can_view_supplier_gold_account': '查看供应商金料账户',
 }
 
 # AI操作到权限的映射
