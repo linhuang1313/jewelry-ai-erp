@@ -762,9 +762,8 @@ function App() {
     // 延迟保存，避免频繁写入
     const timer = setTimeout(() => {
       saveConversation()
-      }, 1000)
-      return () => clearTimeout(timer)
-    }
+    }, 1000)
+    return () => clearTimeout(timer)
   }, [messages])
 
   // 加载指定对话（从后端API加载完整消息内容）
