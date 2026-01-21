@@ -431,23 +431,31 @@ class AIAnalyzer:
                         for tx in cash_txs[:5]:
                             text += f"   • {tx.get('created_at', 'N/A')[:10]}：应收¥{tx.get('total_amount', 0):.2f}，已收¥{tx.get('received_amount', 0):.2f}，未收¥{tx.get('unpaid_amount', 0):.2f}\n"
                 
-                # 金料欠款
-                if "gold_debt" in debt_data:
-                    text += f"⚖️ 金料欠款：{debt_data['gold_debt']:.2f}克\n"
-                    gold_txs = debt_data.get("gold_transactions", [])
-                    if gold_txs:
-                        text += f"   最近金料交易记录：\n"
-                        for tx in gold_txs[:5]:
-                            text += f"   • {tx.get('created_at', 'N/A')[:10]}：{tx.get('type_label', tx.get('type', 'N/A'))}，金料{tx.get('gold_weight', 0):.2f}克，欠款变化{tx.get('gold_due_before', 0):.2f}→{tx.get('gold_due_after', 0):.2f}克\n"
+                # 净金料（存料和欠料合并为净值）
+                gold_debt = debt_data.get("gold_debt", 0)
+                gold_deposit = debt_data.get("gold_deposit", 0)
+                net_gold = gold_deposit - gold_debt
                 
-                # 存料余额
-                if "gold_deposit" in debt_data:
-                    text += f"📦 存料余额：{debt_data['gold_deposit']:.2f}克\n"
-                    deposit_txs = debt_data.get("deposit_transactions", [])
-                    if deposit_txs:
-                        text += f"   最近存料记录：\n"
-                        for tx in deposit_txs[:5]:
-                            text += f"   • {tx.get('created_at', 'N/A')[:10]}：{tx.get('type_label', tx.get('type', 'N/A'))} {tx.get('amount', 0):.2f}克，余额{tx.get('balance_before', 0):.2f}→{tx.get('balance_after', 0):.2f}克\n"
+                if net_gold > 0:
+                    text += f"💎 金料账户：净存料 +{net_gold:.2f}克\n"
+                elif net_gold < 0:
+                    text += f"💎 金料账户：净欠料 {net_gold:.2f}克\n"
+                else:
+                    text += f"💎 金料账户：已结清 0.00克\n"
+                
+                # 最近金料交易记录
+                gold_txs = debt_data.get("gold_transactions", [])
+                if gold_txs:
+                    text += f"   最近金料交易记录：\n"
+                    for tx in gold_txs[:5]:
+                        text += f"   • {tx.get('created_at', 'N/A')[:10]}：{tx.get('type_label', tx.get('type', 'N/A'))}，金料{tx.get('gold_weight', 0):.2f}克\n"
+                
+                # 最近存料记录
+                deposit_txs = debt_data.get("deposit_transactions", [])
+                if deposit_txs:
+                    text += f"   最近存料记录：\n"
+                    for tx in deposit_txs[:5]:
+                        text += f"   • {tx.get('created_at', 'N/A')[:10]}：{tx.get('type_label', tx.get('type', 'N/A'))} {tx.get('amount', 0):.2f}克\n"
                 
                 # 客户销售历史表现（新增）
                 sales_history = debt_data.get("sales_history")
@@ -678,9 +686,8 @@ class AIAnalyzer:
    - 每个品类必须包含：品类名称、**销售克重**、占比百分比、工费金额
 
 4. **账务汇总**（如有）：
-   - 💰 现金欠款：¥金额
-   - ⚖️ 金料欠款：重量克
-   - 📦 存料余额：重量克
+   - 💰 现金账户：有欠款显示"欠款 ¥金额"，无欠款显示"无欠款 ✓"
+   - 💎 金料账户：显示净值（净存料/净欠料/已结清），不要分开显示存料和欠料
 
 **隐藏标记**（必须添加）：
 如果找到了客户，在回答最后添加：<!-- CUSTOMER_DEBT:[customer_id]:[customer_name] -->
@@ -1003,9 +1010,8 @@ class AIAnalyzer:
    - 每个品类必须包含：品类名称、**销售克重**、占比百分比、工费金额
 
 4. **账务汇总**（如有）：
-   - 💰 现金欠款：¥金额
-   - ⚖️ 金料欠款：重量克
-   - 📦 存料余额：重量克
+   - 💰 现金账户：有欠款显示"欠款 ¥金额"，无欠款显示"无欠款 ✓"
+   - 💎 金料账户：显示净值（净存料/净欠料/已结清），不要分开显示存料和欠料
 
 **隐藏标记**（必须添加）：
 如果找到了客户，在回答最后添加：<!-- CUSTOMER_DEBT:[customer_id]:[customer_name] -->

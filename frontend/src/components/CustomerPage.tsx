@@ -673,9 +673,6 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                                 )}
                               </div>
                             </div>
-                            <p className="text-xs text-gray-500 mt-3">
-                              存料 {goldDeposit.toFixed(2)}克 - 欠料 {goldDebt.toFixed(2)}克 = {netGold.toFixed(2)}克
-                            </p>
                           </div>
                         </div>
                       );
