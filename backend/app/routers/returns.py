@@ -218,12 +218,54 @@ async def create_return_order(
             inventory.weight -= data.return_weight
             logger.info(f"扣减库存: {data.product_name} 在位置 {location.name} 扣减 {data.return_weight}g，剩余 {inventory.weight}g")
         
-        # 如果是退给供应商，更新供应商统计
+        # 如果是退给供应商，更新供应商统计和金料账户
         if data.return_type == "to_supplier" and data.supplier_id:
             supplier.total_supply_weight -= data.return_weight
             if supplier.total_supply_count > 0:
                 supplier.total_supply_count -= 1
             logger.info(f"更新供应商统计: {supplier.name} 供货重量减少 {data.return_weight}g")
+            
+            # ========== 更新供应商金料账户（单一账户模式）==========
+            # 我们退货给供应商 = 减少我们欠供应商的料
+            from ..models import SupplierGoldAccount, SupplierGoldTransaction
+            from ..timezone_utils import china_now
+            
+            supplier_gold_account = db.query(SupplierGoldAccount).filter(
+                SupplierGoldAccount.supplier_id == data.supplier_id
+            ).first()
+            
+            if not supplier_gold_account:
+                supplier_gold_account = SupplierGoldAccount(
+                    supplier_id=data.supplier_id,
+                    supplier_name=supplier.name,
+                    current_balance=0.0,
+                    total_received=0.0,
+                    total_paid=0.0
+                )
+                db.add(supplier_gold_account)
+                db.flush()
+            
+            balance_before = supplier_gold_account.current_balance
+            supplier_gold_account.current_balance -= data.return_weight  # 我们欠供应商的料减少
+            supplier_gold_account.total_received -= data.return_weight  # 累计收货减少（退回了）
+            supplier_gold_account.last_transaction_at = china_now()
+            
+            # 创建供应商金料交易记录
+            supplier_gold_tx = SupplierGoldTransaction(
+                supplier_id=data.supplier_id,
+                supplier_name=supplier.name,
+                transaction_type='return',  # 退货
+                gold_weight=data.return_weight,
+                balance_before=balance_before,
+                balance_after=supplier_gold_account.current_balance,
+                status='active',
+                created_by=data.created_by or "系统",
+                remark=f"退货单：{return_no}，退货给供应商"
+            )
+            db.add(supplier_gold_tx)
+            
+            logger.info(f"供应商金料账户更新: 供应商={supplier.name}, 退货={data.return_weight}克, "
+                       f"变动前={balance_before:.2f}克, 变动后={supplier_gold_account.current_balance:.2f}克")
         
         db.commit()
         db.refresh(return_order)
@@ -365,14 +407,55 @@ async def complete_return_order(
                 inventory.weight -= return_order.return_weight
                 logger.info(f"扣减库存: {return_order.product_name} 在位置 {return_order.from_location_id} 扣减 {return_order.return_weight}g")
         
-        # 如果是退给供应商，更新供应商统计
+        # 如果是退给供应商，更新供应商统计和金料账户
         if return_order.return_type == "to_supplier" and return_order.supplier_id:
             supplier = db.query(Supplier).filter(Supplier.id == return_order.supplier_id).first()
             if supplier:
-                # 减少供应商的供货统计（可选：也可以增加退货统计字段）
+                # 减少供应商的供货统计
                 supplier.total_supply_weight -= return_order.return_weight
-                supplier.total_supply_count -= 1  # 可选
+                supplier.total_supply_count -= 1
                 logger.info(f"更新供应商统计: {supplier.name} 供货重量减少 {return_order.return_weight}g")
+                
+                # ========== 更新供应商金料账户（单一账户模式）==========
+                # 我们退货给供应商 = 减少我们欠供应商的料
+                from ..models import SupplierGoldAccount, SupplierGoldTransaction
+                
+                supplier_gold_account = db.query(SupplierGoldAccount).filter(
+                    SupplierGoldAccount.supplier_id == return_order.supplier_id
+                ).first()
+                
+                if not supplier_gold_account:
+                    supplier_gold_account = SupplierGoldAccount(
+                        supplier_id=return_order.supplier_id,
+                        supplier_name=supplier.name,
+                        current_balance=0.0,
+                        total_received=0.0,
+                        total_paid=0.0
+                    )
+                    db.add(supplier_gold_account)
+                    db.flush()
+                
+                balance_before = supplier_gold_account.current_balance
+                supplier_gold_account.current_balance -= return_order.return_weight  # 我们欠供应商的料减少
+                supplier_gold_account.total_received -= return_order.return_weight  # 累计收货减少
+                supplier_gold_account.last_transaction_at = china_now()
+                
+                # 创建供应商金料交易记录
+                supplier_gold_tx = SupplierGoldTransaction(
+                    supplier_id=return_order.supplier_id,
+                    supplier_name=supplier.name,
+                    transaction_type='return',  # 退货
+                    gold_weight=return_order.return_weight,
+                    balance_before=balance_before,
+                    balance_after=supplier_gold_account.current_balance,
+                    status='active',
+                    created_by=data.completed_by,
+                    remark=f"退货单：{return_order.return_no}，退货给供应商"
+                )
+                db.add(supplier_gold_tx)
+                
+                logger.info(f"供应商金料账户更新: 供应商={supplier.name}, 退货={return_order.return_weight}克, "
+                           f"变动前={balance_before:.2f}克, 变动后={supplier_gold_account.current_balance:.2f}克")
         
         # 更新退货单状态
         return_order.status = "completed"
