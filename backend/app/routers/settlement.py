@@ -245,35 +245,25 @@ async def create_settlement_order(
         # 计算应支付金料 = 销售总重量
         total_gold_due = sales_order.total_weight
         
-        # 如果要使用存料抵扣
-        if data.use_deposit and data.use_deposit > 0:
-            if not customer_id:
-                raise HTTPException(status_code=400, detail="该销售单未关联客户，无法使用存料")
-            
-            # 查找客户存料
+        # ========== 自动抵扣存料 ==========
+        # 当客户有存料时，自动使用存料抵扣，只有不足部分才记录为欠料
+        if customer_id:
             customer_deposit = db.query(CustomerGoldDeposit).filter(
                 CustomerGoldDeposit.customer_id == customer_id
             ).first()
             
-            if not customer_deposit or customer_deposit.current_balance <= 0:
-                raise HTTPException(status_code=400, detail="该客户没有可用存料")
-            
-            if data.use_deposit > customer_deposit.current_balance:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"存料余额不足。可用存料：{customer_deposit.current_balance:.2f}克，要求使用：{data.use_deposit:.2f}克"
-                )
-            
-            if data.use_deposit > total_gold_due:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"使用存料不能超过应支付金料。应支付：{total_gold_due:.2f}克，要求使用：{data.use_deposit:.2f}克"
-                )
-            
-            deposit_used = data.use_deposit
-            # 实际需要支付的金料 = 总重量 - 使用存料
-            actual_gold_due = total_gold_due - deposit_used
+            if customer_deposit and customer_deposit.current_balance > 0:
+                # 自动使用存料抵扣（取存料余额和应付金料的较小值）
+                auto_deposit_used = min(customer_deposit.current_balance, total_gold_due)
+                deposit_used = auto_deposit_used
+                # 实际需要支付的金料 = 总重量 - 使用存料
+                actual_gold_due = total_gold_due - deposit_used
+                logger.info(f"[结算] 自动抵扣存料：客户存料={customer_deposit.current_balance:.2f}克，应付={total_gold_due:.2f}克，抵扣={deposit_used:.2f}克，剩余应付={actual_gold_due:.2f}克")
+            else:
+                # 客户没有存料，全部记为欠料
+                actual_gold_due = total_gold_due
         else:
+            # 没有关联客户，全部记为欠料
             actual_gold_due = total_gold_due
         
         # physical_gold_weight 存储客户实际需要支付的金料重量
