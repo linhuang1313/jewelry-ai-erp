@@ -202,39 +202,15 @@ async def get_customer_debt_summary(
             for row in cash_results:
                 cash_debt_map[row.customer_id] = float(row.total_debt or 0)
         
-        # 2. 批量查询金料欠款（获取每个客户最新的交易记录）
-        gold_debt_map = {}
-        if customer_ids:
-            # 使用子查询获取每个客户的最新交易
-            from sqlalchemy import and_
-            subquery = db.query(
-                CustomerTransaction.customer_id,
-                func.max(CustomerTransaction.created_at).label('max_date')
-            ).filter(
-                CustomerTransaction.customer_id.in_(customer_ids),
-                CustomerTransaction.status == "active"
-            ).group_by(CustomerTransaction.customer_id).subquery()
-            
-            latest_txs = db.query(CustomerTransaction).join(
-                subquery,
-                and_(
-                    CustomerTransaction.customer_id == subquery.c.customer_id,
-                    CustomerTransaction.created_at == subquery.c.max_date
-                )
-            ).all()
-            
-            for tx in latest_txs:
-                gold_debt_map[tx.customer_id] = float(tx.gold_due_after or 0)
-        
-        # 3. 批量查询存料余额
-        gold_deposit_map = {}
+        # 2. 批量查询金料账户净值（单一账户模式：current_balance 正=存料，负=欠料）
+        net_gold_map = {}
         if customer_ids:
             deposits = db.query(CustomerGoldDeposit).filter(
                 CustomerGoldDeposit.customer_id.in_(customer_ids)
             ).all()
             
             for deposit in deposits:
-                gold_deposit_map[deposit.customer_id] = float(deposit.current_balance or 0)
+                net_gold_map[deposit.customer_id] = float(deposit.current_balance or 0)
         
         # 4. 批量查询最后交易时间（按客户名称）
         last_tx_map = {}
@@ -252,21 +228,21 @@ async def get_customer_debt_summary(
                     last_tx_map[row.customer_name] = row.last_time.strftime("%Y-%m-%d")
         
         # ========== 构建欠款数据 ==========
-        # gold_balance = gold_debt - gold_deposit
-        # 正数 = 客人欠我们的料
-        # 负数 = 客人有存料（我们欠客人的）
+        # 单一账户模式：net_gold 直接从 current_balance 获取
+        # 正数 = 客人有存料
+        # 负数 = 客人欠料
         debt_list = []
         total_cash_debt = 0.0
-        total_gold_balance = 0.0
+        total_net_gold = 0.0
         
         for customer in customers:
             cash_debt = cash_debt_map.get(customer.id, 0.0)
-            gold_debt = gold_debt_map.get(customer.id, 0.0)
-            gold_deposit = gold_deposit_map.get(customer.id, 0.0)
+            net_gold = net_gold_map.get(customer.id, 0.0)  # 直接获取净金料值
             last_transaction_date = last_tx_map.get(customer.name)
             
-            # 计算金料净额：正数=客人欠我们，负数=客人有存料
-            gold_balance = gold_debt - gold_deposit
+            # 单一账户模式：net_gold 就是最终值
+            # 正数 = 存料，负数 = 欠料
+            gold_balance = -net_gold  # 保持兼容：正数=欠料
             
             # 如果隐藏无欠款客户（现金欠款为0且金料净额为0）
             if hide_zero and cash_debt <= 0 and abs(gold_balance) < 0.001:
@@ -278,16 +254,17 @@ async def get_customer_debt_summary(
                 "customer_name": customer.name,
                 "phone": customer.phone,
                 "cash_debt": round(cash_debt, 2),
-                "gold_balance": round(gold_balance, 3),  # 合并后的金料净额
+                "net_gold": round(net_gold, 3),  # 单一账户净值（正=存料，负=欠料）
+                "gold_balance": round(gold_balance, 3),  # 兼容字段（正=欠料）
                 # 保留原字段用于兼容
-                "gold_debt": round(max(0, gold_balance), 3),  # 正数部分
-                "gold_deposit": round(abs(min(0, gold_balance)), 3),  # 负数部分的绝对值
+                "gold_debt": round(max(0, -net_gold), 3),  # 欠料（负值的绝对值）
+                "gold_deposit": round(max(0, net_gold), 3),  # 存料（正值部分）
                 "total_debt": round(cash_debt, 2),
                 "last_transaction_date": last_transaction_date
             })
             
             total_cash_debt += cash_debt
-            total_gold_balance += gold_balance
+            total_net_gold += net_gold
         
         # 排序
         reverse = sort_order == "desc"
@@ -310,8 +287,8 @@ async def get_customer_debt_summary(
             "total": total,
             "summary": {
                 "total_cash_debt": round(total_cash_debt, 2),
-                "total_gold_balance": round(total_gold_balance, 3),  # 金料净额总计
-                "total_gold_debt": round(max(0, total_gold_balance), 3),  # 兼容旧字段
+                "total_net_gold": round(total_net_gold, 3),  # 净金料总计（正=存料，负=欠料）
+                "total_gold_balance": round(-total_net_gold, 3),  # 兼容旧字段（正=欠料）
                 "customer_count": total
             }
         }
@@ -1020,22 +997,20 @@ async def get_customer_debt_history(
         except:
             pass
         
-        try:
-            latest_tx = db.query(CustomerTransaction).filter(
-                CustomerTransaction.customer_id == customer_id,
-                CustomerTransaction.status == "active"
-            ).order_by(desc(CustomerTransaction.created_at)).first()
-            if latest_tx:
-                current_balance["gold_debt"] = latest_tx.gold_due_after or 0
-        except:
-            pass
-        
+        # 单一账户模式：从 CustomerGoldDeposit.current_balance 获取净金料值
         try:
             deposit = db.query(CustomerGoldDeposit).filter(
                 CustomerGoldDeposit.customer_id == customer_id
             ).first()
             if deposit:
-                current_balance["gold_deposit"] = deposit.current_balance or 0
+                net_gold = deposit.current_balance or 0
+                current_balance["net_gold"] = net_gold  # 净金料值（正=存料，负=欠料）
+                current_balance["gold_debt"] = max(0, -net_gold)  # 兼容字段：欠料
+                current_balance["gold_deposit"] = max(0, net_gold)  # 兼容字段：存料
+            else:
+                current_balance["net_gold"] = 0
+                current_balance["gold_debt"] = 0
+                current_balance["gold_deposit"] = 0
         except:
             pass
         
@@ -1164,64 +1139,22 @@ async def chat_debt_query(
             result["cash_debt"] = cash_debt
             result["cash_transactions"] = cash_transactions
         
-        # 4. 查询金料欠款
-        if query_type in ["all", "gold_debt"]:
-            gold_debt = 0.0
+        # 4. 查询金料账户（单一账户模式：current_balance 正数=存料，负数=欠料）
+        if query_type in ["all", "gold_debt", "gold_deposit"]:
+            net_gold = 0.0  # 净金料值
             gold_transactions = []
-            try:
-                tx_query = db.query(CustomerTransaction).filter(
-                    CustomerTransaction.customer_id == customer_id
-                )
-                
-                if start_date:
-                    tx_query = tx_query.filter(CustomerTransaction.created_at >= start_date)
-                if end_date:
-                    tx_query = tx_query.filter(CustomerTransaction.created_at <= end_date)
-                
-                transactions = tx_query.order_by(desc(CustomerTransaction.created_at)).limit(50).all()
-                
-                # 获取最新的金料欠款余额
-                if transactions:
-                    gold_debt = transactions[0].gold_due_after or 0
-                
-                for tx in transactions[:20]:
-                    tx_type_label = {
-                        "sales": "销售",
-                        "settlement": "结算",
-                        "gold_receipt": "收料",
-                        "payment": "付款"
-                    }.get(tx.transaction_type, tx.transaction_type)
-                    
-                    gold_transactions.append({
-                        "id": tx.id,
-                        "type": tx.transaction_type,
-                        "type_label": tx_type_label,
-                        "amount": tx.amount,
-                        "gold_weight": tx.gold_weight,
-                        "gold_due_before": tx.gold_due_before,
-                        "gold_due_after": tx.gold_due_after,
-                        "remark": tx.remark,
-                        "created_at": tx.created_at.isoformat() if tx.created_at else None
-                    })
-            except Exception as e:
-                logger.warning(f"查询金料欠款出错: {e}")
-            
-            result["gold_debt"] = gold_debt
-            result["gold_transactions"] = gold_transactions
-        
-        # 5. 查询存料余额
-        if query_type in ["all", "gold_deposit"]:
-            gold_deposit = 0.0
             deposit_transactions = []
+            
             try:
+                # 从 CustomerGoldDeposit 获取净金料值
                 deposit = db.query(CustomerGoldDeposit).filter(
                     CustomerGoldDeposit.customer_id == customer_id
                 ).first()
                 
                 if deposit:
-                    gold_deposit = deposit.current_balance or 0
+                    net_gold = deposit.current_balance or 0
                 
-                # 查询存料交易记录
+                # 查询金料账户交易记录
                 dep_tx_query = db.query(CustomerGoldDepositTransaction).filter(
                     CustomerGoldDepositTransaction.customer_id == customer_id,
                     CustomerGoldDepositTransaction.status == "active"
@@ -1236,8 +1169,8 @@ async def chat_debt_query(
                 
                 for tx in dep_txs:
                     tx_type_label = {
-                        "deposit": "存入",
-                        "use": "使用",
+                        "deposit": "存入/收料",
+                        "use": "使用/结算",
                         "refund": "退还"
                     }.get(tx.transaction_type, tx.transaction_type)
                     
@@ -1251,10 +1184,46 @@ async def chat_debt_query(
                         "remark": tx.remark,
                         "created_at": tx.created_at.isoformat() if tx.created_at else None
                     })
+                
+                # 同时查询往来账记录（用于展示历史）
+                tx_query = db.query(CustomerTransaction).filter(
+                    CustomerTransaction.customer_id == customer_id
+                )
+                if start_date:
+                    tx_query = tx_query.filter(CustomerTransaction.created_at >= start_date)
+                if end_date:
+                    tx_query = tx_query.filter(CustomerTransaction.created_at <= end_date)
+                
+                transactions = tx_query.order_by(desc(CustomerTransaction.created_at)).limit(20).all()
+                
+                for tx in transactions:
+                    tx_type_label = {
+                        "sales": "销售",
+                        "settlement": "结算",
+                        "gold_receipt": "收料",
+                        "payment": "付款"
+                    }.get(tx.transaction_type, tx.transaction_type)
+                    
+                    gold_transactions.append({
+                        "id": tx.id,
+                        "type": tx.transaction_type,
+                        "type_label": tx_type_label,
+                        "amount": tx.amount,
+                        "gold_weight": tx.gold_weight,
+                        "remark": tx.remark,
+                        "created_at": tx.created_at.isoformat() if tx.created_at else None
+                    })
+                    
             except Exception as e:
-                logger.warning(f"查询存料余额出错: {e}")
+                logger.warning(f"查询金料账户出错: {e}")
             
-            result["gold_deposit"] = gold_deposit
+            # 单一账户模式：从 net_gold 计算兼容字段
+            # gold_debt = 负值的绝对值（客户欠我们的）
+            # gold_deposit = 正值部分（客户存的）
+            result["net_gold"] = net_gold  # 净金料值（核心字段）
+            result["gold_debt"] = max(0, -net_gold)  # 兼容字段
+            result["gold_deposit"] = max(0, net_gold)  # 兼容字段
+            result["gold_transactions"] = gold_transactions
             result["deposit_transactions"] = deposit_transactions
         
         # 6. 查询客户销售历史表现（新增）

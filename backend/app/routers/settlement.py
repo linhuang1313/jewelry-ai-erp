@@ -231,7 +231,6 @@ async def create_settlement_order(
     
     customer_id = sales_order.customer_id
     customer_name = sales_order.customer_name
-    deposit_used = 0.0  # 使用的存料金额
     
     # 验证支付方式
     if data.payment_method == "cash_price":
@@ -243,31 +242,10 @@ async def create_settlement_order(
         material_amount = 0  # 结料，原料金额为0
         
         # 计算应支付金料 = 销售总重量
-        total_gold_due = sales_order.total_weight
+        # 单一账户模式：直接从 current_balance 扣减，允许负值（负值=欠料）
+        actual_gold_due = sales_order.total_weight
         
-        # ========== 自动抵扣存料 ==========
-        # 当客户有存料时，自动使用存料抵扣，只有不足部分才记录为欠料
-        if customer_id:
-            customer_deposit = db.query(CustomerGoldDeposit).filter(
-                CustomerGoldDeposit.customer_id == customer_id
-            ).first()
-            
-            if customer_deposit and customer_deposit.current_balance > 0:
-                # 自动使用存料抵扣（取存料余额和应付金料的较小值）
-                auto_deposit_used = min(customer_deposit.current_balance, total_gold_due)
-                deposit_used = auto_deposit_used
-                # 实际需要支付的金料 = 总重量 - 使用存料
-                actual_gold_due = total_gold_due - deposit_used
-                logger.info(f"[结算] 自动抵扣存料：客户存料={customer_deposit.current_balance:.2f}克，应付={total_gold_due:.2f}克，抵扣={deposit_used:.2f}克，剩余应付={actual_gold_due:.2f}克")
-            else:
-                # 客户没有存料，全部记为欠料
-                actual_gold_due = total_gold_due
-        else:
-            # 没有关联客户，全部记为欠料
-            actual_gold_due = total_gold_due
-        
-        # physical_gold_weight 存储客户实际需要支付的金料重量
-        # 如果使用了存料抵扣，这个值会小于销售总重量
+        # physical_gold_weight 存储客户需要支付的金料重量
     elif data.payment_method == "mixed":
         # ==================== 混合支付 ====================
         # 验证必填参数
@@ -312,8 +290,8 @@ async def create_settlement_order(
     
     # 构建备注信息
     remark = data.remark or ""
-    if deposit_used > 0:
-        remark = f"使用存料抵扣：{deposit_used:.2f}克。" + remark
+    if data.payment_method == "physical_gold":
+        remark = f"结料支付：{actual_gold_due:.2f}克。" + remark
     
     # ========== 查询客户历史余额信息 ==========
     previous_cash_debt = 0.0  # 上次现金欠款
@@ -413,33 +391,37 @@ async def create_settlement_order(
     db.add(settlement)
     db.flush()
     
-    # 如果使用了存料抵扣，更新客户存料记录
-    if deposit_used > 0 and customer_id:
-        customer_deposit = db.query(CustomerGoldDeposit).filter(
-            CustomerGoldDeposit.customer_id == customer_id
-        ).first()
+    # ========== 单一账户模式：结料时直接扣减 current_balance ==========
+    # current_balance 可以为负值（负值=客户欠料）
+    if data.payment_method in ["physical_gold", "mixed"] and customer_id and actual_gold_due > 0:
+        from .gold_material import get_or_create_customer_deposit
+        customer_deposit = get_or_create_customer_deposit(customer_id, customer_name, db)
         
-        if customer_deposit:
-            balance_before = customer_deposit.current_balance
-            customer_deposit.current_balance -= deposit_used
-            customer_deposit.total_used += deposit_used
-            customer_deposit.last_transaction_at = now
-            
-            # 创建存料使用记录
-            deposit_transaction = CustomerGoldDepositTransaction(
-                customer_id=customer_id,
-                customer_name=customer_name,
-                transaction_type='use',
-                settlement_order_id=settlement.id,
-                amount=deposit_used,
-                balance_before=balance_before,
-                balance_after=customer_deposit.current_balance,
-                created_by=created_by,
-                remark=f"结算单：{settlement_no}，使用存料抵扣"
-            )
-            db.add(deposit_transaction)
-            
-            logger.info(f"客户存料使用: 客户={customer_name}, 使用={deposit_used}克, 新余额={customer_deposit.current_balance}克")
+        balance_before = customer_deposit.current_balance
+        customer_deposit.current_balance -= actual_gold_due
+        customer_deposit.total_used += actual_gold_due
+        customer_deposit.last_transaction_at = now
+        
+        # 创建金料账户变动记录
+        deposit_transaction = CustomerGoldDepositTransaction(
+            customer_id=customer_id,
+            customer_name=customer_name,
+            transaction_type='use',
+            settlement_order_id=settlement.id,
+            amount=actual_gold_due,
+            balance_before=balance_before,
+            balance_after=customer_deposit.current_balance,
+            created_by=created_by,
+            remark=f"结算单：{settlement_no}，结料支付"
+        )
+        db.add(deposit_transaction)
+        
+        # 记录余额变化
+        if customer_deposit.current_balance >= 0:
+            status_text = f"剩余存料 {customer_deposit.current_balance:.2f}克"
+        else:
+            status_text = f"欠料 {abs(customer_deposit.current_balance):.2f}克"
+        logger.info(f"客户金料账户变动: 客户={customer_name}, 扣减={actual_gold_due}克, 变动前={balance_before:.2f}克, 变动后={customer_deposit.current_balance:.2f}克 ({status_text})")
     
     # 创建客户往来账记录
     if customer_id:
@@ -460,7 +442,7 @@ async def create_settlement_order(
     db.refresh(settlement)
     
     logger.info(f"创建结算单: {settlement_no}, 销售单: {sales_order.order_no}, "
-                f"支付方式: {data.payment_method}, 使用存料: {deposit_used}克")
+                f"支付方式: {data.payment_method}, 应付金料: {actual_gold_due}克")
     
     return SettlementOrderResponse(
         id=settlement.id,
@@ -491,7 +473,7 @@ async def create_settlement_order(
         sales_order=None,
         gold_received=0.0,
         gold_remaining_due=actual_gold_due if data.payment_method in ["physical_gold", "mixed"] else None,
-        deposit_used=deposit_used if deposit_used > 0 else None
+        deposit_used=None  # 单一账户模式不再使用此字段
     )
 
 

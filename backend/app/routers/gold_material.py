@@ -2535,11 +2535,9 @@ async def confirm_gold_receipt(
     """
     料部确认接收金料
     
-    确认时会自动：
-    1. 查询该客户的未结清欠料（结料方式的结算单）
-    2. 如有欠料，自动抵扣
-    3. 剩余部分存入客户存料余额
-    4. 创建往来账记录
+    单一账户模式：直接增加 current_balance
+    - 如果之前是负值（欠料），会自动"抵扣"
+    - 如果之前是正值（存料），会增加存料
     """
     receipt = db.query(GoldReceipt).filter(GoldReceipt.id == receipt_id).first()
     
@@ -2554,97 +2552,75 @@ async def confirm_gold_receipt(
     customer_name = customer.name if customer else "未知客户"
     gold_weight = receipt.gold_weight
     
-    # ========== 查询客户未结清的金料欠款 ==========
-    # 从结算单中查询：payment_method = 'physical_gold' 且未完全收料的结算单
-    pending_settlements = db.query(SettlementOrder).join(SalesOrder).filter(
-        SalesOrder.customer_id == customer_id,
-        SettlementOrder.payment_method == 'physical_gold',
-        SettlementOrder.status.in_(['pending', 'confirmed', 'printed'])
-    ).all()
-    
-    # 计算总欠料
-    total_due = 0.0
-    total_received = 0.0
-    for settlement in pending_settlements:
-        total_due += settlement.physical_gold_weight or 0.0
-        # 查询该结算单已收到的金料
-        received = db.query(func.sum(GoldReceipt.gold_weight)).filter(
-            GoldReceipt.settlement_id == settlement.id,
-            GoldReceipt.status == 'received',
-            GoldReceipt.id != receipt_id  # 排除当前这条
-        ).scalar() or 0.0
-        total_received += received
-    
-    remaining_due = max(0.0, total_due - total_received)  # 客户还欠我们多少料
-    
-    # ========== 计算抵扣和存料 ==========
-    if gold_weight <= remaining_due:
-        # 本次来料 <= 欠料，全部用于抵扣
-        deduct_amount = gold_weight
-        deposit_amount = 0.0
-    else:
-        # 本次来料 > 欠料，部分抵扣，部分存料
-        deduct_amount = remaining_due
-        deposit_amount = gold_weight - remaining_due
-    
-    new_remaining_due = max(0.0, remaining_due - gold_weight)
-    
-    # ========== 更新状态 ==========
+    # ========== 更新收料单状态 ==========
     receipt.status = "received"
     receipt.received_by = received_by
     receipt.received_at = china_now()
     
-    # ========== 创建客户往来账记录 ==========
-    remark_parts = [f"收料单：{receipt.receipt_no}"]
-    if deduct_amount > 0:
-        remark_parts.append(f"抵扣欠料：{deduct_amount:.2f}克")
-    if deposit_amount > 0:
-        remark_parts.append(f"存入存料：{deposit_amount:.2f}克")
+    # ========== 单一账户模式：直接增加 current_balance ==========
+    deposit = get_or_create_customer_deposit(customer_id, customer_name, db)
+    balance_before = deposit.current_balance
+    deposit.current_balance += gold_weight
+    deposit.total_deposited += gold_weight
+    deposit.last_transaction_at = china_now()
     
+    # 计算状态变化说明
+    if balance_before < 0:
+        # 之前是欠料状态
+        if deposit.current_balance >= 0:
+            remark_text = f"收料单：{receipt.receipt_no}，来料{gold_weight:.2f}克，欠料{abs(balance_before):.2f}克已清，剩余存料{deposit.current_balance:.2f}克"
+        else:
+            remark_text = f"收料单：{receipt.receipt_no}，来料{gold_weight:.2f}克，剩余欠料{abs(deposit.current_balance):.2f}克"
+    else:
+        # 之前是存料或零
+        remark_text = f"收料单：{receipt.receipt_no}，来料{gold_weight:.2f}克，当前存料{deposit.current_balance:.2f}克"
+    
+    # 创建金料账户变动记录
+    deposit_tx = CustomerGoldDepositTransaction(
+        customer_id=customer_id,
+        customer_name=customer_name,
+        transaction_type='deposit',
+        amount=gold_weight,
+        balance_before=balance_before,
+        balance_after=deposit.current_balance,
+        created_by=received_by,
+        remark=remark_text
+    )
+    db.add(deposit_tx)
+    
+    # 创建客户往来账记录
     customer_tx = CustomerTransaction(
         customer_id=customer_id,
         customer_name=customer_name,
         transaction_type='gold_receipt',
         gold_weight=gold_weight,
-        gold_due_before=remaining_due,
-        gold_due_after=new_remaining_due,
+        gold_due_before=max(0, -balance_before),  # 之前的欠料（负值的绝对值）
+        gold_due_after=max(0, -deposit.current_balance),  # 之后的欠料
         status='active',
-        remark="，".join(remark_parts)
+        remark=remark_text
     )
     db.add(customer_tx)
-    
-    # ========== 更新存料余额（如果有剩余）==========
-    if deposit_amount > 0:
-        deposit = get_or_create_customer_deposit(customer_id, customer_name, db)
-        balance_before = deposit.current_balance
-        deposit.current_balance += deposit_amount
-        deposit.total_deposited += deposit_amount
-        deposit.last_transaction_at = china_now()
-        
-        # 创建存料交易记录
-        deposit_tx = CustomerGoldDepositTransaction(
-            customer_id=customer_id,
-            customer_name=customer_name,
-            transaction_type='deposit',
-            amount=deposit_amount,
-            balance_before=balance_before,
-            balance_after=deposit.current_balance,
-            created_by=received_by,
-            remark=f"收料单：{receipt.receipt_no}，来料存入"
-        )
-        db.add(deposit_tx)
-        
-        logger.info(f"客户存料更新: 客户={customer_name}, 存入={deposit_amount:.2f}克, 新余额={deposit.current_balance:.2f}克")
     
     db.commit()
     db.refresh(receipt)
     
+    # 记录余额变化
+    if deposit.current_balance >= 0:
+        status_text = f"当前存料 {deposit.current_balance:.2f}克"
+    else:
+        status_text = f"当前欠料 {abs(deposit.current_balance):.2f}克"
     logger.info(f"收料单已接收: {receipt.receipt_no}, 接收人={received_by}, "
-                f"来料={gold_weight}克, 抵扣欠料={deduct_amount:.2f}克, 存入存料={deposit_amount:.2f}克")
+                f"来料={gold_weight}克, 变动前={balance_before:.2f}克, 变动后={deposit.current_balance:.2f}克 ({status_text})")
+    
+    # 构建返回消息
+    if deposit.current_balance >= 0:
+        message = f"收料确认成功！来料 {gold_weight:.2f}克，当前存料 {deposit.current_balance:.2f}克"
+    else:
+        message = f"收料确认成功！来料 {gold_weight:.2f}克，剩余欠料 {abs(deposit.current_balance):.2f}克"
     
     return {
         "success": True,
-        "message": f"收料确认成功！抵扣欠料 {deduct_amount:.2f} 克" + (f"，存入存料 {deposit_amount:.2f} 克" if deposit_amount > 0 else ""),
+        "message": message,
         "data": {
             "id": receipt.id,
             "receipt_no": receipt.receipt_no,
@@ -2652,9 +2628,9 @@ async def confirm_gold_receipt(
             "received_by": receipt.received_by,
             "received_at": receipt.received_at.isoformat() if receipt.received_at else None,
             "gold_weight": gold_weight,
-            "deduct_amount": round(deduct_amount, 2),
-            "deposit_amount": round(deposit_amount, 2),
-            "remaining_due": round(new_remaining_due, 2)
+            "balance_before": round(balance_before, 2),
+            "balance_after": round(deposit.current_balance, 2),
+            "net_gold": round(deposit.current_balance, 2)  # 净金料值
         }
     }
 
