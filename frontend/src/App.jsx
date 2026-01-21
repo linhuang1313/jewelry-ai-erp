@@ -2499,26 +2499,7 @@ function App() {
             <div className="flex-1 overflow-y-auto px-6 py-8">
           <div className="max-w-4xl mx-auto space-y-6">
         {messages.length === 0 && (
-              <div className="text-center pt-20">
-                <div className="inline-block p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-3xl mb-6">
-                  <svg className="w-16 h-16 text-[#007aff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} 
-                          d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                  </svg>
-            </div>
-                <h2 className="text-[32px] font-semibold text-gray-900 mb-3 tracking-tight">
-                  开始新的对话
-                </h2>
-                {/* 角色提示文字 */}
-                <p className="text-[17px] text-gray-600 mb-8 max-w-md mx-auto">
-                  {userRole === 'counter' && '试试说："帮我开一张销售单，客户张三，业务员李四，古法戒指 50克 工费8元"'}
-                  {userRole === 'product' && '试试说："古法黄金戒指 100克 工费6元 供应商是金源珠宝，帮我做个入库"'}
-                  {userRole === 'settlement' && '试试说："查看今天待结算的订单"'}
-                  {userRole === 'finance' && '试试说："查看本月财务对账情况"'}
-                  {userRole === 'sales' && '试试说："帮我查询张三今天的销售情况" 或 "王五有多少欠款"'}
-                  {userRole === 'manager' && '试试说："查看今日销售数据汇总"'}
-                </p>
-                
+              <div className="text-center pt-8">
                 {/* 库存概览 - 商品专员、柜台、结算、管理层可见 */}
                 {(userRole === 'product' || userRole === 'counter' || userRole === 'settlement' || userRole === 'manager') && (
                   <div className="max-w-2xl mx-auto mb-6">
