@@ -274,6 +274,17 @@ async def startup_event():
     finally:
         db.close()
     
+    # ========== 创建 behavior_decision_logs 表 ==========
+    from sqlalchemy import inspect
+    from .models.behavior_log import BehaviorDecisionLog
+    inspector = inspect(engine)
+    if 'behavior_decision_logs' not in inspector.get_table_names():
+        try:
+            BehaviorDecisionLog.__table__.create(bind=engine)
+            logger.info("已创建 behavior_decision_logs 表")
+        except Exception as e:
+            logger.warning(f"创建 behavior_decision_logs 表失败（可能已存在）: {e}")
+    
     # 确保 product_codes 表存在
     from sqlalchemy import inspect
     from .models import ProductCode
