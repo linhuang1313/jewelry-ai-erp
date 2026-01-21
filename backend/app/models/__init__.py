@@ -108,8 +108,9 @@ class Customer(Base):
     wechat = Column(String(50))
     address = Column(String(200))
     customer_type = Column(String(20), default="个人")
-    total_purchase_amount = Column(Float, default=0.0)
-    total_purchase_count = Column(Integer, default=0)
+    total_purchase_amount = Column(Float, default=0.0)  # 总工费金额（元）
+    total_purchase_weight = Column(Float, default=0.0)  # 总销售克重（克）
+    total_purchase_count = Column(Integer, default=0)   # 购买次数
     last_purchase_time = Column(DateTime)
     status = Column(String(20), default="active")
     create_time = Column(DateTime, server_default=func.now())

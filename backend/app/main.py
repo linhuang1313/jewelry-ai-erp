@@ -268,6 +268,25 @@ async def startup_event():
                 """))
                 db.commit()
                 logger.info(f"已添加 {col_name} 列到 chat_session_meta 表")
+        
+        # customers 表添加 total_purchase_weight 字段（总销售克重）
+        customer_columns = [
+            ("total_purchase_weight", "FLOAT DEFAULT 0.0"),
+        ]
+        
+        for col_name, col_type in customer_columns:
+            result = db.execute(text(f"""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'customers' AND column_name = '{col_name}'
+            """))
+            if not result.fetchone():
+                db.execute(text(f"""
+                    ALTER TABLE customers 
+                    ADD COLUMN {col_name} {col_type}
+                """))
+                db.commit()
+                logger.info(f"已添加 {col_name} 列到 customers 表")
     except Exception as e:
         logger.warning(f"迁移检查: {e}")
         db.rollback()
@@ -1100,8 +1119,9 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 {
                     'name': c.name,
                     'phone': c.phone,
-                    'total_purchase_amount': c.total_purchase_amount,
-                    'total_purchase_count': c.total_purchase_count,
+                    'total_purchase_amount': c.total_purchase_amount or 0,  # 总工费金额
+                    'total_purchase_weight': getattr(c, 'total_purchase_weight', 0) or 0,  # 总销售克重
+                    'total_purchase_count': c.total_purchase_count or 0,
                     'last_purchase_time': str(c.last_purchase_time) if c.last_purchase_time else None,
                     'customer_type': c.customer_type
                 }

@@ -207,8 +207,9 @@ class AIAnalyzer:
             {
                 "name": c.name,
                 "phone": c.phone,
-                "total_purchase_amount": c.total_purchase_amount,
-                "total_purchase_count": c.total_purchase_count,
+                "total_purchase_amount": c.total_purchase_amount or 0,  # 总工费金额
+                "total_purchase_weight": getattr(c, 'total_purchase_weight', 0) or 0,  # 总销售克重
+                "total_purchase_count": c.total_purchase_count or 0,
                 "last_purchase_time": str(c.last_purchase_time) if c.last_purchase_time else None,
                 "customer_type": c.customer_type
             }
@@ -300,10 +301,16 @@ class AIAnalyzer:
             text += f"=== 客户详情（共{len(data['customers'])}个）===\n"
             for idx, customer in enumerate(data["customers"], 1):
                 text += f"{idx}. {customer['name']}：\n"
-                text += f"   - 总购买金额：{customer['total_purchase_amount']:.2f}元\n"
+                text += f"   - 总销售克重：{customer.get('total_purchase_weight', 0):.2f}克\n"
+                text += f"   - 总工费金额：¥{customer['total_purchase_amount']:.2f}\n"
                 text += f"   - 购买次数：{customer['total_purchase_count']}次\n"
                 if customer.get('last_purchase_time'):
                     text += f"   - 最后购买：{customer['last_purchase_time']}\n"
+                # 品类分布
+                if customer.get('category_breakdown'):
+                    text += f"   - 购买品类：\n"
+                    for cat in customer['category_breakdown'][:5]:
+                        text += f"      • {cat['name']}：{cat['weight']:.1f}克（¥{cat['labor']:.2f}工费）\n"
                 text += "\n"
         
         # 入库单详情（如果指定了入库单号，优先显示该入库单）
@@ -441,6 +448,25 @@ class AIAnalyzer:
                         text += f"   最近存料记录：\n"
                         for tx in deposit_txs[:5]:
                             text += f"   • {tx.get('created_at', 'N/A')[:10]}：{tx.get('type_label', tx.get('type', 'N/A'))} {tx.get('amount', 0):.2f}克，余额{tx.get('balance_before', 0):.2f}→{tx.get('balance_after', 0):.2f}克\n"
+                
+                # 客户销售历史表现（新增）
+                sales_history = debt_data.get("sales_history")
+                if sales_history:
+                    text += "\n--- 📊 客户历史表现分析 ---\n"
+                    text += f"⚖️ 总销售克重：{sales_history.get('total_sales_weight', 0):.2f}克\n"
+                    text += f"💰 总工费金额：¥{sales_history.get('total_labor_cost', 0):.2f}\n"
+                    text += f"🛒 购买次数：{sales_history.get('order_count', 0)}次\n"
+                    if sales_history.get('last_purchase_time'):
+                        text += f"⏱️ 最后购买：{sales_history['last_purchase_time']}\n"
+                    text += f"🏆 客户排名：第{sales_history.get('customer_rank', 0)}位 / {sales_history.get('total_customer_count', 0)}\n"
+                    
+                    category_breakdown = sales_history.get("category_breakdown", [])
+                    if category_breakdown:
+                        text += "\n--- 🏷️ 购买品类分布 ---\n"
+                        total_weight = sales_history.get('total_sales_weight', 1) or 1
+                        for cat in category_breakdown[:5]:
+                            percentage = (cat['weight'] / total_weight * 100) if total_weight > 0 else 0
+                            text += f"• {cat['name']}：{cat['weight']:.1f}克（{percentage:.1f}%），工费¥{cat['labor']:.2f}\n"
                 
                 text += "\n"
             else:
@@ -622,17 +648,28 @@ class AIAnalyzer:
 
 请基于这些数据，用清晰友好的方式回答用户关于客户账务的问题。要求：
 
-1. **账务汇总**：首先展示汇总信息
-   - 现金欠款（如果有）：¥金额
-   - 金料欠款（如果有）：重量克
-   - 存料余额（如果有）：重量克
+1. **销售历史表现**（如果有销售记录）：
+   - ⚖️ 总销售克重：xx克
+   - 💰 总工费金额：¥金额
+   - 🛒 购买次数：xx次
+   - ⏱️ 最后购买时间
+   - 🏆 客户排名：第x位 / 总客户数
 
-2. **交易明细**：如果有交易记录，按时间顺序列出最近的几条
+2. **购买品类分布**（如果有销售记录）：
+   - 列出前3-5个主要购买的品类
+   - 每个品类：名称、克重、占比百分比、工费
+
+3. **账务汇总**：
+   - 💰 现金欠款（如果有）：¥金额
+   - ⚖️ 金料欠款（如果有）：重量克
+   - 📦 存料余额（如果有）：重量克
+
+4. **交易明细**：如果有交易记录，按时间顺序列出最近的几条
    - 日期、类型、金额/重量变化
 
-3. **时间范围**：如果用户指定了时间范围，明确说明查询的时间段
+5. **时间范围**：如果用户指定了时间范围，明确说明查询的时间段
 
-4. **友好提示**：
+6. **友好提示**：
    - 如果客户没有欠款，可以说"账务良好，无欠款"
    - 如果找不到客户，友好提示并建议检查客户名称
 
@@ -640,7 +677,7 @@ class AIAnalyzer:
 如果找到了客户，添加：<!-- CUSTOMER_DEBT:[customer_id]:[customer_name] -->
 其中 [customer_id] 是客户ID（从数据中获取），[customer_name] 是客户名称。
 
-请用自然、专业且友好的语言回答，使用表情符号增强可读性：💰现金、⚖️金料、📦存料。"""
+请用自然、专业且友好的语言回答，使用表情符号增强可读性。"""
         else:
             # 主动检测是否需要详细分析（不依赖AI判断）
             analysis_keywords = ['分析', '详细', '报告', '建议', '对比', '趋势', '为什么', '怎么样', '评估', '深度', '全面']
@@ -939,17 +976,28 @@ class AIAnalyzer:
 
 请基于这些数据，用清晰友好的方式回答用户关于客户账务的问题。要求：
 
-1. **账务汇总**：首先展示汇总信息
-   - 现金欠款（如果有）：¥金额
-   - 金料欠款（如果有）：重量克
-   - 存料余额（如果有）：重量克
+1. **销售历史表现**（如果有销售记录）：
+   - ⚖️ 总销售克重：xx克
+   - 💰 总工费金额：¥金额
+   - 🛒 购买次数：xx次
+   - ⏱️ 最后购买时间
+   - 🏆 客户排名：第x位 / 总客户数
 
-2. **交易明细**：如果有交易记录，按时间顺序列出最近的几条
+2. **购买品类分布**（如果有销售记录）：
+   - 列出前3-5个主要购买的品类
+   - 每个品类：名称、克重、占比百分比、工费
+
+3. **账务汇总**：
+   - 💰 现金欠款（如果有）：¥金额
+   - ⚖️ 金料欠款（如果有）：重量克
+   - 📦 存料余额（如果有）：重量克
+
+4. **交易明细**：如果有交易记录，按时间顺序列出最近的几条
    - 日期、类型、金额/重量变化
 
-3. **时间范围**：如果用户指定了时间范围，明确说明查询的时间段
+5. **时间范围**：如果用户指定了时间范围，明确说明查询的时间段
 
-4. **友好提示**：
+6. **友好提示**：
    - 如果客户没有欠款，可以说"账务良好，无欠款"
    - 如果找不到客户，友好提示并建议检查客户名称
 
@@ -957,7 +1005,7 @@ class AIAnalyzer:
 如果找到了客户，添加：<!-- CUSTOMER_DEBT:[customer_id]:[customer_name] -->
 其中 [customer_id] 是客户ID（从数据中获取），[customer_name] 是客户名称。
 
-请用自然、专业且友好的语言回答，使用表情符号增强可读性：💰现金、⚖️金料、📦存料。"""
+请用自然、专业且友好的语言回答，使用表情符号增强可读性。"""
             system_prompt = "你是珠宝ERP系统AI助手，专门帮助用户查询客户账务信息。请以友好、清晰的方式回答。"
         elif intent == "销售数据查询":
             # 销售数据查询的提示词

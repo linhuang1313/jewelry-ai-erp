@@ -1257,6 +1257,76 @@ async def chat_debt_query(
             result["gold_deposit"] = gold_deposit
             result["deposit_transactions"] = deposit_transactions
         
+        # 6. 查询客户销售历史表现（新增）
+        try:
+            # 构建销售查询
+            sales_query = db.query(SalesOrder).filter(
+                SalesOrder.customer_name == customer.name,
+                SalesOrder.status != "已取消"
+            )
+            
+            if start_date:
+                sales_query = sales_query.filter(SalesOrder.order_date >= start_date)
+            if end_date:
+                sales_query = sales_query.filter(SalesOrder.order_date <= end_date)
+            
+            sales_orders = sales_query.all()
+            
+            # 统计销售克重和工费
+            total_sales_weight = 0.0
+            total_labor_cost = 0.0
+            order_count = len(sales_orders)
+            
+            # 品类统计
+            category_stats = {}
+            
+            for order in sales_orders:
+                details = db.query(SalesDetail).filter(SalesDetail.order_id == order.id).all()
+                for detail in details:
+                    weight = detail.weight or 0
+                    labor = detail.total_labor_cost or 0
+                    total_sales_weight += weight
+                    total_labor_cost += labor
+                    
+                    # 按品类统计
+                    product_name = detail.product_name or "其他"
+                    if product_name not in category_stats:
+                        category_stats[product_name] = {"weight": 0, "labor": 0, "count": 0}
+                    category_stats[product_name]["weight"] += weight
+                    category_stats[product_name]["labor"] += labor
+                    category_stats[product_name]["count"] += 1
+            
+            # 将品类统计转为列表并按销售克重排序
+            category_breakdown = [
+                {"name": name, "weight": stats["weight"], "labor": stats["labor"], "count": stats["count"]}
+                for name, stats in category_stats.items()
+            ]
+            category_breakdown.sort(key=lambda x: x["weight"], reverse=True)
+            
+            # 计算客户排名（按总购买金额）
+            all_customers = db.query(Customer).filter(Customer.status == "active").order_by(
+                desc(Customer.total_purchase_amount)
+            ).all()
+            customer_rank = 1
+            for idx, c in enumerate(all_customers, 1):
+                if c.id == customer.id:
+                    customer_rank = idx
+                    break
+            total_customer_count = len(all_customers)
+            
+            result["sales_history"] = {
+                "total_sales_weight": total_sales_weight,
+                "total_labor_cost": total_labor_cost,
+                "order_count": order_count,
+                "category_breakdown": category_breakdown[:5],  # 只返回前5个品类
+                "customer_rank": customer_rank,
+                "total_customer_count": total_customer_count,
+                "last_purchase_time": str(customer.last_purchase_time) if customer.last_purchase_time else None
+            }
+        except Exception as e:
+            logger.warning(f"查询客户销售历史出错: {e}")
+            result["sales_history"] = None
+        
         return result
         
     except Exception as e:
