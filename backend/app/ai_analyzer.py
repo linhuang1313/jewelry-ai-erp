@@ -452,17 +452,28 @@ class AIAnalyzer:
                 # 客户销售历史表现（新增）
                 sales_history = debt_data.get("sales_history")
                 if sales_history:
-                    text += "\n--- 📊 客户历史表现分析 ---\n"
-                    text += f"⚖️ 总销售克重：{sales_history.get('total_sales_weight', 0):.2f}克\n"
-                    text += f"💰 总工费金额：¥{sales_history.get('total_labor_cost', 0):.2f}\n"
-                    text += f"🛒 购买次数：{sales_history.get('order_count', 0)}次\n"
+                    # 指定时间段销售（今日/本周等）
+                    period_weight = sales_history.get('period_sales_weight', 0)
+                    period_labor = sales_history.get('period_labor_cost', 0)
+                    period_count = sales_history.get('period_order_count', 0)
+                    
+                    text += "\n--- 📅 查询时间段销售 ---\n"
+                    text += f"⚖️ 销售克重：{period_weight:.2f}克\n"
+                    text += f"💰 工费金额：¥{period_labor:.2f}\n"
+                    text += f"📦 订单数量：{period_count}单\n"
+                    
+                    # 历史总览（全部记录）
+                    text += "\n--- 📊 客户历史总览 ---\n"
+                    text += f"⚖️ 历史总销售克重：{sales_history.get('total_sales_weight', 0):.2f}克\n"
+                    text += f"💰 历史总工费金额：¥{sales_history.get('total_labor_cost', 0):.2f}\n"
+                    text += f"🛒 历史总购买次数：{sales_history.get('order_count', 0)}次\n"
                     if sales_history.get('last_purchase_time'):
-                        text += f"⏱️ 最后购买：{sales_history['last_purchase_time']}\n"
+                        text += f"⏱️ 最后购买时间：{sales_history['last_purchase_time']}\n"
                     text += f"🏆 客户排名：第{sales_history.get('customer_rank', 0)}位 / {sales_history.get('total_customer_count', 0)}\n"
                     
                     category_breakdown = sales_history.get("category_breakdown", [])
                     if category_breakdown:
-                        text += "\n--- 🏷️ 购买品类分布 ---\n"
+                        text += "\n--- 🏷️ 购买品类分布（历史） ---\n"
                         total_weight = sales_history.get('total_sales_weight', 1) or 1
                         for cat in category_breakdown[:5]:
                             percentage = (cat['weight'] / total_weight * 100) if total_weight > 0 else 0
@@ -650,23 +661,26 @@ class AIAnalyzer:
 
 **【重要：必须按以下格式展示，克重信息必须展示！】**
 
-1. **销售历史表现**（必须展示，从 sales_history 数据获取）：
-   - ⚖️ **总销售克重**：从 total_sales_weight 字段获取，单位：克（这是最重要的指标！）
-   - 💰 **总工费金额**：从 total_labor_cost 字段获取，单位：元
-   - 🛒 **购买次数**：从 order_count 字段获取
+1. **查询时间段销售**（如用户查询"今天"，就显示今天的数据）：
+   - ⚖️ **销售克重**：从 period_sales_weight 字段获取
+   - 💰 **工费金额**：从 period_labor_cost 字段获取
+   - 📦 **订单数量**：从 period_order_count 字段获取
+
+2. **客户历史总览**（必须展示，不受日期限制的累计数据）：
+   - ⚖️ **历史总销售克重**：从 total_sales_weight 字段获取（这是最重要的指标！）
+   - 💰 **历史总工费金额**：从 total_labor_cost 字段获取
+   - 🛒 **历史总购买次数**：从 order_count 字段获取
    - ⏱️ **最后购买时间**：从 last_purchase_time 字段获取
    - 🏆 **客户排名**：第x位 / 总客户数
 
-2. **购买品类分布**（从 category_breakdown 数组获取）：
+3. **购买品类分布**（从 category_breakdown 数组获取）：
    - 列出前3-5个主要购买的品类
    - 每个品类必须包含：品类名称、**销售克重**、占比百分比、工费金额
 
-3. **账务汇总**（如有）：
+4. **账务汇总**（如有）：
    - 💰 现金欠款：¥金额
    - ⚖️ 金料欠款：重量克
    - 📦 存料余额：重量克
-
-4. **时间范围**：如果用户指定了时间范围，明确说明查询的时间段
 
 **隐藏标记**（必须添加）：
 如果找到了客户，在回答最后添加：<!-- CUSTOMER_DEBT:[customer_id]:[customer_name] -->
@@ -972,23 +986,26 @@ class AIAnalyzer:
 
 **【重要：必须按以下格式展示，克重信息必须展示！】**
 
-1. **销售历史表现**（必须展示，从 sales_history 数据获取）：
-   - ⚖️ **总销售克重**：从 total_sales_weight 字段获取，单位：克（这是最重要的指标！）
-   - 💰 **总工费金额**：从 total_labor_cost 字段获取，单位：元
-   - 🛒 **购买次数**：从 order_count 字段获取
+1. **查询时间段销售**（如用户查询"今天"，就显示今天的数据）：
+   - ⚖️ **销售克重**：从 period_sales_weight 字段获取
+   - 💰 **工费金额**：从 period_labor_cost 字段获取
+   - 📦 **订单数量**：从 period_order_count 字段获取
+
+2. **客户历史总览**（必须展示，不受日期限制的累计数据）：
+   - ⚖️ **历史总销售克重**：从 total_sales_weight 字段获取（这是最重要的指标！）
+   - 💰 **历史总工费金额**：从 total_labor_cost 字段获取
+   - 🛒 **历史总购买次数**：从 order_count 字段获取
    - ⏱️ **最后购买时间**：从 last_purchase_time 字段获取
    - 🏆 **客户排名**：第x位 / 总客户数
 
-2. **购买品类分布**（从 category_breakdown 数组获取）：
+3. **购买品类分布**（从 category_breakdown 数组获取）：
    - 列出前3-5个主要购买的品类
    - 每个品类必须包含：品类名称、**销售克重**、占比百分比、工费金额
 
-3. **账务汇总**（如有）：
+4. **账务汇总**（如有）：
    - 💰 现金欠款：¥金额
    - ⚖️ 金料欠款：重量克
    - 📦 存料余额：重量克
-
-4. **时间范围**：如果用户指定了时间范围，明确说明查询的时间段
 
 **隐藏标记**（必须添加）：
 如果找到了客户，在回答最后添加：<!-- CUSTOMER_DEBT:[customer_id]:[customer_name] -->

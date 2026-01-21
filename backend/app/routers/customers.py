@@ -1259,28 +1259,46 @@ async def chat_debt_query(
         
         # 6. 查询客户销售历史表现（新增）
         try:
-            # 构建销售查询
-            sales_query = db.query(SalesOrder).filter(
+            # === 第一部分：查询指定时间段的销售（今日/本周/本月等）===
+            period_sales_query = db.query(SalesOrder).filter(
                 SalesOrder.customer_name == customer.name,
                 SalesOrder.status != "已取消"
             )
             
             if start_date:
-                sales_query = sales_query.filter(SalesOrder.order_date >= start_date)
+                period_sales_query = period_sales_query.filter(SalesOrder.order_date >= start_date)
             if end_date:
-                sales_query = sales_query.filter(SalesOrder.order_date <= end_date)
+                period_sales_query = period_sales_query.filter(SalesOrder.order_date <= end_date)
             
-            sales_orders = sales_query.all()
+            period_orders = period_sales_query.all()
             
-            # 统计销售克重和工费
+            # 统计指定时间段的销售
+            period_sales_weight = 0.0
+            period_labor_cost = 0.0
+            period_order_count = len(period_orders)
+            
+            for order in period_orders:
+                details = db.query(SalesDetail).filter(SalesDetail.order_id == order.id).all()
+                for detail in details:
+                    period_sales_weight += detail.weight or 0
+                    period_labor_cost += detail.total_labor_cost or 0
+            
+            # === 第二部分：查询历史总览（不受日期限制）===
+            all_sales_query = db.query(SalesOrder).filter(
+                SalesOrder.customer_name == customer.name,
+                SalesOrder.status != "已取消"
+            )
+            all_orders = all_sales_query.all()
+            
+            # 统计历史总销售克重和工费
             total_sales_weight = 0.0
             total_labor_cost = 0.0
-            order_count = len(sales_orders)
+            total_order_count = len(all_orders)
             
-            # 品类统计
+            # 品类统计（基于全部历史记录）
             category_stats = {}
             
-            for order in sales_orders:
+            for order in all_orders:
                 details = db.query(SalesDetail).filter(SalesDetail.order_id == order.id).all()
                 for detail in details:
                     weight = detail.weight or 0
@@ -1315,9 +1333,14 @@ async def chat_debt_query(
             total_customer_count = len(all_customers)
             
             result["sales_history"] = {
+                # 指定时间段销售（今日/本周/本月等）
+                "period_sales_weight": period_sales_weight,
+                "period_labor_cost": period_labor_cost,
+                "period_order_count": period_order_count,
+                # 历史总览（全部记录）
                 "total_sales_weight": total_sales_weight,
                 "total_labor_cost": total_labor_cost,
-                "order_count": order_count,
+                "order_count": total_order_count,
                 "category_breakdown": category_breakdown[:5],  # 只返回前5个品类
                 "customer_rank": customer_rank,
                 "total_customer_count": total_customer_count,
