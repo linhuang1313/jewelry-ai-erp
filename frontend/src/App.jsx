@@ -136,6 +136,49 @@ function App() {
     return `conversationHistory_${role}`
   }
 
+  // 解析消息中的隐藏标记，恢复所有特殊消息的额外字段
+  const parseMessageHiddenMarkers = (messages) => {
+    return messages.map(msg => {
+      if (msg.content) {
+        // 提料单
+        const withdrawalMatch = msg.content.match(/<!-- WITHDRAWAL_ORDER:(\d+):([^>]+) -->/)
+        if (withdrawalMatch && !msg.withdrawalDownloadUrl) {
+          const withdrawalId = parseInt(withdrawalMatch[1])
+          msg.withdrawalId = withdrawalId
+          msg.withdrawalDownloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${withdrawalId}/download?format=html`
+        }
+        // 收料单
+        const goldReceiptMatch = msg.content.match(/<!-- GOLD_RECEIPT:(\d+):/)
+        if (goldReceiptMatch && !msg.goldReceiptDownloadUrl) {
+          const receiptId = parseInt(goldReceiptMatch[1])
+          msg.goldReceiptId = receiptId
+          msg.goldReceiptDownloadUrl = `${API_BASE_URL}/api/gold-material/gold-receipts/${receiptId}/print`
+        }
+        // 入库单
+        const inboundMatch = msg.content.match(/<!-- INBOUND_ORDER:(\d+):/)
+        if (inboundMatch && !msg.inboundOrder) {
+          msg.inboundOrder = { id: parseInt(inboundMatch[1]) }
+        }
+        // 退货单
+        const returnMatch = msg.content.match(/<!-- RETURN_ORDER:(\d+):/)
+        if (returnMatch && !msg.returnOrder) {
+          msg.returnOrder = { id: parseInt(returnMatch[1]) }
+        }
+        // 销售单
+        const salesMatch = msg.content.match(/<!-- SALES_ORDER:(\d+):/)
+        if (salesMatch && !msg.salesOrderId) {
+          msg.salesOrderId = parseInt(salesMatch[1])
+        }
+        // 结算单
+        const settlementMatch = msg.content.match(/<!-- SETTLEMENT_ORDER:(\d+):/)
+        if (settlementMatch && !msg.settlementOrderId) {
+          msg.settlementOrderId = parseInt(settlementMatch[1])
+        }
+      }
+      return msg
+    })
+  }
+
   // 加载指定角色的历史记录（从后端API获取并同步到localStorage）
   const loadRoleHistory = async (role) => {
     try {
@@ -257,6 +300,37 @@ function App() {
   useEffect(() => {
     loadRoleHistory(userRole)
   }, [userRole]) // 当角色变化时重新加载
+
+  // 页面初始化时恢复当前对话的消息内容
+  useEffect(() => {
+    const restoreCurrentConversation = async () => {
+      const savedSessionId = localStorage.getItem('current_session_id')
+      if (savedSessionId && savedSessionId.startsWith('session_')) {
+        // 检查localStorage中是否有这个对话的消息
+        const historyKey = getHistoryKey(userRole)
+        try {
+          const parsedData = JSON.parse(localStorage.getItem(historyKey) || '[]')
+          const history = Array.isArray(parsedData) ? parsedData : []
+          const conversation = history.find(c => c.id === savedSessionId)
+          
+          if (conversation && conversation.messages && conversation.messages.length > 0) {
+            // 解析消息中的隐藏标记，恢复所有特殊消息的额外字段
+            const restoredMessages = parseMessageHiddenMarkers(conversation.messages)
+            
+            setMessages(restoredMessages)
+            setCurrentConversationId(savedSessionId)
+            setConversationTitle(conversation.title || '新对话')
+            console.log('已恢复当前对话:', savedSessionId, '消息数:', restoredMessages.length)
+          }
+        } catch (error) {
+          console.error('恢复当前对话失败:', error)
+        }
+      }
+    }
+    
+    // 页面首次加载时恢复
+    restoreCurrentConversation()
+  }, []) // 只在首次加载时执行
 
   // 加载待处理转移单数量（柜台角色需要看到商品部发来的转移单）
   const loadPendingTransferCount = async () => {
@@ -380,10 +454,29 @@ function App() {
       })
       if (response.ok) {
         const result = await response.json()
-        alert(`收料单创建成功：${result.data.receipt_no}`)
+        const customerName = quickFormCustomers.find(c => c.id.toString() === quickReceiptForm.customer_id)?.name || '未知客户'
+        const receiptWeight = parseFloat(quickReceiptForm.gold_weight)
+        const remarkText = quickReceiptForm.remark || ''
+        
         setShowQuickReceiptModal(false)
+        // 重置表单
+        setQuickReceiptForm({ customer_id: '', gold_weight: '', gold_fineness: '足金999', remark: '' })
+        setQuickFormCustomerSearch('')
+        
+        // 添加收料单记录到聊天框（使用文本格式+隐藏标记）
+        const downloadUrl = `${API_BASE_URL}/api/gold-material/gold-receipts/${result.data.id}/print`
+        const receiptMessage = `✅ 收料单已生成\n\n📋 单号：${result.data.receipt_no}\n👤 客户：${customerName}\n⚖️ 克重：${receiptWeight.toFixed(2)} 克\n🏷️ 成色：${quickReceiptForm.gold_fineness}${remarkText ? `\n📝 备注：${remarkText}` : ''}\n⏰ 时间：${new Date().toLocaleString('zh-CN')}\n\n<!-- GOLD_RECEIPT:${result.data.id}:${result.data.receipt_no} -->`
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          type: 'system',
+          content: receiptMessage,
+          goldReceiptDownloadUrl: downloadUrl,
+          goldReceiptId: result.data.id
+        }])
+        
+        // 自动打开打印页面
         if (result.data.id) {
-          window.open(`${API_BASE_URL}/api/gold-material/gold-receipts/${result.data.id}/print`, '_blank')
+          window.open(downloadUrl, '_blank')
         }
       } else {
         const error = await response.json()
@@ -554,13 +647,41 @@ function App() {
             id: msg.id
           }
           
-          // 解析提料单隐藏标记
+          // 解析所有类型的隐藏标记
           if (msg.content) {
+            // 提料单
             const withdrawalMatch = msg.content.match(/<!-- WITHDRAWAL_ORDER:(\d+):([^>]+) -->/)
             if (withdrawalMatch) {
               const withdrawalId = parseInt(withdrawalMatch[1])
               message.withdrawalId = withdrawalId
               message.withdrawalDownloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${withdrawalId}/download?format=html`
+            }
+            // 收料单
+            const goldReceiptMatch = msg.content.match(/<!-- GOLD_RECEIPT:(\d+):/)
+            if (goldReceiptMatch) {
+              const receiptId = parseInt(goldReceiptMatch[1])
+              message.goldReceiptId = receiptId
+              message.goldReceiptDownloadUrl = `${API_BASE_URL}/api/gold-material/gold-receipts/${receiptId}/print`
+            }
+            // 入库单
+            const inboundMatch = msg.content.match(/<!-- INBOUND_ORDER:(\d+):/)
+            if (inboundMatch) {
+              message.inboundOrder = { id: parseInt(inboundMatch[1]) }
+            }
+            // 退货单
+            const returnMatch = msg.content.match(/<!-- RETURN_ORDER:(\d+):/)
+            if (returnMatch) {
+              message.returnOrder = { id: parseInt(returnMatch[1]) }
+            }
+            // 销售单
+            const salesMatch = msg.content.match(/<!-- SALES_ORDER:(\d+):/)
+            if (salesMatch) {
+              message.salesOrderId = parseInt(salesMatch[1])
+            }
+            // 结算单
+            const settlementMatch = msg.content.match(/<!-- SETTLEMENT_ORDER:(\d+):/)
+            if (settlementMatch) {
+              message.settlementOrderId = parseInt(settlementMatch[1])
             }
           }
           
@@ -594,18 +715,8 @@ function App() {
         const history = Array.isArray(parsedData) ? parsedData : []
         const conversation = history.find(c => c.id === conversationId)
         if (conversation && conversation.messages) {
-          // 解析消息中的隐藏标记，恢复提料单下载链接
-          const messages = conversation.messages.map(msg => {
-            if (msg.content) {
-              const withdrawalMatch = msg.content.match(/<!-- WITHDRAWAL_ORDER:(\d+):([^>]+) -->/)
-              if (withdrawalMatch && !msg.withdrawalDownloadUrl) {
-                const withdrawalId = parseInt(withdrawalMatch[1])
-                msg.withdrawalId = withdrawalId
-                msg.withdrawalDownloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${withdrawalId}/download?format=html`
-              }
-            }
-            return msg
-          })
+          // 解析消息中的隐藏标记，恢复所有特殊消息的额外字段
+          const messages = parseMessageHiddenMarkers(conversation.messages)
           setMessages(messages)
           setCurrentConversationId(conversation.id)
           setConversationTitle(conversation.title)
@@ -624,18 +735,8 @@ function App() {
       const history = Array.isArray(parsedData2) ? parsedData2 : []
       const conversation = history.find(c => c.id === conversationId)
       if (conversation && conversation.messages) {
-        // 解析消息中的隐藏标记，恢复提料单下载链接
-        const messages = conversation.messages.map(msg => {
-          if (msg.content) {
-            const withdrawalMatch = msg.content.match(/<!-- WITHDRAWAL_ORDER:(\d+):([^>]+) -->/)
-            if (withdrawalMatch && !msg.withdrawalDownloadUrl) {
-              const withdrawalId = parseInt(withdrawalMatch[1])
-              msg.withdrawalId = withdrawalId
-              msg.withdrawalDownloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${withdrawalId}/download?format=html`
-            }
-          }
-          return msg
-        })
+        // 解析消息中的隐藏标记，恢复所有特殊消息的额外字段
+        const messages = parseMessageHiddenMarkers(conversation.messages)
         setMessages(messages)
         setCurrentConversationId(conversation.id)
         setConversationTitle(conversation.title)
@@ -2993,6 +3094,33 @@ function App() {
                             </div>
                           )
                         })()}
+                        {/* 收料单操作按钮 - 支持从对象或从内容解析 */}
+                        {(() => {
+                          // 尝试从消息对象获取，或从内容中解析隐藏标记
+                          let receiptId = msg.goldReceiptId
+                          let downloadUrl = msg.goldReceiptDownloadUrl
+                          if (!receiptId && msg.content) {
+                            const match = msg.content.match(/<!-- GOLD_RECEIPT:(\d+):/)
+                            if (match) {
+                              receiptId = parseInt(match[1])
+                              downloadUrl = `${API_BASE_URL}/api/gold-material/gold-receipts/${receiptId}/print`
+                            }
+                          }
+                          if (!receiptId) return null
+                          return (
+                            <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
+                              <button
+                                onClick={() => window.open(downloadUrl, '_blank')}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-yellow-50 text-yellow-600 rounded-lg hover:bg-yellow-100 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                </svg>
+                                打印收料单
+                              </button>
+                            </div>
+                          )
+                        })()}
                         {/* 退货单操作按钮 - 支持从对象或从内容解析 */}
                         {(() => {
                           // 尝试从消息对象获取，或从内容中解析隐藏标记
@@ -4229,15 +4357,17 @@ ${itemsList}
         isOpen={showHistoryPanel}
         onClose={() => setShowHistoryPanel(false)}
         userRole={userRole}
-        onLoadSession={(sessionId, messages) => {
+        onLoadSession={(sessionId, sessionMessages) => {
           // 加载历史对话到当前聊天
-          if (messages && messages.length > 0) {
-            const formattedMessages = messages.map(msg => ({
+          if (sessionMessages && sessionMessages.length > 0) {
+            const formattedMessages = sessionMessages.map(msg => ({
               type: msg.message_type === 'user' ? 'user' : 'system',  // 使用 type 和 system（与渲染逻辑一致）
               content: msg.content,
               timestamp: msg.created_at
             }))
-            setMessages(formattedMessages)
+            // 解析消息中的隐藏标记，恢复所有特殊消息的额外字段
+            const parsedMessages = parseMessageHiddenMarkers(formattedMessages)
+            setMessages(parsedMessages)
             
             // 设置当前 session_id，确保后续消息继续使用相同的会话
             setCurrentSessionId(sessionId)
