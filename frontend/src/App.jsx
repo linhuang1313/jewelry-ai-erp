@@ -2499,6 +2499,18 @@ function App() {
           <div className="max-w-4xl mx-auto space-y-6">
         {messages.length === 0 && (
               <div className="text-center pt-8">
+                {/* 角色引导提示 */}
+                <p className="text-gray-500 text-sm mb-6">
+                  💡 试试说：
+                  {userRole === 'counter' && '"帮我开一张销售单，客户张三，古法戒指 50克 工费8元"'}
+                  {userRole === 'product' && '"古法黄金戒指 100克 工费6元 供应商金源珠宝，帮我入库"'}
+                  {userRole === 'settlement' && '"查看今天待结算的订单" 或 "张老板提5克"'}
+                  {userRole === 'finance' && '"查看本月财务对账情况"'}
+                  {userRole === 'sales' && '"帮我查询张三今天的销售情况" 或 "王五有多少欠款"'}
+                  {userRole === 'material' && '"查看今日金料收付情况"'}
+                  {userRole === 'manager' && '"查看今日销售数据汇总"'}
+                </p>
+                
                 {/* 库存概览 - 商品专员、柜台、结算、管理层可见 */}
                 {(userRole === 'product' || userRole === 'counter' || userRole === 'settlement' || userRole === 'manager') && (
                   <div className="max-w-2xl mx-auto mb-6">
