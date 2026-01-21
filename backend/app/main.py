@@ -828,7 +828,8 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         result = await handle_return(ai_response, db, request.user_role or 'product')
                     elif ai_response.action == "查询客户账务":
                         # 特殊处理：查询客户账务，需要走AI分析流程
-                        pass  # 继续执行后续的AI分析流程
+                        # 不在这里处理，跳到后续的AI分析逻辑
+                        result = None  # 设置为 None，表示需要继续AI分析
                     elif ai_response.action == "登记收款":
                         # 登记收款：返回确认卡片数据
                         result = await handle_payment_registration(ai_response, db)
@@ -929,49 +930,54 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         return
                     
                     # 【上下文工程】记录成功操作（Append-Only）
-                    action_desc = f"{ai_response.action}"
-                    if ai_response.product_name:
-                        action_desc += f" - {ai_response.product_name}"
-                    if ai_response.weight:
-                        action_desc += f" {ai_response.weight}g"
-                    ctx.append_action(session_id, action_desc, result.get("message", "成功"), success=True)
+                    # 跳过"查询客户账务"等需要AI分析的操作
+                    if result is not None:
+                        action_desc = f"{ai_response.action}"
+                        if ai_response.product_name:
+                            action_desc += f" - {ai_response.product_name}"
+                        if ai_response.weight:
+                            action_desc += f" {ai_response.weight}g"
+                        ctx.append_action(session_id, action_desc, result.get("message", "成功"), success=True)
                     
-                    logger.info(f"[流式] {ai_response.action}操作完成，准备返回结果")
-                    logger.info(f"[流式] result 包含的字段: {list(result.keys()) if isinstance(result, dict) else type(result)}")
-                    
-                    # 详细日志：检查 all_products
-                    if isinstance(result, dict):
-                        has_all_products = 'all_products' in result
-                        logger.info(f"[流式][重要] result 是否包含 all_products: {has_all_products}")
-                        if has_all_products:
-                            logger.info(f"[流式][重要] all_products 数量: {len(result['all_products'])}")
-                            for i, p in enumerate(result['all_products']):
-                                logger.info(f"[流式][重要] 商品{i+1}: {p}")
-                        else:
-                            logger.warning(f"[流式][警告] result 中没有 all_products 字段！")
-                            logger.warning(f"[流式][警告] result 完整内容: {result}")
-                    
-                    # 确保 result 可以被 JSON 序列化
-                    result_json = json.dumps({'type': 'complete', 'data': result}, ensure_ascii=False, default=str)
-                    logger.info(f"[流式] 序列化后的JSON长度: {len(result_json)} 字符")
-                    yield f"data: {result_json}\n\n"
-                    logger.info("[流式] 已发送完成事件")
-                    
-                    # 记录 AI 回复到日志（操作类消息）
-                    end_time = datetime.now()
-                    response_time_ms = int((end_time - start_time).total_seconds() * 1000)
-                    log_chat_message(
-                        db=db,
-                        session_id=session_id,
-                        user_role=request.user_role,
-                        message_type="assistant",
-                        content=result.get("message", "操作完成")[:5000] if isinstance(result, dict) else "操作完成",
-                        intent=ai_response.action,
-                        response_time_ms=response_time_ms,
-                        is_successful=result.get("success", True) if isinstance(result, dict) else True
-                    )
-                    
-                    return
+                    # 如果 result 不为 None，说明已处理完成，返回结果
+                    if result is not None:
+                        logger.info(f"[流式] {ai_response.action}操作完成，准备返回结果")
+                        logger.info(f"[流式] result 包含的字段: {list(result.keys()) if isinstance(result, dict) else type(result)}")
+                        
+                        # 详细日志：检查 all_products
+                        if isinstance(result, dict):
+                            has_all_products = 'all_products' in result
+                            logger.info(f"[流式][重要] result 是否包含 all_products: {has_all_products}")
+                            if has_all_products:
+                                logger.info(f"[流式][重要] all_products 数量: {len(result['all_products'])}")
+                                for i, p in enumerate(result['all_products']):
+                                    logger.info(f"[流式][重要] 商品{i+1}: {p}")
+                            else:
+                                logger.warning(f"[流式][警告] result 中没有 all_products 字段！")
+                                logger.warning(f"[流式][警告] result 完整内容: {result}")
+                        
+                        # 确保 result 可以被 JSON 序列化
+                        result_json = json.dumps({'type': 'complete', 'data': result}, ensure_ascii=False, default=str)
+                        logger.info(f"[流式] 序列化后的JSON长度: {len(result_json)} 字符")
+                        yield f"data: {result_json}\n\n"
+                        logger.info("[流式] 已发送完成事件")
+                        
+                        # 记录 AI 回复到日志（操作类消息）
+                        end_time = datetime.now()
+                        response_time_ms = int((end_time - start_time).total_seconds() * 1000)
+                        log_chat_message(
+                            db=db,
+                            session_id=session_id,
+                            user_role=request.user_role,
+                            message_type="assistant",
+                            content=result.get("message", "操作完成")[:5000] if isinstance(result, dict) else "操作完成",
+                            intent=ai_response.action,
+                            response_time_ms=response_time_ms,
+                            is_successful=result.get("success", True) if isinstance(result, dict) else True
+                        )
+                        
+                        return
+                    # 如果 result 为 None，继续到 AI 分析流程
                 except Exception as op_error:
                     logger.error(f"[流式] 执行{ai_response.action}操作时出错: {op_error}", exc_info=True)
                     error_msg = f"执行{ai_response.action}操作失败: {str(op_error)}"
