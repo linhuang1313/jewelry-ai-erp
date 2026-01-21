@@ -229,6 +229,45 @@ async def startup_event():
                 """))
                 db.commit()
                 logger.info(f"已添加 {col_name} 列到 sales_details 表")
+        
+        # chat_logs 表添加 user_id 字段（预留：登录系统接入后使用）
+        chat_log_columns = [
+            ("user_id", "VARCHAR(100) NULL"),
+        ]
+        
+        for col_name, col_type in chat_log_columns:
+            result = db.execute(text(f"""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'chat_logs' AND column_name = '{col_name}'
+            """))
+            if not result.fetchone():
+                db.execute(text(f"""
+                    ALTER TABLE chat_logs 
+                    ADD COLUMN {col_name} {col_type}
+                """))
+                db.commit()
+                logger.info(f"已添加 {col_name} 列到 chat_logs 表")
+        
+        # chat_session_meta 表添加 user_id 和 user_role 字段（预留：登录系统接入后使用）
+        chat_session_meta_columns = [
+            ("user_id", "VARCHAR(100) NULL"),
+            ("user_role", "VARCHAR(20) NULL"),
+        ]
+        
+        for col_name, col_type in chat_session_meta_columns:
+            result = db.execute(text(f"""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'chat_session_meta' AND column_name = '{col_name}'
+            """))
+            if not result.fetchone():
+                db.execute(text(f"""
+                    ALTER TABLE chat_session_meta 
+                    ADD COLUMN {col_name} {col_type}
+                """))
+                db.commit()
+                logger.info(f"已添加 {col_name} 列到 chat_session_meta 表")
     except Exception as e:
         logger.warning(f"迁移检查: {e}")
         db.rollback()
@@ -308,12 +347,28 @@ def log_chat_message(
     entities: dict = None,
     response_time_ms: int = None,
     is_successful: bool = True,
-    error_message: str = None
+    error_message: str = None,
+    user_id: str = None  # 预留：登录系统接入后使用
 ):
-    """记录对话日志到数据库"""
+    """记录对话日志到数据库
+    
+    参数:
+    - db: 数据库会话
+    - session_id: 会话ID
+    - user_role: 用户角色
+    - message_type: 消息类型
+    - content: 消息内容
+    - intent: 意图
+    - entities: 提取的实体
+    - response_time_ms: 响应时间
+    - is_successful: 是否成功
+    - error_message: 错误信息
+    - user_id: 用户ID（预留：登录系统接入后填充）
+    """
     try:
         chat_log = ChatLog(
             session_id=session_id or f"session_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            user_id=user_id,  # 预留字段
             user_role=user_role or "sales",
             message_type=message_type,
             content=content[:10000] if content else "",  # 限制内容长度
@@ -325,7 +380,7 @@ def log_chat_message(
         )
         db.add(chat_log)
         db.commit()
-        logger.info(f"[对话日志] 已记录: role={user_role}, type={message_type}, intent={intent}")
+        logger.info(f"[对话日志] 已记录: role={user_role}, type={message_type}, intent={intent}, user_id={user_id}")
     except Exception as e:
         logger.error(f"[对话日志] 记录失败: {e}")
         db.rollback()
@@ -4577,10 +4632,17 @@ async def export_inbound_query(
 @app.get("/api/chat-sessions")
 async def get_chat_sessions(
     user_role: str = None,
+    user_id: str = None,  # 预留：登录系统接入后使用
     limit: int = 30,
     db: Session = Depends(get_db)
 ):
-    """获取对话会话列表（按会话分组）- 用于历史回溯"""
+    """获取对话会话列表（按会话分组）- 用于历史回溯
+    
+    参数:
+    - user_role: 用户角色过滤
+    - user_id: 用户ID过滤（预留：登录系统接入后使用）
+    - limit: 返回数量限制
+    """
     try:
         # 查询所有不同的会话，按最新消息时间排序
         subquery = db.query(
@@ -4592,6 +4654,10 @@ async def get_chat_sessions(
         
         if user_role:
             subquery = subquery.filter(ChatLog.user_role == user_role)
+        
+        # 预留：按用户ID过滤
+        if user_id:
+            subquery = subquery.filter(ChatLog.user_id == user_id)
         
         subquery = subquery.order_by(desc(func.max(ChatLog.created_at))).limit(limit)
         sessions = subquery.all()
@@ -4798,10 +4864,20 @@ async def save_chat_message(
     message_type: str,  # 'user' or 'assistant'
     content: str,
     user_role: str = 'sales',
+    user_id: str = None,  # 预留：登录系统接入后使用
     intent: str = None,
     db: Session = Depends(get_db)
 ):
-    """保存单条聊天消息到历史记录 - 用于快捷操作后记录操作日志"""
+    """保存单条聊天消息到历史记录 - 用于快捷操作后记录操作日志
+    
+    参数:
+    - session_id: 会话ID
+    - message_type: 消息类型 ('user' or 'assistant')
+    - content: 消息内容
+    - user_role: 用户角色
+    - user_id: 用户ID（预留：登录系统接入后使用）
+    - intent: 意图
+    """
     try:
         log_chat_message(
             db=db,
@@ -4811,7 +4887,8 @@ async def save_chat_message(
             content=content[:10000] if content else "",
             intent=intent,
             response_time_ms=None,
-            is_successful=True
+            is_successful=True,
+            user_id=user_id  # 预留字段
         )
         return {"success": True, "message": "消息保存成功"}
     except Exception as e:

@@ -220,6 +220,7 @@ class ChatLog(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(String(50), index=True)  # 对话会话ID
+    user_id = Column(String(100), nullable=True, index=True)  # 用户ID（预留：登录系统接入后填充）
     user_role = Column(String(20), index=True)  # 用户角色: sales/finance/product/manager
     message_type = Column(String(10))  # 消息类型: user/assistant
     content = Column(Text)  # 消息内容
@@ -237,6 +238,8 @@ class ChatSessionMeta(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(String(50), unique=True, index=True, nullable=False)  # 会话ID
+    user_id = Column(String(100), nullable=True, index=True)  # 用户ID（预留：登录系统接入后填充）
+    user_role = Column(String(20), nullable=True, index=True)  # 用户角色（预留：用于按角色查询）
     custom_name = Column(String(200), nullable=True)  # 用户自定义的会话名称
     is_pinned = Column(Integer, default=0)  # 是否置顶
     is_archived = Column(Integer, default=0)  # 是否归档

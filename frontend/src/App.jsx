@@ -131,50 +131,91 @@ function App() {
     scrollToBottom()
   }, [messages])
 
-  // 获取当前角色的历史记录key
-  const getHistoryKey = (role) => {
-    return `conversationHistory_${role}`
+  // ========== 用户标识抽象层（为未来登录系统预留） ==========
+  // 获取当前用户标识符
+  // 阶段1（当前）：使用设备ID作为临时用户标识
+  // 阶段2（未来）：接入登录系统后，返回真实用户ID
+  const getUserIdentifier = () => {
+    // 未来登录系统接入点 - 取消注释以下代码
+    // const authUser = getAuthUser()
+    // if (authUser) return authUser.id
+    
+    // 当前：使用设备指纹作为临时用户标识
+    if (typeof window === 'undefined') return 'anonymous'
+    
+    let deviceId = localStorage.getItem('jewelry_erp_device_id')
+    if (!deviceId) {
+      deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      localStorage.setItem('jewelry_erp_device_id', deviceId)
+    }
+    return deviceId
   }
 
+  // 获取当前角色的历史记录key（包含用户标识，支持多用户隔离）
+  const getHistoryKey = (role) => {
+    const userId = getUserIdentifier()
+    return `conversationHistory_${userId}_${role}`
+  }
+
+  // 获取上次使用的session key（用于恢复上次对话）
+  const getLastSessionKey = (role) => {
+    const userId = getUserIdentifier()
+    return `lastSessionId_${userId}_${role}`
+  }
+
+  // ========== 消息解析优化（性能优化：合并正则匹配） ==========
   // 解析消息中的隐藏标记，恢复所有特殊消息的额外字段
   const parseMessageHiddenMarkers = (messages) => {
+    // 合并所有标记的正则表达式，一次匹配多种类型
+    const combinedRegex = /<!-- (WITHDRAWAL_ORDER|GOLD_RECEIPT|INBOUND_ORDER|RETURN_ORDER|SALES_ORDER|SETTLEMENT_ORDER):(\d+):?([^>]*) -->/g
+    
     return messages.map(msg => {
-      if (msg.content) {
-        // 提料单
-        const withdrawalMatch = msg.content.match(/<!-- WITHDRAWAL_ORDER:(\d+):([^>]+) -->/)
-        if (withdrawalMatch && !msg.withdrawalDownloadUrl) {
-          const withdrawalId = parseInt(withdrawalMatch[1])
-          msg.withdrawalId = withdrawalId
-          msg.withdrawalDownloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${withdrawalId}/download?format=html`
+      if (!msg.content) return msg
+      
+      // 使用合并正则一次性匹配所有标记
+      const matches = [...msg.content.matchAll(combinedRegex)]
+      if (matches.length === 0) return msg
+      
+      matches.forEach(match => {
+        const [, type, id] = match
+        const orderId = parseInt(id)
+        
+        switch (type) {
+          case 'WITHDRAWAL_ORDER':
+            if (!msg.withdrawalDownloadUrl) {
+              msg.withdrawalId = orderId
+              msg.withdrawalDownloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${orderId}/download?format=html`
+            }
+            break
+          case 'GOLD_RECEIPT':
+            if (!msg.goldReceiptDownloadUrl) {
+              msg.goldReceiptId = orderId
+              msg.goldReceiptDownloadUrl = `${API_BASE_URL}/api/gold-material/gold-receipts/${orderId}/print`
+            }
+            break
+          case 'INBOUND_ORDER':
+            if (!msg.inboundOrder) {
+              msg.inboundOrder = { id: orderId }
+            }
+            break
+          case 'RETURN_ORDER':
+            if (!msg.returnOrder) {
+              msg.returnOrder = { id: orderId }
+            }
+            break
+          case 'SALES_ORDER':
+            if (!msg.salesOrderId) {
+              msg.salesOrderId = orderId
+            }
+            break
+          case 'SETTLEMENT_ORDER':
+            if (!msg.settlementOrderId) {
+              msg.settlementOrderId = orderId
+            }
+            break
         }
-        // 收料单
-        const goldReceiptMatch = msg.content.match(/<!-- GOLD_RECEIPT:(\d+):/)
-        if (goldReceiptMatch && !msg.goldReceiptDownloadUrl) {
-          const receiptId = parseInt(goldReceiptMatch[1])
-          msg.goldReceiptId = receiptId
-          msg.goldReceiptDownloadUrl = `${API_BASE_URL}/api/gold-material/gold-receipts/${receiptId}/print`
-        }
-        // 入库单
-        const inboundMatch = msg.content.match(/<!-- INBOUND_ORDER:(\d+):/)
-        if (inboundMatch && !msg.inboundOrder) {
-          msg.inboundOrder = { id: parseInt(inboundMatch[1]) }
-        }
-        // 退货单
-        const returnMatch = msg.content.match(/<!-- RETURN_ORDER:(\d+):/)
-        if (returnMatch && !msg.returnOrder) {
-          msg.returnOrder = { id: parseInt(returnMatch[1]) }
-        }
-        // 销售单
-        const salesMatch = msg.content.match(/<!-- SALES_ORDER:(\d+):/)
-        if (salesMatch && !msg.salesOrderId) {
-          msg.salesOrderId = parseInt(salesMatch[1])
-        }
-        // 结算单
-        const settlementMatch = msg.content.match(/<!-- SETTLEMENT_ORDER:(\d+):/)
-        if (settlementMatch && !msg.settlementOrderId) {
-          msg.settlementOrderId = parseInt(settlementMatch[1])
-        }
-      }
+      })
+      
       return msg
     })
   }
@@ -227,11 +268,11 @@ function App() {
     }
   }
 
-  // 切换用户角色
-  const changeUserRole = (roleId) => {
+  // ========== 切换用户角色（增强版：保存/恢复各角色上次对话） ==========
+  const changeUserRole = async (roleId) => {
     // 如果切换到不同角色，保存当前对话并加载新角色的历史记录
     if (roleId !== userRole) {
-      // 先保存当前角色的对话（如果有消息）
+      // 1. 保存当前角色的对话和会话ID
       if (messages.length > 0) {
         // 直接保存到当前角色的历史记录（不使用延迟保存）
         const currentHistoryKey = getHistoryKey(userRole)
@@ -248,8 +289,9 @@ function App() {
           }
         }
         
+        const conversationId = currentConversationId || currentSessionId || Date.now().toString()
         const conversation = {
-          id: currentConversationId || Date.now().toString(),
+          id: conversationId,
           title: title,
           messages: messages,
           createdAt: currentConversationId ? 
@@ -268,12 +310,45 @@ function App() {
         // 只保留最近50个对话
         const limitedHistory = currentHistory.slice(0, 50)
         localStorage.setItem(currentHistoryKey, JSON.stringify(limitedHistory))
+        
+        // 保存当前角色的上次会话ID
+        const currentLastSessionKey = getLastSessionKey(userRole)
+        localStorage.setItem(currentLastSessionKey, conversationId)
       }
       
-      // 切换到新角色，加载新角色的历史记录
-      loadRoleHistory(roleId)
-      // 开始新对话
-      newConversation()
+      // 2. 切换到新角色，加载新角色的历史记录
+      await loadRoleHistory(roleId)
+      
+      // 3. 尝试恢复新角色上次的对话
+      const newLastSessionKey = getLastSessionKey(roleId)
+      const lastSessionId = localStorage.getItem(newLastSessionKey)
+      
+      if (lastSessionId) {
+        // 尝试恢复新角色上次的对话
+        const newHistoryKey = getHistoryKey(roleId)
+        try {
+          const parsedData = JSON.parse(localStorage.getItem(newHistoryKey) || '[]')
+          const history = Array.isArray(parsedData) ? parsedData : []
+          const lastConversation = history.find(c => c.id === lastSessionId)
+          
+          if (lastConversation && lastConversation.messages && lastConversation.messages.length > 0) {
+            const restoredMessages = parseMessageHiddenMarkers(lastConversation.messages)
+            setMessages(restoredMessages)
+            setCurrentConversationId(lastSessionId)
+            setCurrentSessionId(lastSessionId)
+            setConversationTitle(lastConversation.title || '新对话')
+            console.log('[角色切换] 恢复上次对话:', lastSessionId)
+          } else {
+            // 没有找到上次对话，开始新对话
+            newConversation()
+          }
+        } catch {
+          newConversation()
+        }
+      } else {
+        // 该角色没有上次对话记录，开始新对话
+        newConversation()
+      }
     }
     setUserRole(roleId)
     localStorage.setItem('userRole', roleId)
@@ -301,36 +376,78 @@ function App() {
     loadRoleHistory(userRole)
   }, [userRole]) // 当角色变化时重新加载
 
-  // 页面初始化时恢复当前对话的消息内容
+  // ========== 页面初始化时恢复当前对话（增强版：支持后端同步兜底） ==========
+  const [isRestoring, setIsRestoring] = useState(false) // 防止重复恢复
+  
   useEffect(() => {
+    // 确保 userRole 已初始化
+    if (!userRole || isRestoring) return
+    
     const restoreCurrentConversation = async () => {
-      const savedSessionId = localStorage.getItem('current_session_id')
-      if (savedSessionId && savedSessionId.startsWith('session_')) {
-        // 检查localStorage中是否有这个对话的消息
-        const historyKey = getHistoryKey(userRole)
-        try {
-          const parsedData = JSON.parse(localStorage.getItem(historyKey) || '[]')
-          const history = Array.isArray(parsedData) ? parsedData : []
-          const conversation = history.find(c => c.id === savedSessionId)
-          
-          if (conversation && conversation.messages && conversation.messages.length > 0) {
-            // 解析消息中的隐藏标记，恢复所有特殊消息的额外字段
-            const restoredMessages = parseMessageHiddenMarkers(conversation.messages)
-            
-            setMessages(restoredMessages)
-            setCurrentConversationId(savedSessionId)
-            setConversationTitle(conversation.title || '新对话')
-            console.log('已恢复当前对话:', savedSessionId, '消息数:', restoredMessages.length)
+      setIsRestoring(true)
+      
+      // 获取该角色上次使用的session
+      const lastSessionKey = getLastSessionKey(userRole)
+      const savedSessionId = localStorage.getItem(lastSessionKey) || localStorage.getItem('current_session_id')
+      
+      if (!savedSessionId) {
+        setIsRestoring(false)
+        return
+      }
+      
+      // 检查localStorage中是否有这个对话的消息
+      const historyKey = getHistoryKey(userRole)
+      try {
+        const parsedData = JSON.parse(localStorage.getItem(historyKey) || '[]')
+        const history = Array.isArray(parsedData) ? parsedData : []
+        const conversation = history.find(c => c.id === savedSessionId)
+        
+        if (conversation && conversation.messages && conversation.messages.length > 0) {
+          // 从本地恢复
+          const restoredMessages = parseMessageHiddenMarkers(conversation.messages)
+          setMessages(restoredMessages)
+          setCurrentConversationId(savedSessionId)
+          setCurrentSessionId(savedSessionId)
+          setConversationTitle(conversation.title || '新对话')
+          console.log('[恢复] 从本地恢复对话:', savedSessionId, '消息数:', restoredMessages.length)
+        } else {
+          // 本地没有，尝试从后端同步
+          console.log('[恢复] 本地无数据，尝试从后端同步:', savedSessionId)
+          try {
+            const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-history/${savedSessionId}`)
+            if (response.ok) {
+              const data = await response.json()
+              if (data.success && data.messages && data.messages.length > 0) {
+                const backendMessages = data.messages.map(msg => ({
+                  type: msg.message_type === 'user' ? 'user' : 'system',
+                  content: msg.content || '',
+                  id: msg.id
+                }))
+                const parsedMessages = parseMessageHiddenMarkers(backendMessages)
+                setMessages(parsedMessages)
+                setCurrentConversationId(savedSessionId)
+                setCurrentSessionId(savedSessionId)
+                console.log('[恢复] 从后端恢复对话:', savedSessionId, '消息数:', parsedMessages.length)
+              }
+            }
+          } catch (backendError) {
+            console.error('[恢复] 后端同步失败:', backendError)
           }
-        } catch (error) {
-          console.error('恢复当前对话失败:', error)
         }
+      } catch (error) {
+        console.error('[恢复] 恢复对话失败:', error)
+        // 数据损坏时，清空该角色的历史记录
+        try {
+          localStorage.setItem(historyKey, '[]')
+          console.warn('[恢复] 已清空损坏的历史记录')
+        } catch {}
+      } finally {
+        setIsRestoring(false)
       }
     }
     
-    // 页面首次加载时恢复
     restoreCurrentConversation()
-  }, []) // 只在首次加载时执行
+  }, [userRole]) // 依赖 userRole，确保角色变化时也能正确恢复
 
   // 加载待处理转移单数量（柜台角色需要看到商品部发来的转移单）
   const loadPendingTransferCount = async () => {
@@ -575,8 +692,18 @@ function App() {
   }, [userRole])
 
   // 保存对话到历史记录（保存到当前角色的历史记录）
+  // ========== 保存对话（增强版：去重优化 + 保存上次会话ID） ==========
+  const lastSavedRef = useRef({ messageCount: 0, lastMessageId: null })
+  
   const saveConversation = () => {
     if (messages.length === 0) return
+    
+    // 性能优化：检查消息是否真的变化了，避免重复保存
+    const lastMessage = messages[messages.length - 1]
+    if (lastSavedRef.current.messageCount === messages.length && 
+        lastSavedRef.current.lastMessageId === lastMessage?.id) {
+      return // 消息没有变化，不需要保存
+    }
     
     // 获取当前角色的历史记录key
     const historyKey = getHistoryKey(userRole)
@@ -595,8 +722,9 @@ function App() {
       }
     }
     
+    const conversationId = currentConversationId || currentSessionId || Date.now().toString()
     const conversation = {
-      id: currentConversationId || Date.now().toString(),
+      id: conversationId,
       title: title,
       messages: messages,
       createdAt: currentConversationId ? 
@@ -617,15 +745,23 @@ function App() {
     const limitedHistory = history.slice(0, 50)
     localStorage.setItem(historyKey, JSON.stringify(limitedHistory))
     setConversationHistory(limitedHistory)
-    setCurrentConversationId(conversation.id)
+    setCurrentConversationId(conversationId)
+    
+    // 保存当前角色的上次会话ID（用于角色切换时恢复）
+    const lastSessionKey = getLastSessionKey(userRole)
+    localStorage.setItem(lastSessionKey, conversationId)
+    
+    // 更新保存状态，用于去重检测
+    lastSavedRef.current = { messageCount: messages.length, lastMessageId: lastMessage?.id }
   }
 
-  // 当消息变化时自动保存
+  // 当消息变化时自动保存（优化：去重）
   useEffect(() => {
-    if (messages.length > 0) {
-      // 延迟保存，避免频繁写入
-      const timer = setTimeout(() => {
-        saveConversation()
+    if (messages.length === 0) return
+    
+    // 延迟保存，避免频繁写入
+    const timer = setTimeout(() => {
+      saveConversation()
       }, 1000)
       return () => clearTimeout(timer)
     }
