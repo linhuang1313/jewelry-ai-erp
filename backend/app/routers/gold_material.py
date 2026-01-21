@@ -632,10 +632,58 @@ async def create_gold_payment(
         remark=data.remark
     )
     db.add(transaction)
+    db.flush()
+    
+    # ========== 更新供应商金料账户（单一账户模式）==========
+    # 我们付料给供应商 = 我们欠供应商的料减少
+    from ..models import SupplierGoldAccount, SupplierGoldTransaction
+    
+    supplier_gold_account = db.query(SupplierGoldAccount).filter(
+        SupplierGoldAccount.supplier_id == supplier.id
+    ).first()
+    
+    if not supplier_gold_account:
+        supplier_gold_account = SupplierGoldAccount(
+            supplier_id=supplier.id,
+            supplier_name=supplier.name,
+            current_balance=0.0,
+            total_received=0.0,
+            total_paid=0.0
+        )
+        db.add(supplier_gold_account)
+        db.flush()
+    
+    balance_before = supplier_gold_account.current_balance
+    supplier_gold_account.current_balance -= data.gold_weight  # 我们欠供应商的料减少
+    supplier_gold_account.total_paid += data.gold_weight
+    supplier_gold_account.last_transaction_at = china_now()
+    
+    # 创建供应商金料交易记录
+    supplier_gold_tx = SupplierGoldTransaction(
+        supplier_id=supplier.id,
+        supplier_name=supplier.name,
+        transaction_type='pay',
+        payment_transaction_id=transaction.id,
+        gold_weight=data.gold_weight,
+        balance_before=balance_before,
+        balance_after=supplier_gold_account.current_balance,
+        created_by=created_by,
+        remark=f"付料单：{payment_no}"
+    )
+    db.add(supplier_gold_tx)
+    
     db.commit()
     db.refresh(transaction)
     
-    logger.info(f"创建付料单: {payment_no}, 供应商: {supplier.name}, 金料重量: {data.gold_weight}克")
+    # 记录余额状态
+    if supplier_gold_account.current_balance > 0:
+        status_text = f"我们仍欠供应商 {supplier_gold_account.current_balance:.2f}克"
+    elif supplier_gold_account.current_balance < 0:
+        status_text = f"供应商欠我们 {abs(supplier_gold_account.current_balance):.2f}克"
+    else:
+        status_text = "已结清"
+    
+    logger.info(f"创建付料单: {payment_no}, 供应商: {supplier.name}, 金料重量: {data.gold_weight}克, {status_text}")
     
     return build_transaction_response(transaction, db)
 

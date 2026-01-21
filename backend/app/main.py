@@ -304,6 +304,23 @@ async def startup_event():
         except Exception as e:
             logger.warning(f"创建 behavior_decision_logs 表失败（可能已存在）: {e}")
     
+    # ========== 创建供应商金料账户表 ==========
+    from .models import SupplierGoldAccount, SupplierGoldTransaction
+    inspector = inspect(engine)
+    if 'supplier_gold_accounts' not in inspector.get_table_names():
+        try:
+            SupplierGoldAccount.__table__.create(bind=engine)
+            logger.info("已创建 supplier_gold_accounts 表")
+        except Exception as e:
+            logger.warning(f"创建 supplier_gold_accounts 表失败（可能已存在）: {e}")
+    
+    if 'supplier_gold_transactions' not in inspector.get_table_names():
+        try:
+            SupplierGoldTransaction.__table__.create(bind=engine)
+            logger.info("已创建 supplier_gold_transactions 表")
+        except Exception as e:
+            logger.warning(f"创建 supplier_gold_transactions 表失败（可能已存在）: {e}")
+    
     # 确保 product_codes 表存在
     from sqlalchemy import inspect
     from .models import ProductCode
@@ -1914,6 +1931,47 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
             supplier_obj.total_supply_weight += weight
             supplier_obj.total_supply_count += 1
             supplier_obj.last_supply_time = datetime.now()
+            
+            # ========== 更新供应商金料账户（单一账户模式）==========
+            # 供应商发货给我们 = 我们欠供应商的料增加
+            from .models import SupplierGoldAccount, SupplierGoldTransaction
+            
+            supplier_gold_account = db.query(SupplierGoldAccount).filter(
+                SupplierGoldAccount.supplier_id == supplier_obj.id
+            ).first()
+            
+            if not supplier_gold_account:
+                supplier_gold_account = SupplierGoldAccount(
+                    supplier_id=supplier_obj.id,
+                    supplier_name=supplier_obj.name,
+                    current_balance=0.0,
+                    total_received=0.0,
+                    total_paid=0.0
+                )
+                db.add(supplier_gold_account)
+                db.flush()
+            
+            balance_before = supplier_gold_account.current_balance
+            supplier_gold_account.current_balance += weight  # 我们欠供应商的料增加
+            supplier_gold_account.total_received += weight
+            supplier_gold_account.last_transaction_at = china_now()
+            
+            # 创建供应商金料交易记录
+            supplier_gold_tx = SupplierGoldTransaction(
+                supplier_id=supplier_obj.id,
+                supplier_name=supplier_obj.name,
+                transaction_type='receive',
+                inbound_order_id=order.id,
+                gold_weight=weight,
+                balance_before=balance_before,
+                balance_after=supplier_gold_account.current_balance,
+                created_by="系统",
+                remark=f"入库单：{order.order_no}，供应商发货"
+            )
+            db.add(supplier_gold_tx)
+            
+            logger.info(f"供应商金料账户更新: 供应商={supplier_obj.name}, 收货={weight:.2f}克, "
+                       f"余额={balance_before:.2f} -> {supplier_gold_account.current_balance:.2f}克")
         
         # 提交事务
         db.commit()

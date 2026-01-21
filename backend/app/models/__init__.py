@@ -648,6 +648,71 @@ class ProductAttribute(Base):
     updated_at = Column(DateTime, onupdate=func.now())
 
 
+# ============= 供应商金料账户模型 =============
+
+class SupplierGoldAccount(Base):
+    """供应商金料账户表 - 单一账户模式记录与供应商的金料往来
+    
+    current_balance 含义：
+    - 正数 = 我们欠供应商的料（供应商发货了，我们还没付料）
+    - 负数 = 供应商欠我们的料（我们付料了，供应商还没发货）
+    - 零 = 已结清
+    """
+    __tablename__ = "supplier_gold_accounts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False, unique=True, index=True)
+    supplier_name = Column(String(100), nullable=False)  # 供应商名称（冗余）
+    
+    # 金料账户余额（单一账户模式）
+    current_balance = Column(Float, default=0.0)  # 净金料值
+    
+    # 统计信息
+    total_received = Column(Float, default=0.0)  # 累计收货（供应商发货给我们的）
+    total_paid = Column(Float, default=0.0)  # 累计付料（我们付给供应商的）
+    last_transaction_at = Column(DateTime, nullable=True)  # 最后交易时间
+    
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+    
+    # 关系
+    supplier = relationship("Supplier", backref="gold_account")
+
+
+class SupplierGoldTransaction(Base):
+    """供应商金料交易记录表 - 记录与供应商的金料往来明细"""
+    __tablename__ = "supplier_gold_transactions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False, index=True)
+    supplier_name = Column(String(100), nullable=False)  # 供应商名称（冗余）
+    
+    # 交易类型
+    transaction_type = Column(String(20), nullable=False, index=True)
+    # 'receive' 收货（供应商发货，我们欠料增加）
+    # 'pay' 付料（我们付料，我们欠料减少）
+    
+    # 关联单据
+    inbound_order_id = Column(Integer, ForeignKey("inbound_orders.id"), nullable=True)  # 收货时关联入库单
+    payment_transaction_id = Column(Integer, ForeignKey("gold_material_transactions.id"), nullable=True)  # 付料时关联付料单
+    
+    # 金料信息
+    gold_weight = Column(Float, nullable=False)  # 本次交易金料克重
+    balance_before = Column(Float, nullable=False)  # 交易前余额
+    balance_after = Column(Float, nullable=False)  # 交易后余额
+    
+    # 状态和时间
+    status = Column(String(20), default="active")  # active有效 / cancelled已取消
+    created_at = Column(DateTime, server_default=func.now())
+    created_by = Column(String(50))  # 操作人
+    remark = Column(Text, nullable=True)  # 备注
+    
+    # 关系
+    supplier = relationship("Supplier", backref="gold_transactions")
+    inbound_order = relationship("InboundOrder", foreign_keys=[inbound_order_id])
+    payment_transaction = relationship("GoldMaterialTransaction", foreign_keys=[payment_transaction_id])
+
+
 # 导出所有模型
 __all__ = [
     # 入库
@@ -690,4 +755,7 @@ __all__ = [
     'ProductCode',
     # 商品属性配置
     'ProductAttribute',
+    # 供应商金料账户
+    'SupplierGoldAccount',
+    'SupplierGoldTransaction',
 ]
