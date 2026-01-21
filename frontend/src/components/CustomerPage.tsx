@@ -601,75 +601,82 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                 {/* 欠款/存料 */}
                 {detailTab === 'balance' && (
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">账户余额</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="p-6 bg-red-50 rounded-xl border border-red-200">
-                        <p className="text-sm text-red-600 mb-1">现金欠款</p>
-                        <p className="text-2xl font-bold text-red-700">
-                          ¥{(customerDetail?.balance?.cash_debt || 0).toFixed(2)}
-                        </p>
-                      </div>
-                      <div className="p-6 bg-orange-50 rounded-xl border border-orange-200">
-                        <p className="text-sm text-orange-600 mb-1">金料欠款</p>
-                        <p className="text-2xl font-bold text-orange-700">
-                          {(customerDetail?.balance?.gold_debt || 0).toFixed(2)}克
-                        </p>
-                      </div>
-                      <div className="p-6 bg-green-50 rounded-xl border border-green-200">
-                        <p className="text-sm text-green-600 mb-1">存料余额</p>
-                        <p className="text-2xl font-bold text-green-700">
-                          {(customerDetail?.balance?.gold_deposit || 0).toFixed(2)}克
-                        </p>
-                      </div>
-                    </div>
-                    
-                    {/* 净金料计算结果 */}
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">账户状态</h3>
                     {(() => {
+                      const cashDebt = customerDetail?.balance?.cash_debt || 0;
                       const goldDebt = customerDetail?.balance?.gold_debt || 0;
                       const goldDeposit = customerDetail?.balance?.gold_deposit || 0;
                       const netGold = goldDeposit - goldDebt;
                       
                       return (
-                        <div className={`mt-6 p-6 rounded-xl border-2 ${
-                          netGold > 0 
-                            ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-300' 
-                            : netGold < 0 
-                              ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-300'
-                              : 'bg-gray-50 border-gray-300'
-                        }`}>
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className={`text-sm font-medium mb-1 ${
-                                netGold > 0 ? 'text-green-600' : netGold < 0 ? 'text-red-600' : 'text-gray-600'
-                              }`}>
-                                💎 净金料状态（存料 - 欠料）
-                              </p>
-                              <p className={`text-3xl font-bold ${
-                                netGold > 0 ? 'text-green-700' : netGold < 0 ? 'text-red-700' : 'text-gray-700'
-                              }`}>
-                                {netGold > 0 
-                                  ? `净存料 +${netGold.toFixed(2)}克` 
-                                  : netGold < 0 
-                                    ? `净欠料 ${netGold.toFixed(2)}克`
-                                    : '已结清 0.00克'
-                                }
-                              </p>
-                            </div>
-                            <div className={`p-4 rounded-full ${
-                              netGold > 0 ? 'bg-green-100' : netGold < 0 ? 'bg-red-100' : 'bg-gray-100'
-                            }`}>
-                              {netGold > 0 ? (
-                                <span className="text-3xl">✅</span>
-                              ) : netGold < 0 ? (
-                                <span className="text-3xl">⚠️</span>
-                              ) : (
-                                <span className="text-3xl">✔️</span>
-                              )}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* 现金欠款 */}
+                          <div className={`p-6 rounded-xl border-2 ${
+                            cashDebt > 0 
+                              ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-300' 
+                              : 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-300'
+                          }`}>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className={`text-sm font-medium mb-1 ${cashDebt > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                  💰 现金账户
+                                </p>
+                                <p className={`text-3xl font-bold ${cashDebt > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                                  {cashDebt > 0 ? `欠款 ¥${cashDebt.toFixed(2)}` : '无欠款 ✓'}
+                                </p>
+                              </div>
+                              <div className={`p-4 rounded-full ${cashDebt > 0 ? 'bg-red-100' : 'bg-green-100'}`}>
+                                {cashDebt > 0 ? (
+                                  <span className="text-3xl">💸</span>
+                                ) : (
+                                  <span className="text-3xl">✅</span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                          <p className="text-xs text-gray-500 mt-3">
-                            计算公式：存料余额（{goldDeposit.toFixed(2)}克）- 金料欠款（{goldDebt.toFixed(2)}克）= {netGold.toFixed(2)}克
-                          </p>
+                          
+                          {/* 净金料 */}
+                          <div className={`p-6 rounded-xl border-2 ${
+                            netGold > 0 
+                              ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-300' 
+                              : netGold < 0 
+                                ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-300'
+                                : 'bg-gray-50 border-gray-300'
+                          }`}>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className={`text-sm font-medium mb-1 ${
+                                  netGold > 0 ? 'text-green-600' : netGold < 0 ? 'text-red-600' : 'text-gray-600'
+                                }`}>
+                                  💎 金料账户
+                                </p>
+                                <p className={`text-3xl font-bold ${
+                                  netGold > 0 ? 'text-green-700' : netGold < 0 ? 'text-red-700' : 'text-gray-700'
+                                }`}>
+                                  {netGold > 0 
+                                    ? `净存料 +${netGold.toFixed(2)}克` 
+                                    : netGold < 0 
+                                      ? `净欠料 ${netGold.toFixed(2)}克`
+                                      : '已结清 0.00克'
+                                  }
+                                </p>
+                              </div>
+                              <div className={`p-4 rounded-full ${
+                                netGold > 0 ? 'bg-green-100' : netGold < 0 ? 'bg-red-100' : 'bg-gray-100'
+                              }`}>
+                                {netGold > 0 ? (
+                                  <span className="text-3xl">✅</span>
+                                ) : netGold < 0 ? (
+                                  <span className="text-3xl">⚠️</span>
+                                ) : (
+                                  <span className="text-3xl">✔️</span>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-3">
+                              存料 {goldDeposit.toFixed(2)}克 - 欠料 {goldDebt.toFixed(2)}克 = {netGold.toFixed(2)}克
+                            </p>
+                          </div>
                         </div>
                       );
                     })()}
@@ -1348,32 +1355,20 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
             {/* 当前余额概览 */}
             {customerCurrentBalance && (
               <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 gap-6">
                   <div className="text-center">
-                    <p className="text-xs text-gray-500 mb-1">现金欠款</p>
-                    <p className="text-lg font-bold text-red-600">
-                      ¥{customerCurrentBalance.cash_debt.toFixed(2)}
+                    <p className="text-xs text-gray-500 mb-1">💰 现金账户</p>
+                    <p className={`text-lg font-bold ${customerCurrentBalance.cash_debt > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {customerCurrentBalance.cash_debt > 0 ? `欠款 ¥${customerCurrentBalance.cash_debt.toFixed(2)}` : '无欠款 ✓'}
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-xs text-gray-500 mb-1">金料欠款</p>
-                    <p className="text-lg font-bold text-orange-600">
-                      {customerCurrentBalance.gold_debt.toFixed(2)}克
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-500 mb-1">存料余额</p>
-                    <p className="text-lg font-bold text-green-600">
-                      {customerCurrentBalance.gold_deposit.toFixed(2)}克
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-500 mb-1">💎 净金料</p>
+                    <p className="text-xs text-gray-500 mb-1">💎 金料账户</p>
                     {(() => {
                       const net = customerCurrentBalance.gold_deposit - customerCurrentBalance.gold_debt;
                       return (
                         <p className={`text-lg font-bold ${net > 0 ? 'text-green-600' : net < 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                          {net > 0 ? `+${net.toFixed(2)}` : net.toFixed(2)}克
+                          {net > 0 ? `净存料 +${net.toFixed(2)}克` : net < 0 ? `净欠料 ${net.toFixed(2)}克` : '已结清'}
                         </p>
                       );
                     })()}
