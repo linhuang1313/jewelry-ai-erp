@@ -1273,6 +1273,8 @@ function App() {
                       chartData: data.data.chart_data,
                       pieData: data.data.pie_data,
                       chartType: data.data.action,
+                      // AI意图识别结果（用于可视化显示）
+                      detectedIntent: data.data.action,
                       // 添加入库卡片数据（单商品或多商品）
                       inboundCard: inboundCard,
                       inboundCards: inboundCards,  // 多商品入库时的卡片数组
@@ -2499,17 +2501,76 @@ function App() {
           <div className="max-w-4xl mx-auto space-y-6">
         {messages.length === 0 && (
               <div className="text-center pt-8">
-                {/* 角色引导提示 */}
-                <p className="text-gray-500 text-sm mb-6">
-                  💡 试试说：
-                  {userRole === 'counter' && '"帮我开一张销售单，客户张三，古法戒指 50克 工费8元"'}
-                  {userRole === 'product' && '"古法黄金戒指 100克 工费6元 供应商金源珠宝，帮我入库"'}
-                  {userRole === 'settlement' && '"查看今天待结算的订单" 或 "张老板提5克"'}
-                  {userRole === 'finance' && '"查看本月财务对账情况"'}
-                  {userRole === 'sales' && '"帮我查询张三今天的销售情况" 或 "王五有多少欠款"'}
-                  {userRole === 'material' && '"查看今日金料收付情况"'}
-                  {userRole === 'manager' && '"查看今日销售数据汇总"'}
-                </p>
+                {/* 智能时间问候 + AI标识 */}
+                <div className="mb-6">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded-full border border-blue-100">
+                    <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                      <span className="text-white text-xs">🤖</span>
+                    </div>
+                    <span className="text-sm text-gray-700">
+                      {(() => {
+                        const hour = new Date().getHours()
+                        if (hour < 9) return '早上好！今天也要加油哦 ☀️'
+                        if (hour < 12) return '上午好！有什么可以帮您的？'
+                        if (hour < 14) return '中午好！记得休息一下 🍵'
+                        if (hour < 18) return '下午好！我随时准备为您服务'
+                        return '晚上好！辛苦了 🌙'
+                      })()}
+                    </span>
+                  </div>
+                </div>
+                
+                {/* 智能快捷建议按钮 - 可点击直接发送 */}
+                <div className="flex flex-wrap justify-center gap-2 mb-6">
+                  <span className="text-gray-400 text-sm">💡 试试：</span>
+                  {userRole === 'counter' && (
+                    <>
+                      <button onClick={() => setInput('帮我开一张销售单')} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">开销售单</button>
+                      <button onClick={() => setInput('查询今天的销售情况')} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">今日销售</button>
+                      <button onClick={() => setInput('库存还有多少')} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">查库存</button>
+                    </>
+                  )}
+                  {userRole === 'product' && (
+                    <>
+                      <button onClick={() => setInput('古法黄金戒指 100克 工费6元 供应商金源珠宝 帮我入库')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">入库商品</button>
+                      <button onClick={() => setInput('查询今天的入库单')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">今日入库</button>
+                      <button onClick={() => setInput('库存分析')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">库存分析</button>
+                    </>
+                  )}
+                  {userRole === 'settlement' && (
+                    <>
+                      <button onClick={() => setInput('查看今天待结算的订单')} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">待结算</button>
+                      <button onClick={() => setInput('张老板提5克')} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">客户提料</button>
+                      <button onClick={() => setInput('收料登记')} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">收料登记</button>
+                    </>
+                  )}
+                  {userRole === 'finance' && (
+                    <>
+                      <button onClick={() => setInput('查看本月财务对账情况')} className="px-3 py-1.5 text-sm bg-purple-50 text-purple-600 rounded-full hover:bg-purple-100 transition-colors">月度对账</button>
+                      <button onClick={() => setInput('今日收款汇总')} className="px-3 py-1.5 text-sm bg-purple-50 text-purple-600 rounded-full hover:bg-purple-100 transition-colors">收款汇总</button>
+                    </>
+                  )}
+                  {userRole === 'sales' && (
+                    <>
+                      <button onClick={() => setInput('帮我查询张三今天的销售情况')} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">客户销售</button>
+                      <button onClick={() => setInput('王五有多少欠款')} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">欠款查询</button>
+                      <button onClick={() => setInput('查询退货记录')} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">退货记录</button>
+                    </>
+                  )}
+                  {userRole === 'material' && (
+                    <>
+                      <button onClick={() => setInput('查看今日金料收付情况')} className="px-3 py-1.5 text-sm bg-yellow-50 text-yellow-600 rounded-full hover:bg-yellow-100 transition-colors">今日收付</button>
+                      <button onClick={() => setInput('金料库存统计')} className="px-3 py-1.5 text-sm bg-yellow-50 text-yellow-600 rounded-full hover:bg-yellow-100 transition-colors">库存统计</button>
+                    </>
+                  )}
+                  {userRole === 'manager' && (
+                    <>
+                      <button onClick={() => setInput('查看今日销售数据汇总')} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">今日汇总</button>
+                      <button onClick={() => setInput('本月业绩分析')} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">业绩分析</button>
+                      <button onClick={() => setInput('库存预警')} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">库存预警</button>
+                    </>
+                  )}
+                </div>
                 
                 {/* 库存概览 - 商品专员、柜台、结算、管理层可见 */}
                 {(userRole === 'product' || userRole === 'counter' || userRole === 'settlement' || userRole === 'manager') && (
@@ -3167,18 +3228,31 @@ function App() {
                 )
               }
               
-              // 系统消息（流式内容或普通内容）
+              // 系统消息（流式内容或普通内容）- 带AI头像
               if (msg.type === 'system') {
                 return (
                   <React.Fragment key={msg.id || idx}>
-                    <div className="flex justify-start">
+                    <div className="flex justify-start items-start gap-3">
+                      {/* AI头像 */}
+                      <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-md">
+                        <span className="text-white text-xs">🤖</span>
+                      </div>
                       <div className={`
                         ${msg.id ? 'max-w-2xl' : 'max-w-[85%] md:max-w-[75%]'}
                         rounded-3xl px-5 py-4 shadow-sm border border-gray-200/60 bg-white
                       `}>
+                        {/* 意图识别可视化标签 */}
+                        {msg.detectedIntent && (
+                          <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-gray-100">
+                            <span className="text-xs text-gray-400">🎯 识别到：</span>
+                            <span className="px-2 py-0.5 text-xs font-medium bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 rounded-full">
+                              {msg.detectedIntent}
+                            </span>
+                          </div>
+                        )}
                         <div className="text-[15px] leading-relaxed whitespace-pre-wrap text-gray-800">
                           {/* 隐藏内容中的特殊标记 */}
-                          {msg.content?.replace(/\n*<!-- (RETURN_ORDER|INBOUND_ORDER|SALES_ORDER|SETTLEMENT_ORDER|CUSTOMER_DEBT|EXPORT_INBOUND):[^>]+ -->/g, '')}
+                          {msg.content?.replace(/\n*<!-- (RETURN_ORDER|INBOUND_ORDER|SALES_ORDER|SETTLEMENT_ORDER|CUSTOMER_DEBT|EXPORT_INBOUND|WITHDRAWAL_ORDER|GOLD_RECEIPT):[^>]+ -->/g, '')}
                           {/* 流式生成时的闪烁光标 */}
                           {msg.isStreaming && (
                             <span className="inline-block w-0.5 h-4 bg-blue-500 ml-1 animate-pulse"></span>
@@ -3941,13 +4015,27 @@ function App() {
               return null
             })}
 
+        {/* AI思考状态动画 - 增强AI感 */}
         {(loading || uploading) && (
-          <div className="flex justify-start">
-                <div className="bg-white rounded-3xl px-5 py-4 shadow-sm border border-gray-200/60">
-              <div className="flex space-x-2">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+          <div className="flex justify-start items-start gap-3">
+            {/* AI头像 + 脉冲动画 */}
+            <div className="relative flex-shrink-0">
+              <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
+                <span className="text-white text-sm">🤖</span>
+              </div>
+              <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-30"></div>
+            </div>
+            {/* 思考气泡 */}
+            <div className="bg-gradient-to-br from-white to-blue-50 rounded-3xl px-5 py-4 shadow-sm border border-blue-100">
+              <div className="flex items-center gap-3">
+                <div className="flex space-x-1.5">
+                  <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce"></div>
+                  <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></div>
+                  <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
+                </div>
+                <span className="text-sm text-blue-600 font-medium">
+                  {uploading ? 'AI正在识别图片...' : 'AI正在分析...'}
+                </span>
               </div>
             </div>
           </div>
