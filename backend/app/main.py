@@ -872,6 +872,55 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     
                     return
             
+            # ========== 闲聊/问候：直接返回友好回复，不进入数据收集 ==========
+            if ai_response.action in ["闲聊", "其他"]:
+                hour = datetime.now().hour
+                if hour < 9:
+                    time_greeting = "早上好！"
+                elif hour < 12:
+                    time_greeting = "上午好！"
+                elif hour < 14:
+                    time_greeting = "中午好！"
+                elif hour < 18:
+                    time_greeting = "下午好！"
+                else:
+                    time_greeting = "晚上好！"
+                
+                user_msg_lower = request.message.lower().strip()
+                
+                if any(word in user_msg_lower for word in ["你好", "嗨", "hi", "hello", "哈喽"]):
+                    chat_response = f"{time_greeting}我是珠宝ERP助手，有什么可以帮您？"
+                elif any(word in user_msg_lower for word in ["谢谢", "感谢", "辛苦"]):
+                    chat_response = "不客气！有其他需要随时告诉我 😊"
+                elif any(word in user_msg_lower for word in ["早上好", "上午好", "中午好", "下午好", "晚上好", "早安", "晚安"]):
+                    chat_response = f"{time_greeting}今天有什么可以帮您处理的吗？"
+                elif any(word in user_msg_lower for word in ["好的", "收到", "明白", "知道了", "ok"]):
+                    chat_response = "好的，有需要再叫我 👍"
+                else:
+                    chat_response = f"{time_greeting}我是珠宝ERP助手，可以帮您：\n\n📦 入库管理（商品入库、查询入库单）\n📊 库存查询（查看库存、库存分析）\n🧾 销售开单（创建销售单、查询销售）\n💰 财务管理（客户欠款、收款登记）\n\n请告诉我具体需要什么帮助？"
+                
+                result = {
+                    "success": True,
+                    "action": "闲聊",
+                    "message": chat_response
+                }
+                yield f"data: {json.dumps({'type': 'complete', 'data': result}, ensure_ascii=False)}\n\n"
+                
+                # 记录闲聊到日志
+                end_time = datetime.now()
+                response_time_ms = int((end_time - start_time).total_seconds() * 1000)
+                log_chat_message(
+                    db=db,
+                    session_id=session_id,
+                    user_role=request.user_role,
+                    message_type="assistant",
+                    content=chat_response,
+                    intent="闲聊",
+                    response_time_ms=response_time_ms,
+                    is_successful=True
+                )
+                return
+            
             # ========== 写操作：先检查权限，再执行 ==========
             if ai_response.action in ["入库", "创建客户", "创建供应商", "创建销售单", "创建转移单", "退货", "登记收款", "查询客户账务", "收料"]:
                 # 导入权限检查模块
