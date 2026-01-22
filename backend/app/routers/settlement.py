@@ -369,20 +369,15 @@ async def create_settlement_order(
     cash_deposit_balance = 0.0  # 存款余额
     
     if customer_id:
-        # 查询存料余额
+        # 查询金料账户（单一账户模式：current_balance 正=存料，负=欠料）
         customer_deposit = db.query(CustomerGoldDeposit).filter(
             CustomerGoldDeposit.customer_id == customer_id
         ).first()
         if customer_deposit:
-            gold_deposit_balance = customer_deposit.current_balance or 0.0
-        
-        # 查询上次金料欠款（从客户往来账中获取最后一条记录）
-        last_transaction = db.query(CustomerTransaction).filter(
-            CustomerTransaction.customer_id == customer_id,
-            CustomerTransaction.status == "active"
-        ).order_by(CustomerTransaction.created_at.desc()).first()
-        if last_transaction:
-            previous_gold_debt = last_transaction.gold_due_after or 0.0
+            current_balance = customer_deposit.current_balance or 0.0
+            # 从单一账户派生兼容字段
+            gold_deposit_balance = max(0, current_balance)  # 正值 = 存料
+            previous_gold_debt = max(0, -current_balance)   # 负值的绝对值 = 欠料
         
         # 查询现金欠款（从应收账款表获取）
         from ..models.finance import AccountReceivable

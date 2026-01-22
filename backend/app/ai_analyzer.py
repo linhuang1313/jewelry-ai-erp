@@ -431,10 +431,12 @@ class AIAnalyzer:
                         for tx in cash_txs[:5]:
                             text += f"   • {tx.get('created_at', 'N/A')[:10]}：应收¥{tx.get('total_amount', 0):.2f}，已收¥{tx.get('received_amount', 0):.2f}，未收¥{tx.get('unpaid_amount', 0):.2f}\n"
                 
-                # 净金料（存料和欠料合并为净值）
-                gold_debt = debt_data.get("gold_debt", 0)
-                gold_deposit = debt_data.get("gold_deposit", 0)
-                net_gold = gold_deposit - gold_debt
+                # 净金料（直接使用单一账户模式的 net_gold 字段）
+                # net_gold 正数=存料，负数=欠料
+                net_gold = debt_data.get("net_gold", 0)
+                # 如果没有 net_gold 字段（兼容旧数据），则从 gold_deposit 和 gold_debt 计算
+                if net_gold == 0 and (debt_data.get("gold_deposit", 0) > 0 or debt_data.get("gold_debt", 0) > 0):
+                    net_gold = debt_data.get("gold_deposit", 0) - debt_data.get("gold_debt", 0)
                 
                 if net_gold > 0:
                     text += f"💎 金料账户：净存料 +{net_gold:.2f}克\n"
