@@ -350,6 +350,32 @@ async def startup_event():
     finally:
         db.close()
     
+    # ========== 迁移 gold_receipts 表 ==========
+    db = SessionLocal()
+    try:
+        gold_receipt_columns = [
+            ("is_initial_balance", "BOOLEAN DEFAULT FALSE"),
+        ]
+        
+        for col_name, col_type in gold_receipt_columns:
+            result = db.execute(text(f"""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'gold_receipts' AND column_name = '{col_name}'
+            """))
+            if not result.fetchone():
+                db.execute(text(f"""
+                    ALTER TABLE gold_receipts 
+                    ADD COLUMN {col_name} {col_type}
+                """))
+                db.commit()
+                logger.info(f"已添加 {col_name} 列到 gold_receipts 表")
+    except Exception as e:
+        logger.warning(f"gold_receipts 迁移检查: {e}")
+        db.rollback()
+    finally:
+        db.close()
+    
     # ========== 创建 behavior_decision_logs 表 ==========
     from sqlalchemy import inspect
     from .models.behavior_log import BehaviorDecisionLog
