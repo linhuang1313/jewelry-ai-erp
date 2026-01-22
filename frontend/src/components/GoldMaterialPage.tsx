@@ -147,10 +147,6 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
   
-  // 收料单数据
-  const [receipts, setReceipts] = useState<GoldTransaction[]>([]);
-  const [receiptsLoading, setReceiptsLoading] = useState(false);
-  
   // 付料单数据
   const [payments, setPayments] = useState<GoldTransaction[]>([]);
   const [paymentsLoading, setPaymentsLoading] = useState(false);
@@ -170,10 +166,6 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
   const [showInitialModal, setShowInitialModal] = useState(false);
   const [initialFormData, setInitialFormData] = useState({ gold_weight: '', remark: '期初金料库存' });
   const [initialSubmitting, setInitialSubmitting] = useState(false);
-  
-  // 待确认收料单（料部）
-  const [pendingReceipts, setPendingReceipts] = useState<GoldTransaction[]>([]);
-  const [pendingLoading, setPendingLoading] = useState(false);
   
   // 取料单数据
   const [withdrawals, setWithdrawals] = useState<CustomerWithdrawal[]>([]);
@@ -294,39 +286,6 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
     setLedgerLoading(false);
   }, [ledgerStartDate, ledgerEndDate, userRole]);
 
-  // 加载收料单列表（使用新系统 /gold-receipts API）
-  const loadReceipts = useCallback(async () => {
-    setReceiptsLoading(true);
-    const url = `${API_ENDPOINTS.API_BASE_URL}/api/gold-material/gold-receipts`;
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        const result = await response.json();
-        // 将新系统数据格式转换为旧格式以兼容UI
-        const receipts = (result.data || []).map((r: any) => ({
-          id: r.id,
-          transaction_no: r.receipt_no,
-          transaction_type: 'income',
-          settlement_order_id: r.settlement_order_id,
-          settlement_no: r.settlement_no,
-          customer_id: r.customer_id,
-          customer_name: r.customer_name,
-          gold_weight: r.gold_weight,
-          status: r.status === 'received' ? 'confirmed' : r.status,
-          created_by: r.created_by,
-          confirmed_by: r.received_by,
-          confirmed_at: r.received_at,
-          created_at: r.created_at,
-          remark: r.remark
-        }));
-        setReceipts(receipts);
-      }
-    } catch (error) {
-      console.error('加载收料单失败:', error);
-    }
-    setReceiptsLoading(false);
-  }, [userRole]);
-
   // 加载付料单列表
   const loadPayments = useCallback(async () => {
     setPaymentsLoading(true);
@@ -404,37 +363,6 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
     }
     setInitialSubmitting(false);
   };
-
-  // 加载待确认收料单（料部）- 使用新系统 /gold-receipts API
-  const loadPendingReceipts = useCallback(async () => {
-    setPendingLoading(true);
-    const url = `${API_ENDPOINTS.API_BASE_URL}/api/gold-material/gold-receipts?status=pending`;
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        const result = await response.json();
-        // 将新系统数据格式转换为旧格式以兼容UI
-        const receipts = (result.data || []).map((r: any) => ({
-          id: r.id,
-          transaction_no: r.receipt_no,
-          transaction_type: 'income',
-          settlement_order_id: r.settlement_order_id,
-          settlement_no: r.settlement_no,
-          customer_id: r.customer_id,
-          customer_name: r.customer_name,
-          gold_weight: r.gold_weight,
-          status: 'pending',
-          created_by: r.created_by,
-          created_at: r.created_at,
-          remark: r.remark
-        }));
-        setPendingReceipts(receipts);
-      }
-    } catch (error) {
-      console.error('加载待确认收料单失败:', error);
-    }
-    setPendingLoading(false);
-  }, [userRole]);
 
   // 加载供应商列表
   const loadSuppliers = useCallback(async () => {
@@ -738,7 +666,6 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
       
       if (response.ok) {
         toast.success('确认成功');
-        loadPendingReceipts();
         loadPendingGoldReceipts();
         loadBalance();
         loadLedger();

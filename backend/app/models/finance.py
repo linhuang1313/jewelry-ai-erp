@@ -135,19 +135,19 @@ class GoldReceipt(Base):
     id = Column(Integer, primary_key=True, index=True)
     receipt_no = Column(String(50), unique=True, index=True, nullable=False)  # 收料单号 (SL+时间戳, QC期初)
     
-    # 关联信息
-    settlement_id = Column(Integer, ForeignKey("settlement_orders.id"), nullable=True)  # 关联结算单（可选）
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)  # 客户ID（期初金料可为空）
+    # 关联信息（添加索引优化查询）
+    settlement_id = Column(Integer, ForeignKey("settlement_orders.id"), nullable=True, index=True)  # 关联结算单
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)  # 客户ID
     
     # 金料信息
     gold_weight = Column(Float, nullable=False)  # 收料克重
     gold_fineness = Column(String(50), default="足金999")  # 成色
     
     # 期初金料标记
-    is_initial_balance = Column(Boolean, default=False)  # 是否为期初金料
+    is_initial_balance = Column(Boolean, default=False, index=True)  # 是否为期初金料
     
-    # 状态
-    status = Column(String(20), default="pending")  # pending=待接收, received=已接收
+    # 状态（添加索引优化按状态查询）
+    status = Column(String(20), default="pending", index=True)  # pending=待接收, received=已接收
     
     # 开单信息
     created_by = Column(String(50), nullable=False)  # 开单人（结算专员）

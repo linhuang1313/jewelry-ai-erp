@@ -650,7 +650,11 @@ async def cancel_transaction(
     user_role: str = Query(default="material", description="用户角色"),
     db: Session = Depends(get_db)
 ):
-    """取消金料流转记录（仅待确认状态可取消）"""
+    """
+    取消金料流转记录（仅待确认状态可取消）
+    
+    注意：收料单(income)请使用新系统 GoldReceipt，此接口主要用于付料单(expense)
+    """
     # 权限检查
     if not has_permission(user_role, 'can_manage_gold_material'):
         raise HTTPException(status_code=403, detail="权限不足：您没有【管理金料流转】的权限")
@@ -693,7 +697,9 @@ async def revoke_gold_confirm(
     db: Session = Depends(get_db)
 ):
     """
-    撤销料部确认（仅管理层）
+    [已废弃] 撤销料部确认（仅管理层）
+    
+    ⚠️ 此接口用于旧系统 GoldMaterialTransaction，新系统请使用 GoldReceipt
     
     - 将confirmed状态回退到pending
     - 回滚客户存料更新（如果有）
@@ -831,7 +837,11 @@ async def download_receipt(
     format: str = Query("pdf", pattern="^(pdf|html)$"),
     db: Session = Depends(get_db)
 ):
-    """下载或打印收料单（支持PDF和HTML格式）"""
+    """
+    [已废弃] 下载或打印收料单（旧系统）
+    
+    ⚠️ 此接口用于旧系统 GoldMaterialTransaction，新系统请使用 /gold-receipts/{id}/print
+    """
     try:
         logger.info(f"下载收料单请求: receipt_id={receipt_id}, format={format}")
         
