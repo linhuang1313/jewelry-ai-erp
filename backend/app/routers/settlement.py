@@ -1169,7 +1169,7 @@ async def download_settlement_order(
                     p.drawRightString(col_x[7] + col_widths[7]*mm - 2, y, f"{total_labor_cost:.2f}")
                     p.drawRightString(col_x[8] + col_widths[8]*mm - 2, y, f"{sales_amount:,.2f}")
                     
-                y -= 8
+                    y -= 8
                     if y < 25 * mm:  # 防止超出页面
                         break
                 
