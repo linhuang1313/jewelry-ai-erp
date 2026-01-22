@@ -125,24 +125,15 @@ def build_transaction_response(transaction: GoldMaterialTransaction, db: Session
 
 
 def get_gold_balance_internal(db: Session) -> dict:
-    """内部函数：获取金料库存余额"""
+    """内部函数：获取金料库存余额（统一使用新系统 GoldReceipt）"""
     from ..models.finance import GoldReceipt
     
-    # 计算总收入 - 来自两个来源：
-    # 1. 旧系统 GoldMaterialTransaction 中的 income 记录（如期初金料）
-    old_income = db.query(func.sum(GoldMaterialTransaction.gold_weight)).filter(
-        GoldMaterialTransaction.transaction_type == 'income',
-        GoldMaterialTransaction.status == 'confirmed'
-    ).scalar() or 0.0
-    
-    # 2. 新系统 GoldReceipt 中的收料记录
-    new_income = db.query(func.sum(GoldReceipt.gold_weight)).filter(
+    # 计算总收入 - 从新系统 GoldReceipt 中查询（包括期初金料和客户收料）
+    total_income = db.query(func.sum(GoldReceipt.gold_weight)).filter(
         GoldReceipt.status == 'received'
     ).scalar() or 0.0
     
-    total_income = old_income + new_income
-    
-    # 计算总支出（已确认的付料单）
+    # 计算总支出（已确认的付料单，仍使用 GoldMaterialTransaction，因为付料单保留在旧模型）
     total_expense = db.query(func.sum(GoldMaterialTransaction.gold_weight)).filter(
         GoldMaterialTransaction.transaction_type == 'expense',
         GoldMaterialTransaction.status == 'confirmed'
@@ -176,388 +167,22 @@ def get_or_create_customer_deposit(customer_id: int, customer_name: str, db: Ses
 
 
 def calculate_settlement_gold_received(settlement_id: int, db: Session) -> float:
-    """计算某结算单已收金料总重量"""
-    receipts = db.query(GoldMaterialTransaction).filter(
-        GoldMaterialTransaction.settlement_order_id == settlement_id,
-        GoldMaterialTransaction.transaction_type == 'income',
-        GoldMaterialTransaction.status != 'cancelled'
+    """计算某结算单已收金料总重量（使用新系统 GoldReceipt）"""
+    from ..models.finance import GoldReceipt
+    
+    receipts = db.query(GoldReceipt).filter(
+        GoldReceipt.settlement_id == settlement_id,
+        GoldReceipt.status != 'cancelled'
     ).all()
     
     return sum(r.gold_weight for r in receipts)
 
 
-# ==================== 收料单管理 ====================
-
-@router.post("/receipts", response_model=GoldMaterialTransactionResponse)
-async def create_gold_receipt(
-    data: GoldReceiptCreate,
-    user_role: str = Query(default="settlement", description="用户角色"),
-    created_by: str = Query(default="结算专员", description="创建人"),
-    db: Session = Depends(get_db)
-):
-    """
-    创建收料单（结算专员收到客户原料后创建）
-    
-    - 验证结算单是否存在且为结料方式
-    - 计算欠款和存料
-    - 创建金料收入记录和往来账记录
-    - 如有超付，更新客户存料
-    """
-    # 权限检查
-    if not has_permission(user_role, 'can_create_gold_receipt'):
-        raise HTTPException(status_code=403, detail="权限不足：您没有【创建收料单】的权限")
-    
-    # 查找结算单
-    settlement = db.query(SettlementOrder).filter(
-        SettlementOrder.id == data.settlement_order_id
-    ).first()
-    if not settlement:
-        raise HTTPException(status_code=404, detail="结算单不存在")
-    
-    if settlement.payment_method != 'physical_gold':
-        raise HTTPException(status_code=400, detail="该结算单不是结料方式，无法创建收料单")
-    
-    if settlement.status not in ['pending', 'confirmed', 'printed']:
-        raise HTTPException(status_code=400, detail=f"结算单状态为 {settlement.status}，无法创建收料单")
-    
-    # 获取销售单和客户信息
-    sales_order = settlement.sales_order
-    if not sales_order:
-        raise HTTPException(status_code=400, detail="结算单未关联销售单")
-    
-    customer_id = sales_order.customer_id
-    customer_name = sales_order.customer_name
-    
-    # 计算该结算单应支付金料和已收金料
-    total_due = settlement.physical_gold_weight or 0.0  # 应支付金料重量
-    total_received = calculate_settlement_gold_received(settlement.id, db)  # 已收金料重量
-    remaining_due = total_due - total_received  # 剩余欠款
-    
-    # 计算本次支付后的情况
-    new_total_received = total_received + data.gold_weight
-    
-    # 本次支付中用于结清欠款的部分和存入存料的部分
-    if data.gold_weight <= remaining_due:
-        # 本次支付 <= 剩余欠款，全部用于结清欠款
-        payment_for_due = data.gold_weight
-        deposit_amount = 0.0
-    else:
-        # 本次支付 > 剩余欠款，部分结清欠款，部分存入存料
-        payment_for_due = remaining_due
-        deposit_amount = data.gold_weight - remaining_due
-    
-    # 计算本次交易后的欠款
-    new_remaining_due = max(0.0, remaining_due - data.gold_weight)
-    
-    # 生成收料单号（SL开头）
-    now = china_now()
-    count = db.query(GoldMaterialTransaction).filter(
-        GoldMaterialTransaction.transaction_no.like(f"SL{now.strftime('%Y%m%d')}%")
-    ).count()
-    receipt_no = f"SL{now.strftime('%Y%m%d')}{count + 1:03d}"
-    
-    # 创建金料收入记录（收料单）
-    transaction = GoldMaterialTransaction(
-        transaction_no=receipt_no,
-        transaction_type='income',
-        settlement_order_id=settlement.id,
-        customer_id=customer_id,
-        customer_name=customer_name,
-        gold_weight=data.gold_weight,
-        status="pending",  # 待料部确认收到
-        created_by=created_by,
-        remark=data.remark
-    )
-    db.add(transaction)
-    db.flush()
-    
-    # 创建客户往来账记录
-    customer_transaction = CustomerTransaction(
-        customer_id=customer_id,
-        customer_name=customer_name,
-        transaction_type='gold_receipt',
-        settlement_order_id=settlement.id,
-        gold_transaction_id=transaction.id,
-        gold_weight=data.gold_weight,
-        gold_due_before=remaining_due,
-        gold_due_after=new_remaining_due,
-        remark=f"收料单：{receipt_no}，结算单：{settlement.settlement_no}。支付欠款：{payment_for_due:.2f}克" + 
-               (f"，存入存料：{deposit_amount:.2f}克" if deposit_amount > 0 else "")
-    )
-    db.add(customer_transaction)
-    
-    # 如果有超付，更新客户存料记录（预处理，实际在料部确认后才生效）
-    # 这里先记录下存料金额，等料部确认后再实际更新存料
-    if deposit_amount > 0:
-        transaction.remark = (transaction.remark or "") + f" [待确认存料：{deposit_amount:.2f}克]"
-    
-    db.commit()
-    db.refresh(transaction)
-    
-    logger.info(f"创建收料单: {receipt_no}, 结算单: {settlement.settlement_no}, "
-                f"金料重量: {data.gold_weight}克, 支付欠款: {payment_for_due}克, 存入存料: {deposit_amount}克")
-    
-    return build_transaction_response(transaction, db)
-
-
-@router.get("/receipts")
-async def get_gold_receipts(
-    status: Optional[str] = None,
-    customer_id: Optional[int] = None,
-    user_role: str = Query(default="settlement", description="用户角色"),
-    db: Session = Depends(get_db)
-):
-    """获取收料单列表"""
-    # 权限检查
-    if not has_permission(user_role, 'can_view_gold_material'):
-        raise HTTPException(status_code=403, detail="权限不足：您没有【查看金料记录】的权限")
-    
-    # 使用 joinedload 预加载关联数据，避免 N+1 查询问题
-    query = db.query(GoldMaterialTransaction).options(
-        joinedload(GoldMaterialTransaction.settlement_order),
-        joinedload(GoldMaterialTransaction.customer)
-    ).filter(
-        GoldMaterialTransaction.transaction_type == 'income'
-    )
-    
-    if status:
-        query = query.filter(GoldMaterialTransaction.status == status)
-    if customer_id:
-        query = query.filter(GoldMaterialTransaction.customer_id == customer_id)
-    
-    receipts = query.order_by(desc(GoldMaterialTransaction.created_at)).all()
-    
-    return {
-        "success": True,
-        "receipts": [build_transaction_response(r, db) for r in receipts],
-        "total": len(receipts)
-    }
-
-
-@router.put("/receipts/{receipt_id}")
-async def update_gold_receipt(
-    receipt_id: int,
-    data: GoldReceiptUpdate,
-    user_role: str = Query(default="settlement", description="用户角色"),
-    db: Session = Depends(get_db)
-):
-    """修改收料单（仅结算专员，且状态为pending）"""
-    # 权限检查
-    if not has_permission(user_role, 'can_create_gold_receipt'):
-        raise HTTPException(status_code=403, detail="权限不足：您没有【创建收料单】的权限")
-    
-    transaction = db.query(GoldMaterialTransaction).filter(
-        GoldMaterialTransaction.id == receipt_id,
-        GoldMaterialTransaction.transaction_type == 'income'
-    ).first()
-    
-    if not transaction:
-        raise HTTPException(status_code=404, detail="收料单不存在")
-    
-    if transaction.status != "pending":
-        raise HTTPException(status_code=400, detail="只能修改待确认状态的收料单")
-    
-    # 更新字段
-    if data.gold_weight is not None:
-        # 重新计算欠款和存料
-        if transaction.settlement_order_id:
-            settlement = db.query(SettlementOrder).filter(
-                SettlementOrder.id == transaction.settlement_order_id
-            ).first()
-            if settlement:
-                total_due = settlement.physical_gold_weight or 0.0
-                # 计算其他收料单的已收金料（不包括当前这条）
-                other_receipts = db.query(GoldMaterialTransaction).filter(
-                    GoldMaterialTransaction.settlement_order_id == settlement.id,
-                    GoldMaterialTransaction.transaction_type == 'income',
-                    GoldMaterialTransaction.id != transaction.id,
-                    GoldMaterialTransaction.status != 'cancelled'
-                ).all()
-                other_received = sum(r.gold_weight for r in other_receipts)
-                
-                # 计算新的总收金料
-                new_total_received = other_received + data.gold_weight
-                new_remaining_due = max(0.0, total_due - new_total_received)
-                
-                # 更新客户往来账记录
-                customer_transaction = db.query(CustomerTransaction).filter(
-                    CustomerTransaction.gold_transaction_id == transaction.id
-                ).first()
-                if customer_transaction:
-                    customer_transaction.gold_weight = data.gold_weight
-                    customer_transaction.gold_due_after = new_remaining_due
-                    # 重新计算支付欠款和存料
-                    if data.gold_weight <= (total_due - other_received):
-                        payment_for_due = data.gold_weight
-                        deposit_amount = 0.0
-                    else:
-                        payment_for_due = total_due - other_received
-                        deposit_amount = data.gold_weight - payment_for_due
-                    
-                    customer_transaction.remark = (
-                        f"收料单：{transaction.transaction_no}，结算单：{settlement.settlement_no}。"
-                        f"支付欠款：{payment_for_due:.2f}克" +
-                        (f"，存入存料：{deposit_amount:.2f}克" if deposit_amount > 0 else "")
-                    )
-        
-        transaction.gold_weight = data.gold_weight
-    
-    if data.remark is not None:
-        transaction.remark = data.remark
-    
-    db.commit()
-    db.refresh(transaction)
-    
-    logger.info(f"修改收料单: {transaction.transaction_no}")
-    
-    return {
-        "success": True,
-        "message": "收料单已修改",
-        "transaction": build_transaction_response(transaction, db)
-    }
-
-
-@router.post("/receipts/{receipt_id}/cancel")
-async def cancel_gold_receipt(
-    receipt_id: int,
-    user_role: str = Query(default="settlement", description="用户角色"),
-    db: Session = Depends(get_db)
-):
-    """取消收料单（仅结算专员，且状态为pending）"""
-    # 权限检查
-    if not has_permission(user_role, 'can_create_gold_receipt'):
-        raise HTTPException(status_code=403, detail="权限不足：您没有【创建收料单】的权限")
-    
-    transaction = db.query(GoldMaterialTransaction).filter(
-        GoldMaterialTransaction.id == receipt_id,
-        GoldMaterialTransaction.transaction_type == 'income'
-    ).first()
-    
-    if not transaction:
-        raise HTTPException(status_code=404, detail="收料单不存在")
-    
-    if transaction.status != "pending":
-        raise HTTPException(status_code=400, detail="只能取消待确认状态的收料单")
-    
-    # 取消收料单
-    transaction.status = "cancelled"
-    
-    # 同时取消关联的往来账记录
-    customer_transaction = db.query(CustomerTransaction).filter(
-        CustomerTransaction.gold_transaction_id == transaction.id
-    ).first()
-    if customer_transaction:
-        customer_transaction.status = "cancelled"
-    
-    db.commit()
-    db.refresh(transaction)
-    
-    logger.info(f"取消收料单: {transaction.transaction_no}")
-    
-    return {
-        "success": True,
-        "message": "收料单已取消",
-        "transaction": build_transaction_response(transaction, db)
-    }
-
-
-# ==================== 料部确认收到原料 ====================
-
-@router.post("/transactions/{transaction_id}/receive")
-async def confirm_gold_receive(
-    transaction_id: int,
-    data: GoldMaterialTransactionConfirm,
-    user_role: str = Query(default="material", description="用户角色"),
-    db: Session = Depends(get_db)
-):
-    """
-    料部确认收到原料（从结算同事处）
-    
-    - 更新金料收入记录状态为confirmed
-    - 如有超付存料，更新客户存料记录
-    """
-    # 权限检查
-    if not has_permission(user_role, 'can_confirm_gold_receive'):
-        raise HTTPException(status_code=403, detail="权限不足：您没有【确认收到原料】的权限")
-    
-    transaction = db.query(GoldMaterialTransaction).filter(
-        GoldMaterialTransaction.id == transaction_id,
-        GoldMaterialTransaction.transaction_type == 'income'
-    ).first()
-    
-    if not transaction:
-        raise HTTPException(status_code=404, detail="收料单不存在")
-    
-    if transaction.status != "pending":
-        raise HTTPException(status_code=400, detail=f"该记录状态为 {transaction.status}，无法确认")
-    
-    # 更新状态
-    transaction.status = "confirmed"
-    transaction.confirmed_by = data.confirmed_by
-    transaction.confirmed_at = china_now()
-    
-    # 检查是否有超付存料需要处理
-    if transaction.settlement_order_id and transaction.customer_id:
-        settlement = db.query(SettlementOrder).filter(
-            SettlementOrder.id == transaction.settlement_order_id
-        ).first()
-        
-        if settlement:
-            total_due = settlement.physical_gold_weight or 0.0
-            # 重新计算已收金料（不包含当前这条，因为它之前是pending）
-            other_receipts = db.query(GoldMaterialTransaction).filter(
-                GoldMaterialTransaction.settlement_order_id == settlement.id,
-                GoldMaterialTransaction.transaction_type == 'income',
-                GoldMaterialTransaction.status == 'confirmed',
-                GoldMaterialTransaction.id != transaction.id
-            ).all()
-            previously_received = sum(r.gold_weight for r in other_receipts)
-            
-            # 当前确认后的总收金料
-            total_received = previously_received + transaction.gold_weight
-            
-            # 计算存料
-            if total_received > total_due:
-                deposit_amount = total_received - total_due
-                
-                # 更新客户存料
-                deposit = get_or_create_customer_deposit(
-                    transaction.customer_id, 
-                    transaction.customer_name, 
-                    db
-                )
-                balance_before = deposit.current_balance
-                deposit.current_balance += deposit_amount
-                deposit.total_deposited += deposit_amount
-                deposit.last_transaction_at = china_now()
-                
-                # 创建存料交易记录
-                deposit_transaction = CustomerGoldDepositTransaction(
-                    customer_id=transaction.customer_id,
-                    customer_name=transaction.customer_name,
-                    transaction_type='deposit',
-                    gold_transaction_id=transaction.id,
-                    amount=deposit_amount,
-                    balance_before=balance_before,
-                    balance_after=deposit.current_balance,
-                    created_by=data.confirmed_by,
-                    remark=f"收料单：{transaction.transaction_no}，超付存入存料"
-                )
-                db.add(deposit_transaction)
-                
-                logger.info(f"客户存料更新: 客户={transaction.customer_name}, "
-                           f"存入={deposit_amount}克, 新余额={deposit.current_balance}克")
-    
-    db.commit()
-    db.refresh(transaction)
-    
-    logger.info(f"确认收料单: {transaction.transaction_no}, 确认人: {data.confirmed_by}")
-    
-    return {
-        "success": True,
-        "message": "收料单已确认",
-        "transaction": build_transaction_response(transaction, db)
-    }
+# ==================== 旧收料单API（已废弃，请使用 /gold-receipts 接口）====================
+# 以下API已废弃，保留仅为向后兼容，请使用新的 /gold-receipts 系列API
+# POST /gold-receipts - 创建收料单
+# GET /gold-receipts - 获取收料单列表
+# POST /gold-receipts/{receipt_id}/receive - 料部确认接收
 
 
 # ==================== 付料单管理 ====================
@@ -754,8 +379,10 @@ async def set_initial_gold_balance(
 ):
     """
     设置期初金料余额（仅管理层或料部可操作）
-    这会创建一条特殊的收料记录，代表系统启用时的初始金料库存
+    使用新系统 GoldReceipt 创建期初金料记录
     """
+    from ..models.finance import GoldReceipt
+    
     # 权限检查 - 仅管理层和料部可以设置期初
     if user_role not in ['manager', 'material']:
         raise HTTPException(status_code=403, detail="仅管理层或料部可以设置期初金料")
@@ -763,35 +390,38 @@ async def set_initial_gold_balance(
     if gold_weight <= 0:
         raise HTTPException(status_code=400, detail="期初金料克重必须大于0")
     
-    # 检查是否已有期初记录
-    existing = db.query(GoldMaterialTransaction).filter(
-        GoldMaterialTransaction.transaction_no.like("QC%")
+    # 检查是否已有期初记录（在新系统中检查）
+    existing = db.query(GoldReceipt).filter(
+        GoldReceipt.is_initial_balance == True
     ).first()
     
     if existing:
         raise HTTPException(
             status_code=400, 
-            detail=f"已存在期初金料记录（{existing.transaction_no}：{existing.gold_weight}克），如需修改请联系管理员删除后重新设置"
+            detail=f"已存在期初金料记录（{existing.receipt_no}：{existing.gold_weight}克），如需修改请联系管理员删除后重新设置"
         )
     
     # 生成期初单号（QC开头，代表"期初"）
     now = china_now()
     initial_no = f"QC{now.strftime('%Y%m%d')}001"
     
-    # 创建期初金料记录（作为收料入账）
-    transaction = GoldMaterialTransaction(
-        transaction_no=initial_no,
-        transaction_type='income',
+    # 创建期初金料记录（使用新系统 GoldReceipt）
+    receipt = GoldReceipt(
+        receipt_no=initial_no,
+        customer_id=None,  # 期初金料不关联客户
+        settlement_id=None,
         gold_weight=gold_weight,
-        status='confirmed',  # 期初直接确认
+        gold_fineness="足金999",
+        is_initial_balance=True,  # 标记为期初金料
+        status='received',  # 期初直接已接收
         created_by=user_role,
-        confirmed_by=user_role,
-        confirmed_at=now,
+        received_by=user_role,
+        received_at=now,
         remark=remark or "期初金料库存"
     )
-    db.add(transaction)
+    db.add(receipt)
     db.commit()
-    db.refresh(transaction)
+    db.refresh(receipt)
     
     logger.info(f"设置期初金料: {gold_weight}克, 单号: {initial_no}, 操作人: {user_role}")
     
@@ -801,7 +431,7 @@ async def set_initial_gold_balance(
         "transaction": {
             "transaction_no": initial_no,
             "gold_weight": gold_weight,
-            "status": "confirmed",
+            "status": "received",
             "remark": remark or "期初金料库存",
             "created_at": now.isoformat()
         }
@@ -813,14 +443,16 @@ async def get_initial_gold_balance(
     user_role: str = Query(default="material", description="用户角色"),
     db: Session = Depends(get_db)
 ):
-    """获取期初金料信息"""
+    """获取期初金料信息（使用新系统 GoldReceipt）"""
+    from ..models.finance import GoldReceipt
+    
     # 权限检查
     if not has_permission(user_role, 'can_view_gold_material'):
         raise HTTPException(status_code=403, detail="权限不足")
     
-    # 查询期初记录
-    initial = db.query(GoldMaterialTransaction).filter(
-        GoldMaterialTransaction.transaction_no.like("QC%")
+    # 查询期初记录（在新系统中查询）
+    initial = db.query(GoldReceipt).filter(
+        GoldReceipt.is_initial_balance == True
     ).first()
     
     if not initial:
@@ -835,12 +467,12 @@ async def get_initial_gold_balance(
         "success": True,
         "has_initial": True,
         "initial": {
-            "transaction_no": initial.transaction_no,
+            "transaction_no": initial.receipt_no,
             "gold_weight": initial.gold_weight,
             "status": initial.status,
             "remark": initial.remark,
             "created_at": initial.created_at.isoformat() if initial.created_at else None,
-            "confirmed_at": initial.confirmed_at.isoformat() if initial.confirmed_at else None
+            "confirmed_at": initial.received_at.isoformat() if initial.received_at else None
         }
     }
 
@@ -936,11 +568,10 @@ async def get_customer_transactions(
     
     for settlement in settlements:
         total_due += settlement.physical_gold_weight or 0.0
-        # 查询该结算单的所有已确认收料单
-        receipts = db.query(GoldMaterialTransaction).filter(
-            GoldMaterialTransaction.settlement_order_id == settlement.id,
-            GoldMaterialTransaction.transaction_type == 'income',
-            GoldMaterialTransaction.status == 'confirmed'
+        # 查询该结算单的所有已接收收料单（使用新系统 GoldReceipt）
+        receipts = db.query(GoldReceipt).filter(
+            GoldReceipt.settlement_id == settlement.id,
+            GoldReceipt.status == 'received'
         ).all()
         total_received += sum(r.gold_weight for r in receipts)
     

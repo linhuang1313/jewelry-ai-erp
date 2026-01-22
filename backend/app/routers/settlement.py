@@ -845,11 +845,12 @@ async def mark_settlement_printed(
 
 
 def calculate_gold_received(settlement_id: int, db: Session) -> float:
-    """计算某结算单已收金料总重量"""
-    receipts = db.query(GoldMaterialTransaction).filter(
-        GoldMaterialTransaction.settlement_order_id == settlement_id,
-        GoldMaterialTransaction.transaction_type == 'income',
-        GoldMaterialTransaction.status.in_(['pending', 'confirmed'])  # 包括待确认和已确认
+    """计算某结算单已收金料总重量（使用新系统 GoldReceipt）"""
+    from ..models.finance import GoldReceipt
+    
+    receipts = db.query(GoldReceipt).filter(
+        GoldReceipt.settlement_id == settlement_id,
+        GoldReceipt.status.in_(['pending', 'received'])  # 包括待接收和已接收
     ).all()
     
     return sum(r.gold_weight for r in receipts)

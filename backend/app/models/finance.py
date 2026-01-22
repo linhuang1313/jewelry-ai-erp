@@ -129,19 +129,22 @@ class ReminderRecord(Base):
 
 
 class GoldReceipt(Base):
-    """收料单表 - 记录客户交付金料"""
+    """收料单表 - 记录客户交付金料和期初金料"""
     __tablename__ = "gold_receipts"
     
     id = Column(Integer, primary_key=True, index=True)
-    receipt_no = Column(String(50), unique=True, index=True, nullable=False)  # 收料单号 (SL+时间戳)
+    receipt_no = Column(String(50), unique=True, index=True, nullable=False)  # 收料单号 (SL+时间戳, QC期初)
     
     # 关联信息
     settlement_id = Column(Integer, ForeignKey("settlement_orders.id"), nullable=True)  # 关联结算单（可选）
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)  # 客户ID
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)  # 客户ID（期初金料可为空）
     
     # 金料信息
     gold_weight = Column(Float, nullable=False)  # 收料克重
     gold_fineness = Column(String(50), default="足金999")  # 成色
+    
+    # 期初金料标记
+    is_initial_balance = Column(Boolean, default=False)  # 是否为期初金料
     
     # 状态
     status = Column(String(20), default="pending")  # pending=待接收, received=已接收
