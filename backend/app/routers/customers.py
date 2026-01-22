@@ -1501,3 +1501,68 @@ async def get_customer_transactions_detail(
     except Exception as e:
         logger.error(f"获取客户往来账明细失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取往来账明细失败: {str(e)}")
+
+
+# ========== 手动修复客户金料账户 API ==========
+
+@router.post("/{customer_id}/fix-gold-account")
+async def fix_customer_gold_account(
+    customer_id: int,
+    correct_balance: float = Query(..., description="正确的净金料值（正=存料，负=欠料）"),
+    db: Session = Depends(get_db)
+):
+    """
+    手动修复客户金料账户余额
+    
+    参数:
+    - customer_id: 客户ID
+    - correct_balance: 正确的净金料值（正数=存料，负数=欠料，0=清账）
+    
+    此API用于一次性修复数据，不会自动执行。
+    """
+    try:
+        # 查找客户
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        if not customer:
+            raise HTTPException(status_code=404, detail=f"客户ID {customer_id} 不存在")
+        
+        # 查找或创建金料账户记录
+        deposit = db.query(CustomerGoldDeposit).filter(
+            CustomerGoldDeposit.customer_id == customer_id
+        ).first()
+        
+        old_balance = 0.0
+        if deposit:
+            old_balance = deposit.current_balance or 0.0
+            deposit.current_balance = correct_balance
+        else:
+            # 创建新记录
+            deposit = CustomerGoldDeposit(
+                customer_id=customer_id,
+                customer_name=customer.name,
+                current_balance=correct_balance,
+                total_deposited=max(0, correct_balance),
+                total_used=max(0, -correct_balance)
+            )
+            db.add(deposit)
+        
+        db.commit()
+        
+        logger.info(f"[金料账户修复] 客户 {customer.name}(ID:{customer_id}): {old_balance:.2f}克 -> {correct_balance:.2f}克")
+        
+        return {
+            "success": True,
+            "message": f"客户 {customer.name} 的金料账户已修复",
+            "customer_id": customer_id,
+            "customer_name": customer.name,
+            "old_balance": old_balance,
+            "new_balance": correct_balance,
+            "status": "存料" if correct_balance > 0 else ("欠料" if correct_balance < 0 else "清账")
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"修复客户金料账户失败: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"修复失败: {str(e)}")
