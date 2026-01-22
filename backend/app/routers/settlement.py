@@ -461,24 +461,24 @@ async def create_settlement_order(
         from .gold_material import get_or_create_customer_deposit
         customer_deposit = get_or_create_customer_deposit(customer_id, customer_name, db)
         
-            balance_before = customer_deposit.current_balance
+        balance_before = customer_deposit.current_balance
         customer_deposit.current_balance -= actual_gold_due
         customer_deposit.total_used += actual_gold_due
-            customer_deposit.last_transaction_at = now
-            
+        customer_deposit.last_transaction_at = now
+        
         # 创建金料账户变动记录
-            deposit_transaction = CustomerGoldDepositTransaction(
-                customer_id=customer_id,
-                customer_name=customer_name,
-                transaction_type='use',
-                settlement_order_id=settlement.id,
+        deposit_transaction = CustomerGoldDepositTransaction(
+            customer_id=customer_id,
+            customer_name=customer_name,
+            transaction_type='use',
+            settlement_order_id=settlement.id,
             amount=actual_gold_due,
-                balance_before=balance_before,
-                balance_after=customer_deposit.current_balance,
-                created_by=created_by,
+            balance_before=balance_before,
+            balance_after=customer_deposit.current_balance,
+            created_by=created_by,
             remark=f"结算单：{settlement_no}，结料支付"
-            )
-            db.add(deposit_transaction)
+        )
+        db.add(deposit_transaction)
             
         # 记录余额变化
         if customer_deposit.current_balance >= 0:
