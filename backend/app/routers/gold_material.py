@@ -58,6 +58,10 @@ from ..utils.document_generator import (
     get_current_time_str,
     get_status_label,
 )
+from ..utils.response import (
+    success_response, error_response, paginated_response,
+    not_found_response, conflict_response, server_error_response, ErrorCode
+)
 
 logger = logging.getLogger(__name__)
 
@@ -340,11 +344,12 @@ async def get_gold_payments(
     
     payments = query.order_by(desc(GoldMaterialTransaction.created_at)).all()
     
-    return {
-        "success": True,
-        "payments": [build_transaction_response(p, db) for p in payments],
-        "total": len(payments)
-    }
+    return success_response(
+        data={
+            "payments": [build_transaction_response(p, db) for p in payments],
+            "total": len(payments)
+        }
+    )
 
 
 # ==================== 金料库存查询 ====================
@@ -425,17 +430,18 @@ async def set_initial_gold_balance(
     
     logger.info(f"设置期初金料: {gold_weight}克, 单号: {initial_no}, 操作人: {user_role}")
     
-    return {
-        "success": True,
-        "message": f"✅ 期初金料 {gold_weight}克 已成功设置",
-        "transaction": {
-            "transaction_no": initial_no,
-            "gold_weight": gold_weight,
-            "status": "received",
-            "remark": remark or "期初金料库存",
-            "created_at": now.isoformat()
+    return success_response(
+        message=f"✅ 期初金料 {gold_weight}克 已成功设置",
+        data={
+            "transaction": {
+                "transaction_no": initial_no,
+                "gold_weight": gold_weight,
+                "status": "received",
+                "remark": remark or "期初金料库存",
+                "created_at": now.isoformat()
+            }
         }
-    }
+    )
 
 
 @router.get("/initial-balance")
@@ -456,25 +462,24 @@ async def get_initial_gold_balance(
     ).first()
     
     if not initial:
-        return {
-            "success": True,
-            "has_initial": False,
-            "message": "尚未设置期初金料",
-            "initial": None
-        }
+        return success_response(
+            message="尚未设置期初金料",
+            data={"has_initial": False, "initial": None}
+        )
     
-    return {
-        "success": True,
-        "has_initial": True,
-        "initial": {
-            "transaction_no": initial.receipt_no,
-            "gold_weight": initial.gold_weight,
-            "status": initial.status,
-            "remark": initial.remark,
-            "created_at": initial.created_at.isoformat() if initial.created_at else None,
-            "confirmed_at": initial.received_at.isoformat() if initial.received_at else None
+    return success_response(
+        data={
+            "has_initial": True,
+            "initial": {
+                "transaction_no": initial.receipt_no,
+                "gold_weight": initial.gold_weight,
+                "status": initial.status,
+                "remark": initial.remark,
+                "created_at": initial.created_at.isoformat() if initial.created_at else None,
+                "confirmed_at": initial.received_at.isoformat() if initial.received_at else None
+            }
         }
-    }
+    )
 
 
 # ==================== 客户存料管理 ====================
@@ -504,32 +509,33 @@ async def get_customer_deposit(
         CustomerGoldDepositTransaction.status == "active"
     ).order_by(desc(CustomerGoldDepositTransaction.created_at)).limit(20).all()
     
-    return {
-        "success": True,
-        "customer": {
-            "id": customer.id,
-            "name": customer.name,
-        },
-        "deposit": {
-            "current_balance": deposit.current_balance,
-            "total_deposited": deposit.total_deposited,
-            "total_used": deposit.total_used,
-            "last_transaction_at": deposit.last_transaction_at,
-        },
-        "recent_transactions": [
-            {
-                "id": t.id,
-                "transaction_type": t.transaction_type,
-                "amount": t.amount,
-                "balance_before": t.balance_before,
-                "balance_after": t.balance_after,
-                "created_at": t.created_at,
-                "created_by": t.created_by,
-                "remark": t.remark
-            }
-            for t in recent_transactions
-        ]
-    }
+    return success_response(
+        data={
+            "customer": {
+                "id": customer.id,
+                "name": customer.name,
+            },
+            "deposit": {
+                "current_balance": deposit.current_balance,
+                "total_deposited": deposit.total_deposited,
+                "total_used": deposit.total_used,
+                "last_transaction_at": deposit.last_transaction_at,
+            },
+            "recent_transactions": [
+                {
+                    "id": t.id,
+                    "transaction_type": t.transaction_type,
+                    "amount": t.amount,
+                    "balance_before": t.balance_before,
+                    "balance_after": t.balance_after,
+                    "created_at": t.created_at,
+                    "created_by": t.created_by,
+                    "remark": t.remark
+                }
+                for t in recent_transactions
+            ]
+        }
+    )
 
 
 # ==================== 客户往来账查询 ====================
@@ -624,22 +630,23 @@ async def get_customer_transactions(
             "remark": t.remark
         })
     
-    return {
-        "success": True,
-        "customer": {
-            "id": customer.id,
-            "name": customer.name,
-        },
-        "summary": {
-            "current_gold_due": current_due,
-            "total_gold_due": total_due,
-            "total_gold_received": total_received,
-            "current_deposit": current_deposit,
-            "total_deposited": total_deposited,
-            "total_used": total_used,
-        },
-        "transactions": transaction_list
-    }
+    return success_response(
+        data={
+            "customer": {
+                "id": customer.id,
+                "name": customer.name,
+            },
+            "summary": {
+                "current_gold_due": current_due,
+                "total_gold_due": total_due,
+                "total_gold_received": total_received,
+                "current_deposit": current_deposit,
+                "total_deposited": total_deposited,
+                "total_used": total_used,
+            },
+            "transactions": transaction_list
+        }
+    )
 
 
 # ==================== 取消金料流转记录 ====================
@@ -683,11 +690,10 @@ async def cancel_transaction(
     
     logger.info(f"取消金料流转记录: {transaction.transaction_no}")
     
-    return {
-        "success": True,
-        "message": "已取消",
-        "transaction": build_transaction_response(transaction, db)
-    }
+    return success_response(
+        message="已取消",
+        data={"transaction": build_transaction_response(transaction, db)}
+    )
 
 
 @router.post("/transactions/{transaction_id}/revoke")
@@ -778,11 +784,10 @@ async def revoke_gold_confirm(
     
     logger.info(f"撤销确认收料单: {transaction.transaction_no}, 操作人: {user_role}")
     
-    return {
-        "success": True,
-        "message": "已撤销确认",
-        "transaction": build_transaction_response(transaction, db)
-    }
+    return success_response(
+        message="已撤销确认",
+        data={"transaction": build_transaction_response(transaction, db)}
+    )
 
 
 # ==================== 获取所有金料流转记录 ====================
@@ -808,11 +813,12 @@ async def get_all_transactions(
     
     transactions = query.order_by(desc(GoldMaterialTransaction.created_at)).all()
     
-    return {
-        "success": True,
-        "transactions": [build_transaction_response(t, db) for t in transactions],
-        "total": len(transactions)
-    }
+    return success_response(
+        data={
+            "transactions": [build_transaction_response(t, db) for t in transactions],
+            "total": len(transactions)
+        }
+    )
 
 
 # ==================== 收料单打印和下载 ====================
@@ -1127,18 +1133,19 @@ async def get_gold_ledger(
     total_expense = sum(day["expense"] for day in ledger_list)
     total_net = total_income - total_expense
     
-    return {
-        "success": True,
-        "start_date": start_date or start_dt.strftime('%Y-%m-%d'),
-        "end_date": end_date or end_dt.strftime('%Y-%m-%d'),
-        "ledger": ledger_list,
-        "summary": {
-            "total_income": total_income,
-            "total_expense": total_expense,
-            "total_net": total_net,
-            "days_count": len(ledger_list)
+    return success_response(
+        data={
+            "start_date": start_date or start_dt.strftime('%Y-%m-%d'),
+            "end_date": end_date or end_dt.strftime('%Y-%m-%d'),
+            "ledger": ledger_list,
+            "summary": {
+                "total_income": total_income,
+                "total_expense": total_expense,
+                "total_net": total_net,
+                "days_count": len(ledger_list)
+            }
         }
-    }
+    )
 
 
 @router.get("/ledger/export")
@@ -1500,11 +1507,12 @@ async def get_customer_withdrawals(
     
     withdrawals = query.order_by(desc(CustomerWithdrawal.created_at)).all()
     
-    return {
-        "success": True,
-        "withdrawals": [CustomerWithdrawalResponse.model_validate(w) for w in withdrawals],
-        "total": len(withdrawals)
-    }
+    return success_response(
+        data={
+            "withdrawals": [CustomerWithdrawalResponse.model_validate(w) for w in withdrawals],
+            "total": len(withdrawals)
+        }
+    )
 
 
 @router.post("/withdrawals/{withdrawal_id}/complete")
@@ -1544,11 +1552,10 @@ async def complete_customer_withdrawal(
     
     logger.info(f"确认取料单已取: {withdrawal.withdrawal_no}, 客户: {withdrawal.customer_name}, 克重: {withdrawal.gold_weight}克, 确认人: {data.completed_by}")
     
-    return {
-        "success": True,
-        "message": f"取料单 {withdrawal.withdrawal_no} 已确认取走",
-        "withdrawal": CustomerWithdrawalResponse.model_validate(withdrawal)
-    }
+    return success_response(
+        message=f"取料单 {withdrawal.withdrawal_no} 已确认取走",
+        data={"withdrawal": CustomerWithdrawalResponse.model_validate(withdrawal)}
+    )
 
 
 @router.post("/withdrawals/{withdrawal_id}/complete-old")
@@ -1618,11 +1625,10 @@ async def complete_customer_withdrawal_old(
     logger.info(f"完成取料单: {withdrawal.withdrawal_no}, 客户: {withdrawal.customer_name}, "
                f"克重: {withdrawal.gold_weight}克, 余额: {deposit.current_balance}克")
     
-    return {
-        "success": True,
-        "message": "取料单已完成",
-        "withdrawal": CustomerWithdrawalResponse.model_validate(withdrawal)
-    }
+    return success_response(
+        message="取料单已完成",
+        data={"withdrawal": CustomerWithdrawalResponse.model_validate(withdrawal)}
+    )
 
 
 @router.post("/withdrawals/{withdrawal_id}/cancel")
@@ -1646,11 +1652,10 @@ async def cancel_customer_withdrawal(
     db.commit()
     db.refresh(withdrawal)
     
-    return {
-        "success": True,
-        "message": "取料单已取消",
-        "withdrawal": CustomerWithdrawalResponse.model_validate(withdrawal)
-    }
+    return success_response(
+        message="取料单已取消",
+        data={"withdrawal": CustomerWithdrawalResponse.model_validate(withdrawal)}
+    )
 
 
 @router.get("/withdrawals/{withdrawal_id}/download")
@@ -1886,11 +1891,12 @@ async def get_customer_transfers(
     
     transfers = query.order_by(desc(CustomerTransfer.created_at)).all()
     
-    return {
-        "success": True,
-        "transfers": [CustomerTransferResponse.model_validate(t) for t in transfers],
-        "total": len(transfers)
-    }
+    return success_response(
+        data={
+            "transfers": [CustomerTransferResponse.model_validate(t) for t in transfers],
+            "total": len(transfers)
+        }
+    )
 
 
 @router.post("/transfers/{transfer_id}/confirm")
@@ -1992,11 +1998,10 @@ async def confirm_customer_transfer(
                f"{transfer.to_customer_name}({to_deposit.current_balance}克), "
                f"克重: {transfer.gold_weight}克")
     
-    return {
-        "success": True,
-        "message": "转料单已确认",
-        "transfer": CustomerTransferResponse.model_validate(transfer)
-    }
+    return success_response(
+        message="转料单已确认",
+        data={"transfer": CustomerTransferResponse.model_validate(transfer)}
+    )
 
 
 @router.post("/transfers/{transfer_id}/cancel")
@@ -2020,11 +2025,10 @@ async def cancel_customer_transfer(
     db.commit()
     db.refresh(transfer)
     
-    return {
-        "success": True,
-        "message": "转料单已取消",
-        "transfer": CustomerTransferResponse.model_validate(transfer)
-    }
+    return success_response(
+        message="转料单已取消",
+        data={"transfer": CustomerTransferResponse.model_validate(transfer)}
+    )
 
 
 @router.get("/transfers/{transfer_id}/download")
@@ -2142,11 +2146,7 @@ async def get_gold_receipts(
             "created_at": r.created_at.isoformat() if r.created_at else None,
         })
     
-    return {
-        "success": True,
-        "data": result,
-        "total": total
-    }
+    return success_response(data={"items": result, "total": total})
 
 
 @router.post("/gold-receipts")
@@ -2201,18 +2201,18 @@ async def create_gold_receipt(
     
     logger.info(f"创建收料单: {receipt_no}, 客户={customer.name}, 克重={gold_weight}")
     
-    return {
-        "success": True,
-        "message": "收料单创建成功",
-        "data": {
+    return success_response(
+        message="收料单创建成功",
+        data={
             "id": receipt.id,
             "receipt_no": receipt.receipt_no,
             "customer_name": customer.name,
             "gold_weight": receipt.gold_weight,
             "gold_fineness": receipt.gold_fineness,
             "status": receipt.status
-        }
-    }
+        },
+        code=ErrorCode.CREATED
+    )
 
 
 @router.post("/gold-receipts/{receipt_id}/receive")
@@ -2307,10 +2307,9 @@ async def confirm_gold_receipt(
     else:
         message = f"收料确认成功！来料 {gold_weight:.2f}克，剩余欠料 {abs(deposit.current_balance):.2f}克"
     
-    return {
-        "success": True,
-        "message": message,
-        "data": {
+    return success_response(
+        message=message,
+        data={
             "id": receipt.id,
             "receipt_no": receipt.receipt_no,
             "status": receipt.status,
@@ -2319,9 +2318,9 @@ async def confirm_gold_receipt(
             "gold_weight": gold_weight,
             "balance_before": round(balance_before, 2),
             "balance_after": round(deposit.current_balance, 2),
-            "net_gold": round(deposit.current_balance, 2)  # 净金料值
+            "net_gold": round(deposit.current_balance, 2)
         }
-    }
+    )
 
 
 @router.get("/gold-receipts/{receipt_id}")
@@ -2338,9 +2337,8 @@ async def get_gold_receipt_detail(
     if not receipt:
         raise HTTPException(status_code=404, detail="收料单不存在")
     
-    return {
-        "success": True,
-        "data": {
+    return success_response(
+        data={
             "id": receipt.id,
             "receipt_no": receipt.receipt_no,
             "settlement_id": receipt.settlement_id,
@@ -2357,7 +2355,7 @@ async def get_gold_receipt_detail(
             "remark": receipt.remark,
             "created_at": receipt.created_at.isoformat() if receipt.created_at else None,
         }
-    }
+    )
 
 
 @router.get("/gold-receipts/{receipt_id}/print")
@@ -2781,80 +2779,81 @@ async def get_gold_daily_summary(
     ).order_by(CustomerWithdrawal.created_at.desc()).all()
     
     # 构建响应
-    return {
-        "success": True,
-        "period": period,
-        "date_range": {
-            "start": start_date.isoformat(),
-            "end": end_date.isoformat()
-        },
-        "receipt_summary": {
-            "total_count": receipt_stats.count or 0,
-            "total_weight": float(receipt_stats.total_weight or 0),
-            "by_customer": [
-                {
-                    "customer_id": r.customer_id,
-                    "customer_name": r.customer_name,
-                    "count": r.count,
-                    "total_weight": float(r.total_weight or 0)
-                }
-                for r in receipt_by_customer
-            ],
-            "receipts": [
-                {
-                    "id": r.id,
-                    "receipt_no": r.receipt_no,
-                    "customer_id": r.customer_id,
-                    "customer_name": db.query(Customer.name).filter(Customer.id == r.customer_id).scalar() or "未知",
-                    "gold_weight": float(r.gold_weight or 0),
-                    "gold_fineness": r.gold_fineness,
-                    "status": r.status,
-                    "created_at": r.created_at.isoformat() if r.created_at else None,
-                    "remark": r.remark
-                }
-                for r in receipt_details
-            ]
-        },
-        "payment_summary": {
-            "total_count": payment_stats.count or 0,
-            "total_weight": float(payment_stats.total_weight or 0),
-            "by_supplier": [
-                {
-                    "supplier_id": p.supplier_id,
-                    "supplier_name": p.supplier_name or "未知供应商",
-                    "count": p.count,
-                    "total_weight": float(p.total_weight or 0)
-                }
-                for p in payment_by_supplier
-            ]
-        },
-        "withdrawal_summary": {
-            "total_count": withdrawal_stats.count or 0,
-            "total_weight": float(withdrawal_stats.total_weight or 0),
-            "by_customer": [
-                {
-                    "customer_id": w.customer_id,
-                    "customer_name": w.customer_name,
-                    "count": w.count,
-                    "total_weight": float(w.total_weight or 0)
-                }
-                for w in withdrawal_by_customer
-            ],
-            "withdrawals": [
-                {
-                    "id": w.id,
-                    "withdrawal_no": w.withdrawal_no,
-                    "customer_id": w.customer_id,
-                    "customer_name": w.customer_name,
-                    "gold_weight": float(w.gold_weight or 0),
-                    "status": w.status,
-                    "created_at": w.created_at.isoformat() if w.created_at else None,
-                    "remark": w.remark
-                }
-                for w in withdrawal_details
-            ]
+    return success_response(
+        data={
+            "period": period,
+            "date_range": {
+                "start": start_date.isoformat(),
+                "end": end_date.isoformat()
+            },
+            "receipt_summary": {
+                "total_count": receipt_stats.count or 0,
+                "total_weight": float(receipt_stats.total_weight or 0),
+                "by_customer": [
+                    {
+                        "customer_id": r.customer_id,
+                        "customer_name": r.customer_name,
+                        "count": r.count,
+                        "total_weight": float(r.total_weight or 0)
+                    }
+                    for r in receipt_by_customer
+                ],
+                "receipts": [
+                    {
+                        "id": r.id,
+                        "receipt_no": r.receipt_no,
+                        "customer_id": r.customer_id,
+                        "customer_name": db.query(Customer.name).filter(Customer.id == r.customer_id).scalar() or "未知",
+                        "gold_weight": float(r.gold_weight or 0),
+                        "gold_fineness": r.gold_fineness,
+                        "status": r.status,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                        "remark": r.remark
+                    }
+                    for r in receipt_details
+                ]
+            },
+            "payment_summary": {
+                "total_count": payment_stats.count or 0,
+                "total_weight": float(payment_stats.total_weight or 0),
+                "by_supplier": [
+                    {
+                        "supplier_id": p.supplier_id,
+                        "supplier_name": p.supplier_name or "未知供应商",
+                        "count": p.count,
+                        "total_weight": float(p.total_weight or 0)
+                    }
+                    for p in payment_by_supplier
+                ]
+            },
+            "withdrawal_summary": {
+                "total_count": withdrawal_stats.count or 0,
+                "total_weight": float(withdrawal_stats.total_weight or 0),
+                "by_customer": [
+                    {
+                        "customer_id": w.customer_id,
+                        "customer_name": w.customer_name,
+                        "count": w.count,
+                        "total_weight": float(w.total_weight or 0)
+                    }
+                    for w in withdrawal_by_customer
+                ],
+                "withdrawals": [
+                    {
+                        "id": w.id,
+                        "withdrawal_no": w.withdrawal_no,
+                        "customer_id": w.customer_id,
+                        "customer_name": w.customer_name,
+                        "gold_weight": float(w.gold_weight or 0),
+                        "status": w.status,
+                        "created_at": w.created_at.isoformat() if w.created_at else None,
+                        "remark": w.remark
+                    }
+                    for w in withdrawal_details
+                ]
+            }
         }
-    }
+    )
 
 
 # ==================== 数据修复：同步 GoldReceipt 到往来账 ====================
@@ -2949,13 +2948,14 @@ async def fix_receipt_transactions(
         
         db.commit()
         
-        return {
-            "success": True,
-            "message": f"数据修复完成：修复 {fixed_count} 条，跳过 {skipped_count} 条（已有记录）",
-            "fixed_count": fixed_count,
-            "skipped_count": skipped_count,
-            "details": results
-        }
+        return success_response(
+            message=f"数据修复完成：修复 {fixed_count} 条，跳过 {skipped_count} 条（已有记录）",
+            data={
+                "fixed_count": fixed_count,
+                "skipped_count": skipped_count,
+                "details": results
+            }
+        )
         
     except Exception as e:
         db.rollback()
@@ -3025,16 +3025,17 @@ async def get_supplier_gold_accounts(
             "created_at": account.created_at.isoformat() if account.created_at else None
         })
     
-    return {
-        "success": True,
-        "data": result,
-        "total": len(result),
-        "total_balance": total_balance,
-        "summary": {
-            "total_we_owe": sum(a["current_balance"] for a in result if a["current_balance"] > 0),
-            "total_they_owe": abs(sum(a["current_balance"] for a in result if a["current_balance"] < 0))
+    return success_response(
+        data={
+            "items": result,
+            "total": len(result),
+            "total_balance": total_balance,
+            "summary": {
+                "total_we_owe": sum(a["current_balance"] for a in result if a["current_balance"] > 0),
+                "total_they_owe": abs(sum(a["current_balance"] for a in result if a["current_balance"] < 0))
+            }
         }
-    }
+    )
 
 
 @router.get("/supplier-gold-accounts/{supplier_id}")
@@ -3066,18 +3067,19 @@ async def get_supplier_gold_account_detail(
         if not supplier:
             raise HTTPException(status_code=404, detail="供应商不存在")
         
-        return {
-            "success": True,
-            "account": {
-                "supplier_id": supplier_id,
-                "supplier_name": supplier.name,
-                "current_balance": 0,
-                "total_received": 0,
-                "total_paid": 0,
-                "status_text": "无往来记录"
-            },
-            "transactions": []
-        }
+        return success_response(
+            data={
+                "account": {
+                    "supplier_id": supplier_id,
+                    "supplier_name": supplier.name,
+                    "current_balance": 0,
+                    "total_received": 0,
+                    "total_paid": 0,
+                    "status_text": "无往来记录"
+                },
+                "transactions": []
+            }
+        )
     
     # 查询交易记录
     transactions = db.query(SupplierGoldTransaction).filter(
@@ -3109,18 +3111,19 @@ async def get_supplier_gold_account_detail(
     else:
         status_text = "已结清"
     
-    return {
-        "success": True,
-        "account": {
-            "id": account.id,
-            "supplier_id": account.supplier_id,
-            "supplier_name": account.supplier_name,
-            "current_balance": balance,
-            "total_received": account.total_received or 0,
-            "total_paid": account.total_paid or 0,
-            "status_text": status_text,
-            "last_transaction_at": account.last_transaction_at.isoformat() if account.last_transaction_at else None
-        },
-        "transactions": tx_list
-    }
+    return success_response(
+        data={
+            "account": {
+                "id": account.id,
+                "supplier_id": account.supplier_id,
+                "supplier_name": account.supplier_name,
+                "current_balance": balance,
+                "total_received": account.total_received or 0,
+                "total_paid": account.total_paid or 0,
+                "status_text": status_text,
+                "last_transaction_at": account.last_transaction_at.isoformat() if account.last_transaction_at else None
+            },
+            "transactions": tx_list
+        }
+    )
 

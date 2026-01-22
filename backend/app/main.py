@@ -1,6 +1,8 @@
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query
-from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query, Request
+from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from datetime import datetime, timezone, timedelta
@@ -109,6 +111,61 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=3600,  # 预检请求缓存时间
 )
+
+
+# ========== 全局异常处理器 ==========
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """HTTP异常统一处理 - 转换为标准响应格式"""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "code": exc.status_code,
+            "message": str(exc.detail) if exc.detail else "请求错误",
+            "data": None
+        }
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """请求参数验证异常处理 - 转换为标准响应格式"""
+    errors = []
+    for error in exc.errors():
+        field = ".".join(str(loc) for loc in error.get("loc", []))
+        errors.append({
+            "field": field,
+            "message": error.get("msg", "验证失败"),
+            "type": error.get("type", "unknown")
+        })
+    
+    return JSONResponse(
+        status_code=422,
+        content={
+            "success": False,
+            "code": 422,
+            "message": "请求参数验证失败",
+            "data": {"errors": errors}
+        }
+    )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """全局异常处理 - 捕获所有未处理的异常"""
+    logger.error(f"Unhandled exception on {request.url}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "code": 500,
+            "message": "服务器内部错误",
+            "data": None
+        }
+    )
+
 
 # 注册财务对账路由
 app.include_router(finance_router)

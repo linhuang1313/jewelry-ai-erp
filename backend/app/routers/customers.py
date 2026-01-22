@@ -13,6 +13,10 @@ import csv
 import time
 
 from ..database import get_db
+from ..utils.response import (
+    success_response, error_response, paginated_response,
+    not_found_response, conflict_response, server_error_response, ErrorCode
+)
 from ..models import (
     Customer, SalesOrder, SalesDetail, ReturnOrder,
     AccountReceivable, CustomerTransaction, CustomerGoldDeposit,
@@ -45,11 +49,9 @@ async def create_customer(
         ).first()
         
         if existing:
-            return {
-                "success": False,
-                "message": f"客户 {customer_data.name} 已存在",
-                "customer": CustomerResponse.model_validate(existing).model_dump(mode='json')
-            }
+            return conflict_response(
+                message=f"客户 {customer_data.name} 已存在",
+            )
         
         # 生成客户编号
         customer_no = f"KH{china_now().strftime('%Y%m%d%H%M%S')}"
@@ -62,18 +64,15 @@ async def create_customer(
         db.commit()
         db.refresh(customer)
         
-        return {
-            "success": True,
-            "message": f"客户创建成功：{customer.name}",
-            "customer": CustomerResponse.model_validate(customer).model_dump(mode='json')
-        }
+        return success_response(
+            data={"customer": CustomerResponse.model_validate(customer).model_dump(mode='json')},
+            message=f"客户创建成功：{customer.name}",
+            code=ErrorCode.CREATED
+        )
     except Exception as e:
         db.rollback()
         logger.error(f"创建客户失败: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"创建客户失败: {str(e)}"
-        }
+        return server_error_response(message=f"创建客户失败: {str(e)}")
 
 
 @router.get("")
@@ -96,16 +95,13 @@ async def get_customers(
         
         customers = query.order_by(desc(Customer.create_time)).all()
         
-        return {
-            "success": True,
-            "customers": [CustomerResponse.model_validate(c).model_dump(mode='json') for c in customers]
-        }
+        return success_response(
+            data={"customers": [CustomerResponse.model_validate(c).model_dump(mode='json') for c in customers]},
+            message="查询成功"
+        )
     except Exception as e:
         logger.error(f"查询客户失败: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"查询客户失败: {str(e)}"
-        }
+        return server_error_response(message=f"查询客户失败: {str(e)}")
 
 
 @router.get("/suggest-salesperson")
@@ -113,7 +109,9 @@ async def suggest_salesperson(customer_name: str, db: Session = Depends(get_db))
     """根据客户名智能推荐业务员（基于历史销售记录）"""
     try:
         if not customer_name or not customer_name.strip():
-            return {"success": True, "salesperson": None, "hint": "请输入客户名"}
+            return success_response(
+                data={"salesperson": None, "hint": "请输入客户名", "is_new_customer": None}
+            )
         
         customer_name = customer_name.strip()
         
@@ -125,24 +123,26 @@ async def suggest_salesperson(customer_name: str, db: Session = Depends(get_db))
         
         if latest_order and latest_order.salesperson:
             last_date = latest_order.create_time.strftime('%Y-%m-%d') if latest_order.create_time else "未知"
-            return {
-                "success": True,
-                "salesperson": latest_order.salesperson,
-                "hint": f"已自动匹配业务员（上次服务：{last_date}）",
-                "is_new_customer": False
-            }
+            return success_response(
+                data={
+                    "salesperson": latest_order.salesperson,
+                    "hint": f"已自动匹配业务员（上次服务：{last_date}）",
+                    "is_new_customer": False
+                }
+            )
         
         # 如果没有历史记录，返回空
-        return {
-            "success": True,
-            "salesperson": None,
-            "hint": "新客户，请手动输入业务员",
-            "is_new_customer": True
-        }
+        return success_response(
+            data={
+                "salesperson": None,
+                "hint": "新客户，请手动输入业务员",
+                "is_new_customer": True
+            }
+        )
     
     except Exception as e:
         logger.error(f"查询业务员推荐失败: {e}", exc_info=True)
-        return {"success": False, "salesperson": None, "error": str(e)}
+        return server_error_response(message=f"查询业务员推荐失败: {str(e)}")
 
 
 # ============= 客户欠款查询 API =============
@@ -281,26 +281,23 @@ async def get_customer_debt_summary(
         total = len(debt_list)
         debt_list = debt_list[skip:skip + limit]
         
-        return {
-            "success": True,
-            "items": debt_list,
-            "total": total,
-            "summary": {
-                "total_cash_debt": round(total_cash_debt, 2),
-                "total_net_gold": round(total_net_gold, 3),  # 净金料总计（正=存料，负=欠料）
-                "total_gold_balance": round(-total_net_gold, 3),  # 兼容旧字段（正=欠料）
-                "customer_count": total
-            }
-        }
+        return success_response(
+            data={
+                "items": debt_list,
+                "total": total,
+                "summary": {
+                    "total_cash_debt": round(total_cash_debt, 2),
+                    "total_net_gold": round(total_net_gold, 3),
+                    "total_gold_balance": round(-total_net_gold, 3),
+                    "customer_count": total
+                }
+            },
+            message="查询成功"
+        )
         
     except Exception as e:
         logger.error(f"查询客户欠款汇总失败: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"查询失败: {str(e)}",
-            "items": [],
-            "total": 0
-        }
+        return server_error_response(message=f"查询失败: {str(e)}")
 
 
 @router.get("/{customer_id}")
@@ -319,21 +316,14 @@ async def get_customer(
         customer = db.query(Customer).filter(Customer.id == customer_id).first()
         
         if not customer:
-            return {
-                "success": False,
-                "message": "客户不存在"
-            }
+            return not_found_response(message="客户不存在")
         
-        return {
-            "success": True,
-            "customer": CustomerResponse.model_validate(customer).model_dump(mode='json')
-        }
+        return success_response(
+            data={"customer": CustomerResponse.model_validate(customer).model_dump(mode='json')}
+        )
     except Exception as e:
         logger.error(f"查询客户详情失败: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"查询客户详情失败: {str(e)}"
-        }
+        return server_error_response(message=f"查询客户详情失败: {str(e)}")
 
 
 @router.put("/{customer_id}")
@@ -352,7 +342,7 @@ async def update_customer(
     try:
         customer = db.query(Customer).filter(Customer.id == customer_id).first()
         if not customer:
-            return {"success": False, "message": "客户不存在"}
+            return not_found_response(message="客户不存在")
         
         # 更新字段
         if data.name:
@@ -369,15 +359,14 @@ async def update_customer(
         db.commit()
         db.refresh(customer)
         
-        return {
-            "success": True,
-            "message": f"客户【{customer.name}】信息已更新",
-            "customer": CustomerResponse.model_validate(customer).model_dump(mode='json')
-        }
+        return success_response(
+            data={"customer": CustomerResponse.model_validate(customer).model_dump(mode='json')},
+            message=f"客户【{customer.name}】信息已更新"
+        )
     except Exception as e:
         db.rollback()
         logger.error(f"更新客户失败: {e}", exc_info=True)
-        return {"success": False, "message": str(e)}
+        return server_error_response(message=str(e))
 
 
 @router.delete("/{customer_id}")
@@ -395,19 +384,16 @@ async def delete_customer(
     try:
         customer = db.query(Customer).filter(Customer.id == customer_id).first()
         if not customer:
-            return {"success": False, "message": "客户不存在"}
+            return not_found_response(message="客户不存在")
         
         customer.status = "inactive"
         db.commit()
         
-        return {
-            "success": True,
-            "message": f"客户【{customer.name}】已删除"
-        }
+        return success_response(message=f"客户【{customer.name}】已删除")
     except Exception as e:
         db.rollback()
         logger.error(f"删除客户失败: {e}", exc_info=True)
-        return {"success": False, "message": str(e)}
+        return server_error_response(message=str(e))
 
 
 @router.get("/{customer_id}/detail")
@@ -434,7 +420,7 @@ async def get_customer_detail(
         # 获取客户基本信息
         customer = db.query(Customer).filter(Customer.id == customer_id).first()
         if not customer:
-            return {"success": False, "message": "客户不存在"}
+            return not_found_response(message="客户不存在")
         
         # 获取销售记录
         sales_orders = db.query(SalesOrder).filter(
@@ -556,22 +542,18 @@ async def get_customer_detail(
         # 按时间排序
         transactions_list.sort(key=lambda x: x["created_at"] or "", reverse=True)
         
-        return {
-            "success": True,
-            "detail": {
+        return success_response(
+            data={
                 "customer": CustomerResponse.model_validate(customer).model_dump(mode='json'),
                 "sales": sales_list,
                 "returns": returns_list,
                 "balance": balance,
-                "transactions": transactions_list[:30]  # 限制返回数量
+                "transactions": transactions_list[:30]
             }
-        }
+        )
     except Exception as e:
         logger.error(f"查询客户详情失败: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"查询客户详情失败: {str(e)}"
-        }
+        return server_error_response(message=f"查询客户详情失败: {str(e)}")
 
 
 @router.post("/batch-import")
@@ -632,15 +614,13 @@ async def batch_import_customers(
                 error_msg = str(e).lower()
                 # 检测是否是 .xls 格式导致的错误
                 if "zip file" in error_msg or "not a zip file" in error_msg or file_extension == 'xls':
-                    return {
-                        "success": False,
-                        "message": "不支持旧版 Excel (.xls) 格式，请将文件另存为 .xlsx 格式或转换为 CSV 格式后重试"
-                    }
+                    return error_response(
+                        message="不支持旧版 Excel (.xls) 格式，请将文件另存为 .xlsx 格式或转换为 CSV 格式后重试"
+                    )
                 else:
-                    return {
-                        "success": False,
-                        "message": f"Excel 文件解析失败: {str(e)[:200]}\n\n提示：请确保文件格式正确，或尝试转换为 CSV 格式上传"
-                    }
+                    return error_response(
+                        message=f"Excel 文件解析失败: {str(e)[:200]}\n\n提示：请确保文件格式正确，或尝试转换为 CSV 格式上传"
+                    )
         
         elif file_extension == 'csv':
             # CSV 文件处理
@@ -692,18 +672,14 @@ async def batch_import_customers(
                         "remark": None,
                     })
         else:
-            return {
-                "success": False,
-                "message": f"不支持的文件格式：{file_extension}。支持格式：.xlsx, .xls, .csv, .txt"
-            }
+            return error_response(
+                message=f"不支持的文件格式：{file_extension}。支持格式：.xlsx, .xls, .csv, .txt"
+            )
         
         results["total"] = len(customers_data)
         
         if results["total"] == 0:
-            return {
-                "success": False,
-                "message": "文件中没有找到有效的客户数据"
-            }
+            return error_response(message="文件中没有找到有效的客户数据")
         
         # 批量创建客户（性能优化：批量提交）
         start_time = time.time()
@@ -773,32 +749,27 @@ async def batch_import_customers(
                 # 如果错误太多，停止导入
                 if len(results["errors"]) > 100:
                     db.rollback()
-                    return {
-                        "success": False,
-                        "message": f"导入过程中错误过多（超过100个），已停止导入。已成功导入 {results['created']} 条",
-                        "results": results
-                    }
+                    return error_response(
+                        message=f"导入过程中错误过多（超过100个），已停止导入。已成功导入 {results['created']} 条",
+                        data=results
+                    )
         
         # 最终提交
         db.commit()
         
         elapsed_time = time.time() - start_time
-        results["message"] = f"导入完成！成功创建 {results['created']} 个客户，跳过 {results['skipped']} 个已存在客户"
+        message = f"导入完成！成功创建 {results['created']} 个客户，跳过 {results['skipped']} 个已存在客户"
         if results["errors"]:
-            results["message"] += f"，失败 {len(results['errors'])} 个"
-        results["message"] += f"。耗时 {elapsed_time:.2f} 秒"
+            message += f"，失败 {len(results['errors'])} 个"
+        message += f"。耗时 {elapsed_time:.2f} 秒"
         results["elapsed_time"] = elapsed_time
         
-        return results
+        return success_response(data=results, message=message)
         
     except Exception as e:
         db.rollback()
         logger.error(f"批量导入客户失败: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"批量导入失败: {str(e)}",
-            "results": results
-        }
+        return server_error_response(message=f"批量导入失败: {str(e)}")
 
 
 @router.get("/{customer_id}/debt-history")
@@ -828,7 +799,7 @@ async def get_customer_debt_history(
         # 获取客户信息
         customer = db.query(Customer).filter(Customer.id == customer_id).first()
         if not customer:
-            return {"success": False, "message": "客户不存在"}
+            return not_found_response(message="客户不存在")
         
         transactions = []
         
@@ -1009,24 +980,22 @@ async def get_customer_debt_history(
         except:
             pass
         
-        return {
-            "success": True,
-            "customer": {
-                "id": customer.id,
-                "name": customer.name,
-                "phone": customer.phone,
-                "customer_no": customer.customer_no
-            },
-            "current_balance": current_balance,
-            "transactions": unique_transactions[:limit]
-        }
+        return success_response(
+            data={
+                "customer": {
+                    "id": customer.id,
+                    "name": customer.name,
+                    "phone": customer.phone,
+                    "customer_no": customer.customer_no
+                },
+                "current_balance": current_balance,
+                "transactions": unique_transactions[:limit]
+            }
+        )
         
     except Exception as e:
         logger.error(f"查询客户欠款历史失败: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"查询失败: {str(e)}"
-        }
+        return server_error_response(message=f"查询失败: {str(e)}")
 
 
 @router.get("/chat-debt-query")
@@ -1056,11 +1025,7 @@ async def chat_debt_query(
             ).first()
         
         if not customer:
-            return {
-                "success": False,
-                "message": f"未找到客户：{customer_name}",
-                "customer_name": customer_name
-            }
+            return not_found_response(message=f"未找到客户：{customer_name}")
         
         customer_id = customer.id
         
@@ -1314,14 +1279,12 @@ async def chat_debt_query(
             logger.warning(f"查询客户销售历史出错: {e}")
             result["sales_history"] = None
         
-        return result
+        # 将result转换为统一响应格式
+        return success_response(data=result)
         
     except Exception as e:
         logger.error(f"聊天查询客户账务失败: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"查询失败: {str(e)}"
-        }
+        return server_error_response(message=f"查询失败: {str(e)}")
 
 
 # ============= 客户往来账明细表 API =============
