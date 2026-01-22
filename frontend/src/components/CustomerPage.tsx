@@ -5,7 +5,8 @@ import {
   Users, Plus, Trash2, Edit2, Check, X, RefreshCw, User,
   MapPin, Search, UserPlus, Eye, ShoppingBag, RotateCcw, 
   Wallet, FileText, ChevronRight, ArrowLeft, Upload, 
-  CreditCard, TrendingDown, ArrowUpDown, Clock, Download
+  CreditCard, TrendingDown, ArrowUpDown, Clock, Download,
+  Diamond, CheckCircle, AlertCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -601,7 +602,7 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                 {/* 欠款/存料 */}
                 {detailTab === 'balance' && (
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">账户状态</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-6">账户状态</h3>
                     {(() => {
                       const cashDebt = customerDetail?.balance?.cash_debt || 0;
                       const goldDebt = customerDetail?.balance?.gold_debt || 0;
@@ -609,69 +610,96 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                       const netGold = goldDeposit - goldDebt;
                       
                       return (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* 现金欠款 */}
-                          <div className={`p-6 rounded-xl border-2 ${
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* 现金账户卡片 - 使用金色主题 */}
+                          <div className={`p-6 rounded-xl border-2 transition-all duration-200 ${
                             cashDebt > 0 
-                              ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-300' 
-                              : 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-300'
+                              ? 'bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 border-amber-300 shadow-md hover:shadow-lg' 
+                              : 'bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 border-emerald-300 shadow-sm hover:shadow-md'
                           }`}>
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className={`text-sm font-medium mb-1 ${cashDebt > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                  💰 现金账户
-                                </p>
-                                <p className={`text-3xl font-bold ${cashDebt > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                                  {cashDebt > 0 ? `欠款 ¥${cashDebt.toFixed(2)}` : '无欠款 ✓'}
-                                </p>
+                            <div className="flex items-center justify-between mb-4">
+                              <div className="flex items-center gap-3">
+                                <div className={`p-3 rounded-lg ${
+                                  cashDebt > 0 ? 'bg-amber-100' : 'bg-emerald-100'
+                                }`}>
+                                  <Wallet className={`w-5 h-5 ${
+                                    cashDebt > 0 ? 'text-amber-600' : 'text-emerald-600'
+                                  }`} />
+                                </div>
+                                <span className="text-sm font-medium text-gray-700">现金账户</span>
                               </div>
-                              <div className={`p-4 rounded-full ${cashDebt > 0 ? 'bg-red-100' : 'bg-green-100'}`}>
-                                {cashDebt > 0 ? (
-                                  <span className="text-3xl">💸</span>
-                                ) : (
-                                  <span className="text-3xl">✅</span>
-                                )}
-                              </div>
+                              {cashDebt === 0 && (
+                                <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700 flex items-center gap-1">
+                                  <CheckCircle className="w-3 h-3" />
+                                  已结清
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-2">
+                              {cashDebt > 0 ? (
+                                <div>
+                                  <p className="text-xs text-amber-700 mb-1 font-medium">欠款金额</p>
+                                  <p className="text-2xl font-bold text-amber-900 font-mono">
+                                    ¥{cashDebt.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle className="w-6 h-6 text-emerald-600" />
+                                  <p className="text-xl font-bold text-emerald-700">无欠款</p>
+                                </div>
+                              )}
                             </div>
                           </div>
                           
-                          {/* 净金料 */}
-                          <div className={`p-6 rounded-xl border-2 ${
+                          {/* 金料账户卡片 - 使用蓝色/金色主题 */}
+                          <div className={`p-6 rounded-xl border-2 transition-all duration-200 ${
                             netGold > 0 
-                              ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-300' 
+                              ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-blue-300 shadow-sm hover:shadow-md' 
                               : netGold < 0 
-                                ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-300'
-                                : 'bg-gray-50 border-gray-300'
+                                ? 'bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 border-amber-300 shadow-md hover:shadow-lg'
+                                : 'bg-gray-50 border-gray-200 shadow-sm'
                           }`}>
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className={`text-sm font-medium mb-1 ${
-                                  netGold > 0 ? 'text-green-600' : netGold < 0 ? 'text-red-600' : 'text-gray-600'
+                            <div className="flex items-center justify-between mb-4">
+                              <div className="flex items-center gap-3">
+                                <div className={`p-3 rounded-lg ${
+                                  netGold > 0 ? 'bg-blue-100' : netGold < 0 ? 'bg-amber-100' : 'bg-gray-100'
                                 }`}>
-                                  💎 金料账户
-                                </p>
-                                <p className={`text-3xl font-bold ${
-                                  netGold > 0 ? 'text-green-700' : netGold < 0 ? 'text-red-700' : 'text-gray-700'
-                                }`}>
-                                  {netGold > 0 
-                                    ? `净存料 +${netGold.toFixed(2)}克` 
-                                    : netGold < 0 
-                                      ? `净欠料 ${netGold.toFixed(2)}克`
-                                      : '已结清 0.00克'
-                                  }
-                                </p>
+                                  <Diamond className={`w-5 h-5 ${
+                                    netGold > 0 ? 'text-blue-600' : netGold < 0 ? 'text-amber-600' : 'text-gray-400'
+                                  }`} />
+                                </div>
+                                <span className="text-sm font-medium text-gray-700">金料账户</span>
                               </div>
-                              <div className={`p-4 rounded-full ${
-                                netGold > 0 ? 'bg-green-100' : netGold < 0 ? 'bg-red-100' : 'bg-gray-100'
-                              }`}>
-                                {netGold > 0 ? (
-                                  <span className="text-3xl">✅</span>
-                                ) : netGold < 0 ? (
-                                  <span className="text-3xl">⚠️</span>
-                                ) : (
-                                  <span className="text-3xl">✔️</span>
-                                )}
-                              </div>
+                              {netGold === 0 && (
+                                <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+                                  已结清
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-2">
+                              {netGold > 0 ? (
+                                <div>
+                                  <p className="text-xs text-blue-700 mb-1 font-medium">净存料</p>
+                                  <p className="text-2xl font-bold text-blue-900 font-mono">
+                                    +{netGold.toFixed(2)}<span className="text-sm ml-1 font-normal">克</span>
+                                  </p>
+                                </div>
+                              ) : netGold < 0 ? (
+                                <div>
+                                  <p className="text-xs text-amber-700 mb-1 font-medium">净欠料</p>
+                                  <p className="text-2xl font-bold text-amber-900 font-mono">
+                                    {netGold.toFixed(2)}<span className="text-sm ml-1 font-normal">克</span>
+                                  </p>
+                                </div>
+                              ) : (
+                                <div>
+                                  <p className="text-xs text-gray-600 mb-1 font-medium">存料余额</p>
+                                  <p className="text-lg font-semibold text-gray-500 font-mono">
+                                    0.00<span className="text-sm ml-1 font-normal">克</span>
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
