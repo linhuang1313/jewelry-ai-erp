@@ -496,32 +496,27 @@ async def get_customer_detail(
         except Exception as e:
             logger.warning(f"查询现金欠款时出错: {e}")
         
-        # 金料欠款 - 从客户交易记录获取
-        gold_debt = 0.0
-        try:
-            latest_transaction = db.query(CustomerTransaction).filter(
-                CustomerTransaction.customer_id == customer_id
-            ).order_by(desc(CustomerTransaction.created_at)).first()
-            if latest_transaction:
-                gold_debt = latest_transaction.gold_due_after or 0.0
-        except Exception as e:
-            logger.warning(f"查询金料欠款时出错: {e}")
-        
-        # 存料余额
+        # 金料账户（单一账户模式：current_balance 正=存料，负=欠料）
         gold_deposit = 0.0
+        gold_debt = 0.0
+        net_gold = 0.0
         try:
             deposit_record = db.query(CustomerGoldDeposit).filter(
                 CustomerGoldDeposit.customer_id == customer_id
             ).first()
             if deposit_record:
-                gold_deposit = deposit_record.current_balance or 0.0
+                net_gold = deposit_record.current_balance or 0.0
+                # 从净值计算兼容字段
+                gold_deposit = max(0, net_gold)  # 正值 = 存料
+                gold_debt = max(0, -net_gold)    # 负值的绝对值 = 欠料
         except Exception as e:
-            logger.warning(f"查询存料余额时出错: {e}")
+            logger.warning(f"查询金料账户时出错: {e}")
         
         balance = {
             "cash_debt": cash_debt,
             "gold_debt": gold_debt,
-            "gold_deposit": gold_deposit
+            "gold_deposit": gold_deposit,
+            "net_gold": net_gold  # 净金料值（核心字段）
         }
         
         # 获取往来账目
