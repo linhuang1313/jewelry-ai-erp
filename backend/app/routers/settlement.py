@@ -1199,8 +1199,8 @@ async def download_settlement_order(
                 p.setFillColorRGB(0.9, 0.9, 0.9)
                 p.rect(left_margin, y - 2, table_width, 10, fill=1)
                 p.setFillColorRGB(0, 0, 0)
-                    if chinese_font:
-                        p.setFont(chinese_font, 7)
+                if chinese_font:
+                    p.setFont(chinese_font, 7)
                 p.drawString(left_margin + 2, y, "【结算汇总】")
                 
                 y -= 12
@@ -1260,8 +1260,8 @@ async def download_settlement_order(
                 
                 # === 签名区 ===
                 y -= 12
-                    if chinese_font:
-                        p.setFont(chinese_font, 7)
+                if chinese_font:
+                    p.setFont(chinese_font, 7)
                 p.drawString(left_margin, y, f"制单人：{salesperson}")
                 p.drawString(left_margin + 70*mm, y, f"复核人：{settlement.confirmed_by or ''}")
                 p.drawString(left_margin + 140*mm, y, "客户确认：")
@@ -1928,7 +1928,7 @@ async def revert_settlement_order(
         settlement.confirmed_at = None
         
         # 销售单状态改回待结算
-            sales_order.status = "待结算"
+        sales_order.status = "待结算"
         
         db.commit()
         

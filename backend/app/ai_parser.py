@@ -14,10 +14,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # DeepSeek API 客户端（使用 OpenAI 兼容格式）
-client = OpenAI(
-    api_key=os.getenv("DEEPSEEK_API_KEY"),
-    base_url="https://api.deepseek.com"
-)
+# 延迟初始化，避免在环境变量未设置时导致启动失败
+_client = None
+
+def get_client():
+    """获取 DeepSeek API 客户端（延迟初始化）"""
+    global _client
+    if _client is None:
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        if not api_key:
+            raise RuntimeError("DEEPSEEK_API_KEY 环境变量未设置，无法使用 AI 解析功能")
+        _client = OpenAI(
+            api_key=api_key,
+            base_url="https://api.deepseek.com"
+        )
+    return _client
 
 def parse_user_message(message: str, conversation_history: Optional[List[dict]] = None) -> AIResponse:
     """使用 DeepSeek API 解析用户自然语言输入，必须成功
@@ -1022,7 +1033,7 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
     while retry_count < max_retries:
         try:
             logger.info(f"调用 DeepSeek API 解析消息 (尝试 {retry_count + 1}/{max_retries}): {message}")
-            response = client.chat.completions.create(
+            response = get_client().chat.completions.create(
                 model="deepseek-chat",
                 max_tokens=1500,
                 messages=[

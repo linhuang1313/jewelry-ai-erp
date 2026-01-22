@@ -25,13 +25,28 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # 用于 Embedding
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "jewelry-erp-decisions")
 
-# 初始化 LLM 客户端
-llm_client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
+# LLM 客户端（延迟初始化）
+_llm_client = None
 
-# Embedding 客户端（使用 OpenAI）
-embedding_client = None
-if OPENAI_API_KEY:
-    embedding_client = OpenAI(api_key=OPENAI_API_KEY)
+def get_llm_client():
+    """获取 DeepSeek LLM 客户端（延迟初始化）"""
+    global _llm_client
+    if _llm_client is None:
+        if not DEEPSEEK_API_KEY:
+            logger.warning("[LLM] 未配置 DEEPSEEK_API_KEY，LLM 功能不可用")
+            return None
+        _llm_client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
+    return _llm_client
+
+# Embedding 客户端（延迟初始化）
+_embedding_client = None
+
+def get_embedding_client():
+    """获取 OpenAI Embedding 客户端（延迟初始化）"""
+    global _embedding_client
+    if _embedding_client is None and OPENAI_API_KEY:
+        _embedding_client = OpenAI(api_key=OPENAI_API_KEY)
+    return _embedding_client
 
 # Pinecone 客户端（延迟初始化）
 _pinecone_index = None
@@ -95,7 +110,12 @@ class BehaviorLoggerService:
             # ========== Step 1: 生成 Embedding 向量 ==========
             logger.info(f"[Pinecone] 开始生成 embedding，文本长度: {len(embedding_text)}")
             
-            embedding_response = embedding_client.embeddings.create(
+            client = get_embedding_client()
+            if not client:
+                logger.warning("[Pinecone] Embedding 客户端未初始化，跳过向量存储")
+                return None
+            
+            embedding_response = client.embeddings.create(
                 model="text-embedding-3-small",  # 1536维，性价比高
                 input=embedding_text,
                 encoding_format="float"
@@ -348,7 +368,12 @@ class BehaviorLoggerService:
 只返回 JSON，不要其他文字。"""
         
         try:
-            response = llm_client.chat.completions.create(
+            client = get_llm_client()
+            if not client:
+                logger.warning("[LLM] 客户端未初始化，跳过决策依据提取")
+                return {"reasoning": "LLM 未配置", "key_factors": [], "confidence": 0.0}
+            
+            response = client.chat.completions.create(
                 model="deepseek-chat",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
@@ -443,7 +468,12 @@ async def get_decision_context_for_suggestion(
         query_text = "\n".join(query_parts)
         
         # 生成查询向量
-        query_response = embedding_client.embeddings.create(
+        client = get_embedding_client()
+        if not client:
+            logger.warning("[Pinecone] Embedding 客户端未初始化，无法查询相似决策")
+            return []
+        
+        query_response = client.embeddings.create(
             model="text-embedding-3-small",
             input=query_text,
             encoding_format="float"
