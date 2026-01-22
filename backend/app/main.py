@@ -1916,6 +1916,31 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
                 "error": "validation_failed"
             }
         
+        # ========== 珐琅产品自动生成F编码 ==========
+        # 如果产品名称或工艺包含"珐琅"，且没有提供product_code，自动生成F编码
+        craft = card_data.get("craft", "")
+        is_enamel_product = "珐琅" in (product_name or "") or "珐琅" in (craft or "")
+        
+        if is_enamel_product and not product_code:
+            from .init_product_codes import get_next_f_code
+            from .models import ProductCode as ProductCodeModel
+            
+            # 生成下一个可用的F编码
+            product_code = get_next_f_code(db)
+            
+            # 创建新的F编码记录
+            new_code = ProductCodeModel(
+                code=product_code,
+                name=product_name,
+                code_type="f_single",
+                is_unique=1,
+                is_used=1,  # 立即标记为已使用
+                created_by="系统自动"
+            )
+            db.add(new_code)
+            db.flush()
+            logger.info(f"[珐琅产品] 自动生成F编码：{product_code} -> {product_name}")
+        
         # 生成入库单号（RK + 日期 + 4位随机数）
         order_no = generate_inbound_order_no(db)
         
@@ -1953,6 +1978,7 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
         # 创建入库明细
         detail = InboundDetail(
             order_id=order.id,
+            product_code=product_code,  # 商品编码（珐琅产品自动生成F编码）
             product_name=product_name,
             product_category=card_data.get("product_category"),
             weight=weight,
@@ -1961,7 +1987,8 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
             piece_labor_cost=piece_labor_cost,
             supplier=supplier_name,
             supplier_id=supplier_id,
-            total_cost=total_cost
+            total_cost=total_cost,
+            craft=craft if craft else None  # 工艺信息
         )
         db.add(detail)
         
