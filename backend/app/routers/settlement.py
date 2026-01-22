@@ -461,25 +461,25 @@ async def create_settlement_order(
         from .gold_material import get_or_create_customer_deposit
         customer_deposit = get_or_create_customer_deposit(customer_id, customer_name, db)
         
-        balance_before = customer_deposit.current_balance
+            balance_before = customer_deposit.current_balance
         customer_deposit.current_balance -= actual_gold_due
         customer_deposit.total_used += actual_gold_due
-        customer_deposit.last_transaction_at = now
-        
+            customer_deposit.last_transaction_at = now
+            
         # 创建金料账户变动记录
-        deposit_transaction = CustomerGoldDepositTransaction(
-            customer_id=customer_id,
-            customer_name=customer_name,
-            transaction_type='use',
-            settlement_order_id=settlement.id,
+            deposit_transaction = CustomerGoldDepositTransaction(
+                customer_id=customer_id,
+                customer_name=customer_name,
+                transaction_type='use',
+                settlement_order_id=settlement.id,
             amount=actual_gold_due,
-            balance_before=balance_before,
-            balance_after=customer_deposit.current_balance,
-            created_by=created_by,
+                balance_before=balance_before,
+                balance_after=customer_deposit.current_balance,
+                created_by=created_by,
             remark=f"结算单：{settlement_no}，结料支付"
-        )
-        db.add(deposit_transaction)
-        
+            )
+            db.add(deposit_transaction)
+            
         # 记录余额变化
         if customer_deposit.current_balance >= 0:
             status_text = f"剩余存料 {customer_deposit.current_balance:.2f}克"
@@ -1169,7 +1169,7 @@ async def download_settlement_order(
                     p.drawRightString(col_x[7] + col_widths[7]*mm - 2, y, f"{total_labor_cost:.2f}")
                     p.drawRightString(col_x[8] + col_widths[8]*mm - 2, y, f"{sales_amount:,.2f}")
                     
-                    y -= 8
+                y -= 8
                     if y < 25 * mm:  # 防止超出页面
                         break
                 
@@ -1199,8 +1199,8 @@ async def download_settlement_order(
                 p.setFillColorRGB(0.9, 0.9, 0.9)
                 p.rect(left_margin, y - 2, table_width, 10, fill=1)
                 p.setFillColorRGB(0, 0, 0)
-                if chinese_font:
-                    p.setFont(chinese_font, 7)
+                    if chinese_font:
+                        p.setFont(chinese_font, 7)
                 p.drawString(left_margin + 2, y, "【结算汇总】")
                 
                 y -= 12
@@ -1260,8 +1260,8 @@ async def download_settlement_order(
                 
                 # === 签名区 ===
                 y -= 12
-                if chinese_font:
-                    p.setFont(chinese_font, 7)
+                    if chinese_font:
+                        p.setFont(chinese_font, 7)
                 p.drawString(left_margin, y, f"制单人：{salesperson}")
                 p.drawString(left_margin + 70*mm, y, f"复核人：{settlement.confirmed_by or ''}")
                 p.drawString(left_margin + 140*mm, y, "客户确认：")
@@ -1615,12 +1615,12 @@ async def download_settlement_order(
                 <span class="header-info-cell">打印人：{salesperson}</span>
                 <span class="header-info-cell">打印日期：{print_time}</span>
             </div>
-        </div>
+            </div>
         <div class="info-row">
             <span class="item">结算客户：{customer_name}</span>
             <span class="item">客户电话：{customer_phone}</span>
             <span class="item">结算备注：{settlement.remark or store_code or ''}</span>
-        </div>
+            </div>
         
         <!-- 饰品出货表 -->
         <div class="section-title">【饰品出货】</div>
@@ -1668,7 +1668,7 @@ async def download_settlement_order(
             <span>优惠额：0.00</span>
             <span>结算金额：<b>{settlement.total_amount:,.2f}</b></span>
             <span>本单应收：<b>{settlement.total_amount:,.2f}</b></span>
-        </div>
+            </div>
         
         <!-- 结算汇总表 -->
         <div class="section-title">【结算汇总】</div>
@@ -1727,19 +1727,19 @@ async def download_settlement_order(
         <div class="notice">
             <span class="notice-title">【敬告客户】</span>
             我公司所售饰品均通过严格检测。为了保障您的利益，请将以上饰品送当地检测部门检测后再上柜销售。
-        </div>
+            </div>
         
         <!-- 签名区 -->
         <div class="signature-row">
             <span class="signature-item">制单人：{salesperson}</span>
             <span class="signature-item">复核人：{settlement.confirmed_by or '结算专员'}</span>
             <span class="signature-item">客户确认：</span>
-        </div>
+            </div>
         
         <div class="page-num">第 1-1 页</div>
-    </div>
+            </div>
     
-    <button class="print-btn" onclick="window.print()">打印结算单</button>
+        <button class="print-btn" onclick="window.print()">打印结算单</button>
 </body>
 </html>
 """
@@ -1928,7 +1928,7 @@ async def revert_settlement_order(
         settlement.confirmed_at = None
         
         # 销售单状态改回待结算
-        sales_order.status = "待结算"
+            sales_order.status = "待结算"
         
         db.commit()
         

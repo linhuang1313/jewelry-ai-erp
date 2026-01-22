@@ -1503,7 +1503,119 @@ async def get_customer_transactions_detail(
         raise HTTPException(status_code=500, detail=f"获取往来账明细失败: {str(e)}")
 
 
-# ========== 手动修复客户金料账户 API ==========
+# ========== 金料账户诊断和修复 API ==========
+
+@router.get("/{customer_id}/gold-account-diagnosis")
+async def diagnose_gold_account(
+    customer_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    诊断客户金料账户，计算正确的净值
+    
+    通过汇总所有金料交易记录，计算应该的净值：
+    - 收料/存料 = 增加（正）
+    - 结算欠料/提料 = 减少（负）
+    """
+    try:
+        # 查找客户
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        if not customer:
+            raise HTTPException(status_code=404, detail=f"客户ID {customer_id} 不存在")
+        
+        # 当前账户余额
+        deposit = db.query(CustomerGoldDeposit).filter(
+            CustomerGoldDeposit.customer_id == customer_id
+        ).first()
+        current_balance = deposit.current_balance if deposit else 0.0
+        
+        # 汇总所有金料交易
+        # 1. 从 CustomerGoldDepositTransaction 获取存料记录
+        deposit_txs = db.query(CustomerGoldDepositTransaction).filter(
+            CustomerGoldDepositTransaction.customer_id == customer_id,
+            CustomerGoldDepositTransaction.status == "active"
+        ).all()
+        
+        total_deposited = 0.0  # 总存入
+        total_used = 0.0  # 总使用
+        deposit_details = []
+        
+        for tx in deposit_txs:
+            if tx.transaction_type == "deposit":
+                total_deposited += tx.amount or 0
+            elif tx.transaction_type == "use":
+                total_used += tx.amount or 0
+            
+            deposit_details.append({
+                "id": tx.id,
+                "type": tx.transaction_type,
+                "amount": tx.amount,
+                "balance_after": tx.balance_after,
+                "remark": tx.remark,
+                "created_at": tx.created_at.isoformat() if tx.created_at else None
+            })
+        
+        # 2. 从 CustomerTransaction 获取金料欠款记录
+        gold_txs = db.query(CustomerTransaction).filter(
+            CustomerTransaction.customer_id == customer_id,
+            CustomerTransaction.status == "active"
+        ).order_by(CustomerTransaction.created_at).all()
+        
+        latest_gold_due = 0.0
+        gold_tx_details = []
+        
+        for tx in gold_txs:
+            latest_gold_due = tx.gold_due_after or 0
+            gold_tx_details.append({
+                "id": tx.id,
+                "type": tx.transaction_type,
+                "gold_weight": tx.gold_weight,
+                "gold_due_before": tx.gold_due_before,
+                "gold_due_after": tx.gold_due_after,
+                "remark": tx.remark,
+                "created_at": tx.created_at.isoformat() if tx.created_at else None
+            })
+        
+        # 计算正确的净值
+        # 方法1：根据交易记录计算
+        calculated_from_deposits = total_deposited - total_used
+        
+        # 方法2：根据最后一条存料交易的 balance_after
+        last_deposit_balance = deposit_txs[-1].balance_after if deposit_txs else 0.0
+        
+        # 推荐的正确净值：使用最后一条存料交易的 balance_after
+        # 如果没有存料交易，则使用 -latest_gold_due（欠料转为负值）
+        if deposit_txs:
+            recommended_balance = last_deposit_balance
+        else:
+            recommended_balance = -latest_gold_due  # 欠料转为负值
+        
+        return {
+            "success": True,
+            "customer": {
+                "id": customer.id,
+                "name": customer.name
+            },
+            "current_balance": current_balance,
+            "diagnosis": {
+                "total_deposited": total_deposited,
+                "total_used": total_used,
+                "calculated_net": calculated_from_deposits,
+                "latest_gold_due": latest_gold_due,
+                "last_deposit_balance": last_deposit_balance
+            },
+            "recommended_balance": recommended_balance,
+            "status": "存料" if recommended_balance > 0 else ("欠料" if recommended_balance < 0 else "清账"),
+            "deposit_transactions": deposit_details[-10:],  # 最近10条
+            "gold_transactions": gold_tx_details[-10:]  # 最近10条
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"诊断客户金料账户失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"诊断失败: {str(e)}")
+
 
 @router.post("/{customer_id}/fix-gold-account")
 async def fix_customer_gold_account(
