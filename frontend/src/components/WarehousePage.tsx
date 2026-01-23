@@ -871,25 +871,34 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
             icon={<Package className="w-4 h-4" />}
             label="库存总览"
           />
-          <TabButton
-            active={activeTab === 'transfer'}
-            onClick={() => setActiveTab('transfer')}
-            icon={<Send className="w-4 h-4" />}
-            label="发起转移"
-          />
-          <TabButton
-            active={activeTab === 'batch'}
-            onClick={() => setActiveTab('batch')}
-            icon={<FileText className="w-4 h-4" />}
-            label="按单号转移"
-          />
-          <TabButton
-            active={activeTab === 'receive'}
-            onClick={() => setActiveTab('receive')}
-            icon={<Inbox className="w-4 h-4" />}
-            label="待接收"
-            count={pendingTransfers.length}
-          />
+          {/* 发起转移 - 仅商品专员和管理员可见 */}
+          {(userRole === 'product' || userRole === 'manager') && (
+            <TabButton
+              active={activeTab === 'transfer'}
+              onClick={() => setActiveTab('transfer')}
+              icon={<Send className="w-4 h-4" />}
+              label="发起转移"
+            />
+          )}
+          {/* 按单号转移 - 仅商品专员和管理员可见 */}
+          {(userRole === 'product' || userRole === 'manager') && (
+            <TabButton
+              active={activeTab === 'batch'}
+              onClick={() => setActiveTab('batch')}
+              icon={<FileText className="w-4 h-4" />}
+              label="按单号转移"
+            />
+          )}
+          {/* 待接收 - 仅柜台和管理员可见 */}
+          {(userRole === 'counter' || userRole === 'manager') && (
+            <TabButton
+              active={activeTab === 'receive'}
+              onClick={() => setActiveTab('receive')}
+              icon={<Inbox className="w-4 h-4" />}
+              label="待接收"
+              count={pendingTransfers.length}
+            />
+          )}
           {/* 待确认标签页 - 仅商品专员和管理员可见 */}
           {(userRole === 'product' || userRole === 'manager') && (
             <TabButton
