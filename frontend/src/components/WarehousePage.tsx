@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { API_ENDPOINTS } from '../config';
 import {
   Package, MapPin, ArrowRight, ArrowLeft, Check, X, Clock, RefreshCw,
@@ -127,6 +127,7 @@ interface WarehousePageProps {
 
 export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'product' }) => {
   const [activeTab, setActiveTab] = useState<'inventory' | 'transfer' | 'batch' | 'receive' | 'confirm'>('inventory');
+  const hasAutoSwitched = useRef(false);  // 跟踪是否已自动切换标签页
   const [locations, setLocations] = useState<Location[]>([]);
   const [inventorySummary, setInventorySummary] = useState<InventorySummary[]>([]);
   const [transfers, setTransfers] = useState<InventoryTransfer[]>([]);
@@ -336,6 +337,22 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       console.error('加载转移单失败:', error);
     }
   };
+
+  // 自动切换到有待处理数据的标签页（仅首次加载时）
+  useEffect(() => {
+    if (hasAutoSwitched.current) return;
+    
+    // 柜台用户：如果有待接收的转移单，自动切换到"待接收"标签页
+    if ((userRole === 'counter' || userRole === 'manager') && pendingTransfers.length > 0) {
+      setActiveTab('receive');
+      hasAutoSwitched.current = true;
+    }
+    // 商品专员：如果有待确认的转移单，自动切换到"待确认"标签页
+    else if ((userRole === 'product' || userRole === 'manager') && pendingConfirmTransfers.length > 0) {
+      setActiveTab('confirm');
+      hasAutoSwitched.current = true;
+    }
+  }, [pendingTransfers, pendingConfirmTransfers, userRole]);
 
   // 加载最近入库单（供批量转移选择）
   const loadRecentInboundOrders = async () => {
