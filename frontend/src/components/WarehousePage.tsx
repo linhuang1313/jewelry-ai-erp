@@ -1343,7 +1343,6 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       value={transferForm.product_name}
                       onChange={(e) => setTransferForm({ ...transferForm, product_name: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
                     >
                       <option value="">选择商品</option>
                       {(() => {
