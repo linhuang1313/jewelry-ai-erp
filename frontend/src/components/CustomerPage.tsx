@@ -180,14 +180,32 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
       params.append('user_role', userRole);
       const url = `${API_BASE_URL}/api/customers?${params.toString()}`;
       const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
+      
       if (data.success) {
-        setCustomers(data.customers || []);
+        // 后端返回格式: { success: true, data: { customers: [...] } }
+        const customersData = data.data?.customers || data.customers || [];
+        const customersArray = Array.isArray(customersData) ? customersData : [];
+        setCustomers(customersArray);
+        
+        // 调试信息（仅在开发环境）
+        if (customersArray.length === 0 && !searchName) {
+          console.log('客户列表为空，API响应:', data);
+        }
       } else {
+        console.error('获取客户列表失败:', data);
         toast.error(data.message || '获取客户列表失败');
+        setCustomers([]);
       }
     } catch (error) {
+      console.error('获取客户列表网络错误:', error);
       toast.error('网络错误，请检查后端服务');
+      setCustomers([]);
     } finally {
       setLoading(false);
     }
