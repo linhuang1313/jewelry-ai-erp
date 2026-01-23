@@ -23,6 +23,7 @@ export const API_ENDPOINTS = {
   TRANSFER: (id) => `${API_BASE_URL}/api/warehouse/transfers/${id}`,  // 转移单详情
   TRANSFER_RECEIVE: (id) => `${API_BASE_URL}/api/warehouse/transfers/${id}/receive`,  // 接收转移
   TRANSFER_REJECT: (id) => `${API_BASE_URL}/api/warehouse/transfers/${id}/reject`,  // 拒收转移
+  TRANSFERS_BATCH: `${API_BASE_URL}/api/warehouse/transfers/batch`,  // 批量创建转移单
   INIT_DEFAULT_LOCATIONS: `${API_BASE_URL}/api/warehouse/init-default-locations`,  // 初始化默认位置
   
   // 结算管理相关

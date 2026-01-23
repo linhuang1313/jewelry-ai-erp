@@ -500,7 +500,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     
     setBatchLoading(true);
     try {
-      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/warehouse/transfers/batch?user_role=${userRole}`, {
+      const response = await fetch(`${API_ENDPOINTS.TRANSFERS_BATCH}?user_role=${userRole}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -634,7 +634,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     
     setBatchLoading(true);
     try {
-      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/warehouse/transfers/batch?user_role=${userRole}`, {
+      const response = await fetch(`${API_ENDPOINTS.TRANSFERS_BATCH}?user_role=${userRole}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -737,7 +737,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
 
     try {
       // 使用批量创建 API
-      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/warehouse/transfers/batch?user_role=${userRole}`, {
+      const response = await fetch(`${API_ENDPOINTS.TRANSFERS_BATCH}?user_role=${userRole}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
