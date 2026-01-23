@@ -58,6 +58,12 @@ Usage notes:
 </skill>
 
 <skill>
+<name>jewelry-deployment</name>
+<description>Use when completing code changes - provides project deployment config and auto-push workflow for GitHub and Railway</description>
+<location>project</location>
+</skill>
+
+<skill>
 <name>receiving-code-review</name>
 <description>Use when receiving code review feedback, before implementing suggestions, especially if feedback seems unclear or technically questionable - requires technical rigor and verification, not performative agreement or blind implementation</description>
 <location>project</location>
