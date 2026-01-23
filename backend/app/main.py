@@ -101,14 +101,18 @@ app = FastAPI(title="AI-ERP珠宝入库BETA测试")
 # ========== 配置CORS（必须在路由注册之前）==========
 # 配置CORS - 支持所有来源（包括 Vercel 和 Railway）
 # 从环境变量读取允许的域名，如果没有则使用默认值
+vercel_origin = "https://jewelry-ai-erp.vercel.app"
 cors_allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
 if cors_allowed_origins_env:
     # 从环境变量读取，支持逗号分隔的多个域名
     allowed_origins = [origin.strip() for origin in cors_allowed_origins_env.split(",") if origin.strip()]
+    # 确保 Vercel 域名在列表中（即使环境变量中没有）
+    if vercel_origin not in allowed_origins:
+        allowed_origins.append(vercel_origin)
 else:
     # 默认允许的域名列表
     allowed_origins = [
-        "https://jewelry-ai-erp.vercel.app",
+        vercel_origin,
         "https://jewelry-ai-erp-production.up.railway.app",
         "http://localhost:5173",  # Vite 开发服务器
         "http://localhost:3000",  # React 开发服务器
