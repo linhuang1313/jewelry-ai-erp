@@ -48,6 +48,16 @@ interface Customer {
   phone: string | null;
 }
 
+interface Product {
+  product_name: string;
+  total_weight: number;
+}
+
+interface Salesperson {
+  id: number;
+  name: string;
+}
+
 // 状态徽章
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const config: Record<string, { bg: string; text: string; label: string }> = {
@@ -112,6 +122,16 @@ const LoanPage: React.FC = () => {
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   
+  // 产品相关状态
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productSearch, setProductSearch] = useState('');
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [showProductDropdown, setShowProductDropdown] = useState(false);
+  
+  // 业务员相关状态
+  const [salespersons, setSalespersons] = useState<Salesperson[]>([]);
+  const [showSalespersonDropdown, setShowSalespersonDropdown] = useState(false);
+  
   // 搜索筛选
   const [searchFilters, setSearchFilters] = useState({
     customer_name: '',
@@ -148,6 +168,41 @@ const LoanPage: React.FC = () => {
       }
     } catch (error) {
       console.error('加载客户列表失败:', error);
+    }
+  };
+
+  // 加载产品列表（从库存汇总）
+  const loadProducts = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/warehouse/inventory/summary`);
+      if (response.ok) {
+        const data = await response.json();
+        // API 返回格式: 数组 [{ product_name, total_weight, ... }]
+        if (Array.isArray(data)) {
+          setProducts(data.map((item: any) => ({
+            product_name: item.product_name,
+            total_weight: item.total_weight || 0
+          })));
+        }
+      }
+    } catch (error) {
+      console.error('加载产品列表失败:', error);
+    }
+  };
+
+  // 加载业务员列表
+  const loadSalespersons = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/salespersons`);
+      if (response.ok) {
+        const result = await response.json();
+        // API 返回格式: { success: true, salespersons: [...] }
+        if (result.success && result.salespersons) {
+          setSalespersons(result.salespersons);
+        }
+      }
+    } catch (error) {
+      console.error('加载业务员列表失败:', error);
     }
   };
 
@@ -194,6 +249,18 @@ const LoanPage: React.FC = () => {
     }
   }, [customerSearch, customers]);
 
+  // 产品搜索过滤
+  useEffect(() => {
+    if (productSearch.trim()) {
+      const filtered = products.filter(p => 
+        p.product_name.toLowerCase().includes(productSearch.toLowerCase())
+      );
+      setFilteredProducts(filtered.slice(0, 10));
+    } else {
+      setFilteredProducts(products.slice(0, 10));
+    }
+  }, [productSearch, products]);
+
   // 选择客户
   const handleSelectCustomer = (customer: Customer) => {
     setCreateForm({
@@ -203,6 +270,25 @@ const LoanPage: React.FC = () => {
     });
     setCustomerSearch(customer.name);
     setShowCustomerDropdown(false);
+  };
+
+  // 选择产品
+  const handleSelectProduct = (product: Product) => {
+    setCreateForm({
+      ...createForm,
+      product_name: product.product_name,
+    });
+    setProductSearch(product.product_name);
+    setShowProductDropdown(false);
+  };
+
+  // 选择业务员
+  const handleSelectSalesperson = (salesperson: Salesperson) => {
+    setCreateForm({
+      ...createForm,
+      salesperson: salesperson.name,
+    });
+    setShowSalespersonDropdown(false);
   };
 
   // 创建暂借单
@@ -242,6 +328,10 @@ const LoanPage: React.FC = () => {
           remark: '',
         });
         setCustomerSearch('');
+        setProductSearch('');
+        setShowCustomerDropdown(false);
+        setShowProductDropdown(false);
+        setShowSalespersonDropdown(false);
         loadLoanOrders();
       } else {
         const error = await response.json();
@@ -364,6 +454,8 @@ const LoanPage: React.FC = () => {
 
   useEffect(() => {
     loadCustomers();
+    loadProducts();
+    loadSalespersons();
   }, []);
 
   // 统计各状态数量
@@ -650,16 +742,42 @@ const LoanPage: React.FC = () => {
                 )}
               </div>
               
-              {/* 产品名称 */}
-              <div>
+              {/* 产品选择 */}
+              <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-1">产品品类 *</label>
                 <input
                   type="text"
-                  value={createForm.product_name}
-                  onChange={(e) => setCreateForm({ ...createForm, product_name: e.target.value })}
-                  placeholder="请输入产品品类"
+                  value={productSearch}
+                  onChange={(e) => {
+                    setProductSearch(e.target.value);
+                    setShowProductDropdown(true);
+                    if (createForm.product_name !== e.target.value) {
+                      setCreateForm({ ...createForm, product_name: '' });
+                    }
+                  }}
+                  onFocus={() => setShowProductDropdown(true)}
+                  placeholder="搜索并选择产品品类"
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-200 focus:border-amber-400"
                 />
+                {createForm.product_name && (
+                  <span className="absolute right-3 top-8 text-green-500 text-sm">✓ 已选择</span>
+                )}
+                
+                {/* 产品下拉列表 */}
+                {showProductDropdown && filteredProducts.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {filteredProducts.map((product, index) => (
+                      <div
+                        key={index}
+                        onClick={() => handleSelectProduct(product)}
+                        className="px-3 py-2 hover:bg-amber-50 cursor-pointer flex justify-between items-center"
+                      >
+                        <span className="font-medium">{product.product_name}</span>
+                        <span className="text-gray-400 text-sm">库存: {product.total_weight.toFixed(2)}g</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               
               {/* 克重和工费 */}
@@ -690,15 +808,36 @@ const LoanPage: React.FC = () => {
               
               {/* 业务员和日期 */}
               <div className="grid grid-cols-2 gap-4">
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-1">业务员 *</label>
-                  <input
-                    type="text"
-                    value={createForm.salesperson}
-                    onChange={(e) => setCreateForm({ ...createForm, salesperson: e.target.value })}
-                    placeholder="请输入业务员姓名"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-200 focus:border-amber-400"
-                  />
+                  <div
+                    onClick={() => setShowSalespersonDropdown(!showSalespersonDropdown)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg cursor-pointer bg-white flex justify-between items-center hover:border-amber-400"
+                  >
+                    <span className={createForm.salesperson ? 'text-gray-800' : 'text-gray-400'}>
+                      {createForm.salesperson || '选择业务员'}
+                    </span>
+                    <span className="text-gray-400">▼</span>
+                  </div>
+                  
+                  {/* 业务员下拉列表 */}
+                  {showSalespersonDropdown && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {salespersons.length === 0 ? (
+                        <div className="px-3 py-2 text-gray-400 text-sm">暂无业务员</div>
+                      ) : (
+                        salespersons.map((sp) => (
+                          <div
+                            key={sp.id}
+                            onClick={() => handleSelectSalesperson(sp)}
+                            className="px-3 py-2 hover:bg-amber-50 cursor-pointer"
+                          >
+                            {sp.name}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">暂借日期 *</label>
@@ -729,7 +868,10 @@ const LoanPage: React.FC = () => {
                 onClick={() => {
                   setShowCreateModal(false);
                   setCustomerSearch('');
+                  setProductSearch('');
                   setShowCustomerDropdown(false);
+                  setShowProductDropdown(false);
+                  setShowSalespersonDropdown(false);
                 }}
                 className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
               >
@@ -849,11 +991,15 @@ const LoanPage: React.FC = () => {
         </div>
       )}
       
-      {/* 点击外部关闭客户下拉 */}
-      {showCustomerDropdown && (
+      {/* 点击外部关闭下拉菜单 */}
+      {(showCustomerDropdown || showProductDropdown || showSalespersonDropdown) && (
         <div 
           className="fixed inset-0 z-40" 
-          onClick={() => setShowCustomerDropdown(false)}
+          onClick={() => {
+            setShowCustomerDropdown(false);
+            setShowProductDropdown(false);
+            setShowSalespersonDropdown(false);
+          }}
         />
       )}
     </div>
