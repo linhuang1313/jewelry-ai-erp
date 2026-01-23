@@ -1184,6 +1184,21 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                 <form onSubmit={handleCreateTransfer} className="max-w-lg mx-auto space-y-4">
                   <h3 className="text-lg font-semibold mb-4">新建货品转移单</h3>
                   
+                  {/* 根据角色显示固定的位置信息 */}
+                  {(userRole === 'product' || userRole === 'counter') && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-blue-700">
+                          {userRole === 'product' ? '商品部仓库' : '展厅'}
+                        </span>
+                        <ArrowRight className="w-4 h-4 text-blue-500" />
+                        <span className="text-blue-700">
+                          {userRole === 'product' ? '展厅' : '商品部仓库'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">商品名称</label>
                     <select
@@ -1193,13 +1208,55 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       required
                     >
                       <option value="">选择商品</option>
-                      {inventorySummary.map(item => (
-                        <option key={item.product_name} value={item.product_name}>
-                          {item.product_name} (总库存: {item.total_weight.toFixed(1)}g)
-                        </option>
-                      ))}
+                      {(() => {
+                        // 获取当前发出位置名称
+                        const fromLocationName = locations.find(l => l.id.toString() === transferForm.from_location_id)?.name;
+                        
+                        // 根据角色过滤：只显示发出位置有库存的商品
+                        return inventorySummary
+                          .filter(item => {
+                            if (!fromLocationName) return true;
+                            // 查找该位置的库存
+                            const locInventory = item.locations.find(loc => loc.location_name === fromLocationName);
+                            return locInventory && locInventory.weight > 0;
+                          })
+                          .map(item => {
+                            // 获取发出位置的库存
+                            const locInventory = item.locations.find(loc => loc.location_name === fromLocationName);
+                            const availableWeight = locInventory?.weight || 0;
+                            
+                            return (
+                              <option key={item.product_name} value={item.product_name}>
+                                {item.product_name} ({fromLocationName || '总库存'}: {availableWeight.toFixed(1)}g)
+                              </option>
+                            );
+                          });
+                      })()}
                     </select>
                   </div>
+
+                  {/* 显示可转移重量提示 */}
+                  {transferForm.product_name && transferForm.from_location_id && (() => {
+                    const fromLocationName = locations.find(l => l.id.toString() === transferForm.from_location_id)?.name;
+                    const item = inventorySummary.find(i => i.product_name === transferForm.product_name);
+                    const locInventory = item?.locations.find(loc => loc.location_name === fromLocationName);
+                    const availableWeight = locInventory?.weight || 0;
+                    const inputWeight = parseFloat(transferForm.weight) || 0;
+                    const isOverLimit = inputWeight > availableWeight;
+                    
+                    return (
+                      <div className={`text-sm px-3 py-2 rounded-lg ${isOverLimit ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                        {isOverLimit ? (
+                          <span className="flex items-center">
+                            <AlertTriangle className="w-4 h-4 mr-1" />
+                            超出可转移重量！{fromLocationName}仅有 {availableWeight.toFixed(2)}g
+                          </span>
+                        ) : (
+                          <span>可转移重量：{availableWeight.toFixed(2)}g</span>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">转移重量 (g)</label>
@@ -1214,34 +1271,57 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                     />
                   </div>
 
+                  {/* 位置选择 - 根据角色决定是否可编辑 */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">发出位置</label>
-                      <select
-                        value={transferForm.from_location_id}
-                        onChange={(e) => setTransferForm({ ...transferForm, from_location_id: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        required
-                      >
-                        <option value="">选择发出位置</option>
-                        {locations.map(loc => (
-                          <option key={loc.id} value={loc.id}>{loc.name}</option>
-                        ))}
-                      </select>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        发出位置
+                        {(userRole === 'product' || userRole === 'counter') && (
+                          <span className="text-xs text-gray-400 ml-1">(已锁定)</span>
+                        )}
+                      </label>
+                      {userRole === 'product' || userRole === 'counter' ? (
+                        <div className="w-full px-4 py-2 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
+                          {locations.find(l => l.id.toString() === transferForm.from_location_id)?.name || '未设置'}
+                        </div>
+                      ) : (
+                        <select
+                          value={transferForm.from_location_id}
+                          onChange={(e) => setTransferForm({ ...transferForm, from_location_id: e.target.value, product_name: '' })}
+                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          required
+                        >
+                          <option value="">选择发出位置</option>
+                          {locations.map(loc => (
+                            <option key={loc.id} value={loc.id}>{loc.name}</option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">目标位置</label>
-                      <select
-                        value={transferForm.to_location_id}
-                        onChange={(e) => setTransferForm({ ...transferForm, to_location_id: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        required
-                      >
-                        <option value="">选择目标位置</option>
-                        {locations.filter(l => l.id.toString() !== transferForm.from_location_id).map(loc => (
-                          <option key={loc.id} value={loc.id}>{loc.name}</option>
-                        ))}
-                      </select>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        目标位置
+                        {(userRole === 'product' || userRole === 'counter') && (
+                          <span className="text-xs text-gray-400 ml-1">(已锁定)</span>
+                        )}
+                      </label>
+                      {userRole === 'product' || userRole === 'counter' ? (
+                        <div className="w-full px-4 py-2 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
+                          {locations.find(l => l.id.toString() === transferForm.to_location_id)?.name || '未设置'}
+                        </div>
+                      ) : (
+                        <select
+                          value={transferForm.to_location_id}
+                          onChange={(e) => setTransferForm({ ...transferForm, to_location_id: e.target.value })}
+                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          required
+                        >
+                          <option value="">选择目标位置</option>
+                          {locations.filter(l => l.id.toString() !== transferForm.from_location_id).map(loc => (
+                            <option key={loc.id} value={loc.id}>{loc.name}</option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                   </div>
 
