@@ -460,7 +460,22 @@ function App() {
       const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/warehouse/transfers?status=pending`)
       if (response.ok) {
         const transfers = await response.json()
-        setPendingTransferCount(transfers.length)
+        
+        // 根据角色过滤，与 WarehousePage 逻辑保持一致
+        const roleLocationMap = {
+          'counter': '展厅',
+          'product': '商品部仓库'
+        }
+        const myLocation = roleLocationMap[userRole]
+        
+        if (myLocation) {
+          // 只计算目标是当前角色管辖仓库的转移单
+          const filtered = transfers.filter(t => t.to_location_name === myLocation)
+          setPendingTransferCount(filtered.length)
+        } else {
+          // 管理员看所有
+          setPendingTransferCount(transfers.length)
+        }
       }
     } catch (error) {
       console.error('加载待处理转移单数量失败:', error)
