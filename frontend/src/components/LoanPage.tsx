@@ -138,8 +138,13 @@ const LoanPage: React.FC = () => {
     try {
       const response = await fetch(`${API_BASE}/api/customers`);
       if (response.ok) {
-        const data = await response.json();
-        setCustomers(data);
+        const result = await response.json();
+        // API 返回格式: { success: true, data: { customers: [...] } }
+        if (result.success && result.data?.customers) {
+          setCustomers(result.data.customers);
+        } else if (Array.isArray(result)) {
+          setCustomers(result);
+        }
       }
     } catch (error) {
       console.error('加载客户列表失败:', error);
