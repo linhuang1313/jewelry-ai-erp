@@ -17,6 +17,7 @@ from ..models import (
     InboundOrder, InboundDetail,
     Customer, Supplier, Salesperson
 )
+from ..models.finance import GoldReceipt
 from ..timezone_utils import china_now, to_china_time
 
 logger = logging.getLogger(__name__)
@@ -104,6 +105,49 @@ async def get_dashboard_summary(
             SettlementOrder.status == "pending"
         ).scalar() or 0
         
+        # ============= 管理层专用指标 =============
+        
+        # 今日工费金额
+        today_labor = db.query(
+            func.sum(SettlementOrder.labor_amount)
+        ).filter(
+            SettlementOrder.status.in_(["confirmed", "printed"]),
+            SettlementOrder.created_at >= today_start
+        ).scalar() or 0
+        
+        # 今日收到客人金料克重（已确认的收料单，排除期初）
+        today_gold_received = db.query(
+            func.sum(GoldReceipt.gold_weight)
+        ).filter(
+            GoldReceipt.status == "received",
+            GoldReceipt.is_initial_balance == False,
+            GoldReceipt.received_at.isnot(None),
+            GoldReceipt.received_at >= today_start
+        ).scalar() or 0
+        
+        # 今日结价平均金价
+        today_avg_gold_price = db.query(
+            func.avg(SettlementOrder.gold_price)
+        ).filter(
+            SettlementOrder.status.in_(["confirmed", "printed"]),
+            SettlementOrder.payment_method.in_(["cash_price", "mixed"]),
+            SettlementOrder.created_at >= today_start,
+            SettlementOrder.gold_price.isnot(None)
+        ).scalar() or 0
+        
+        # 今日结价克重
+        today_cash_price_weight = db.query(
+            func.sum(case(
+                (SettlementOrder.payment_method == "cash_price", SettlementOrder.total_weight),
+                (SettlementOrder.payment_method == "mixed", SettlementOrder.cash_payment_weight),
+                else_=0
+            ))
+        ).filter(
+            SettlementOrder.status.in_(["confirmed", "printed"]),
+            SettlementOrder.payment_method.in_(["cash_price", "mixed"]),
+            SettlementOrder.created_at >= today_start
+        ).scalar() or 0
+        
         return {
             "success": True,
             "data": {
@@ -111,7 +155,11 @@ async def get_dashboard_summary(
                     "sales_amount": today_amount,
                     "sales_weight": float(today_sales.weight or 0),
                     "order_count": int(today_sales.count or 0),
-                    "change_percent": round(today_change, 1)
+                    "change_percent": round(today_change, 1),
+                    "labor_amount": float(today_labor),
+                    "gold_received_weight": float(today_gold_received),
+                    "avg_gold_price": round(float(today_avg_gold_price), 2),
+                    "cash_price_weight": float(today_cash_price_weight)
                 },
                 "month": {
                     "sales_amount": month_amount,

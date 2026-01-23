@@ -56,6 +56,7 @@ from .routers.product_codes import router as product_codes_router
 from .routers.salespersons import router as salespersons_router
 from .routers.sales import router as sales_router
 from .routers.export import router as export_router
+from .routers.loan import router as loan_router
 from .ocr_parser import OCR_AVAILABLE
 
 # 百度云 OCR（云端可用）
@@ -230,6 +231,9 @@ app.include_router(sales_router)
 
 # 注册数据导出路由
 app.include_router(export_router)
+
+# 注册暂借单管理路由
+app.include_router(loan_router)
 
 
 # 初始化数据库

@@ -79,8 +79,11 @@ export const ROLE_PERMISSIONS = {
     canCompleteWithdrawal: false,   // 不能完成取料（料部职责）
     canCreateTransfer: true,        // 可以创建转料单
     canConfirmTransfer: false,      // 不能确认转料（料部职责）
+    // 暂借单权限
+    canCreateLoan: true,            // 可以创建暂借单
+    canManageLoan: true,            // 可以管理暂借单（确认借出、归还、撤销）
     
-    pages: ['chat', 'settlement', 'gold-material', 'customer'],
+    pages: ['chat', 'settlement', 'gold-material', 'customer', 'loan'],
   },
   
   // 业务员 - 只能查询客户相关信息
@@ -196,8 +199,11 @@ export const ROLE_PERMISSIONS = {
     canConfirmTransfer: true,
     // 商品编码管理
     canManageProductCodes: true,
+    // 暂借单权限
+    canCreateLoan: true,            // 可以创建暂借单
+    canManageLoan: true,            // 可以管理暂借单
     
-    pages: ['chat', 'warehouse', 'settlement', 'finance', 'analytics', 'export', 'salesperson', 'customer', 'supplier', 'return', 'gold-material', 'product-codes'],
+    pages: ['chat', 'warehouse', 'settlement', 'finance', 'analytics', 'export', 'salesperson', 'customer', 'supplier', 'return', 'gold-material', 'product-codes', 'loan'],
   }
 };
 
@@ -269,6 +275,9 @@ export function getPermissionDeniedMessage(action) {
     'completeWithdrawal': '您没有完成取料的权限，请联系料部或管理层',
     'createTransfer': '您没有创建转料单的权限，请联系结算专员或管理层',
     'confirmTransfer': '您没有确认转料的权限，请联系料部或管理层',
+    // 暂借单
+    'createLoan': '您没有创建暂借单的权限，请联系结算专员或管理层',
+    'manageLoan': '您没有管理暂借单的权限，请联系结算专员或管理层',
   };
   
   return actionMessages[action] || '您没有执行此操作的权限';
@@ -298,5 +307,8 @@ export const PERMISSION_ACTIONS = {
   '完成取料': 'canCompleteWithdrawal',
   '创建转料单': 'canCreateTransfer',
   '确认转料': 'canConfirmTransfer',
+  // 暂借单
+  '创建暂借单': 'canCreateLoan',
+  '管理暂借单': 'canManageLoan',
 };
 

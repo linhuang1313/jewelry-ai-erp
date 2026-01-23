@@ -80,6 +80,9 @@ ROLE_PERMISSIONS = {
         'can_confirm_transfer': False,     # 不能确认转料（料部职责）
         'can_refund_settlement': True,     # 可以执行销退操作
         'can_view_supplier_gold_account': False,  # 不能查看供应商金料账户
+        # 暂借单权限
+        'can_create_loan': True,           # 可以创建暂借单
+        'can_manage_loan': True,           # 可以管理暂借单（确认借出、归还、撤销）
     },
     
     # 业务员 - 只能查询客户相关信息
@@ -202,6 +205,9 @@ ROLE_PERMISSIONS = {
         'can_refund_settlement': True,     # 可以执行销退操作
         # 供应商金料账户权限
         'can_view_supplier_gold_account': True,   # 可以查看供应商金料账户
+        # 暂借单权限
+        'can_create_loan': True,           # 可以创建暂借单
+        'can_manage_loan': True,           # 可以管理暂借单
     }
 }
 
@@ -243,6 +249,9 @@ PERMISSION_NAMES = {
     'can_refund_settlement': '销退操作',
     # 供应商金料账户权限
     'can_view_supplier_gold_account': '查看供应商金料账户',
+    # 暂借单权限
+    'can_create_loan': '创建暂借单',
+    'can_manage_loan': '管理暂借单',
 }
 
 # AI操作到权限的映射

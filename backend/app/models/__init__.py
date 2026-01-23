@@ -713,6 +713,77 @@ class SupplierGoldTransaction(Base):
     payment_transaction = relationship("GoldMaterialTransaction", foreign_keys=[payment_transaction_id])
 
 
+# ============= 暂借单模型 =============
+
+class LoanOrder(Base):
+    """暂借单 - 记录产品临时借出情况"""
+    __tablename__ = "loan_orders"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    loan_no = Column(String(50), unique=True, index=True, nullable=False)  # 暂借单号（ZJ+日期+序号）
+    
+    # 借出对象信息
+    borrower_type = Column(String(20), nullable=False)  # customer客户 / internal内部 / supplier供应商
+    borrower_name = Column(String(100), nullable=False)  # 借出对象姓名
+    borrower_contact = Column(String(50), nullable=True)  # 联系方式（可选）
+    
+    # 产品信息
+    product_name = Column(String(200), nullable=False)  # 产品品类
+    weight = Column(Float, nullable=False)  # 克重
+    labor_cost = Column(Float, nullable=False)  # 工费（元/克）
+    total_labor_cost = Column(Float, nullable=False)  # 总工费 = 克重 × 工费
+    
+    # 业务信息
+    salesperson = Column(String(50), nullable=False)  # 业务员姓名
+    loan_date = Column(DateTime, nullable=False)  # 暂借日期
+    
+    # 状态管理
+    # pending待确认 / borrowed已借出 / returned已归还 / cancelled已撤销
+    status = Column(String(20), default="pending", index=True)
+    
+    # 操作人信息
+    created_by = Column(String(50))  # 创建人（结算专员）
+    created_at = Column(DateTime, server_default=func.now())
+    
+    confirmed_at = Column(DateTime, nullable=True)  # 确认借出时间
+    
+    returned_at = Column(DateTime, nullable=True)  # 归还时间
+    returned_by = Column(String(50), nullable=True)  # 归还确认人
+    
+    cancelled_at = Column(DateTime, nullable=True)  # 撤销时间
+    cancelled_by = Column(String(50), nullable=True)  # 撤销人
+    cancel_reason = Column(Text, nullable=True)  # 撤销原因（留痕）
+    
+    # 打印时间
+    printed_at = Column(DateTime, nullable=True)
+    
+    # 备注
+    remark = Column(Text, nullable=True)
+
+
+class LoanOrderLog(Base):
+    """暂借单操作日志 - 留痕处理，记录所有状态变更"""
+    __tablename__ = "loan_order_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    loan_order_id = Column(Integer, ForeignKey("loan_orders.id"), nullable=False, index=True)
+    
+    # 操作信息
+    action = Column(String(50), nullable=False)  # create创建 / confirm确认借出 / return归还 / cancel撤销
+    operator = Column(String(50), nullable=False)  # 操作人
+    action_time = Column(DateTime, server_default=func.now())
+    
+    # 状态变更
+    old_status = Column(String(20), nullable=True)  # 操作前状态
+    new_status = Column(String(20), nullable=False)  # 操作后状态
+    
+    # 备注说明
+    remark = Column(Text, nullable=True)
+    
+    # 关系
+    loan_order = relationship("LoanOrder", backref="logs")
+
+
 # 导出所有模型
 __all__ = [
     # 入库
@@ -758,4 +829,7 @@ __all__ = [
     # 供应商金料账户
     'SupplierGoldAccount',
     'SupplierGoldTransaction',
+    # 暂借单
+    'LoanOrder',
+    'LoanOrderLog',
 ]

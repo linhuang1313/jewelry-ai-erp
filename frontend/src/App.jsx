@@ -10,6 +10,7 @@ import { confirmInbound, reportError } from './services/inboundService'
 import { FinancePage } from './components/finance'
 import { AnalyticsPage } from './components/AnalyticsPage'
 import DashboardPage from './components/DashboardPage'
+import ManagerDashboardPage from './components/ManagerDashboardPage'
 import { ExportPage } from './components/ExportPage'
 import { WarehousePage } from './components/WarehousePage'
 import { SettlementPage } from './components/SettlementPage'
@@ -19,9 +20,11 @@ import { QuickOrderModal } from './components/QuickOrderModal'
 import { QuickReturnModal } from './components/QuickReturnModal'
 import QuickInboundModal from './components/QuickInboundModal'
 import InventoryOverview from './components/InventoryOverview'
+import ManagerDashboardCard from './components/ManagerDashboardCard'
 import { SupplierPage } from './components/SupplierPage'
 import ReturnPage from './components/ReturnPage'
 import GoldMaterialPage from './components/GoldMaterialPage'
+import LoanPage from './components/LoanPage'
 import ProductCodePage from './components/ProductCodePage'
 import InboundOrdersPage from './components/InboundOrdersPage'
 import LineNumberedTextarea from './components/LineNumberedTextarea'
@@ -2446,6 +2449,18 @@ function App() {
                       <span>金料管理</span>
                     </button>
                   )}
+                  {/* 暂借管理按钮 - 结算专员和管理层可见 */}
+                  {hasPermission(userRole, 'canManageLoan') && (
+                    <button
+                      onClick={() => setCurrentPage('loan')}
+                      className="flex items-center space-x-2 px-4 py-2 bg-teal-500 text-white rounded-xl 
+                                 hover:bg-teal-600 transition-all duration-200 font-medium text-[15px] 
+                                 shadow-sm hover:shadow-md"
+                    >
+                      <Package className="w-4 h-4" />
+                      <span>暂借管理</span>
+                    </button>
+                  )}
                   {/* 商品编码按钮 - 商品专员和管理层可见 */}
                   {hasPermission(userRole, 'canManageProductCodes') && (
                     <button
@@ -4439,6 +4454,12 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
           </div>
         )}
 
+        {currentPage === 'loan' && (
+          <div className="flex-1 overflow-y-auto">
+            <LoanPage />
+          </div>
+        )}
+
         {currentPage === 'product-codes' && (
           <div className="flex-1 overflow-y-auto">
             <ProductCodePage userRole={userRole} />
@@ -4453,7 +4474,11 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
 
         {currentPage === 'dashboard' && (
           <div className="flex-1 overflow-y-auto">
-            <DashboardPage />
+            {userRole === 'manager' ? (
+              <ManagerDashboardPage />
+            ) : (
+              <DashboardPage />
+            )}
           </div>
         )}
       </div>
