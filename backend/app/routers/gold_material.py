@@ -26,6 +26,7 @@ from ..models import (
     SettlementOrder,
     SalesOrder,
     InboundOrder,
+    InboundDetail,
     Customer,
     Supplier,
 )
@@ -3046,6 +3047,11 @@ async def get_supplier_gold_account_detail(
 ):
     """
     查询单个供应商的金料账户明细（仅料部和管理层可查看）
+    
+    数据来源：
+    - 入库记录：InboundDetail + InboundOrder
+    - 付料记录：GoldMaterialTransaction (expense 类型，已确认)
+    - 退货记录：SupplierGoldTransaction (return 类型)
     """
     # 权限检查：仅料部和管理层可查看
     if not has_permission(user_role, 'can_view_supplier_gold_account'):
@@ -3054,74 +3060,141 @@ async def get_supplier_gold_account_detail(
             detail="权限不足：您没有查看供应商金料账户的权限。请联系料部或管理层。"
         )
     
-    from ..models import SupplierGoldAccount, SupplierGoldTransaction
-    
-    # 查询账户
-    account = db.query(SupplierGoldAccount).filter(
-        SupplierGoldAccount.supplier_id == supplier_id
-    ).first()
-    
-    if not account:
-        # 查询供应商是否存在
-        supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
-        if not supplier:
-            raise HTTPException(status_code=404, detail="供应商不存在")
-        
-        return success_response(
-            data={
-                "account": {
-                    "supplier_id": supplier_id,
-                    "supplier_name": supplier.name,
-                    "current_balance": 0,
-                    "total_received": 0,
-                    "total_paid": 0,
-                    "status_text": "无往来记录"
-                },
-                "transactions": []
-            }
-        )
-    
-    # 查询交易记录
-    transactions = db.query(SupplierGoldTransaction).filter(
-        SupplierGoldTransaction.supplier_id == supplier_id,
-        SupplierGoldTransaction.status == "active"
-    ).order_by(desc(SupplierGoldTransaction.created_at)).limit(100).all()
+    # 查询供应商是否存在
+    supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="供应商不存在")
     
     tx_list = []
-    for tx in transactions:
+    total_inbound = 0.0
+    total_paid = 0.0
+    total_return = 0.0
+    
+    # 1. 查询入库记录（从 InboundDetail 关联 InboundOrder）
+    inbound_records = db.query(
+        InboundDetail.id,
+        InboundDetail.weight,
+        InboundDetail.product_name,
+        InboundOrder.order_no,
+        InboundOrder.id.label('order_id'),
+        InboundOrder.create_time,
+        InboundOrder.operator
+    ).join(
+        InboundOrder, InboundDetail.order_id == InboundOrder.id
+    ).filter(
+        InboundDetail.supplier_id == supplier_id
+    ).order_by(desc(InboundOrder.create_time)).all()
+    
+    for record in inbound_records:
+        weight = float(record.weight or 0)
+        total_inbound += weight
         tx_list.append({
-            "id": tx.id,
-            "transaction_type": tx.transaction_type,
-            "transaction_type_text": "供应商发货" if tx.transaction_type == "receive" else "我们付料",
-            "gold_weight": tx.gold_weight,
-            "balance_before": tx.balance_before,
-            "balance_after": tx.balance_after,
-            "inbound_order_id": tx.inbound_order_id,
-            "payment_transaction_id": tx.payment_transaction_id,
-            "remark": tx.remark,
-            "created_at": tx.created_at.isoformat() if tx.created_at else None,
-            "created_by": tx.created_by
+            "id": f"inbound_{record.id}",
+            "transaction_type": "receive",
+            "transaction_type_text": "供应商发货",
+            "gold_weight": weight,
+            "balance_before": 0,  # 稍后计算
+            "balance_after": 0,   # 稍后计算
+            "inbound_order_id": record.order_id,
+            "payment_transaction_id": None,
+            "order_no": record.order_no,
+            "product_name": record.product_name,
+            "remark": f"入库单 {record.order_no}",
+            "created_at": record.create_time.isoformat() if record.create_time else None,
+            "created_by": record.operator
         })
     
-    balance = account.current_balance or 0
-    if balance > 0:
-        status_text = f"我们欠供应商 {balance:.2f}克"
-    elif balance < 0:
-        status_text = f"供应商欠我们 {abs(balance):.2f}克"
+    # 2. 查询付料记录（从 GoldMaterialTransaction）
+    payment_records = db.query(GoldMaterialTransaction).filter(
+        GoldMaterialTransaction.supplier_id == supplier_id,
+        GoldMaterialTransaction.transaction_type == 'expense',
+        GoldMaterialTransaction.status == 'confirmed'
+    ).order_by(desc(GoldMaterialTransaction.created_at)).all()
+    
+    for record in payment_records:
+        weight = float(record.gold_weight or 0)
+        total_paid += weight
+        tx_list.append({
+            "id": f"payment_{record.id}",
+            "transaction_type": "pay",
+            "transaction_type_text": "我们付料",
+            "gold_weight": weight,
+            "balance_before": 0,
+            "balance_after": 0,
+            "inbound_order_id": None,
+            "payment_transaction_id": record.id,
+            "order_no": record.transaction_no,
+            "product_name": None,
+            "remark": record.remark or f"付料单 {record.transaction_no}",
+            "created_at": record.created_at.isoformat() if record.created_at else None,
+            "created_by": record.created_by
+        })
+    
+    # 3. 查询退货记录（从 SupplierGoldTransaction，如果有的话）
+    from ..models import SupplierGoldTransaction
+    return_records = db.query(SupplierGoldTransaction).filter(
+        SupplierGoldTransaction.supplier_id == supplier_id,
+        SupplierGoldTransaction.transaction_type == 'return',
+        SupplierGoldTransaction.status == 'active'
+    ).order_by(desc(SupplierGoldTransaction.created_at)).all()
+    
+    for record in return_records:
+        weight = float(record.gold_weight or 0)
+        total_return += weight
+        tx_list.append({
+            "id": f"return_{record.id}",
+            "transaction_type": "return",
+            "transaction_type_text": "退货给供应商",
+            "gold_weight": weight,
+            "balance_before": 0,
+            "balance_after": 0,
+            "inbound_order_id": None,
+            "payment_transaction_id": None,
+            "order_no": None,
+            "product_name": None,
+            "remark": record.remark or "退货",
+            "created_at": record.created_at.isoformat() if record.created_at else None,
+            "created_by": record.created_by
+        })
+    
+    # 按时间排序（最新的在前）
+    tx_list.sort(key=lambda x: x['created_at'] or '', reverse=True)
+    
+    # 计算余额：欠料 = 入库 - 付料 - 退货
+    current_balance = total_inbound - total_paid - total_return
+    
+    # 计算每笔交易的余额变化（从最早到最新）
+    running_balance = 0.0
+    for tx in reversed(tx_list):
+        tx['balance_before'] = round(running_balance, 2)
+        if tx['transaction_type'] == 'receive':
+            running_balance += tx['gold_weight']
+        elif tx['transaction_type'] in ['pay', 'return']:
+            running_balance -= tx['gold_weight']
+        tx['balance_after'] = round(running_balance, 2)
+    
+    # 生成状态文本
+    if current_balance > 0:
+        status_text = f"我们欠供应商 {current_balance:.2f}克"
+    elif current_balance < 0:
+        status_text = f"供应商欠我们 {abs(current_balance):.2f}克"
     else:
         status_text = "已结清"
+    
+    # 如果没有任何记录
+    if not tx_list:
+        status_text = "无往来记录"
     
     return success_response(
         data={
             "account": {
-                "id": account.id,
-                "supplier_id": account.supplier_id,
-                "supplier_name": account.supplier_name,
-                "current_balance": balance,
-                "total_received": account.total_received or 0,
-                "total_paid": account.total_paid or 0,
-                "status_text": status_text,
-                "last_transaction_at": account.last_transaction_at.isoformat() if account.last_transaction_at else None
+                "supplier_id": supplier_id,
+                "supplier_name": supplier.name,
+                "current_balance": round(current_balance, 2),
+                "total_received": round(total_inbound, 2),
+                "total_paid": round(total_paid, 2),
+                "total_return": round(total_return, 2),
+                "status_text": status_text
             },
             "transactions": tx_list
         }
