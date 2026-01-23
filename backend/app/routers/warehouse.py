@@ -610,7 +610,14 @@ async def reject_confirm_transfer(
     user_role: str = Query(default="manager", description="用户角色"),
     db: Session = Depends(get_db)
 ):
-    """商品专员拒绝确认转移单（退回库存到商品部仓库）"""
+    """商品专员拒绝确认转移单（退回库存到商品部仓库，状态退回pending可继续操作）
+    
+    流程：
+    1. 状态退回 pending（可继续操作）
+    2. 清空本次接收信息
+    3. 备注追加操作历史（留痕）
+    4. 库存退回商品部
+    """
     # 权限检查：只有商品专员或管理员可以拒绝
     if user_role not in ['product', 'manager']:
         raise HTTPException(status_code=403, detail="权限不足：只有商品专员可以拒绝确认")
@@ -622,9 +629,33 @@ async def reject_confirm_transfer(
     if transfer.status != "pending_confirm":
         raise HTTPException(status_code=400, detail=f"转移单状态为 {transfer.status}，无法拒绝")
     
-    # 更新状态为已拒收
-    transfer.status = "rejected"
-    transfer.diff_reason = f"[商品部拒绝] {reason}"
+    # 记录本次接收信息用于历史记录
+    old_actual_weight = transfer.actual_weight
+    old_weight_diff = transfer.weight_diff
+    old_diff_reason = transfer.diff_reason
+    old_received_by = transfer.received_by
+    old_received_at = transfer.received_at
+    
+    # 追加操作历史到备注（留痕）
+    now = china_now()
+    history_entry = f"\n---\n[{now.strftime('%Y-%m-%d %H:%M')}] 操作历史：\n"
+    history_entry += f"  柜台接收: {old_received_by} 于 {old_received_at.strftime('%Y-%m-%d %H:%M') if old_received_at else '-'}\n"
+    history_entry += f"  实际重量: {old_actual_weight}g, 差异: {old_weight_diff}g\n"
+    history_entry += f"  差异原因: {old_diff_reason}\n"
+    history_entry += f"  商品部拒绝: {rejected_by}, 原因: {reason}\n"
+    history_entry += f"  处理结果: 库存{transfer.weight}g已退回商品部仓库，待重新处理"
+    
+    transfer.remark = (transfer.remark or "") + history_entry
+    
+    # 状态退回 pending（可继续操作）
+    transfer.status = "pending"
+    
+    # 清空本次接收信息
+    transfer.actual_weight = None
+    transfer.weight_diff = None
+    transfer.diff_reason = None
+    transfer.received_by = None
+    transfer.received_at = None
     
     # 退回库存到发出位置（商品部仓库）
     from_inventory = db.query(LocationInventory).filter(
@@ -645,13 +676,15 @@ async def reject_confirm_transfer(
     db.commit()
     db.refresh(transfer)
     
-    logger.info(f"拒绝确认转移单: {transfer.transfer_no}, 原因: {reason}, 库存 {transfer.weight}g 退回发出位置")
+    logger.info(f"拒绝确认转移单: {transfer.transfer_no}, 原因: {reason}, "
+                f"库存 {transfer.weight}g 退回发出位置, 状态退回 pending")
     
     return {
         "success": True,
-        "message": f"已拒绝确认，{transfer.weight}g 库存已退回商品部仓库",
+        "message": f"已拒绝，{transfer.weight}g 库存已退回商品部仓库，可重新发起转移",
         "transfer_id": transfer.id,
-        "transfer_no": transfer.transfer_no
+        "transfer_no": transfer.transfer_no,
+        "new_status": "pending"
     }
 
 

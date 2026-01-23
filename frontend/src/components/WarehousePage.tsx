@@ -788,9 +788,9 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     }
   };
 
-  // 商品专员拒绝确认转移单
+  // 商品专员拒绝确认转移单（状态退回pending，可重新处理）
   const handleRejectConfirmTransfer = async (transfer: InventoryTransfer) => {
-    const reason = prompt('请输入拒绝原因:');
+    const reason = prompt('请输入拒绝原因（转移单将退回待处理状态）:');
     if (!reason) return;
 
     try {
@@ -799,7 +799,8 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       });
 
       if (response.ok) {
-        toast.success(`已拒绝，${transfer.weight}g 已退回商品部仓库`);
+        const result = await response.json();
+        toast.success(`已拒绝，${transfer.weight}g 已退回商品部仓库，可重新发起转移`);
         loadTransfers();
         loadInventorySummary();
       } else {
