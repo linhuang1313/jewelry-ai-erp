@@ -1301,6 +1301,7 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                           )}
                         </button>
                       </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">业务人员</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">电话</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                         <button
@@ -1334,6 +1335,9 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                         <td className="px-4 py-3">
                           <span className="font-medium text-gray-900">{item.customer_name}</span>
                           <span className="text-xs text-gray-400 ml-2">{item.customer_no}</span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {item.salesperson || '-'}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">
                           {item.phone || '-'}

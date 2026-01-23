@@ -227,6 +227,31 @@ async def get_customer_debt_summary(
                 if row.last_time:
                     last_tx_map[row.customer_name] = row.last_time.strftime("%Y-%m-%d")
         
+        # 5. 批量查询每个客户最常用的业务员
+        salesperson_map = {}
+        if customer_names:
+            # 查询每个客户最常用的业务员（按销售次数统计）
+            salesperson_results = db.query(
+                SalesOrder.customer_name,
+                SalesOrder.salesperson,
+                func.count(SalesOrder.id).label('order_count')
+            ).filter(
+                SalesOrder.customer_name.in_(customer_names),
+                SalesOrder.status != "已取消",
+                SalesOrder.salesperson.isnot(None)
+            ).group_by(
+                SalesOrder.customer_name,
+                SalesOrder.salesperson
+            ).order_by(
+                SalesOrder.customer_name,
+                desc('order_count')
+            ).all()
+            
+            # 为每个客户选择订单数最多的业务员
+            for row in salesperson_results:
+                if row.customer_name not in salesperson_map:
+                    salesperson_map[row.customer_name] = row.salesperson
+        
         # ========== 构建欠款数据 ==========
         # 单一账户模式：net_gold 直接从 current_balance 获取
         # 正数 = 客人有存料
@@ -253,6 +278,7 @@ async def get_customer_debt_summary(
                 "customer_no": customer.customer_no,
                 "customer_name": customer.name,
                 "phone": customer.phone,
+                "salesperson": salesperson_map.get(customer.name, ""),  # 业务员
                 "cash_debt": round(cash_debt, 2),
                 "net_gold": round(net_gold, 3),  # 单一账户净值（正=存料，负=欠料）
                 "gold_balance": round(gold_balance, 3),  # 兼容字段（正=欠料）
