@@ -610,13 +610,14 @@ async def reject_confirm_transfer(
     user_role: str = Query(default="manager", description="用户角色"),
     db: Session = Depends(get_db)
 ):
-    """商品专员拒绝确认转移单（退回库存到商品部仓库，状态退回pending可继续操作）
+    """商品专员拒绝确认转移单（退回库存到商品部仓库）
     
     流程：
-    1. 状态退回 pending（可继续操作）
-    2. 清空本次接收信息
+    1. 状态变为 returned（已退回，转移单结束）
+    2. 保留接收信息用于历史记录
     3. 备注追加操作历史（留痕）
     4. 库存退回商品部
+    5. 如需重新转移，商品专员新建转移单
     """
     # 权限检查：只有商品专员或管理员可以拒绝
     if user_role not in ['product', 'manager']:
@@ -638,24 +639,21 @@ async def reject_confirm_transfer(
     
     # 追加操作历史到备注（留痕）
     now = china_now()
-    history_entry = f"\n---\n[{now.strftime('%Y-%m-%d %H:%M')}] 操作历史：\n"
+    history_entry = f"\n---\n[{now.strftime('%Y-%m-%d %H:%M')}] 商品部拒绝确认：\n"
     history_entry += f"  柜台接收: {old_received_by} 于 {old_received_at.strftime('%Y-%m-%d %H:%M') if old_received_at else '-'}\n"
     history_entry += f"  实际重量: {old_actual_weight}g, 差异: {old_weight_diff}g\n"
     history_entry += f"  差异原因: {old_diff_reason}\n"
-    history_entry += f"  商品部拒绝: {rejected_by}, 原因: {reason}\n"
-    history_entry += f"  处理结果: 库存{transfer.weight}g已退回商品部仓库，待重新处理"
+    history_entry += f"  拒绝原因: {reason}\n"
+    history_entry += f"  处理结果: 库存{transfer.weight}g已退回商品部仓库"
     
     transfer.remark = (transfer.remark or "") + history_entry
     
-    # 状态退回 pending（可继续操作）
-    transfer.status = "pending"
+    # 状态变为 returned（已退回，转移单结束）
+    transfer.status = "returned"
     
-    # 清空本次接收信息
-    transfer.actual_weight = None
-    transfer.weight_diff = None
-    transfer.diff_reason = None
-    transfer.received_by = None
-    transfer.received_at = None
+    # 保留接收信息用于历史记录（不清空）
+    # 追加拒绝原因到 diff_reason
+    transfer.diff_reason = f"{old_diff_reason} | [商品部拒绝] {reason}"
     
     # 退回库存到发出位置（商品部仓库）
     from_inventory = db.query(LocationInventory).filter(
@@ -677,14 +675,14 @@ async def reject_confirm_transfer(
     db.refresh(transfer)
     
     logger.info(f"拒绝确认转移单: {transfer.transfer_no}, 原因: {reason}, "
-                f"库存 {transfer.weight}g 退回发出位置, 状态退回 pending")
+                f"库存 {transfer.weight}g 退回发出位置, 状态变为 returned")
     
     return {
         "success": True,
-        "message": f"已拒绝，{transfer.weight}g 库存已退回商品部仓库，可重新发起转移",
+        "message": f"已拒绝，{transfer.weight}g 库存已退回商品部仓库。如需重新转移请新建转移单。",
         "transfer_id": transfer.id,
         "transfer_no": transfer.transfer_no,
-        "new_status": "pending"
+        "new_status": "returned"
     }
 
 

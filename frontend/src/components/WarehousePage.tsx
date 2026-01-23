@@ -104,6 +104,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     pending_confirm: { bg: 'bg-orange-100', text: 'text-orange-700', label: '待确认' },
     received: { bg: 'bg-green-100', text: 'text-green-700', label: '已接收' },
     rejected: { bg: 'bg-red-100', text: 'text-red-700', label: '已拒收' },
+    returned: { bg: 'bg-purple-100', text: 'text-purple-700', label: '已退回' },
   };
   const { bg, text, label } = config[status] || { bg: 'bg-gray-100', text: 'text-gray-700', label: status };
   
@@ -788,9 +789,9 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     }
   };
 
-  // 商品专员拒绝确认转移单（状态退回pending，可重新处理）
+  // 商品专员拒绝确认转移单（状态变为 returned，转移单结束）
   const handleRejectConfirmTransfer = async (transfer: InventoryTransfer) => {
-    const reason = prompt('请输入拒绝原因（转移单将退回待处理状态）:');
+    const reason = prompt('请输入拒绝原因（库存将退回商品部仓库）:');
     if (!reason) return;
 
     try {
@@ -799,8 +800,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       });
 
       if (response.ok) {
-        const result = await response.json();
-        toast.success(`已拒绝，${transfer.weight}g 已退回商品部仓库，可重新发起转移`);
+        toast.success(`已拒绝，${transfer.weight}g 已退回商品部仓库。如需重新转移请新建转移单。`);
         loadTransfers();
         loadInventorySummary();
       } else {
