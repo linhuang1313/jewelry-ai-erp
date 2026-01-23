@@ -459,7 +459,11 @@ async def receive_transfer(
     user_role: str = Query(default="manager", description="用户角色"),
     db: Session = Depends(get_db)
 ):
-    """接收货品转移"""
+    """接收货品转移
+    
+    如果实际重量与预期重量一致（差异 < 0.01g），直接完成接收。
+    如果重量不符，状态变为 pending_confirm，等待商品专员确认。
+    """
     # 权限检查
     from ..middleware.permissions import has_permission
     if not has_permission(user_role, 'can_receive_transfer'):
@@ -471,35 +475,47 @@ async def receive_transfer(
     if transfer.status != "pending":
         raise HTTPException(status_code=400, detail=f"转移单状态为 {transfer.status}，无法接收")
     
-    # 更新转移单状态
-    transfer.status = "received"
+    # 计算重量差异
+    weight_diff = receive_data.actual_weight - transfer.weight
+    
+    # 更新基本信息
     transfer.received_by = received_by
     transfer.received_at = china_now()
     transfer.actual_weight = receive_data.actual_weight
-    transfer.weight_diff = receive_data.actual_weight - transfer.weight
+    transfer.weight_diff = weight_diff
     transfer.diff_reason = receive_data.diff_reason
     
-    # 增加目标位置库存
-    to_inventory = db.query(LocationInventory).filter(
-        LocationInventory.location_id == transfer.to_location_id,
-        LocationInventory.product_name == transfer.product_name
-    ).first()
-    
-    if to_inventory:
-        to_inventory.weight += receive_data.actual_weight
+    # 判断是否需要审批：差异超过 0.01g 需要商品专员确认
+    if abs(weight_diff) < 0.01:
+        # 无差异，直接完成接收
+        transfer.status = "received"
+        
+        # 增加目标位置库存
+        to_inventory = db.query(LocationInventory).filter(
+            LocationInventory.location_id == transfer.to_location_id,
+            LocationInventory.product_name == transfer.product_name
+        ).first()
+        
+        if to_inventory:
+            to_inventory.weight += receive_data.actual_weight
+        else:
+            to_inventory = LocationInventory(
+                product_name=transfer.product_name,
+                location_id=transfer.to_location_id,
+                weight=receive_data.actual_weight
+            )
+            db.add(to_inventory)
+        
+        logger.info(f"接收转移单: {transfer.transfer_no}, 无差异直接完成")
     else:
-        to_inventory = LocationInventory(
-            product_name=transfer.product_name,
-            location_id=transfer.to_location_id,
-            weight=receive_data.actual_weight
-        )
-        db.add(to_inventory)
+        # 有差异，需要商品专员确认
+        if not receive_data.diff_reason:
+            raise HTTPException(status_code=400, detail="重量不符时必须填写差异原因")
+        transfer.status = "pending_confirm"
+        logger.info(f"接收转移单待确认: {transfer.transfer_no}, 差异 {weight_diff}g, 原因: {receive_data.diff_reason}")
     
     db.commit()
     db.refresh(transfer)
-    
-    logger.info(f"接收转移单: {transfer.transfer_no}, 实际接收 {receive_data.actual_weight}g, "
-                f"差异 {transfer.weight_diff}g")
     
     return InventoryTransferResponse(
         id=transfer.id,
@@ -520,6 +536,123 @@ async def receive_transfer(
         weight_diff=transfer.weight_diff,
         diff_reason=transfer.diff_reason
     )
+
+
+@router.post("/transfers/{transfer_id}/confirm", response_model=InventoryTransferResponse)
+async def confirm_transfer(
+    transfer_id: int,
+    confirmed_by: str = "系统管理员",
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """商品专员确认转移单（同意柜台填写的实际重量）"""
+    # 权限检查：只有商品专员或管理员可以确认
+    if user_role not in ['product', 'manager']:
+        raise HTTPException(status_code=403, detail="权限不足：只有商品专员可以确认转移单")
+    
+    transfer = db.query(InventoryTransfer).filter(InventoryTransfer.id == transfer_id).first()
+    
+    if not transfer:
+        raise HTTPException(status_code=404, detail="转移单不存在")
+    if transfer.status != "pending_confirm":
+        raise HTTPException(status_code=400, detail=f"转移单状态为 {transfer.status}，无法确认")
+    
+    # 更新状态为已接收
+    transfer.status = "received"
+    
+    # 按实际重量增加目标位置库存
+    to_inventory = db.query(LocationInventory).filter(
+        LocationInventory.location_id == transfer.to_location_id,
+        LocationInventory.product_name == transfer.product_name
+    ).first()
+    
+    if to_inventory:
+        to_inventory.weight += transfer.actual_weight
+    else:
+        to_inventory = LocationInventory(
+            product_name=transfer.product_name,
+            location_id=transfer.to_location_id,
+            weight=transfer.actual_weight
+        )
+        db.add(to_inventory)
+    
+    db.commit()
+    db.refresh(transfer)
+    
+    logger.info(f"确认转移单: {transfer.transfer_no}, 按实际重量 {transfer.actual_weight}g 入库, 确认人: {confirmed_by}")
+    
+    return InventoryTransferResponse(
+        id=transfer.id,
+        transfer_no=transfer.transfer_no,
+        product_name=transfer.product_name,
+        weight=transfer.weight,
+        from_location_id=transfer.from_location_id,
+        to_location_id=transfer.to_location_id,
+        from_location_name=transfer.from_location.name if transfer.from_location else None,
+        to_location_name=transfer.to_location.name if transfer.to_location else None,
+        status=transfer.status,
+        created_by=transfer.created_by,
+        created_at=transfer.created_at,
+        remark=transfer.remark,
+        received_by=transfer.received_by,
+        received_at=transfer.received_at,
+        actual_weight=transfer.actual_weight,
+        weight_diff=transfer.weight_diff,
+        diff_reason=transfer.diff_reason
+    )
+
+
+@router.post("/transfers/{transfer_id}/reject-confirm")
+async def reject_confirm_transfer(
+    transfer_id: int,
+    reason: str = Query(..., description="拒绝原因"),
+    rejected_by: str = "系统管理员",
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """商品专员拒绝确认转移单（退回库存到商品部仓库）"""
+    # 权限检查：只有商品专员或管理员可以拒绝
+    if user_role not in ['product', 'manager']:
+        raise HTTPException(status_code=403, detail="权限不足：只有商品专员可以拒绝确认")
+    
+    transfer = db.query(InventoryTransfer).filter(InventoryTransfer.id == transfer_id).first()
+    
+    if not transfer:
+        raise HTTPException(status_code=404, detail="转移单不存在")
+    if transfer.status != "pending_confirm":
+        raise HTTPException(status_code=400, detail=f"转移单状态为 {transfer.status}，无法拒绝")
+    
+    # 更新状态为已拒收
+    transfer.status = "rejected"
+    transfer.diff_reason = f"[商品部拒绝] {reason}"
+    
+    # 退回库存到发出位置（商品部仓库）
+    from_inventory = db.query(LocationInventory).filter(
+        LocationInventory.location_id == transfer.from_location_id,
+        LocationInventory.product_name == transfer.product_name
+    ).first()
+    
+    if from_inventory:
+        from_inventory.weight += transfer.weight  # 按原始重量退回
+    else:
+        from_inventory = LocationInventory(
+            product_name=transfer.product_name,
+            location_id=transfer.from_location_id,
+            weight=transfer.weight
+        )
+        db.add(from_inventory)
+    
+    db.commit()
+    db.refresh(transfer)
+    
+    logger.info(f"拒绝确认转移单: {transfer.transfer_no}, 原因: {reason}, 库存 {transfer.weight}g 退回发出位置")
+    
+    return {
+        "success": True,
+        "message": f"已拒绝确认，{transfer.weight}g 库存已退回商品部仓库",
+        "transfer_id": transfer.id,
+        "transfer_no": transfer.transfer_no
+    }
 
 
 @router.post("/transfers/{transfer_id}/reject", response_model=InventoryTransferResponse)
