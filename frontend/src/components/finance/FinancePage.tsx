@@ -99,8 +99,8 @@ export const FinancePage: React.FC = () => {
         f.settlementNo
       );
       if (result.success && result.data) {
-        const converted = result.data.map(convertReceivable);
-        setReceivables(converted);
+        const converted = Array.isArray(result.data) ? result.data.map(convertReceivable) : [];
+        setReceivables(Array.isArray(converted) ? converted : []);
       } else {
         toast.error(result.error || '加载应收账款失败');
       }

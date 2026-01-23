@@ -296,16 +296,16 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
     }
   };
 
-  // 筛选客户
-  const filteredCustomers = customers.filter(c => 
-    c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-    (c.phone && c.phone.includes(customerSearch))
+  // 筛选客户（添加数组安全检查）
+  const filteredCustomers = (Array.isArray(customers) ? customers : []).filter(c => 
+    c && c.name && (c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    (c.phone && c.phone.includes(customerSearch)))
   );
 
-  // 筛选提料客户
-  const filteredWithdrawalCustomers = customers.filter(c => 
-    c.name.toLowerCase().includes(withdrawalCustomerSearch.toLowerCase()) ||
-    (c.phone && c.phone.includes(withdrawalCustomerSearch))
+  // 筛选提料客户（添加数组安全检查）
+  const filteredWithdrawalCustomers = (Array.isArray(customers) ? customers : []).filter(c => 
+    c && c.name && (c.name.toLowerCase().includes(withdrawalCustomerSearch.toLowerCase()) ||
+    (c.phone && c.phone.includes(withdrawalCustomerSearch)))
   );
 
   // 打开快捷提料弹窗
@@ -789,15 +789,15 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
     return settlement.payment_method === 'physical_gold' || settlement.payment_method === 'mixed';
   };
 
-  // 过滤结算单
-  const filteredSettlements = settlements.filter(s => {
+  // 过滤结算单（添加数组安全检查）
+  const filteredSettlements = (Array.isArray(settlements) ? settlements : []).filter(s => {
     if (activeTab === 'pending') return s.status === 'pending';
     if (activeTab === 'confirmed') return s.status === 'confirmed' || s.status === 'printed';
     // 全部Tab显示所有记录（包括已销退）
     return true;
   });
 
-  const pendingCount = settlements.filter(s => s.status === 'pending').length;
+  const pendingCount = (Array.isArray(settlements) ? settlements : []).filter(s => s.status === 'pending').length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-amber-50/30 to-gray-50 p-6">
@@ -947,7 +947,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
               <Check className="w-5 h-5 opacity-60" />
             </div>
             <div className="text-3xl font-bold mt-2">
-              {settlements.filter(s => s.status === 'confirmed' || s.status === 'printed').length}
+              {(Array.isArray(settlements) ? settlements : []).filter(s => s.status === 'confirmed' || s.status === 'printed').length}
             </div>
             {activeTab === 'confirmed' && (
               <div className="absolute top-2 right-2">

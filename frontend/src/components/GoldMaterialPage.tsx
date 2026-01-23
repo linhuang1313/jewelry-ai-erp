@@ -827,9 +827,9 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                 <>
                   {renderTabButton('ledger', '金料台账')}
                   {renderTabButton('daily-summary', '每日统计')}
-                  {renderTabButton('receipts', '收料单管理', pendingGoldReceipts.filter((r: any) => r.status === 'pending').length)}
+                  {renderTabButton('receipts', '收料单管理', (Array.isArray(pendingGoldReceipts) ? pendingGoldReceipts : []).filter((r: any) => r && r.status === 'pending').length)}
                   {renderTabButton('payments', '付料单')}
-                  {renderTabButton('withdrawals', '待取料', withdrawals.filter(w => w.status === 'pending').length)}
+                  {renderTabButton('withdrawals', '待取料', (Array.isArray(withdrawals) ? withdrawals : []).filter(w => w && w.status === 'pending').length)}
                   {renderTabButton('supplier-debt', '供应商欠料')}
                   {renderTabButton('balance', '金料库存')}
                 </>
