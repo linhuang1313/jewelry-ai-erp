@@ -722,10 +722,9 @@ class LoanOrder(Base):
     id = Column(Integer, primary_key=True, index=True)
     loan_no = Column(String(50), unique=True, index=True, nullable=False)  # 暂借单号（ZJ+日期+序号）
     
-    # 借出对象信息
-    borrower_type = Column(String(20), nullable=False)  # customer客户 / internal内部 / supplier供应商
-    borrower_name = Column(String(100), nullable=False)  # 借出对象姓名
-    borrower_contact = Column(String(50), nullable=True)  # 联系方式（可选）
+    # 借出客户信息
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)  # 客户ID
+    customer_name = Column(String(100), nullable=False)  # 客户姓名（冗余字段，便于查询）
     
     # 产品信息
     product_name = Column(String(200), nullable=False)  # 产品品类
@@ -759,6 +758,9 @@ class LoanOrder(Base):
     
     # 备注
     remark = Column(Text, nullable=True)
+    
+    # 关系
+    customer = relationship("Customer", backref="loan_orders")
 
 
 class LoanOrderLog(Base):

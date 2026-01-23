@@ -12,7 +12,7 @@ import logging
 
 from ..database import get_db
 from ..timezone_utils import china_now, to_china_time, format_china_time
-from ..models import LoanOrder, LoanOrderLog, Inventory, LocationInventory, Location
+from ..models import LoanOrder, LoanOrderLog, Inventory, LocationInventory, Location, Customer
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +23,7 @@ router = APIRouter(prefix="/api/loan", tags=["暂借管理"])
 
 class LoanOrderCreate(BaseModel):
     """创建暂借单请求"""
-    borrower_type: str  # customer/internal/supplier
-    borrower_name: str
-    borrower_contact: Optional[str] = None
+    customer_id: int  # 客户ID
     product_name: str
     weight: float
     labor_cost: float
@@ -56,9 +54,8 @@ class LoanOrderResponse(BaseModel):
     """暂借单响应"""
     id: int
     loan_no: str
-    borrower_type: str
-    borrower_name: str
-    borrower_contact: Optional[str]
+    customer_id: int
+    customer_name: str
     product_name: str
     weight: float
     labor_cost: float
@@ -133,16 +130,6 @@ def create_log(db: Session, loan_order_id: int, action: str, operator: str,
     db.add(log)
 
 
-def get_borrower_type_label(borrower_type: str) -> str:
-    """获取借出对象类型的中文标签"""
-    labels = {
-        "customer": "客户",
-        "internal": "内部",
-        "supplier": "供应商"
-    }
-    return labels.get(borrower_type, borrower_type)
-
-
 def get_status_label(status: str) -> str:
     """获取状态的中文标签"""
     labels = {
@@ -159,7 +146,7 @@ def get_status_label(status: str) -> str:
 @router.get("/orders", response_model=List[LoanOrderResponse])
 async def get_loan_orders(
     status: Optional[str] = Query(None, description="状态筛选: pending/borrowed/returned/cancelled"),
-    borrower_name: Optional[str] = Query(None, description="借出对象姓名搜索"),
+    customer_name: Optional[str] = Query(None, description="客户姓名搜索"),
     product_name: Optional[str] = Query(None, description="产品名称搜索"),
     db: Session = Depends(get_db)
 ):
@@ -168,8 +155,8 @@ async def get_loan_orders(
     
     if status:
         query = query.filter(LoanOrder.status == status)
-    if borrower_name:
-        query = query.filter(LoanOrder.borrower_name.contains(borrower_name))
+    if customer_name:
+        query = query.filter(LoanOrder.customer_name.contains(customer_name))
     if product_name:
         query = query.filter(LoanOrder.product_name.contains(product_name))
     
@@ -186,9 +173,10 @@ async def create_loan_order(
     db: Session = Depends(get_db)
 ):
     """创建暂借单"""
-    # 验证借出对象类型
-    if data.borrower_type not in ["customer", "internal", "supplier"]:
-        raise HTTPException(status_code=400, detail="无效的借出对象类型")
+    # 验证客户是否存在
+    customer = db.query(Customer).filter(Customer.id == data.customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=400, detail="客户不存在")
     
     # 验证克重和工费
     if data.weight <= 0:
@@ -217,9 +205,8 @@ async def create_loan_order(
     # 创建暂借单
     loan_order = LoanOrder(
         loan_no=loan_no,
-        borrower_type=data.borrower_type,
-        borrower_name=data.borrower_name,
-        borrower_contact=data.borrower_contact,
+        customer_id=data.customer_id,
+        customer_name=customer.name,  # 自动从客户表获取姓名
         product_name=data.product_name,
         weight=data.weight,
         labor_cost=data.labor_cost,
@@ -241,7 +228,7 @@ async def create_loan_order(
     db.commit()
     db.refresh(loan_order)
     
-    logger.info(f"创建暂借单: {loan_no}, 借出对象: {data.borrower_name}, 产品: {data.product_name}, 克重: {data.weight}")
+    logger.info(f"创建暂借单: {loan_no}, 客户: {customer.name}, 产品: {data.product_name}, 克重: {data.weight}")
     
     return LoanOrderResponse.model_validate(loan_order)
 
@@ -578,8 +565,7 @@ async def download_loan_order(
     created_at_str = format_china_time(to_china_time(loan_order.created_at), '%Y-%m-%d %H:%M') if loan_order.created_at else ""
     print_time = format_china_time(china_now(), '%Y/%m/%d %H:%M')
     
-    # 借出对象类型标签
-    borrower_type_label = get_borrower_type_label(loan_order.borrower_type)
+    # 状态标签
     status_label = get_status_label(loan_order.status)
     
     # 生成 HTML
@@ -731,22 +717,12 @@ async def download_loan_order(
         </div>
         
         <div class="info-section">
-            <h3>借出对象信息</h3>
+            <h3>借出信息</h3>
             <div class="info-row">
                 <div class="info-item">
-                    <span class="info-label">对象类型：</span>
-                    <span class="info-value">{borrower_type_label}</span>
+                    <span class="info-label">客户姓名：</span>
+                    <span class="info-value">{loan_order.customer_name}</span>
                 </div>
-                <div class="info-item">
-                    <span class="info-label">姓名：</span>
-                    <span class="info-value">{loan_order.borrower_name}</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">联系方式：</span>
-                    <span class="info-value">{loan_order.borrower_contact or '-'}</span>
-                </div>
-            </div>
-            <div class="info-row">
                 <div class="info-item">
                     <span class="info-label">业务员：</span>
                     <span class="info-value">{loan_order.salesperson}</span>
@@ -755,6 +731,8 @@ async def download_loan_order(
                     <span class="info-label">经办人：</span>
                     <span class="info-value">{loan_order.created_by or '-'}</span>
                 </div>
+            </div>
+            <div class="info-row">
                 <div class="info-item">
                     <span class="info-label">创建时间：</span>
                     <span class="info-value">{created_at_str}</span>

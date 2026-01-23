@@ -10,9 +10,8 @@ import toast from 'react-hot-toast';
 interface LoanOrder {
   id: number;
   loan_no: string;
-  borrower_type: string;
-  borrower_name: string;
-  borrower_contact: string | null;
+  customer_id: number;
+  customer_name: string;
   product_name: string;
   weight: number;
   labor_cost: number;
@@ -43,6 +42,12 @@ interface LoanOrderLog {
   remark: string | null;
 }
 
+interface Customer {
+  id: number;
+  name: string;
+  phone: string | null;
+}
+
 // 状态徽章
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const config: Record<string, { bg: string; text: string; label: string }> = {
@@ -55,22 +60,6 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   
   return (
     <span className={`px-2 py-1 rounded-full text-xs font-medium ${bg} ${text}`}>
-      {label}
-    </span>
-  );
-};
-
-// 借出对象类型标签
-const BorrowerTypeBadge: React.FC<{ type: string }> = ({ type }) => {
-  const config: Record<string, { bg: string; text: string; label: string }> = {
-    customer: { bg: 'bg-purple-100', text: 'text-purple-700', label: '客户' },
-    internal: { bg: 'bg-indigo-100', text: 'text-indigo-700', label: '内部' },
-    supplier: { bg: 'bg-orange-100', text: 'text-orange-700', label: '供应商' },
-  };
-  const { bg, text, label } = config[type] || { bg: 'bg-gray-100', text: 'text-gray-700', label: type };
-  
-  return (
-    <span className={`px-2 py-0.5 rounded text-xs font-medium ${bg} ${text}`}>
       {label}
     </span>
   );
@@ -117,17 +106,22 @@ const LoanPage: React.FC = () => {
   const [logs, setLogs] = useState<LoanOrderLog[]>([]);
   const [cancelReason, setCancelReason] = useState('');
   
+  // 客户相关状态
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  
   // 搜索筛选
   const [searchFilters, setSearchFilters] = useState({
-    borrower_name: '',
+    customer_name: '',
     product_name: '',
   });
   
   // 创建表单
   const [createForm, setCreateForm] = useState({
-    borrower_type: 'customer',
-    borrower_name: '',
-    borrower_contact: '',
+    customer_id: 0,
+    customer_name: '',
     product_name: '',
     weight: '',
     labor_cost: '',
@@ -139,6 +133,19 @@ const LoanPage: React.FC = () => {
   // API 基础 URL
   const API_BASE = API_ENDPOINTS.API_BASE_URL;
 
+  // 加载客户列表
+  const loadCustomers = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/customers`);
+      if (response.ok) {
+        const data = await response.json();
+        setCustomers(data);
+      }
+    } catch (error) {
+      console.error('加载客户列表失败:', error);
+    }
+  };
+
   // 加载暂借单列表
   const loadLoanOrders = async () => {
     setLoading(true);
@@ -147,8 +154,8 @@ const LoanPage: React.FC = () => {
       if (activeTab !== 'all') {
         params.append('status', activeTab);
       }
-      if (searchFilters.borrower_name) {
-        params.append('borrower_name', searchFilters.borrower_name);
+      if (searchFilters.customer_name) {
+        params.append('customer_name', searchFilters.customer_name);
       }
       if (searchFilters.product_name) {
         params.append('product_name', searchFilters.product_name);
@@ -169,9 +176,33 @@ const LoanPage: React.FC = () => {
     }
   };
 
+  // 客户搜索过滤
+  useEffect(() => {
+    if (customerSearch.trim()) {
+      const filtered = customers.filter(c => 
+        c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+        (c.phone && c.phone.includes(customerSearch))
+      );
+      setFilteredCustomers(filtered.slice(0, 10));
+    } else {
+      setFilteredCustomers(customers.slice(0, 10));
+    }
+  }, [customerSearch, customers]);
+
+  // 选择客户
+  const handleSelectCustomer = (customer: Customer) => {
+    setCreateForm({
+      ...createForm,
+      customer_id: customer.id,
+      customer_name: customer.name,
+    });
+    setCustomerSearch(customer.name);
+    setShowCustomerDropdown(false);
+  };
+
   // 创建暂借单
   const handleCreate = async () => {
-    if (!createForm.borrower_name || !createForm.product_name || !createForm.weight || !createForm.salesperson) {
+    if (!createForm.customer_id || !createForm.product_name || !createForm.weight || !createForm.salesperson) {
       toast.error('请填写必填项');
       return;
     }
@@ -181,10 +212,13 @@ const LoanPage: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...createForm,
+          customer_id: createForm.customer_id,
+          product_name: createForm.product_name,
           weight: parseFloat(createForm.weight),
           labor_cost: parseFloat(createForm.labor_cost) || 0,
+          salesperson: createForm.salesperson,
           loan_date: new Date(createForm.loan_date).toISOString(),
+          remark: createForm.remark || null,
           created_by: '结算专员',
         }),
       });
@@ -193,9 +227,8 @@ const LoanPage: React.FC = () => {
         toast.success('暂借单创建成功');
         setShowCreateModal(false);
         setCreateForm({
-          borrower_type: 'customer',
-          borrower_name: '',
-          borrower_contact: '',
+          customer_id: 0,
+          customer_name: '',
           product_name: '',
           weight: '',
           labor_cost: '',
@@ -203,6 +236,7 @@ const LoanPage: React.FC = () => {
           loan_date: new Date().toISOString().split('T')[0],
           remark: '',
         });
+        setCustomerSearch('');
         loadLoanOrders();
       } else {
         const error = await response.json();
@@ -323,6 +357,10 @@ const LoanPage: React.FC = () => {
     loadLoanOrders();
   }, [activeTab]);
 
+  useEffect(() => {
+    loadCustomers();
+  }, []);
+
   // 统计各状态数量
   const pendingCount = loanOrders.filter(o => o.status === 'pending').length;
   const borrowedCount = loanOrders.filter(o => o.status === 'borrowed').length;
@@ -409,12 +447,12 @@ const LoanPage: React.FC = () => {
       <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
         <div className="flex items-center space-x-4 flex-wrap gap-y-2">
           <div className="flex items-center space-x-2">
-            <Search className="w-4 h-4 text-gray-400" />
+            <User className="w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="借出对象姓名"
-              value={searchFilters.borrower_name}
-              onChange={(e) => setSearchFilters({ ...searchFilters, borrower_name: e.target.value })}
+              placeholder="客户姓名"
+              value={searchFilters.customer_name}
+              onChange={(e) => setSearchFilters({ ...searchFilters, customer_name: e.target.value })}
               className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-200 focus:border-amber-400"
             />
           </div>
@@ -437,7 +475,7 @@ const LoanPage: React.FC = () => {
           </button>
           <button
             onClick={() => {
-              setSearchFilters({ borrower_name: '', product_name: '' });
+              setSearchFilters({ customer_name: '', product_name: '' });
               loadLoanOrders();
             }}
             className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors flex items-center space-x-1"
@@ -465,7 +503,7 @@ const LoanPage: React.FC = () => {
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">单号</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">借出对象</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">客户</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">产品</th>
                 <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">克重</th>
                 <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">工费</th>
@@ -482,13 +520,7 @@ const LoanPage: React.FC = () => {
                     <span className="font-mono text-sm text-amber-600">{loan.loan_no}</span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center space-x-2">
-                      <BorrowerTypeBadge type={loan.borrower_type} />
-                      <span className="font-medium">{loan.borrower_name}</span>
-                    </div>
-                    {loan.borrower_contact && (
-                      <div className="text-xs text-gray-400 mt-0.5">{loan.borrower_contact}</div>
-                    )}
+                    <span className="font-medium">{loan.customer_name}</span>
                   </td>
                   <td className="px-4 py-3 text-sm">{loan.product_name}</td>
                   <td className="px-4 py-3 text-right font-medium">{loan.weight.toFixed(2)}克</td>
@@ -572,42 +604,45 @@ const LoanPage: React.FC = () => {
             </h3>
             
             <div className="space-y-4">
-              {/* 借出对象类型 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">借出对象类型 *</label>
-                <select
-                  value={createForm.borrower_type}
-                  onChange={(e) => setCreateForm({ ...createForm, borrower_type: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-200 focus:border-amber-400"
-                >
-                  <option value="customer">客户</option>
-                  <option value="internal">内部人员</option>
-                  <option value="supplier">供应商</option>
-                </select>
-              </div>
-              
-              {/* 借出对象姓名 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">借出对象姓名 *</label>
+              {/* 客户选择 */}
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-1">客户 *</label>
                 <input
                   type="text"
-                  value={createForm.borrower_name}
-                  onChange={(e) => setCreateForm({ ...createForm, borrower_name: e.target.value })}
-                  placeholder="请输入姓名"
+                  value={customerSearch}
+                  onChange={(e) => {
+                    setCustomerSearch(e.target.value);
+                    setShowCustomerDropdown(true);
+                    // 如果手动输入，清除已选客户
+                    if (createForm.customer_name !== e.target.value) {
+                      setCreateForm({ ...createForm, customer_id: 0, customer_name: '' });
+                    }
+                  }}
+                  onFocus={() => setShowCustomerDropdown(true)}
+                  placeholder="搜索并选择客户"
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-200 focus:border-amber-400"
                 />
-              </div>
-              
-              {/* 联系方式 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">联系方式</label>
-                <input
-                  type="text"
-                  value={createForm.borrower_contact}
-                  onChange={(e) => setCreateForm({ ...createForm, borrower_contact: e.target.value })}
-                  placeholder="电话或微信（可选）"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-200 focus:border-amber-400"
-                />
+                {createForm.customer_id > 0 && (
+                  <span className="absolute right-3 top-8 text-green-500 text-sm">✓ 已选择</span>
+                )}
+                
+                {/* 客户下拉列表 */}
+                {showCustomerDropdown && filteredCustomers.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {filteredCustomers.map((customer) => (
+                      <div
+                        key={customer.id}
+                        onClick={() => handleSelectCustomer(customer)}
+                        className="px-3 py-2 hover:bg-amber-50 cursor-pointer flex justify-between items-center"
+                      >
+                        <span className="font-medium">{customer.name}</span>
+                        {customer.phone && (
+                          <span className="text-gray-400 text-sm">{customer.phone}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               
               {/* 产品名称 */}
@@ -686,7 +721,11 @@ const LoanPage: React.FC = () => {
             
             <div className="flex justify-end space-x-3 mt-6">
               <button
-                onClick={() => setShowCreateModal(false)}
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setCustomerSearch('');
+                  setShowCustomerDropdown(false);
+                }}
                 className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
               >
                 取消
@@ -803,6 +842,14 @@ const LoanPage: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      
+      {/* 点击外部关闭客户下拉 */}
+      {showCustomerDropdown && (
+        <div 
+          className="fixed inset-0 z-40" 
+          onClick={() => setShowCustomerDropdown(false)}
+        />
       )}
     </div>
   );
