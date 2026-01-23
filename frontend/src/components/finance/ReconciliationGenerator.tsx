@@ -147,7 +147,247 @@ export const ReconciliationGenerator: React.FC<ReconciliationGeneratorProps> = (
 
   // 打印
   const handlePrint = () => {
-    window.print();
+    if (!generatedStatement) return;
+
+    // 查找对账单预览元素
+    const previewElement = document.querySelector('.statement-preview');
+    if (!previewElement) {
+      toast.error('未找到对账单内容');
+      return;
+    }
+
+    // 克隆元素内容
+    const printContent = previewElement.cloneNode(true) as HTMLElement;
+
+    // 创建新窗口
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    if (!printWindow) {
+      toast.error('无法打开打印窗口，请检查浏览器弹窗设置');
+      return;
+    }
+
+    // 构建打印页面的 HTML
+    const printHTML = `
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>客户往来账对账单</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background: white;
+      padding: 20px;
+    }
+    
+    .statement-preview {
+      width: 210mm;
+      min-height: 297mm;
+      max-width: 100%;
+      margin: 0 auto;
+      padding: 32px 40px;
+      background: white;
+      border: 2px solid #000;
+      box-shadow: none;
+    }
+    
+    /* 表格样式 */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    
+    th, td {
+      border: 1px solid #000;
+      padding: 8px;
+      text-align: left;
+    }
+    
+    th {
+      background-color: #fef3c7;
+      font-weight: bold;
+      text-align: center;
+    }
+    
+    /* 字体样式 */
+    .font-mono {
+      font-family: 'Courier New', Courier, monospace;
+    }
+    
+    .font-bold {
+      font-weight: bold;
+    }
+    
+    /* 文本对齐 */
+    .text-center {
+      text-align: center;
+    }
+    
+    .text-right {
+      text-align: right;
+    }
+    
+    .text-left {
+      text-align: left;
+    }
+    
+    /* 颜色样式 */
+    .text-gray-600 { color: #4b5563; }
+    .text-gray-700 { color: #374151; }
+    .text-gray-800 { color: #1f2937; }
+    .text-gray-900 { color: #111827; }
+    .text-amber-700 { color: #b45309; }
+    .text-blue-600 { color: #2563eb; }
+    .text-green-600 { color: #16a34a; }
+    .text-red-600 { color: #dc2626; }
+    .text-orange-600 { color: #ea580c; }
+    
+    /* 背景色 */
+    .bg-amber-50 { background-color: #fffbeb; }
+    .bg-amber-50\\/50 { background-color: rgba(255, 251, 235, 0.5); }
+    .bg-blue-50\\/50 { background-color: rgba(239, 246, 255, 0.5); }
+    .bg-green-50\\/50 { background-color: rgba(240, 253, 244, 0.5); }
+    .bg-gray-50 { background-color: #f9fafb; }
+    .bg-gray-100 { background-color: #f3f4f6; }
+    .bg-gradient-to-br { background: linear-gradient(to bottom right, var(--tw-gradient-stops)); }
+    .from-amber-50 { --tw-gradient-from: #fffbeb; }
+    .to-orange-50 { --tw-gradient-to: #fff7ed; }
+    .from-emerald-50 { --tw-gradient-from: #ecfdf5; }
+    .to-green-50 { --tw-gradient-to: #f0fdf4; }
+    
+    /* 边框样式 */
+    .border { border-width: 1px; }
+    .border-2 { border-width: 2px; }
+    .border-gray-300 { border-color: #d1d5db; }
+    .border-gray-400 { border-color: #9ca3af; }
+    .border-amber-200 { border-color: #fde68a; }
+    .border-emerald-200 { border-color: #a7f3d0; }
+    
+    /* 间距 */
+    .mb-1 { margin-bottom: 0.25rem; }
+    .mb-2 { margin-bottom: 0.5rem; }
+    .mb-3 { margin-bottom: 0.75rem; }
+    .mb-4 { margin-bottom: 1rem; }
+    .mb-5 { margin-bottom: 1.25rem; }
+    .mb-6 { margin-bottom: 1.5rem; }
+    .mt-1 { margin-top: 0.25rem; }
+    .mt-2 { margin-top: 0.5rem; }
+    .mt-3 { margin-top: 0.75rem; }
+    .mt-auto { margin-top: auto; }
+    .p-3 { padding: 0.75rem; }
+    .p-4 { padding: 1rem; }
+    .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+    .py-1\\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+    .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+    .pt-3 { padding-top: 0.75rem; }
+    .gap-2 { gap: 0.5rem; }
+    .gap-4 { gap: 1rem; }
+    .gap-8 { gap: 2rem; }
+    
+    /* 布局 */
+    .flex { display: flex; }
+    .flex-1 { flex: 1 1 0%; }
+    .items-center { align-items: center; }
+    .items-start { align-items: flex-start; }
+    .justify-between { justify-content: space-between; }
+    .grid { display: grid; }
+    .grid-cols-2 { grid-template-columns: repeat(2, minfr); }
+    
+    /* 字体大小 */
+    .text-xs { font-size: 0.75rem; }
+    .text-sm { font-size: 0.875rem; }
+    .text-xl { font-size: 1.25rem; }
+    .text-2xl { font-size: 1.5rem; }
+    
+    /* 其他 */
+    .rounded { border-radius: 0.25rem; }
+    .rounded-lg { border-radius: 0.5rem; }
+    .space-y-1 > * + * { margin-top: 0.25rem; }
+    .w-full { width: 100%; }
+    .w-10 { width: 2.5rem; }
+    .w-20 { width: 5rem; }
+    .w-24 { width: 6rem; }
+    .w-40 { width: 10rem; }
+    .inline-block { display: inline-block; }
+    .border-b-2 { border-bottom-width: 2px; }
+    .border-t-2 { border-top-width: 2px; }
+    .h-0\\.5 { height: 0.125rem; }
+    .tracking-wider { letter-spacing: 0.05em; }
+    
+    /* 打印样式 */
+    @media print {
+      body {
+        padding: 0;
+      }
+      
+      .statement-preview {
+        width: 210mm !important;
+        min-height: 297mm !important;
+        margin: 0 !important;
+        padding: 20mm !important;
+        border: 2px solid #000 !important;
+        page-break-after: always;
+        page-break-inside: avoid;
+      }
+      
+      table, th, td {
+        border: 1px solid #000 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      
+      .font-mono {
+        font-family: 'Courier New', Courier, monospace !important;
+      }
+      
+      /* 确保背景色打印 */
+      .bg-amber-50,
+      .bg-amber-50\\/50,
+      .bg-blue-50\\/50,
+      .bg-green-50\\/50,
+      .bg-gray-100 {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      
+      /* 金额颜色在打印时保持 */
+      .text-blue-600,
+      .text-green-600,
+      .text-red-600,
+      .text-orange-600 {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body>
+  ${printContent.outerHTML}
+  <script>
+    window.onload = function() {
+      window.print();
+      window.onafterprint = function() {
+        window.close();
+      };
+    };
+  </script>
+</body>
+</html>`;
+
+    // 写入内容并打印
+    printWindow.document.write(printHTML);
+    printWindow.document.close();
   };
 
   // 发送客户（生成分享链接和二维码）
