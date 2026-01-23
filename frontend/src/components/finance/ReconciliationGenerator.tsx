@@ -28,10 +28,11 @@ export const ReconciliationGenerator: React.FC<ReconciliationGeneratorProps> = (
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [shareLink, setShareLink] = useState<string>('');
 
-  const filteredCustomers = customers.filter(
+  const filteredCustomers = (Array.isArray(customers) ? customers : []).filter(
     (customer) =>
-      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.customerNo.toLowerCase().includes(searchTerm.toLowerCase())
+      customer && customer.name && customer.customerNo &&
+      (customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.customerNo.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const handleGenerate = async () => {
@@ -156,8 +157,29 @@ export const ReconciliationGenerator: React.FC<ReconciliationGeneratorProps> = (
       return;
     }
 
-    // 克隆元素内容
+    // 克隆元素内容（深拷贝）
     const printContent = previewElement.cloneNode(true) as HTMLElement;
+    
+    // 移除所有事件监听器和脚本相关的内容
+    const removeEventListeners = (element: HTMLElement) => {
+      // 移除所有属性中的事件监听器（onclick, onchange 等）
+      Array.from(element.attributes).forEach(attr => {
+        if (attr.name.startsWith('on')) {
+          element.removeAttribute(attr.name);
+        }
+      });
+      
+      // 递归处理子元素
+      Array.from(element.children).forEach(child => {
+        removeEventListeners(child as HTMLElement);
+      });
+    };
+    
+    removeEventListeners(printContent);
+    
+    // 移除所有 script 标签
+    const scripts = printContent.querySelectorAll('script');
+    scripts.forEach(script => script.remove());
 
     // 创建新窗口
     const printWindow = window.open('', '_blank', 'width=800,height=600');
@@ -375,12 +397,35 @@ export const ReconciliationGenerator: React.FC<ReconciliationGeneratorProps> = (
 <body>
   ${printContent.outerHTML}
   <script>
-    window.onload = function() {
-      window.print();
-      window.onafterprint = function() {
-        window.close();
-      };
-    };
+    (function() {
+      try {
+        // 等待 DOM 完全加载
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+              window.print();
+            }, 100);
+          });
+        } else {
+          setTimeout(function() {
+            window.print();
+          }, 100);
+        }
+        
+        // 打印后关闭窗口
+        window.onafterprint = function() {
+          setTimeout(function() {
+            window.close();
+          }, 100);
+        };
+      } catch (e) {
+        console.error('Print error:', e);
+        // 即使出错也尝试打印
+        setTimeout(function() {
+          window.print();
+        }, 500);
+      }
+    })();
   </script>
 </body>
 </html>`;

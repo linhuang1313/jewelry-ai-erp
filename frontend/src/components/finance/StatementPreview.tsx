@@ -155,7 +155,7 @@ export const StatementPreview: React.FC<StatementPreviewProps> = ({ data }) => {
             ) : (
               // 如果没有合并明细，显示旧格式
               <>
-                {data.salesDetails.map((detail, index) => (
+                {(data.salesDetails || []).map((detail, index) => (
                   <tr key={`sale-${index}`} className="bg-white">
                     <td className="border border-gray-400 px-2 py-1.5 text-center">{index + 2}</td>
                     <td className="border border-gray-400 px-2 py-1.5 text-center">{formatDate(detail.date)}</td>
@@ -168,9 +168,9 @@ export const StatementPreview: React.FC<StatementPreviewProps> = ({ data }) => {
                     <td className="border border-gray-400 px-2 py-1.5 text-xs text-gray-600">{detail.salesperson || ''}</td>
                   </tr>
                 ))}
-                {data.paymentDetails.map((detail, index) => (
+                {(data.paymentDetails || []).map((detail, index) => (
                   <tr key={`pay-${index}`} className="bg-green-50/50">
-                    <td className="border border-gray-400 px-2 py-1.5 text-center">{data.salesDetails.length + index + 2}</td>
+                    <td className="border border-gray-400 px-2 py-1.5 text-center">{(data.salesDetails || []).length + index + 2}</td>
                     <td className="border border-gray-400 px-2 py-1.5 text-center">{formatDate(detail.date)}</td>
                     <td className="border border-gray-400 px-2 py-1.5 text-center">客户来款</td>
                     <td className="border border-gray-400 px-2 py-1.5 text-xs font-mono">-</td>
