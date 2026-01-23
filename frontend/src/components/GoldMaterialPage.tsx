@@ -1,8 +1,32 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
+import { Line, Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
 import { API_ENDPOINTS } from '../config';
 import { hasPermission } from '../config/permissions';
 import { apiGet, apiPost, buildQueryString, openDownloadUrl } from '../utils/api';
+
+// 注册 Chart.js 组件
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 // ==================== 类型定义 ====================
 
@@ -202,6 +226,26 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
     suppliers: Array<{ supplier_id: number; supplier_name: string; supplier_no: string; inbound_weight: number; paid_weight: number; debt_weight: number }>;
   } | null>(null);
   const [supplierDebtLoading, setSupplierDebtLoading] = useState(false);
+  
+  // 每日明细数据
+  const [dailyTransactions, setDailyTransactions] = useState<any>(null);
+  const [dailyTransactionsLoading, setDailyTransactionsLoading] = useState(false);
+  const [dateRange, setDateRange] = useState<{ start: string; end: string }>(() => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 30); // 默认最近30天
+    return {
+      start: start.toISOString().split('T')[0],
+      end: end.toISOString().split('T')[0]
+    };
+  });
+  const [showDailyDetail, setShowDailyDetail] = useState(false);
+  
+  // 供应商详情
+  const [selectedSupplier, setSelectedSupplier] = useState<number | null>(null);
+  const [supplierDetail, setSupplierDetail] = useState<any>(null);
+  const [supplierDetailLoading, setSupplierDetailLoading] = useState(false);
+  const [showSupplierDetailModal, setShowSupplierDetailModal] = useState(false);
 
   // ==================== API 调用函数 ====================
 
@@ -438,6 +482,75 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
     setSupplierDebtLoading(false);
   }, [userRole]);
 
+  // 加载每日明细
+  const loadDailyTransactions = useCallback(async (supplierId?: number) => {
+    setDailyTransactionsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (dateRange.start) params.append('start_date', dateRange.start);
+      if (dateRange.end) params.append('end_date', dateRange.end);
+      if (supplierId) params.append('supplier_id', supplierId.toString());
+      params.append('user_role', userRole);
+      
+      const data = await apiGet<{
+        success: boolean;
+        data: {
+          daily_summary: Array<{
+            date: string;
+            inbound_records: Array<any>;
+            payment_records: Array<any>;
+            total_inbound: number;
+            total_paid: number;
+            net_change: number;
+          }>;
+          summary: {
+            total_inbound: number;
+            total_paid: number;
+            total_net_change: number;
+          };
+        };
+      }>(`/api/suppliers/daily-transactions?${params.toString()}`, { showErrorToast: false });
+      
+      if (data?.success) {
+        setDailyTransactions(data.data);
+      }
+    } catch (error) {
+      console.error('加载每日明细失败:', error);
+    } finally {
+      setDailyTransactionsLoading(false);
+    }
+  }, [dateRange, userRole]);
+
+  // 加载供应商详情
+  const loadSupplierDetail = useCallback(async (supplierId: number) => {
+    setSupplierDetailLoading(true);
+    try {
+      const data = await apiGet<{
+        success: boolean;
+        data: {
+          account: any;
+          transactions: Array<any>;
+        };
+      }>(`/api/gold-material/supplier-gold-accounts/${supplierId}?user_role=${userRole}`, { showErrorToast: false });
+      
+      if (data?.success) {
+        setSupplierDetail(data.data);
+      }
+    } catch (error) {
+      console.error('加载供应商详情失败:', error);
+      toast.error('加载供应商详情失败');
+    } finally {
+      setSupplierDetailLoading(false);
+    }
+  }, [userRole]);
+
+  // 打开供应商详情
+  const openSupplierDetail = async (supplierId: number) => {
+    setSelectedSupplier(supplierId);
+    setShowSupplierDetailModal(true);
+    await loadSupplierDetail(supplierId);
+  };
+
   // 创建取料单
   const createWithdrawal = async () => {
     if (!withdrawalFormData.customer_id || !withdrawalFormData.gold_weight) {
@@ -634,6 +747,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
       loadInitialBalance();
     } else if (activeTab === 'supplier-debt') {
       loadSupplierDebt();
+      loadDailyTransactions();
     } else if (activeTab === 'withdrawals') {
       loadWithdrawals();
       loadCustomers();
@@ -1364,12 +1478,85 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-semibold">供应商欠料统计</h2>
-              <button
-                onClick={() => loadSupplierDebt()}
-                className="px-3 py-1.5 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
-              >
-                刷新
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    loadSupplierDebt();
+                    loadDailyTransactions();
+                  }}
+                  className="px-3 py-1.5 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
+                >
+                  刷新
+                </button>
+              </div>
+            </div>
+            
+            {/* 日期筛选器 */}
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">开始日期：</label>
+                  <input
+                    type="date"
+                    value={dateRange.start}
+                    onChange={(e) => {
+                      setDateRange({ ...dateRange, start: e.target.value });
+                      setTimeout(() => loadDailyTransactions(), 100);
+                    }}
+                    className="px-3 py-1.5 border rounded-lg text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">结束日期：</label>
+                  <input
+                    type="date"
+                    value={dateRange.end}
+                    onChange={(e) => {
+                      setDateRange({ ...dateRange, end: e.target.value });
+                      setTimeout(() => loadDailyTransactions(), 100);
+                    }}
+                    className="px-3 py-1.5 border rounded-lg text-sm"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      const end = new Date();
+                      const start = new Date();
+                      start.setDate(start.getDate() - 7);
+                      setDateRange({
+                        start: start.toISOString().split('T')[0],
+                        end: end.toISOString().split('T')[0]
+                      });
+                      setTimeout(() => loadDailyTransactions(), 100);
+                    }}
+                    className="px-3 py-1.5 text-xs bg-white border rounded-lg hover:bg-gray-50"
+                  >
+                    最近7天
+                  </button>
+                  <button
+                    onClick={() => {
+                      const end = new Date();
+                      const start = new Date();
+                      start.setDate(start.getDate() - 30);
+                      setDateRange({
+                        start: start.toISOString().split('T')[0],
+                        end: end.toISOString().split('T')[0]
+                      });
+                      setTimeout(() => loadDailyTransactions(), 100);
+                    }}
+                    className="px-3 py-1.5 text-xs bg-white border rounded-lg hover:bg-gray-50"
+                  >
+                    最近30天
+                  </button>
+                </div>
+                <button
+                  onClick={() => setShowDailyDetail(!showDailyDetail)}
+                  className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                >
+                  {showDailyDetail ? '隐藏' : '显示'}每日明细
+                </button>
+              </div>
             </div>
             
             {/* 汇总卡片 */}
@@ -1394,6 +1581,92 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
               </div>
             )}
             
+            {/* 可视化图表 */}
+            {dailyTransactions && dailyTransactions.daily_summary && dailyTransactions.daily_summary.length > 0 && (
+              <div className="mb-6 p-4 bg-white border rounded-lg">
+                <h3 className="text-lg font-semibold mb-4">每日趋势图</h3>
+                <div style={{ height: '300px' }}>
+                  <Line
+                    data={{
+                      labels: dailyTransactions.daily_summary.map((d: any) => d.date).reverse(),
+                      datasets: [
+                        {
+                          label: '入库重量 (克)',
+                          data: dailyTransactions.daily_summary.map((d: any) => d.total_inbound).reverse(),
+                          borderColor: 'rgb(59, 130, 246)',
+                          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                          tension: 0.1,
+                        },
+                        {
+                          label: '付料重量 (克)',
+                          data: dailyTransactions.daily_summary.map((d: any) => d.total_paid).reverse(),
+                          borderColor: 'rgb(34, 197, 94)',
+                          backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                          tension: 0.1,
+                        },
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          position: 'top' as const,
+                        },
+                        title: {
+                          display: false,
+                        },
+                      },
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                        },
+                      },
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+            
+            {/* 每日明细表格 */}
+            {showDailyDetail && (
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-4">每日明细</h3>
+                {dailyTransactionsLoading ? (
+                  renderLoading()
+                ) : dailyTransactions && dailyTransactions.daily_summary && dailyTransactions.daily_summary.length > 0 ? (
+                  <div className="overflow-x-auto border rounded-lg">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left font-medium text-gray-600">日期</th>
+                          <th className="px-4 py-3 text-right font-medium text-gray-600">入库重量 (克)</th>
+                          <th className="px-4 py-3 text-right font-medium text-gray-600">付料重量 (克)</th>
+                          <th className="px-4 py-3 text-right font-medium text-gray-600">净增欠料 (克)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {dailyTransactions.daily_summary.map((day: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 font-medium">{day.date}</td>
+                            <td className="px-4 py-3 text-right text-blue-600">{day.total_inbound.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right text-green-600">{day.total_paid.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right font-semibold">
+                              <span className={day.net_change > 0 ? 'text-red-600' : day.net_change < 0 ? 'text-green-600' : 'text-gray-600'}>
+                                {day.net_change > 0 ? '+' : ''}{day.net_change.toFixed(2)}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">暂无数据</div>
+                )}
+              </div>
+            )}
+            
             {/* 供应商欠料列表 */}
             {supplierDebtLoading ? renderLoading() : supplierDebt && supplierDebt.suppliers.length > 0 ? (
               <div className="overflow-x-auto">
@@ -1405,12 +1678,13 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                       <th className="px-4 py-3 text-right font-medium text-gray-600">已付料 (克)</th>
                       <th className="px-4 py-3 text-right font-medium text-gray-600">欠料 (克)</th>
                       <th className="px-4 py-3 text-center font-medium text-gray-600">状态</th>
+                      <th className="px-4 py-3 text-center font-medium text-gray-600">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {supplierDebt.suppliers.map((s) => (
-                      <tr key={s.supplier_id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">
+                      <tr key={s.supplier_id} className="hover:bg-gray-50 cursor-pointer">
+                        <td className="px-4 py-3" onClick={() => openSupplierDetail(s.supplier_id)}>
                           <div className="font-medium text-gray-900">{s.supplier_name}</div>
                           <div className="text-xs text-gray-500">{s.supplier_no}</div>
                         </td>
@@ -1430,12 +1704,124 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                             <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">结清</span>
                           )}
                         </td>
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            onClick={() => openSupplierDetail(s.supplier_id)}
+                            className="px-3 py-1 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                          >
+                            查看详情
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : renderEmpty()}
+          </div>
+        )}
+        
+        {/* 供应商详情弹窗 */}
+        {showSupplierDetailModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowSupplierDetailModal(false)}>
+            <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-semibold">供应商交易详情</h3>
+                <button
+                  onClick={() => setShowSupplierDetailModal(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+              
+              {supplierDetailLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                </div>
+              ) : supplierDetail ? (
+                <>
+                  {/* 账户信息 */}
+                  <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                    <h4 className="font-semibold mb-2">账户信息</h4>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <div className="text-sm text-gray-600">供应商名称</div>
+                        <div className="font-medium">{supplierDetail.account.supplier_name}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-600">当前余额</div>
+                        <div className={`font-medium ${supplierDetail.account.current_balance > 0 ? 'text-red-600' : supplierDetail.account.current_balance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                          {supplierDetail.account.current_balance > 0 ? '+' : ''}{supplierDetail.account.current_balance.toFixed(2)} 克
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-600">状态</div>
+                        <div className="font-medium">{supplierDetail.account.status_text}</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* 交易记录 */}
+                  <div>
+                    <h4 className="font-semibold mb-4">交易记录</h4>
+                    {supplierDetail.transactions && supplierDetail.transactions.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-3 text-left font-medium text-gray-600">日期</th>
+                              <th className="px-4 py-3 text-left font-medium text-gray-600">类型</th>
+                              <th className="px-4 py-3 text-right font-medium text-gray-600">重量 (克)</th>
+                              <th className="px-4 py-3 text-right font-medium text-gray-600">余额变化</th>
+                              <th className="px-4 py-3 text-left font-medium text-gray-600">关联单号</th>
+                              <th className="px-4 py-3 text-left font-medium text-gray-600">备注</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {supplierDetail.transactions.map((tx: any, idx: number) => (
+                              <tr key={idx} className="hover:bg-gray-50">
+                                <td className="px-4 py-3">
+                                  {tx.created_at ? new Date(tx.created_at).toLocaleString('zh-CN') : '-'}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`px-2 py-1 text-xs rounded-full ${
+                                    tx.transaction_type === 'receive' 
+                                      ? 'bg-blue-100 text-blue-700' 
+                                      : 'bg-green-100 text-green-700'
+                                  }`}>
+                                    {tx.transaction_type_text}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-right font-medium">
+                                  {tx.gold_weight.toFixed(2)}
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <div className="text-xs text-gray-500">
+                                    {tx.balance_before.toFixed(2)} → {tx.balance_after.toFixed(2)}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-xs text-gray-600">
+                                  {tx.inbound_order_id ? `入库单#${tx.inbound_order_id}` : 
+                                   tx.payment_transaction_id ? `付料单#${tx.payment_transaction_id}` : '-'}
+                                </td>
+                                <td className="px-4 py-3 text-xs text-gray-600">
+                                  {tx.remark || '-'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">暂无交易记录</div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-12 text-gray-500">加载失败</div>
+              )}
+            </div>
           </div>
         )}
         
@@ -1644,7 +2030,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                               打印
                             </button>
                             <button
-                              onClick={() => window.open(`${API_BASE_URL}/api/gold-material/withdrawals/${w.id}/download?format=html`, '_blank')}
+                              onClick={() => window.open(`${API_ENDPOINTS.API_BASE_URL}/api/gold-material/withdrawals/${w.id}/download?format=html`, '_blank')}
                               className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
                             >
                               下载

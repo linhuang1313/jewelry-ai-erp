@@ -9,8 +9,11 @@ from ..timezone_utils import china_now
 import logging
 
 from ..database import get_db
-from ..models import Supplier, InboundDetail, GoldMaterialTransaction
+from ..models import Supplier, InboundDetail, GoldMaterialTransaction, InboundOrder
 from ..schemas import SupplierCreate, SupplierResponse
+from ..utils.response import success_response
+from typing import Optional
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -276,4 +279,171 @@ async def get_supplier_debt_summary(
     except Exception as e:
         logger.error(f"获取供应商欠料统计失败: {e}", exc_info=True)
         return {"success": False, "message": str(e), "suppliers": []}
+
+
+@router.get("/daily-transactions")
+async def get_supplier_daily_transactions(
+    start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+    supplier_id: Optional[int] = Query(None, description="供应商ID"),
+    user_role: str = Query(default="material", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    获取供应商每日收料和付料明细
+    
+    返回按日期分组的数据，包括：
+    - 每日入库记录
+    - 每日付料记录
+    - 每日汇总
+    """
+    try:
+        # 解析日期
+        start_dt = None
+        end_dt = None
+        
+        if start_date:
+            try:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            except:
+                pass
+        
+        if end_date:
+            try:
+                end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            except:
+                pass
+        
+        # 查询入库记录（按日期分组）
+        inbound_query = db.query(
+            func.date(InboundOrder.create_time).label('date'),
+            InboundOrder.order_no,
+            InboundOrder.id.label('order_id'),
+            InboundDetail.supplier_id,
+            Supplier.name.label('supplier_name'),
+            func.sum(InboundDetail.weight).label('weight'),
+            InboundOrder.create_time
+        ).join(
+            InboundDetail, InboundOrder.id == InboundDetail.order_id
+        ).join(
+            Supplier, InboundDetail.supplier_id == Supplier.id
+        ).filter(
+            InboundDetail.supplier_id.isnot(None)
+        )
+        
+        if start_dt:
+            inbound_query = inbound_query.filter(InboundOrder.create_time >= start_dt)
+        if end_dt:
+            inbound_query = inbound_query.filter(InboundOrder.create_time <= end_dt)
+        if supplier_id:
+            inbound_query = inbound_query.filter(InboundDetail.supplier_id == supplier_id)
+        
+        inbound_records = inbound_query.group_by(
+            func.date(InboundOrder.create_time),
+            InboundOrder.order_no,
+            InboundOrder.id,
+            InboundDetail.supplier_id,
+            Supplier.name,
+            InboundOrder.create_time
+        ).order_by(desc(func.date(InboundOrder.create_time))).all()
+        
+        # 查询付料记录（按日期分组）
+        payment_query = db.query(
+            func.date(GoldMaterialTransaction.created_at).label('date'),
+            GoldMaterialTransaction.transaction_no,
+            GoldMaterialTransaction.id.label('transaction_id'),
+            GoldMaterialTransaction.supplier_id,
+            Supplier.name.label('supplier_name'),
+            GoldMaterialTransaction.gold_weight,
+            GoldMaterialTransaction.created_at,
+            GoldMaterialTransaction.remark
+        ).join(
+            Supplier, GoldMaterialTransaction.supplier_id == Supplier.id
+        ).filter(
+            GoldMaterialTransaction.transaction_type == 'expense',
+            GoldMaterialTransaction.status == 'confirmed',
+            GoldMaterialTransaction.supplier_id.isnot(None)
+        )
+        
+        if start_dt:
+            payment_query = payment_query.filter(GoldMaterialTransaction.created_at >= start_dt)
+        if end_dt:
+            payment_query = payment_query.filter(GoldMaterialTransaction.created_at <= end_dt)
+        if supplier_id:
+            payment_query = payment_query.filter(GoldMaterialTransaction.supplier_id == supplier_id)
+        
+        payment_records = payment_query.order_by(desc(func.date(GoldMaterialTransaction.created_at))).all()
+        
+        # 按日期分组
+        daily_data = defaultdict(lambda: {
+            'date': None,
+            'inbound_records': [],
+            'payment_records': [],
+            'total_inbound': 0.0,
+            'total_paid': 0.0,
+            'net_change': 0.0
+        })
+        
+        # 处理入库记录
+        for record in inbound_records:
+            date_str = record.date.strftime('%Y-%m-%d') if record.date else ''
+            if date_str not in daily_data:
+                daily_data[date_str]['date'] = date_str
+            
+            daily_data[date_str]['inbound_records'].append({
+                'order_no': record.order_no,
+                'order_id': record.order_id,
+                'supplier_id': record.supplier_id,
+                'supplier_name': record.supplier_name,
+                'weight': float(record.weight or 0),
+                'create_time': record.create_time.isoformat() if record.create_time else None
+            })
+            daily_data[date_str]['total_inbound'] += float(record.weight or 0)
+        
+        # 处理付料记录
+        for record in payment_records:
+            date_str = record.date.strftime('%Y-%m-%d') if record.date else ''
+            if date_str not in daily_data:
+                daily_data[date_str]['date'] = date_str
+            
+            daily_data[date_str]['payment_records'].append({
+                'transaction_no': record.transaction_no,
+                'transaction_id': record.transaction_id,
+                'supplier_id': record.supplier_id,
+                'supplier_name': record.supplier_name,
+                'gold_weight': float(record.gold_weight or 0),
+                'created_at': record.created_at.isoformat() if record.created_at else None,
+                'remark': record.remark
+            })
+            daily_data[date_str]['total_paid'] += float(record.gold_weight or 0)
+        
+        # 计算净变化
+        for date_str in daily_data:
+            daily_data[date_str]['net_change'] = daily_data[date_str]['total_inbound'] - daily_data[date_str]['total_paid']
+        
+        # 转换为列表并按日期排序
+        daily_summary = []
+        total_inbound = 0.0
+        total_paid = 0.0
+        
+        for date_str in sorted(daily_data.keys(), reverse=True):
+            data = daily_data[date_str]
+            daily_summary.append(data)
+            total_inbound += data['total_inbound']
+            total_paid += data['total_paid']
+        
+        return success_response(
+            data={
+                'daily_summary': daily_summary,
+                'summary': {
+                    'total_inbound': round(total_inbound, 2),
+                    'total_paid': round(total_paid, 2),
+                    'total_net_change': round(total_inbound - total_paid, 2)
+                }
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"获取供应商每日交易明细失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e), "data": None}
 
