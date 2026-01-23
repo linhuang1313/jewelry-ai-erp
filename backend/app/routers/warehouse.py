@@ -442,9 +442,12 @@ async def create_batch_transfers(
     
     db.commit()
     
+    total_weight = sum(t["weight"] for t in created_transfers)
+    
     return {
         "success": True,
         "created_count": len(created_transfers),
+        "total_weight": total_weight,
         "created_transfers": created_transfers,
         "errors": errors,
         "message": f"成功创建 {len(created_transfers)} 个转移单" + (f"，{len(errors)} 个失败" if errors else "")
