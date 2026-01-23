@@ -170,7 +170,9 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     weight: number;
     transfer_weight: number;
     selected: boolean;
+    order_no: string;  // 来源入库单号
   }>>([]);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(new Set());  // 已选择的入库单ID
   const [batchLoading, setBatchLoading] = useState(false);
   const [recentInboundOrders, setRecentInboundOrders] = useState<Array<{
     id: number;
@@ -351,7 +353,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     }
   };
 
-  // 根据入库单号查询商品
+  // 根据入库单号查询商品（单个入库单）
   const handleSearchByOrderNo = async (orderNoOverride?: string) => {
     const orderNoToSearch = orderNoOverride || batchOrderNo.trim();
     if (!orderNoToSearch) {
@@ -375,9 +377,11 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
           product_name: d.product_name,
           weight: d.weight,
           transfer_weight: d.weight,
-          selected: true
+          selected: true,
+          order_no: order.order_no
         }));
         setBatchItems(items);
+        setSelectedOrderIds(new Set());  // 清除多选状态
         toast.success(`找到 ${items.length} 个商品`);
       } else {
         toast.error('未找到该入库单');
@@ -389,6 +393,129 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     } finally {
       setBatchLoading(false);
     }
+  };
+
+  // 加载已选择的多个入库单商品
+  const handleLoadSelectedOrders = () => {
+    if (selectedOrderIds.size === 0) {
+      toast.error('请先选择入库单');
+      return;
+    }
+    
+    const selectedOrders = recentInboundOrders.filter(o => selectedOrderIds.has(o.id));
+    let itemId = 0;
+    const allItems: typeof batchItems = [];
+    
+    selectedOrders.forEach(order => {
+      order.details.forEach(d => {
+        allItems.push({
+          id: itemId++,
+          product_name: d.product_name,
+          weight: d.weight,
+          transfer_weight: d.weight,
+          selected: true,
+          order_no: order.order_no
+        });
+      });
+    });
+    
+    setBatchItems(allItems);
+    toast.success(`已加载 ${selectedOrders.length} 个入库单，共 ${allItems.length} 个商品`);
+  };
+
+  // 一键全量转移
+  const handleQuickTransferAll = async () => {
+    if (selectedOrderIds.size === 0) {
+      toast.error('请先选择入库单');
+      return;
+    }
+    
+    const selectedOrders = recentInboundOrders.filter(o => selectedOrderIds.has(o.id));
+    let itemId = 0;
+    const allItems: typeof batchItems = [];
+    
+    selectedOrders.forEach(order => {
+      order.details.forEach(d => {
+        allItems.push({
+          id: itemId++,
+          product_name: d.product_name,
+          weight: d.weight,
+          transfer_weight: d.weight,
+          selected: true,
+          order_no: order.order_no
+        });
+      });
+    });
+    
+    if (allItems.length === 0) {
+      toast.error('选中的入库单没有商品');
+      return;
+    }
+    
+    // 获取默认位置
+    const productLoc = locations.find(l => l.name === '商品部仓库');
+    const showroomLoc = locations.find(l => l.name === '展厅');
+    
+    let fromLocationId = productLoc?.id;
+    let toLocationId = showroomLoc?.id;
+    
+    if (userRole === 'counter') {
+      fromLocationId = showroomLoc?.id;
+      toLocationId = productLoc?.id;
+    }
+    
+    if (!fromLocationId || !toLocationId) {
+      toast.error('位置配置错误');
+      return;
+    }
+    
+    // 构建备注（包含所有入库单号）
+    const orderNos = selectedOrders.map(o => o.order_no).join('、');
+    
+    setBatchLoading(true);
+    try {
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/warehouse/transfers/batch?user_role=${userRole}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: allItems.map(item => ({
+            product_name: item.product_name,
+            weight: item.transfer_weight
+          })),
+          from_location_id: fromLocationId,
+          to_location_id: toLocationId,
+          remark: `来自入库单 ${orderNos}`
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        toast.success(result.message);
+        setSelectedOrderIds(new Set());
+        setBatchItems([]);
+        loadTransfers();
+        loadInventorySummary();
+        loadRecentInboundOrders();
+      } else {
+        toast.error(result.detail || '批量转移失败');
+      }
+    } catch (error) {
+      toast.error('批量转移失败');
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
+  // 切换入库单选择
+  const toggleOrderSelection = (orderId: number) => {
+    const newSet = new Set(selectedOrderIds);
+    if (newSet.has(orderId)) {
+      newSet.delete(orderId);
+    } else {
+      newSet.add(orderId);
+    }
+    setSelectedOrderIds(newSet);
   };
 
   // 批量创建转移单
@@ -417,6 +544,12 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       return;
     }
     
+    // 构建备注（收集所有不同的入库单号）
+    const orderNos = [...new Set(selectedItems.map(item => item.order_no).filter(Boolean))];
+    const remarkText = orderNos.length > 0 
+      ? `来自入库单 ${orderNos.join('、')}`
+      : (batchOrderNo ? `来自入库单 ${batchOrderNo}` : '批量转移');
+    
     setBatchLoading(true);
     try {
       const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/warehouse/transfers/batch?user_role=${userRole}`, {
@@ -429,7 +562,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
           })),
           from_location_id: fromLocationId,
           to_location_id: toLocationId,
-          remark: `来自入库单 ${batchOrderNo}`
+          remark: remarkText
         })
       });
       
@@ -439,8 +572,10 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
         toast.success(result.message);
         setBatchOrderNo('');
         setBatchItems([]);
+        setSelectedOrderIds(new Set());
         loadTransfers();
         loadInventorySummary();
+        loadRecentInboundOrders();
       } else {
         toast.error(result.detail || '批量转移失败');
       }
@@ -1151,11 +1286,35 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                 </p>
               </div>
 
-              {/* 最近入库单快速选择 */}
+              {/* 最近入库单快速选择（支持多选） */}
               {batchItems.length === 0 && recentInboundOrders.length > 0 && (
                 <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                    <h4 className="font-medium">最近入库单（点击快速选择）</h4>
+                  <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <h4 className="font-medium">最近入库单</h4>
+                      <span className="text-sm text-gray-500">
+                        （已选 {selectedOrderIds.size} 个，
+                        共 {recentInboundOrders.filter(o => selectedOrderIds.has(o.id)).reduce((sum, o) => sum + o.item_count, 0)} 件商品，
+                        {recentInboundOrders.filter(o => selectedOrderIds.has(o.id)).reduce((sum, o) => sum + o.total_weight, 0).toFixed(2)} 克）
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={handleLoadSelectedOrders}
+                        disabled={selectedOrderIds.size === 0 || batchLoading}
+                        className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400"
+                      >
+                        加载已选入库单
+                      </button>
+                      <button
+                        onClick={handleQuickTransferAll}
+                        disabled={selectedOrderIds.size === 0 || batchLoading}
+                        className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 flex items-center space-x-1"
+                      >
+                        <Send className="w-4 h-4" />
+                        <span>{batchLoading ? '转移中...' : '一键全量转移'}</span>
+                      </button>
+                    </div>
                   </div>
                   <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
                     {recentInboundOrders.map((order) => {
@@ -1171,26 +1330,39 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       });
                       const tagList = Array.from(tags).slice(0, 4);
                       
+                      const isSelected = selectedOrderIds.has(order.id);
+                      
                       return (
                         <div 
                           key={order.id}
-                          onClick={() => handleSearchByOrderNo(order.order_no)}
-                          className="px-6 py-4 hover:bg-blue-50 cursor-pointer transition-colors"
+                          className={`px-6 py-4 hover:bg-blue-50 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
                         >
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex items-center space-x-3">
-                              <div className="p-2 bg-orange-100 rounded-lg">
-                                <FileText className="w-4 h-4 text-orange-600" />
-                              </div>
-                              <div>
-                                <div className="font-mono text-sm font-medium">{order.order_no}</div>
-                                <div className="text-xs text-gray-500">
-                                  {order.create_time ? new Date(order.create_time).toLocaleDateString('zh-CN', {
-                                    month: '2-digit',
-                                    day: '2-digit',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  }) : ''}
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleOrderSelection(order.id)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-5 h-5 text-blue-600 rounded"
+                              />
+                              <div 
+                                className="flex items-center space-x-3 flex-1"
+                                onClick={() => handleSearchByOrderNo(order.order_no)}
+                              >
+                                <div className="p-2 bg-orange-100 rounded-lg">
+                                  <FileText className="w-4 h-4 text-orange-600" />
+                                </div>
+                                <div>
+                                  <div className="font-mono text-sm font-medium">{order.order_no}</div>
+                                  <div className="text-xs text-gray-500">
+                                    {order.create_time ? new Date(order.create_time).toLocaleDateString('zh-CN', {
+                                      month: '2-digit',
+                                      day: '2-digit',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    }) : ''}
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -1200,35 +1372,37 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                             </div>
                           </div>
                           
-                          {/* 供应商信息 */}
-                          {order.suppliers && order.suppliers.length > 0 && (
-                            <div className="mb-2 text-sm">
-                              <span className="text-gray-500">供应商：</span>
-                              <span className="text-blue-600 font-medium">{order.suppliers.join('、')}</span>
-                            </div>
-                          )}
-                          
-                          {/* 商品预览 */}
-                          {productNames.length > 0 && (
-                            <div className="mb-2 text-sm text-gray-600">
-                              <span className="text-gray-500">商品：</span>
-                              {productNames.join('、')}{hasMore ? '...' : ''}
-                            </div>
-                          )}
-                          
-                          {/* 成色/工艺标签 */}
-                          {tagList.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {tagList.map((tag, idx) => (
-                                <span 
-                                  key={idx} 
-                                  className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700"
-                                >
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          )}
+                          <div className="ml-8">
+                            {/* 供应商信息 */}
+                            {order.suppliers && order.suppliers.length > 0 && (
+                              <div className="mb-2 text-sm">
+                                <span className="text-gray-500">供应商：</span>
+                                <span className="text-blue-600 font-medium">{order.suppliers.join('、')}</span>
+                              </div>
+                            )}
+                            
+                            {/* 商品预览 */}
+                            {productNames.length > 0 && (
+                              <div className="mb-2 text-sm text-gray-600">
+                                <span className="text-gray-500">商品：</span>
+                                {productNames.join('、')}{hasMore ? '...' : ''}
+                              </div>
+                            )}
+                            
+                            {/* 成色/工艺标签 */}
+                            {tagList.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {tagList.map((tag, idx) => (
+                                  <span 
+                                    key={idx} 
+                                    className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700"
+                                  >
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -1255,7 +1429,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       </label>
                     </div>
                   </div>
-                  <div className="divide-y divide-gray-100">
+                  <div className="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
                     {batchItems.map((item, index) => (
                       <div key={item.id} className={`px-6 py-4 flex items-center space-x-4 ${item.selected ? 'bg-blue-50' : ''}`}>
                         <input
@@ -1269,8 +1443,15 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                           className="w-4 h-4 text-blue-600 rounded"
                         />
                         <div className="flex-1">
-                          <span className="font-medium">{item.product_name}</span>
-                          <span className="text-gray-500 ml-2">（入库重量：{item.weight}克）</span>
+                          <div className="flex items-center space-x-2">
+                            <span className="font-medium">{item.product_name}</span>
+                            <span className="text-gray-500">（入库重量：{item.weight}克）</span>
+                          </div>
+                          {item.order_no && (
+                            <div className="text-xs text-gray-400 mt-1">
+                              来源：{item.order_no}
+                            </div>
+                          )}
                         </div>
                         <div className="flex items-center space-x-2">
                           <span className="text-sm text-gray-500">转移重量：</span>
