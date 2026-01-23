@@ -181,6 +181,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     item_count: number;
     total_weight: number;
     suppliers: string[];
+    transferred_weight: number;  // 已转移重量
     details: Array<{
       product_name: string;
       weight: number;
@@ -188,6 +189,14 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       craft?: string;
     }>;
   }>>([]);
+  
+  // 日期筛选
+  const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'month' | 'all'>('all');
+  // 隐藏已转移入库单
+  const [hideTransferred, setHideTransferred] = useState(false);
+  // 确认弹窗
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'quick' | 'batch' | null>(null);
 
   // 加载数据
   useEffect(() => {
@@ -315,7 +324,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
   // 加载最近入库单（供批量转移选择）
   const loadRecentInboundOrders = async () => {
     try {
-      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/inbound-orders?limit=20`);
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/inbound-orders?limit=30`);
       const data = await response.json();
       if (data.success && data.data) {
         setRecentInboundOrders(data.data.map((order: any) => ({
@@ -325,6 +334,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
           item_count: order.item_count,
           total_weight: order.total_weight,
           suppliers: order.suppliers || [],
+          transferred_weight: order.transferred_weight || 0,  // 已转移重量
           details: (order.details || []).map((d: any) => ({
             product_name: d.product_name,
             weight: d.weight,
@@ -516,6 +526,62 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       newSet.add(orderId);
     }
     setSelectedOrderIds(newSet);
+  };
+
+  // 筛选后的入库单列表
+  const filteredInboundOrders = recentInboundOrders.filter(order => {
+    // 日期筛选
+    if (dateFilter !== 'all' && order.create_time) {
+      const orderDate = new Date(order.create_time);
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
+      if (dateFilter === 'today') {
+        if (orderDate < todayStart) return false;
+      } else if (dateFilter === 'week') {
+        const weekAgo = new Date(todayStart);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        if (orderDate < weekAgo) return false;
+      } else if (dateFilter === 'month') {
+        const monthAgo = new Date(todayStart);
+        monthAgo.setMonth(monthAgo.getMonth() - 1);
+        if (orderDate < monthAgo) return false;
+      }
+    }
+    
+    // 隐藏已转移
+    if (hideTransferred && order.transferred_weight >= order.total_weight) {
+      return false;
+    }
+    
+    return true;
+  });
+
+  // 全选/取消全选
+  const handleSelectAll = () => {
+    if (selectedOrderIds.size === filteredInboundOrders.length) {
+      // 已全选，取消全选
+      setSelectedOrderIds(new Set());
+    } else {
+      // 全选
+      setSelectedOrderIds(new Set(filteredInboundOrders.map(o => o.id)));
+    }
+  };
+
+  // 打开确认弹窗
+  const openConfirmModal = (action: 'quick' | 'batch') => {
+    setConfirmAction(action);
+    setShowConfirmModal(true);
+  };
+
+  // 确认转移
+  const handleConfirmTransfer = () => {
+    setShowConfirmModal(false);
+    if (confirmAction === 'quick') {
+      handleQuickTransferAll();
+    } else if (confirmAction === 'batch') {
+      handleBatchTransfer();
+    }
   };
 
   // 批量创建转移单
@@ -1289,13 +1355,51 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
               {/* 最近入库单快速选择（支持多选） */}
               {batchItems.length === 0 && recentInboundOrders.length > 0 && (
                 <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                  {/* 筛选栏 */}
+                  <div className="px-6 py-3 bg-gray-100 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm text-gray-600">日期：</span>
+                      <div className="flex rounded-lg overflow-hidden border border-gray-300">
+                        {[
+                          { value: 'today', label: '今天' },
+                          { value: 'week', label: '近一周' },
+                          { value: 'month', label: '近一月' },
+                          { value: 'all', label: '全部' }
+                        ].map(opt => (
+                          <button
+                            key={opt.value}
+                            onClick={() => setDateFilter(opt.value as typeof dateFilter)}
+                            className={`px-3 py-1 text-sm ${dateFilter === opt.value ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <label className="flex items-center space-x-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={hideTransferred}
+                        onChange={(e) => setHideTransferred(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded"
+                      />
+                      <span className="text-gray-600">隐藏已全部转移</span>
+                    </label>
+                  </div>
+                  
+                  {/* 操作栏 */}
+                  <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center space-x-4">
-                      <h4 className="font-medium">最近入库单</h4>
+                      <button
+                        onClick={handleSelectAll}
+                        className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
+                      >
+                        {selectedOrderIds.size === filteredInboundOrders.length && filteredInboundOrders.length > 0 ? '取消全选' : '全选'}
+                      </button>
                       <span className="text-sm text-gray-500">
-                        （已选 {selectedOrderIds.size} 个，
-                        共 {recentInboundOrders.filter(o => selectedOrderIds.has(o.id)).reduce((sum, o) => sum + o.item_count, 0)} 件商品，
-                        {recentInboundOrders.filter(o => selectedOrderIds.has(o.id)).reduce((sum, o) => sum + o.total_weight, 0).toFixed(2)} 克）
+                        已选 <span className="font-semibold text-blue-600">{selectedOrderIds.size}</span> 个入库单，
+                        共 <span className="font-semibold">{recentInboundOrders.filter(o => selectedOrderIds.has(o.id)).reduce((sum, o) => sum + o.item_count, 0)}</span> 件商品，
+                        <span className="font-semibold text-orange-600">{recentInboundOrders.filter(o => selectedOrderIds.has(o.id)).reduce((sum, o) => sum + o.total_weight, 0).toFixed(2)}</span> 克
                       </span>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -1304,10 +1408,10 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                         disabled={selectedOrderIds.size === 0 || batchLoading}
                         className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400"
                       >
-                        加载已选入库单
+                        加载并编辑
                       </button>
                       <button
-                        onClick={handleQuickTransferAll}
+                        onClick={() => openConfirmModal('quick')}
                         disabled={selectedOrderIds.size === 0 || batchLoading}
                         className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 flex items-center space-x-1"
                       >
@@ -1316,8 +1420,14 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       </button>
                     </div>
                   </div>
+                  
+                  {/* 入库单列表 */}
                   <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
-                    {recentInboundOrders.map((order) => {
+                    {filteredInboundOrders.length === 0 ? (
+                      <div className="py-8 text-center text-gray-500">
+                        没有符合条件的入库单
+                      </div>
+                    ) : filteredInboundOrders.map((order) => {
                       // 获取商品名称预览（最多显示3个）
                       const productNames = order.details.slice(0, 3).map(d => d.product_name);
                       const hasMore = order.details.length > 3;
@@ -1369,6 +1479,11 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                             <div className="text-right">
                               <div className="text-sm font-medium text-gray-900">{order.item_count} 个商品</div>
                               <div className="text-xs text-orange-600 font-semibold">{order.total_weight} 克</div>
+                              {order.transferred_weight > 0 && (
+                                <div className={`text-xs mt-1 ${order.transferred_weight >= order.total_weight ? 'text-green-600' : 'text-blue-600'}`}>
+                                  {order.transferred_weight >= order.total_weight ? '✓ 已全部转移' : `已转移 ${order.transferred_weight.toFixed(2)}克`}
+                                </div>
+                              )}
                             </div>
                           </div>
                           
@@ -1750,6 +1865,83 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                 >
                   关闭
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 转移确认弹窗 */}
+        {showConfirmModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+              <div className="px-6 py-4 bg-gradient-to-r from-green-600 to-green-700 text-white">
+                <h3 className="text-lg font-semibold">确认转移</h3>
+              </div>
+              <div className="p-6">
+                <div className="mb-4">
+                  <p className="text-gray-700 mb-4">
+                    确定要将以下入库单的商品全部转移到{userRole === 'counter' ? '商品部仓库' : '展厅'}吗？
+                  </p>
+                  
+                  <div className="bg-gray-50 rounded-lg p-4 max-h-[300px] overflow-y-auto">
+                    <div className="space-y-2">
+                      {recentInboundOrders.filter(o => selectedOrderIds.has(o.id)).map(order => (
+                        <div key={order.id} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-0">
+                          <div>
+                            <div className="font-mono text-sm">{order.order_no}</div>
+                            <div className="text-xs text-gray-500">{order.item_count} 个商品</div>
+                          </div>
+                          <div className="text-orange-600 font-semibold">{order.total_weight} 克</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">入库单数量：</span>
+                      <span className="font-semibold">{selectedOrderIds.size} 个</span>
+                    </div>
+                    <div className="flex justify-between text-sm mt-1">
+                      <span className="text-gray-600">商品总数：</span>
+                      <span className="font-semibold">
+                        {recentInboundOrders.filter(o => selectedOrderIds.has(o.id)).reduce((sum, o) => sum + o.item_count, 0)} 件
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm mt-1">
+                      <span className="text-gray-600">总重量：</span>
+                      <span className="font-semibold text-orange-600">
+                        {recentInboundOrders.filter(o => selectedOrderIds.has(o.id)).reduce((sum, o) => sum + o.total_weight, 0).toFixed(2)} 克
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => setShowConfirmModal(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleConfirmTransfer}
+                    disabled={batchLoading}
+                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 flex items-center justify-center space-x-2"
+                  >
+                    {batchLoading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>转移中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>确认转移</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
