@@ -178,6 +178,13 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     create_time: string;
     item_count: number;
     total_weight: number;
+    suppliers: string[];
+    details: Array<{
+      product_name: string;
+      weight: number;
+      fineness?: string;
+      craft?: string;
+    }>;
   }>>([]);
 
   // 加载数据
@@ -314,7 +321,14 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
           order_no: order.order_no,
           create_time: order.create_time,
           item_count: order.item_count,
-          total_weight: order.total_weight
+          total_weight: order.total_weight,
+          suppliers: order.suppliers || [],
+          details: (order.details || []).map((d: any) => ({
+            product_name: d.product_name,
+            weight: d.weight,
+            fineness: d.fineness,
+            craft: d.craft
+          }))
         })));
       }
     } catch (error) {
@@ -1143,35 +1157,81 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                   <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
                     <h4 className="font-medium">最近入库单（点击快速选择）</h4>
                   </div>
-                  <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
-                    {recentInboundOrders.map((order) => (
-                      <div 
-                        key={order.id}
-                        onClick={() => handleSearchByOrderNo(order.order_no)}
-                        className="px-6 py-3 hover:bg-blue-50 cursor-pointer flex items-center justify-between transition-colors"
-                      >
-                        <div className="flex items-center space-x-4">
-                          <div className="p-2 bg-orange-100 rounded-lg">
-                            <FileText className="w-4 h-4 text-orange-600" />
-                          </div>
-                          <div>
-                            <div className="font-mono text-sm font-medium">{order.order_no}</div>
-                            <div className="text-xs text-gray-500">
-                              {order.create_time ? new Date(order.create_time).toLocaleDateString('zh-CN', {
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              }) : ''}
+                  <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
+                    {recentInboundOrders.map((order) => {
+                      // 获取商品名称预览（最多显示3个）
+                      const productNames = order.details.slice(0, 3).map(d => d.product_name);
+                      const hasMore = order.details.length > 3;
+                      
+                      // 获取唯一的成色和工艺标签
+                      const tags = new Set<string>();
+                      order.details.forEach(d => {
+                        if (d.fineness) tags.add(d.fineness);
+                        if (d.craft) tags.add(d.craft);
+                      });
+                      const tagList = Array.from(tags).slice(0, 4);
+                      
+                      return (
+                        <div 
+                          key={order.id}
+                          onClick={() => handleSearchByOrderNo(order.order_no)}
+                          className="px-6 py-4 hover:bg-blue-50 cursor-pointer transition-colors"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center space-x-3">
+                              <div className="p-2 bg-orange-100 rounded-lg">
+                                <FileText className="w-4 h-4 text-orange-600" />
+                              </div>
+                              <div>
+                                <div className="font-mono text-sm font-medium">{order.order_no}</div>
+                                <div className="text-xs text-gray-500">
+                                  {order.create_time ? new Date(order.create_time).toLocaleDateString('zh-CN', {
+                                    month: '2-digit',
+                                    day: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  }) : ''}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-medium text-gray-900">{order.item_count} 个商品</div>
+                              <div className="text-xs text-orange-600 font-semibold">{order.total_weight} 克</div>
                             </div>
                           </div>
+                          
+                          {/* 供应商信息 */}
+                          {order.suppliers && order.suppliers.length > 0 && (
+                            <div className="mb-2 text-sm">
+                              <span className="text-gray-500">供应商：</span>
+                              <span className="text-blue-600 font-medium">{order.suppliers.join('、')}</span>
+                            </div>
+                          )}
+                          
+                          {/* 商品预览 */}
+                          {productNames.length > 0 && (
+                            <div className="mb-2 text-sm text-gray-600">
+                              <span className="text-gray-500">商品：</span>
+                              {productNames.join('、')}{hasMore ? '...' : ''}
+                            </div>
+                          )}
+                          
+                          {/* 成色/工艺标签 */}
+                          {tagList.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {tagList.map((tag, idx) => (
+                                <span 
+                                  key={idx} 
+                                  className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        <div className="text-right">
-                          <div className="text-sm font-medium text-gray-900">{order.item_count} 个商品</div>
-                          <div className="text-xs text-orange-600">{order.total_weight} 克</div>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
