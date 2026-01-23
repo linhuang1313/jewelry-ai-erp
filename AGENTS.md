@@ -123,6 +123,18 @@ Usage notes:
 <location>project</location>
 </skill>
 
+<skill>
+<name>vercel-react-best-practices</name>
+<description>React and Next.js performance optimization guidelines from Vercel Engineering. This skill should be used when writing, reviewing, or refactoring React/Next.js code to ensure optimal performance patterns. Triggers on tasks involving React components, Next.js pages, data fetching, bundle optimization, or performance improvements.</description>
+<location>project</location>
+</skill>
+
+<skill>
+<name>web-design-guidelines</name>
+<description>Review UI code for Web Interface Guidelines compliance. Use when asked to "review my UI", "check accessibility", "audit design", "review UX", or "check my site against best practices".</description>
+<location>project</location>
+</skill>
+
 </available_skills>
 <!-- SKILLS_TABLE_END -->
 
