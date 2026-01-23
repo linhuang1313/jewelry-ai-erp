@@ -1750,7 +1750,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                         <div className="font-medium">{supplierDetail.account.supplier_name}</div>
                       </div>
                       <div>
-                        <div className="text-sm text-gray-600">当前余额</div>
+                        <div className="text-sm text-gray-600">当前欠料</div>
                         <div className={`font-medium ${supplierDetail.account.current_balance > 0 ? 'text-red-600' : supplierDetail.account.current_balance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
                           {supplierDetail.account.current_balance > 0 ? '+' : ''}{supplierDetail.account.current_balance.toFixed(2)} 克
                         </div>
@@ -1794,7 +1794,9 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-right font-medium">
-                                  {tx.gold_weight.toFixed(2)}
+                                  <span className={tx.transaction_type === 'receive' ? 'text-blue-600' : 'text-green-600'}>
+                                    {tx.transaction_type === 'receive' ? '+' : '-'}{tx.gold_weight.toFixed(2)}
+                                  </span>
                                 </td>
                                 <td className="px-4 py-3 text-right">
                                   <div className="text-xs text-gray-500">
