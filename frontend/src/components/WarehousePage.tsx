@@ -153,6 +153,9 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     to_location_id: '',
     remark: ''
   });
+  
+  // 批量转移商品列表
+  const [transferItems, setTransferItems] = useState<Array<{ product_name: string; weight: number }>>([]);
 
   // 接收表单状态
   const [receivingTransfer, setReceivingTransfer] = useState<InventoryTransfer | null>(null);
@@ -666,30 +669,90 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
   };
 
   // 创建转移单
+  // 添加商品到批量转移列表
+  const handleAddToTransferList = () => {
+    if (!transferForm.product_name || !transferForm.weight) {
+      toast.error('请选择商品并输入重量');
+      return;
+    }
+    
+    const weight = parseFloat(transferForm.weight);
+    if (weight <= 0) {
+      toast.error('重量必须大于0');
+      return;
+    }
+    
+    // 检查是否超出可转移重量
+    const fromLocationName = locations.find(l => l.id.toString() === transferForm.from_location_id)?.name;
+    const item = inventorySummary.find(i => i.product_name === transferForm.product_name);
+    const locInventory = item?.locations.find(loc => loc.location_name === fromLocationName);
+    const availableWeight = locInventory?.weight || 0;
+    
+    // 计算已添加到列表中的同商品重量
+    const alreadyAdded = transferItems
+      .filter(i => i.product_name === transferForm.product_name)
+      .reduce((sum, i) => sum + i.weight, 0);
+    
+    if (weight + alreadyAdded > availableWeight) {
+      toast.error(`超出可转移重量！${fromLocationName}仅有 ${availableWeight.toFixed(2)}g，已添加 ${alreadyAdded.toFixed(2)}g`);
+      return;
+    }
+    
+    // 添加到列表
+    setTransferItems([...transferItems, { product_name: transferForm.product_name, weight }]);
+    
+    // 清空当前选择但保留位置
+    setTransferForm({ ...transferForm, product_name: '', weight: '' });
+    toast.success(`已添加 ${transferForm.product_name} ${weight}g 到转移列表`);
+  };
+  
+  // 从批量转移列表移除商品
+  const handleRemoveFromTransferList = (index: number) => {
+    const newItems = [...transferItems];
+    newItems.splice(index, 1);
+    setTransferItems(newItems);
+  };
+  
   const handleCreateTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!transferForm.product_name || !transferForm.weight || !transferForm.from_location_id || !transferForm.to_location_id) {
-      toast.error('请填写完整信息');
+    if (!transferForm.from_location_id || !transferForm.to_location_id) {
+      toast.error('请选择转移位置');
+      return;
+    }
+    
+    // 如果列表为空但表单有数据，先添加到列表
+    let itemsToTransfer = [...transferItems];
+    if (transferForm.product_name && transferForm.weight) {
+      const weight = parseFloat(transferForm.weight);
+      if (weight > 0) {
+        itemsToTransfer.push({ product_name: transferForm.product_name, weight });
+      }
+    }
+    
+    if (itemsToTransfer.length === 0) {
+      toast.error('请添加至少一个商品');
       return;
     }
 
     try {
-      const response = await fetch(API_ENDPOINTS.TRANSFERS, {
+      // 使用批量创建 API
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/warehouse/transfers/batch?user_role=${userRole}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          product_name: transferForm.product_name,
-          weight: parseFloat(transferForm.weight),
           from_location_id: parseInt(transferForm.from_location_id),
           to_location_id: parseInt(transferForm.to_location_id),
+          items: itemsToTransfer,
           remark: transferForm.remark || null
         })
       });
 
       if (response.ok) {
-        toast.success('转移单创建成功');
+        const result = await response.json();
+        toast.success(`成功创建 ${result.created_count} 个转移单，共 ${result.total_weight.toFixed(2)}g`);
         setShowTransferForm(false);
+        setTransferItems([]);
         // 重置表单但保留默认位置
         const productLoc = locations.find(l => l.name === '商品部仓库');
         const showroomLoc = locations.find(l => l.name === '展厅');
@@ -1335,16 +1398,54 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">转移重量 (g)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={transferForm.weight}
-                      onChange={(e) => setTransferForm({ ...transferForm, weight: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="输入转移重量"
-                      required
-                    />
+                    <div className="flex space-x-2">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={transferForm.weight}
+                        onChange={(e) => setTransferForm({ ...transferForm, weight: e.target.value })}
+                        className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="输入转移重量"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddToTransferList}
+                        disabled={!transferForm.product_name || !transferForm.weight}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed whitespace-nowrap"
+                      >
+                        <Plus className="w-4 h-4 inline mr-1" />
+                        添加
+                      </button>
+                    </div>
                   </div>
+                  
+                  {/* 已添加的商品列表 */}
+                  {transferItems.length > 0 && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-blue-700">
+                          待转移商品 ({transferItems.length} 项，共 {transferItems.reduce((sum, i) => sum + i.weight, 0).toFixed(2)}g)
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        {transferItems.map((item, index) => (
+                          <div key={index} className="flex items-center justify-between bg-white rounded px-2 py-1 text-sm">
+                            <span>{item.product_name}</span>
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium">{item.weight}g</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveFromTransferList(index)}
+                                className="text-red-500 hover:text-red-700"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* 位置选择 - 根据角色决定是否可编辑 */}
                   <div className="grid grid-cols-2 gap-4">
@@ -1414,16 +1515,20 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                   <div className="flex space-x-3 pt-4">
                     <button
                       type="button"
-                      onClick={() => setShowTransferForm(false)}
+                      onClick={() => { setShowTransferForm(false); setTransferItems([]); }}
                       className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                     >
                       取消
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      disabled={transferItems.length === 0 && (!transferForm.product_name || !transferForm.weight)}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                     >
-                      确认转移
+                      {transferItems.length > 0 
+                        ? `确认转移 (${transferItems.length} 项，${transferItems.reduce((sum, i) => sum + i.weight, 0).toFixed(1)}g)`
+                        : '确认转移'
+                      }
                     </button>
                   </div>
                 </form>
