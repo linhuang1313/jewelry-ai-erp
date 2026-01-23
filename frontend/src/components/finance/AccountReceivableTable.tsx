@@ -82,7 +82,9 @@ export const AccountReceivableTable: React.FC<AccountReceivableTableProps> = ({
   };
 
   const filteredAndSortedData = useMemo(() => {
-    let filtered = [...data];
+    // 添加数组安全检查
+    const safeData = Array.isArray(data) ? data : [];
+    let filtered = [...safeData];
 
     // 搜索过滤
     if (searchTerm) {
@@ -416,7 +418,7 @@ export const AccountReceivableTable: React.FC<AccountReceivableTableProps> = ({
           customerName={selectedReceivable.customer?.name || ''}
           receivableId={selectedReceivable.id}
           receivable={selectedReceivable}
-          unpaidReceivables={data.filter(
+          unpaidReceivables={(Array.isArray(data) ? data : []).filter(
             (ar) =>
               ar.customerId === selectedReceivable.customerId &&
               ar.unpaidAmount > 0 &&

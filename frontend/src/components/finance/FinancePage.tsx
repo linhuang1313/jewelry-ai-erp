@@ -190,13 +190,13 @@ export const FinancePage: React.FC = () => {
     loadPaymentRecords();
   }, [loadReceivables]);
 
-  // 获取逾期客户列表
-  const overdueAccounts = receivables.filter((ar) => ar.isOverdue);
+  // 获取逾期客户列表（添加数组安全检查）
+  const overdueAccounts = (Array.isArray(receivables) ? receivables : []).filter((ar) => ar.isOverdue);
 
-  // 获取客户列表（从应收账款中提取）
+  // 获取客户列表（从应收账款中提取，添加数组安全检查）
   const customers: CustomerReference[] = Array.from(
     new Map(
-      receivables
+      (Array.isArray(receivables) ? receivables : [])
         .map((ar) => [ar.customerId, ar.customer!])
         .filter(([_, customer]) => customer)
     ).values()
