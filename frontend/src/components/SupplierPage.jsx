@@ -7,6 +7,7 @@ import { Search, Plus, Edit2, Trash2, X, Building2, Phone, MapPin, User, Refresh
  * 供应商管理页面
  * - 管理层：可添加、编辑、删除
  * - 商品专员：可添加、编辑，不可删除
+ * - 料部：可添加、编辑，不可删除
  */
 export function SupplierPage({ userRole = 'manager' }) {
   const [suppliers, setSuppliers] = useState([])

@@ -138,7 +138,7 @@ ROLE_PERMISSIONS = {
         'can_receive_transfer': False,
         'can_manage_customers': False,
         'can_view_customers': True,        # 可以查看客户（查询关联信息）
-        'can_manage_suppliers': False,
+        'can_manage_suppliers': True,     # 可以管理供应商（添加、编辑，但不能删除）
         'can_view_suppliers': True,        # 可以查看供应商（查询关联信息）
         'can_manage_salespersons': False,
         'can_view_analytics': False,

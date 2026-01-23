@@ -141,7 +141,7 @@ export const ROLE_PERMISSIONS = {
     canReceiveTransfer: false,
     canManageCustomers: false,
     canViewCustomers: true,         // 可以查看客户（查询关联信息）
-    canManageSuppliers: false,
+    canManageSuppliers: true,       // 可以管理供应商（添加、编辑，但不能删除）
     canViewSuppliers: true,         // 可以查看供应商（查询关联信息）
     canManageSalespersons: false,
     canViewAnalytics: false,
