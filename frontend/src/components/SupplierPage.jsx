@@ -28,20 +28,58 @@ export function SupplierPage({ userRole = 'manager' }) {
   const canDelete = hasPermission(userRole, 'canDelete')
   const canEdit = hasPermission(userRole, 'canManageSuppliers')
 
-  // 获取供应商列表
-  const fetchSuppliers = async () => {
+  // 获取供应商列表（带重试机制）
+  const fetchSuppliers = async (retryCount = 0) => {
     setLoading(true)
+    const maxRetries = 2
+    const retryDelay = 1000 // 1秒
+    
     try {
       const url = searchKeyword 
         ? `${API_ENDPOINTS.API_BASE_URL}/api/suppliers?keyword=${encodeURIComponent(searchKeyword)}`
         : `${API_ENDPOINTS.API_BASE_URL}/api/suppliers`
-      const response = await fetch(url)
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
       const data = await response.json()
+      
       if (data.success) {
-        setSuppliers(data.suppliers || [])
+        // 后端返回格式: { success: true, suppliers: [...] }
+        const suppliersData = data.suppliers || data.data?.suppliers || []
+        const suppliersArray = Array.isArray(suppliersData) ? suppliersData : []
+        setSuppliers(suppliersArray)
+        
+        // 调试信息（仅在开发环境）
+        if (suppliersArray.length === 0 && !searchKeyword) {
+          console.log('供应商列表为空，API响应:', data)
+        }
+      } else {
+        console.error('获取供应商列表失败:', data)
+        alert(data.message || '获取供应商列表失败')
+        setSuppliers([])
       }
     } catch (error) {
-      console.error('获取供应商列表失败:', error)
+      console.error(`获取供应商列表失败 (尝试 ${retryCount + 1}/${maxRetries + 1}):`, error)
+      
+      // 如果是网络错误且还有重试次数，则重试
+      if (retryCount < maxRetries && (error.message.includes('fetch') || error.message.includes('network'))) {
+        console.log(`${retryDelay}ms 后重试...`)
+        await new Promise(resolve => setTimeout(resolve, retryDelay))
+        return fetchSuppliers(retryCount + 1)
+      }
+      
+      // 最终失败
+      alert('网络错误，请检查后端服务连接')
+      setSuppliers([])
     } finally {
       setLoading(false)
     }

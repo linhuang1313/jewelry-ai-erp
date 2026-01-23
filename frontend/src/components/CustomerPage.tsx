@@ -169,9 +169,12 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
     remark: ''
   });
 
-  // 获取客户列表
-  const fetchCustomers = async () => {
+  // 获取客户列表（带重试机制）
+  const fetchCustomers = async (retryCount = 0) => {
     setLoading(true);
+    const maxRetries = 2;
+    const retryDelay = 1000; // 1秒
+    
     try {
       const params = new URLSearchParams();
       if (searchName) {
@@ -179,7 +182,13 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
       }
       params.append('user_role', userRole);
       const url = `${API_BASE_URL}/api/customers?${params.toString()}`;
-      const response = await fetch(url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -203,8 +212,17 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
         setCustomers([]);
       }
     } catch (error) {
-      console.error('获取客户列表网络错误:', error);
-      toast.error('网络错误，请检查后端服务');
+      console.error(`获取客户列表失败 (尝试 ${retryCount + 1}/${maxRetries + 1}):`, error);
+      
+      // 如果是网络错误且还有重试次数，则重试
+      if (retryCount < maxRetries && (error.message.includes('fetch') || error.message.includes('network') || error.message.includes('CORS'))) {
+        console.log(`${retryDelay}ms 后重试...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        return fetchCustomers(retryCount + 1);
+      }
+      
+      // 最终失败
+      toast.error('网络错误，请检查后端服务连接');
       setCustomers([]);
     } finally {
       setLoading(false);

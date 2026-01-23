@@ -100,16 +100,40 @@ app = FastAPI(title="AI-ERP珠宝入库BETA测试")
 
 # ========== 配置CORS（必须在路由注册之前）==========
 # 配置CORS - 支持所有来源（包括 Vercel 和 Railway）
-# 注意：allow_credentials=True 时不能使用 allow_origins=["*"]
-# 所以这里使用 allow_credentials=False
+# 从环境变量读取允许的域名，如果没有则使用默认值
+cors_allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+if cors_allowed_origins_env:
+    # 从环境变量读取，支持逗号分隔的多个域名
+    allowed_origins = [origin.strip() for origin in cors_allowed_origins_env.split(",") if origin.strip()]
+else:
+    # 默认允许的域名列表
+    allowed_origins = [
+        "https://jewelry-ai-erp.vercel.app",
+        "https://jewelry-ai-erp-production.up.railway.app",
+        "http://localhost:5173",  # Vite 开发服务器
+        "http://localhost:3000",  # React 开发服务器
+        "http://localhost:8000",  # 本地后端
+    ]
+
+# 如果环境变量设置为 "ALLOW_ALL" 或包含 "*"，则允许所有域名
+cors_allow_all = os.getenv("CORS_ALLOW_ALL", "false").lower() == "true"
+if cors_allow_all or "*" in allowed_origins:
+    allow_origins = ["*"]
+    allow_credentials = False
+else:
+    allow_origins = allowed_origins
+    allow_credentials = True
+
+logger.info(f"CORS配置: allow_origins={allow_origins}, allow_credentials={allow_credentials}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 允许所有域名
-    allow_credentials=False,  # 设为 False 才能使用 allow_origins=["*"]
-    allow_methods=["*"],  # 允许所有方法
+    allow_origins=allow_origins,  # 允许的域名列表
+    allow_credentials=allow_credentials,  # 允许携带凭证
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],  # 允许的HTTP方法
     allow_headers=["*"],  # 允许所有头
-    expose_headers=["*"],
-    max_age=3600,  # 预检请求缓存时间
+    expose_headers=["*"],  # 暴露所有头
+    max_age=3600,  # 预检请求缓存时间（秒）
 )
 
 

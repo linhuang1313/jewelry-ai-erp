@@ -19,25 +19,31 @@ interface ApiCallOptions {
   showErrorToast?: boolean;    // 是否显示错误提示（默认 true）
   successMessage?: string;     // 自定义成功消息
   errorMessage?: string;       // 自定义错误消息
+  retryCount?: number;         // 重试次数（默认 2）
+  retryDelay?: number;         // 重试延迟（毫秒，默认 1000）
 }
 
 /**
- * 通用 API 调用函数
+ * 通用 API 调用函数（带重试机制）
  * @param endpoint API 端点（不含基础 URL）
  * @param options 请求选项
  * @param toastOptions toast 选项
+ * @param retryCount 当前重试次数（内部使用）
  * @returns API 响应数据或 null
  */
 export async function apiCall<T = any>(
   endpoint: string,
   requestOptions?: RequestInit,
-  toastOptions: ApiCallOptions = {}
+  toastOptions: ApiCallOptions = {},
+  retryCount = 0
 ): Promise<T | null> {
   const {
     showSuccessToast = false,
     showErrorToast = true,
     successMessage,
     errorMessage,
+    retryCount: maxRetries = 2,
+    retryDelay = 1000,
   } = toastOptions;
 
   try {
@@ -45,7 +51,14 @@ export async function apiCall<T = any>(
       ? endpoint 
       : `${API_ENDPOINTS.API_BASE_URL}${endpoint}`;
     
-    const response = await fetch(url, requestOptions);
+    const response = await fetch(url, {
+      ...requestOptions,
+      headers: {
+        'Content-Type': 'application/json',
+        ...requestOptions?.headers,
+      },
+    });
+    
     const data = await response.json();
 
     // 检查响应状态
@@ -74,7 +87,21 @@ export async function apiCall<T = any>(
     }
     
     return data as T;
-  } catch (error) {
+  } catch (error: any) {
+    const errorMsg = error?.message || String(error);
+    const isNetworkError = errorMsg.includes('fetch') || 
+                          errorMsg.includes('network') || 
+                          errorMsg.includes('CORS') ||
+                          errorMsg.includes('Failed to fetch');
+    
+    // 如果是网络错误且还有重试次数，则重试
+    if (isNetworkError && retryCount < maxRetries) {
+      console.log(`API调用失败 (尝试 ${retryCount + 1}/${maxRetries + 1})，${retryDelay}ms 后重试...`, error);
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
+      return apiCall<T>(endpoint, requestOptions, toastOptions, retryCount + 1);
+    }
+    
+    // 最终失败
     const errMsg = errorMessage || '网络错误，请稍后重试';
     if (showErrorToast) {
       toast.error(errMsg);
