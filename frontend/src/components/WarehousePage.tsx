@@ -158,6 +158,10 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     diff_reason: ''
   });
 
+  // 转移单详情状态
+  const [selectedTransfer, setSelectedTransfer] = useState<InventoryTransfer | null>(null);
+  const [showTransferDetail, setShowTransferDetail] = useState(false);
+
   // 批量转移相关状态
   const [batchOrderNo, setBatchOrderNo] = useState('');
   const [batchItems, setBatchItems] = useState<Array<{
@@ -1073,7 +1077,14 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {transfers.slice(0, 10).map(t => (
-                          <tr key={t.id} className="hover:bg-gray-50">
+                          <tr 
+                            key={t.id} 
+                            className="hover:bg-gray-50 cursor-pointer"
+                            onClick={() => {
+                              setSelectedTransfer(t);
+                              setShowTransferDetail(true);
+                            }}
+                          >
                             <td className="px-4 py-3 text-sm font-mono">{t.transfer_no}</td>
                             <td className="px-4 py-3 text-sm">{t.product_name}</td>
                             <td className="px-4 py-3 text-sm font-semibold">{t.weight}g</td>
@@ -1364,6 +1375,139 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                   className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                 >
                   确认接收
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 转移单详情弹窗 */}
+        {showTransferDetail && selectedTransfer && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowTransferDetail(false)}>
+            <div className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-semibold">转移单详情</h3>
+                <button
+                  onClick={() => setShowTransferDetail(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* 基本信息 */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold mb-3 text-gray-700">基本信息</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-sm text-gray-600 mb-1">转移单号</div>
+                      <div className="font-mono font-medium">{selectedTransfer.transfer_no}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600 mb-1">商品名称</div>
+                      <div className="font-medium">{selectedTransfer.product_name}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600 mb-1">转移重量</div>
+                      <div className="font-semibold text-lg">{selectedTransfer.weight}g</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600 mb-1">路径</div>
+                      <div className="flex items-center">
+                        <span className="text-gray-700">{selectedTransfer.from_location_name}</span>
+                        <ArrowRight className="w-4 h-4 mx-2 text-gray-400" />
+                        <span className="text-gray-700">{selectedTransfer.to_location_name}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 状态信息 */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold mb-3 text-gray-700">状态信息</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-sm text-gray-600 mb-1">状态</div>
+                      <div><StatusBadge status={selectedTransfer.status} /></div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600 mb-1">创建人</div>
+                      <div className="font-medium">{selectedTransfer.created_by || '-'}</div>
+                    </div>
+                    <div className="col-span-2">
+                      <div className="text-sm text-gray-600 mb-1">创建时间</div>
+                      <div className="font-medium">{new Date(selectedTransfer.created_at).toLocaleString('zh-CN')}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 接收信息（如果已接收或拒收） */}
+                {(selectedTransfer.status === 'received' || selectedTransfer.status === 'rejected') && (
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="font-semibold mb-3 text-gray-700">
+                      {selectedTransfer.status === 'received' ? '接收信息' : '拒收信息'}
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-sm text-gray-600 mb-1">
+                          {selectedTransfer.status === 'received' ? '接收人' : '拒收人'}
+                        </div>
+                        <div className="font-medium">{selectedTransfer.received_by || '-'}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-600 mb-1">
+                          {selectedTransfer.status === 'received' ? '接收时间' : '拒收时间'}
+                        </div>
+                        <div className="font-medium">
+                          {selectedTransfer.received_at 
+                            ? new Date(selectedTransfer.received_at).toLocaleString('zh-CN')
+                            : '-'}
+                        </div>
+                      </div>
+                      {selectedTransfer.status === 'received' && selectedTransfer.actual_weight !== null && (
+                        <>
+                          <div>
+                            <div className="text-sm text-gray-600 mb-1">实际接收重量</div>
+                            <div className="font-semibold">{selectedTransfer.actual_weight}g</div>
+                          </div>
+                          {selectedTransfer.weight_diff !== null && selectedTransfer.weight_diff !== 0 && (
+                            <div>
+                              <div className="text-sm text-gray-600 mb-1">重量差异</div>
+                              <div className={`font-semibold ${selectedTransfer.weight_diff > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {selectedTransfer.weight_diff > 0 ? '+' : ''}{selectedTransfer.weight_diff.toFixed(2)}g
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {(selectedTransfer.diff_reason || selectedTransfer.status === 'rejected') && (
+                        <div className="col-span-2">
+                          <div className="text-sm text-gray-600 mb-1">
+                            {selectedTransfer.status === 'received' ? '差异原因' : '拒收原因'}
+                          </div>
+                          <div className="font-medium">{selectedTransfer.diff_reason || '-'}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 备注 */}
+                {selectedTransfer.remark && (
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="font-semibold mb-3 text-gray-700">备注</h4>
+                    <div className="text-gray-700">{selectedTransfer.remark}</div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowTransferDetail(false)}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  关闭
                 </button>
               </div>
             </div>
