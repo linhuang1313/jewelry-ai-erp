@@ -345,7 +345,13 @@ const LoanPage: React.FC = () => {
 
   // 确认借出
   const handleConfirm = async (loan: LoanOrder) => {
-    if (!confirm('确认借出？将扣减对应库存。')) return;
+    const message = `【确认借出】\n\n` +
+      `客户：${loan.customer_name}\n` +
+      `产品：${loan.product_name}\n` +
+      `克重：${loan.weight.toFixed(2)}克\n\n` +
+      `确认后将从库存中扣减 ${loan.weight.toFixed(2)}克。\n` +
+      `确定要借出吗？`;
+    if (!confirm(message)) return;
     
     try {
       const response = await fetch(`${API_BASE}/api/loan/orders/${loan.id}/confirm`, {
@@ -369,7 +375,15 @@ const LoanPage: React.FC = () => {
 
   // 确认归还
   const handleReturn = async (loan: LoanOrder) => {
-    if (!confirm('确认归还？将恢复对应库存。')) return;
+    const message = `【确认归还】\n\n` +
+      `客户 ${loan.customer_name} 归还了产品：\n` +
+      `产品：${loan.product_name}\n` +
+      `克重：${loan.weight.toFixed(2)}克\n\n` +
+      `✓ 这是正常的业务流程结束\n` +
+      `✓ 库存将恢复 ${loan.weight.toFixed(2)}克\n` +
+      `✓ 状态将变为"已归还"\n\n` +
+      `确定客户已归还产品吗？`;
+    if (!confirm(message)) return;
     
     try {
       const response = await fetch(`${API_BASE}/api/loan/orders/${loan.id}/return`, {
@@ -897,15 +911,30 @@ const LoanPage: React.FC = () => {
               <span>撤销暂借单</span>
             </h3>
             
+            {/* 撤销说明 */}
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-red-700 font-medium mb-2">⚠️ 撤销 = 作废这笔暂借单</p>
+              <ul className="text-sm text-red-600 space-y-1">
+                <li>• 适用于：录入错误、客户取消借货等异常情况</li>
+                <li>• 状态将变为"已撤销"</li>
+                {selectedLoan.status === 'borrowed' && (
+                  <li>• 库存将恢复 {selectedLoan.weight.toFixed(2)}克</li>
+                )}
+              </ul>
+            </div>
+            
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-green-700">
+                💡 如果客户<strong>正常归还</strong>了产品，请使用"确认归还"按钮，而不是撤销。
+              </p>
+            </div>
+            
             <p className="text-gray-600 mb-4">
               确定要撤销暂借单 <span className="font-mono font-medium text-amber-600">{selectedLoan.loan_no}</span> 吗？
-              {selectedLoan.status === 'borrowed' && (
-                <span className="block text-sm text-red-500 mt-1">撤销后将恢复库存。</span>
-              )}
             </p>
             
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">撤销原因 *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">撤销原因 *（用于留痕追溯）</label>
               <textarea
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
