@@ -756,7 +756,8 @@ class AIAnalyzer:
         try:
             response = self.client.chat.completions.create(
                 model="deepseek-chat",
-                max_tokens=4000,
+                max_tokens=2000,  # 降低token限制以加快响应
+                temperature=0.3,  # 更确定性的回复，减少生成时间
                 messages=[
                     {
                         "role": "system",
@@ -1118,7 +1119,8 @@ class AIAnalyzer:
             # 使用流式API（DeepSeek/OpenAI 格式）
             stream = self.client.chat.completions.create(
                 model="deepseek-chat",
-                max_tokens=2000,
+                max_tokens=1500,  # 降低token限制以加快响应
+                temperature=0.3,  # 更确定性的回复，减少生成时间
                 stream=True,
                 messages=[
                     {
@@ -1148,7 +1150,8 @@ class AIAnalyzer:
             try:
                 response = self.client.chat.completions.create(
                     model="deepseek-chat",
-                    max_tokens=2000,
+                    max_tokens=1500,  # 降低token限制以加快响应
+                    temperature=0.3,  # 更确定性的回复，减少生成时间
                     messages=[
                         {
                             "role": "system",

@@ -1035,7 +1035,8 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
             logger.info(f"调用 DeepSeek API 解析消息 (尝试 {retry_count + 1}/{max_retries}): {message}")
             response = get_client().chat.completions.create(
                 model="deepseek-chat",
-                max_tokens=1500,
+                max_tokens=800,  # 意图解析不需要太多token
+                temperature=0.1,  # 低温度确保稳定的意图识别
                 messages=[
                     {
                         "role": "system",

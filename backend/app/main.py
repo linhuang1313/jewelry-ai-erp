@@ -846,7 +846,92 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             yield initial_padding
             logger.info("[流式] 已发送初始填充数据")
             
-            # ========== 阶段1: 意图解析（立即开始）==========
+            # ========== 快速路径：常见问题直接响应（跳过AI意图解析）==========
+            import re
+            user_msg = request.message.strip()
+            fast_result = None
+            
+            # 1. 客户存料/余额查询：xxx有存料吗、xxx余额、xxx存料余额
+            deposit_match = re.search(r'^(.+?)(有|的|在我们这里有)?(存料|余额|金料余额|存料余额)(吗|多少|情况)?[？?]?$', user_msg)
+            if deposit_match:
+                customer_name = deposit_match.group(1).strip()
+                logger.info(f"[快速路径] 检测到存料查询: {customer_name}")
+                yield f"data: {json.dumps({'type': 'thinking', 'step': '快速查询', 'message': f'正在查询 {customer_name} 的存料信息...', 'progress': 30}, ensure_ascii=False)}\n\n"
+                
+                # 直接查询客户
+                from .models import CustomerGoldDeposit
+                customer = db.query(Customer).filter(Customer.name.contains(customer_name)).first()
+                if customer:
+                    deposit = db.query(CustomerGoldDeposit).filter(CustomerGoldDeposit.customer_id == customer.id).first()
+                    balance = deposit.current_balance if deposit else 0
+                    if balance > 0:
+                        msg = f"**{customer.name}** 当前存料余额：**{balance:.2f}克**"
+                    else:
+                        msg = f"**{customer.name}** 目前没有存料（余额：0克）"
+                    fast_result = {"success": True, "action": "查询客户存料", "message": msg}
+                else:
+                    fast_result = {"success": False, "message": f"未找到名为 **{customer_name}** 的客户"}
+            
+            # 2. 客户欠款查询：xxx欠款、xxx欠多少
+            debt_match = re.search(r'^(.+?)(有|的)?(欠款|欠多少|欠了多少|欠我们多少)(钱)?[？?]?$', user_msg)
+            if not fast_result and debt_match:
+                customer_name = debt_match.group(1).strip()
+                logger.info(f"[快速路径] 检测到欠款查询: {customer_name}")
+                yield f"data: {json.dumps({'type': 'thinking', 'step': '快速查询', 'message': f'正在查询 {customer_name} 的欠款信息...', 'progress': 30}, ensure_ascii=False)}\n\n"
+                
+                from .models import CustomerTransaction
+                customer = db.query(Customer).filter(Customer.name.contains(customer_name)).first()
+                if customer:
+                    # 计算欠款（未结清的销售单）
+                    unpaid = db.query(func.sum(SalesOrder.unpaid_amount)).filter(
+                        SalesOrder.customer_name == customer.name,
+                        SalesOrder.unpaid_amount > 0,
+                        SalesOrder.status.in_(["completed", "partial_paid"])
+                    ).scalar() or 0
+                    if unpaid > 0:
+                        msg = f"**{customer.name}** 当前欠款：**¥{unpaid:.2f}**"
+                    else:
+                        msg = f"**{customer.name}** 目前没有欠款 ✓"
+                    fast_result = {"success": True, "action": "查询客户欠款", "message": msg}
+                else:
+                    fast_result = {"success": False, "message": f"未找到名为 **{customer_name}** 的客户"}
+            
+            # 3. 库存查询：xxx库存、xxx有多少
+            inventory_match = re.search(r'^(.+?)(的)?(库存|有多少|还有多少)(量)?[？?]?$', user_msg)
+            if not fast_result and inventory_match:
+                product_name = inventory_match.group(1).strip()
+                logger.info(f"[快速路径] 检测到库存查询: {product_name}")
+                yield f"data: {json.dumps({'type': 'thinking', 'step': '快速查询', 'message': f'正在查询 {product_name} 的库存...', 'progress': 30}, ensure_ascii=False)}\n\n"
+                
+                inventory = db.query(Inventory).filter(Inventory.product_name.contains(product_name)).first()
+                if inventory:
+                    msg = f"**{inventory.product_name}** 当前库存：**{inventory.total_weight:.2f}克**"
+                    fast_result = {"success": True, "action": "查询库存", "message": msg}
+                else:
+                    fast_result = {"success": False, "message": f"未找到 **{product_name}** 的库存记录"}
+            
+            # 如果匹配到快速路径，直接返回结果
+            if fast_result:
+                yield f"data: {json.dumps({'type': 'thinking', 'step': '快速查询', 'message': '查询完成', 'progress': 100, 'status': 'complete'}, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps({'type': 'complete', 'data': fast_result}, ensure_ascii=False)}\n\n"
+                
+                # 记录到日志
+                end_time = datetime.now()
+                response_time_ms = int((end_time - start_time).total_seconds() * 1000)
+                log_chat_message(
+                    db=db,
+                    session_id=session_id,
+                    user_role=request.user_role,
+                    message_type="assistant",
+                    content=fast_result.get("message", ""),
+                    intent=fast_result.get("action", "快速查询"),
+                    response_time_ms=response_time_ms,
+                    is_successful=fast_result.get("success", True)
+                )
+                logger.info(f"[快速路径] 响应完成，耗时: {response_time_ms}ms")
+                return
+            
+            # ========== 阶段1: 意图解析（并行预取数据）==========
             first_chunk = f"data: {json.dumps({'type': 'thinking', 'step': '意图解析', 'message': '正在理解您的问题...', 'progress': 10}, ensure_ascii=False)}\n\n"
             logger.info(f"[流式] 发送第一个数据块: {len(first_chunk)} 字节")
             yield first_chunk
@@ -863,9 +948,41 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 context_parts.append(f"【用户请求】\n{request.message}")
                 enhanced_message = "\n\n".join(context_parts)
             
-            # 传递对话历史给 AI 解析器
-            ai_response = parse_user_message(enhanced_message, conversation_history)
-            logger.info(f"[流式] 识别到意图: {ai_response.action}")
+            # ========== 并行预取：在意图解析的同时预加载常用数据 ==========
+            preloaded_data = {}
+            
+            async def preload_common_data():
+                """预加载常用数据（在意图解析的同时执行）"""
+                try:
+                    # 提取消息中可能的客户名（简单的中文名模式）
+                    name_match = re.search(r'^([^\s,，。？?!！]{2,8})', user_msg)
+                    if name_match:
+                        potential_name = name_match.group(1)
+                        # 预加载可能的客户
+                        customer = db.query(Customer).filter(Customer.name.contains(potential_name)).first()
+                        if customer:
+                            preloaded_data['customer'] = customer
+                            # 预加载客户存料信息
+                            from .models import CustomerGoldDeposit
+                            deposit = db.query(CustomerGoldDeposit).filter(CustomerGoldDeposit.customer_id == customer.id).first()
+                            if deposit:
+                                preloaded_data['deposit'] = deposit
+                except Exception as e:
+                    logger.debug(f"[预取] 预加载数据失败（可忽略）: {e}")
+            
+            async def parse_intent_async():
+                """异步执行意图解析"""
+                return parse_user_message(enhanced_message, conversation_history)
+            
+            # 并行执行意图解析和数据预取
+            intent_task = asyncio.create_task(parse_intent_async())
+            preload_task = asyncio.create_task(preload_common_data())
+            
+            # 等待两个任务完成
+            ai_response = await intent_task
+            await preload_task  # 确保预取完成（不阻塞主流程）
+            
+            logger.info(f"[流式] 识别到意图: {ai_response.action}, 预加载数据: {list(preloaded_data.keys())}")
             
             # 更新上下文中的实体信息
             entities_to_save = {}
