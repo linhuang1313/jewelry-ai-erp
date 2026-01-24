@@ -462,8 +462,8 @@ async def create_settlement_order(
         customer_deposit = get_or_create_customer_deposit(customer_id, customer_name, db)
         
         balance_before = customer_deposit.current_balance
-        customer_deposit.current_balance -= actual_gold_due
-        customer_deposit.total_used += actual_gold_due
+        customer_deposit.current_balance = round(customer_deposit.current_balance - actual_gold_due, 3)
+        customer_deposit.total_used = round(customer_deposit.total_used + actual_gold_due, 3)
         customer_deposit.last_transaction_at = now
         
         # 创建金料账户变动记录
@@ -1887,8 +1887,8 @@ async def revert_settlement_order(
                 customer_deposit = get_or_create_customer_deposit(customer_id, sales_order.customer_name, db)
                 
                 balance_before = customer_deposit.current_balance
-                customer_deposit.current_balance += gold_to_rollback  # 回滚：增加余额
-                customer_deposit.total_used -= gold_to_rollback  # 减少已使用
+                customer_deposit.current_balance = round(customer_deposit.current_balance + gold_to_rollback, 3)  # 回滚：增加余额
+                customer_deposit.total_used = round(customer_deposit.total_used - gold_to_rollback, 3)  # 减少已使用
                 customer_deposit.last_transaction_at = now
                 
                 # 创建回滚记录

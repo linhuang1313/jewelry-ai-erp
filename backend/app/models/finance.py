@@ -13,8 +13,8 @@ class AccountReceivable(Base):
     __tablename__ = "account_receivables"
     
     id = Column(Integer, primary_key=True, index=True)
-    sales_order_id = Column(Integer, ForeignKey("sales_orders.id"), nullable=False)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    sales_order_id = Column(Integer, ForeignKey("sales_orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # 金额字段
     total_amount = Column(Float, nullable=False, default=0.0)  # 应收总额
@@ -28,7 +28,7 @@ class AccountReceivable(Base):
     overdue_days = Column(Integer, default=0)  # 逾期天数
     
     # 状态字段
-    status = Column(String(20), default="unpaid")  # unpaid/paid/overdue/cancelled
+    status = Column(String(20), default="unpaid", index=True)  # unpaid/paid/overdue/cancelled
     is_overdue = Column(Boolean, default=False)  # 是否逾期
     
     # 其他字段
@@ -60,11 +60,11 @@ class PaymentRecord(Base):
     # 收款单号
     payment_no = Column(String(50), unique=True, index=True)  # 收款单号 (SK+时间戳)
     # 关联信息（account_receivable_id 改为可选，因为一笔收款可能冲抵多笔应收）
-    account_receivable_id = Column(Integer, ForeignKey("account_receivables.id"), nullable=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    account_receivable_id = Column(Integer, ForeignKey("account_receivables.id", ondelete="SET NULL"), nullable=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # 收款信息
-    payment_date = Column(Date, nullable=False)  # 收款日期
+    payment_date = Column(Date, nullable=False, index=True)  # 收款日期
     amount = Column(Float, nullable=False)  # 收款金额
     payment_method = Column(String(20), nullable=False)  # 收款方式: cash/bank_transfer/wechat/alipay/card/check/other
     
@@ -95,8 +95,8 @@ class ReminderRecord(Base):
     __tablename__ = "reminder_records"
     
     id = Column(Integer, primary_key=True, index=True)
-    account_receivable_id = Column(Integer, ForeignKey("account_receivables.id"), nullable=False)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    account_receivable_id = Column(Integer, ForeignKey("account_receivables.id", ondelete="CASCADE"), nullable=False, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # 催款信息
     reminder_date = Column(Date, nullable=False)  # 催款日期
@@ -111,7 +111,7 @@ class ReminderRecord(Base):
     next_follow_up_date = Column(Date)  # 下次跟进日期
     
     # 状态和评分
-    status = Column(String(30), default="pending_follow_up")  # pending_follow_up/customer_promised/customer_refused/paid/cancelled
+    status = Column(String(30), default="pending_follow_up", index=True)  # pending_follow_up/customer_promised/customer_refused/paid/cancelled
     effectiveness_score = Column(Integer)  # 效果评分 1-5
     
     # 其他信息
@@ -136,8 +136,8 @@ class GoldReceipt(Base):
     receipt_no = Column(String(50), unique=True, index=True, nullable=False)  # 收料单号 (SL+时间戳, QC期初)
     
     # 关联信息（添加索引优化查询）
-    settlement_id = Column(Integer, ForeignKey("settlement_orders.id"), nullable=True, index=True)  # 关联结算单
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)  # 客户ID
+    settlement_id = Column(Integer, ForeignKey("settlement_orders.id", ondelete="SET NULL"), nullable=True, index=True)  # 关联结算单
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)  # 客户ID
     
     # 金料信息
     gold_weight = Column(Float, nullable=False)  # 收料克重
@@ -173,7 +173,7 @@ class ReconciliationStatement(Base):
     __tablename__ = "reconciliation_statements"
     
     id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
     statement_no = Column(String(50), unique=True, index=True, nullable=False)  # 对账单号
     
     # 期间
@@ -192,7 +192,7 @@ class ReconciliationStatement(Base):
     payment_details = Column(Text)  # 收款明细（JSON）
     
     # 状态
-    status = Column(String(20), default="draft")  # draft/sent/confirmed/disputed/archived
+    status = Column(String(20), default="draft", index=True)  # draft/sent/confirmed/disputed/archived
     sent_date = Column(DateTime)  # 发送日期
     confirmed_date = Column(DateTime)  # 确认日期
     confirmed_by = Column(String(50))  # 确认人

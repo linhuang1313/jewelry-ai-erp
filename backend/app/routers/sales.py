@@ -204,7 +204,7 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
                 Inventory.product_name == item.product_name
             ).first()
             if inventory:
-                inventory.total_weight -= item.weight
+                inventory.total_weight = round(inventory.total_weight - item.weight, 3)
                 logger.info(f"扣减总库存: {item.product_name} - {item.weight}克, 剩余: {inventory.total_weight}克")
             
             # 2. 扣减展厅库存 (LocationInventory 表)
@@ -640,7 +640,7 @@ async def cancel_sales_order(order_id: int, db: Session = Depends(get_db)):
                 Inventory.product_name == detail.product_name
             ).first()
             if inventory:
-                inventory.total_weight += detail.weight
+                inventory.total_weight = round(inventory.total_weight + detail.weight, 3)
                 logger.info(f"回滚总库存: {detail.product_name} + {detail.weight}克, 剩余: {inventory.total_weight}克")
             
             # 2. 回滚展厅库存 (LocationInventory 表)

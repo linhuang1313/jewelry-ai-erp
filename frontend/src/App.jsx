@@ -104,6 +104,7 @@ function App() {
   const [showHistoryPanel, setShowHistoryPanel] = useState(false) // 历史回溯面板
   const [showQuickReceiptModal, setShowQuickReceiptModal] = useState(false) // 快捷收料弹窗
   const [showQuickWithdrawalModal, setShowQuickWithdrawalModal] = useState(false) // 快捷提料弹窗
+  const [toastMessage, setToastMessage] = useState('') // Toast 提示消息
   const [quickFormCustomers, setQuickFormCustomers] = useState([]) // 客户列表
   const [quickFormCustomerSearch, setQuickFormCustomerSearch] = useState('') // 客户搜索
   const [quickReceiptForm, setQuickReceiptForm] = useState({ customer_id: '', gold_weight: '', gold_fineness: '足金999', remark: '' })
@@ -126,6 +127,12 @@ function App() {
   const [pendingTransferCount, setPendingTransferCount] = useState(0)
   // 待结算销售单数量（用于结算管理按钮badge）
   const [pendingSalesCount, setPendingSalesCount] = useState(0)
+
+  // Toast 提示函数（3秒后自动消失）
+  const showToast = (message, duration = 3000) => {
+    setToastMessage(message)
+    setTimeout(() => setToastMessage(''), duration)
+  }
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -492,6 +499,7 @@ function App() {
       }
     } catch (error) {
       console.error('加载待处理转移单数量失败:', error)
+      // 非关键功能，静默失败
     }
   }
 
@@ -510,6 +518,7 @@ function App() {
       }
     } catch (error) {
       console.error('加载待结算销售单数量失败:', error)
+      // 非关键功能，静默失败
     }
   }
 
@@ -525,9 +534,11 @@ function App() {
         setQuickFormCustomers(Array.isArray(customers) ? customers : [])
       } else {
         console.error('加载客户列表API失败:', response.status)
+        showToast('加载客户列表失败，请刷新重试')
       }
     } catch (error) {
       console.error('加载客户列表失败:', error)
+      showToast('加载客户列表失败，请检查网络连接')
     }
   }
 
@@ -569,6 +580,7 @@ function App() {
     } catch (error) {
       console.error('查询客户存料余额失败:', error)
       setSelectedCustomerDeposit({ current_balance: 0, customer_name: '' })
+      showToast('查询客户余额失败，显示为0')
     } finally {
       setDepositLoading(false)
     }
@@ -4957,6 +4969,15 @@ ${itemsList}
           },
         }}
       />
+      
+      {/* Toast 提示组件 */}
+      {toastMessage && (
+        <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
+          <div className="bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
+            {toastMessage}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

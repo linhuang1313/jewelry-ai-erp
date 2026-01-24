@@ -220,7 +220,7 @@ async def create_return_order(
         
         # 如果是退给供应商，更新供应商统计和金料账户
         if data.return_type == "to_supplier" and data.supplier_id:
-            supplier.total_supply_weight -= data.return_weight
+            supplier.total_supply_weight = round(supplier.total_supply_weight - data.return_weight, 3)
             if supplier.total_supply_count > 0:
                 supplier.total_supply_count -= 1
             logger.info(f"更新供应商统计: {supplier.name} 供货重量减少 {data.return_weight}g")
@@ -246,8 +246,8 @@ async def create_return_order(
                 db.flush()
             
             balance_before = supplier_gold_account.current_balance
-            supplier_gold_account.current_balance -= data.return_weight  # 我们欠供应商的料减少
-            supplier_gold_account.total_received -= data.return_weight  # 累计收货减少（退回了）
+            supplier_gold_account.current_balance = round(supplier_gold_account.current_balance - data.return_weight, 3)  # 我们欠供应商的料减少
+            supplier_gold_account.total_received = round(supplier_gold_account.total_received - data.return_weight, 3)  # 累计收货减少（退回了）
             supplier_gold_account.last_transaction_at = china_now()
             
             # 创建供应商金料交易记录
@@ -412,7 +412,7 @@ async def complete_return_order(
             supplier = db.query(Supplier).filter(Supplier.id == return_order.supplier_id).first()
             if supplier:
                 # 减少供应商的供货统计
-                supplier.total_supply_weight -= return_order.return_weight
+                supplier.total_supply_weight = round(supplier.total_supply_weight - return_order.return_weight, 3)
                 supplier.total_supply_count -= 1
                 logger.info(f"更新供应商统计: {supplier.name} 供货重量减少 {return_order.return_weight}g")
                 
@@ -436,8 +436,8 @@ async def complete_return_order(
                     db.flush()
                 
                 balance_before = supplier_gold_account.current_balance
-                supplier_gold_account.current_balance -= return_order.return_weight  # 我们欠供应商的料减少
-                supplier_gold_account.total_received -= return_order.return_weight  # 累计收货减少
+                supplier_gold_account.current_balance = round(supplier_gold_account.current_balance - return_order.return_weight, 3)  # 我们欠供应商的料减少
+                supplier_gold_account.total_received = round(supplier_gold_account.total_received - return_order.return_weight, 3)  # 累计收货减少
                 supplier_gold_account.last_transaction_at = china_now()
                 
                 # 创建供应商金料交易记录

@@ -279,7 +279,7 @@ async def confirm_loan_order(
         )
     
     # 扣减总库存
-    inventory.total_weight -= loan_order.weight
+    inventory.total_weight = round(inventory.total_weight - loan_order.weight, 3)
     inventory.last_update = china_now()
     
     # 扣减展厅库存（优先从展厅扣减）
@@ -366,7 +366,7 @@ async def return_loan_order(
     ).first()
     
     if inventory:
-        inventory.total_weight += loan_order.weight
+        inventory.total_weight = round(inventory.total_weight + loan_order.weight, 3)
         inventory.last_update = china_now()
     else:
         # 如果库存记录不存在，创建一个新的
@@ -446,7 +446,7 @@ async def cancel_loan_order(
         ).first()
         
         if inventory:
-            inventory.total_weight += loan_order.weight
+            inventory.total_weight = round(inventory.total_weight + loan_order.weight, 3)
             inventory.last_update = china_now()
         else:
             inventory = Inventory(

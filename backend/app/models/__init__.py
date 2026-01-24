@@ -18,7 +18,7 @@ class Salesperson(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(50), unique=True, nullable=False, index=True)  # 业务员姓名
     phone = Column(String(20))  # 电话
-    status = Column(String(20), default="active")  # active/inactive
+    status = Column(String(20), default="active", index=True)  # active/inactive
     create_time = Column(DateTime(timezone=True), server_default=func.now())
     remark = Column(Text)  # 备注
 
@@ -33,7 +33,7 @@ class InboundOrder(Base):
     order_no = Column(String(50), unique=True, index=True, nullable=False)
     create_time = Column(DateTime(timezone=True), server_default=func.now())
     operator = Column(String(50), default="系统管理员")
-    status = Column(String(20), default="已入库")
+    status = Column(String(20), default="已入库", index=True)
 
 
 class InboundDetail(Base):
@@ -41,7 +41,7 @@ class InboundDetail(Base):
     __tablename__ = "inbound_details"
     
     id = Column(Integer, primary_key=True, index=True)
-    order_id = Column(Integer, ForeignKey("inbound_orders.id"))
+    order_id = Column(Integer, ForeignKey("inbound_orders.id", ondelete="CASCADE"), index=True)
     product_code = Column(String(20), nullable=True, index=True)  # 商品编码（JPJZ, F00000001等）
     product_name = Column(String(200), nullable=False)
     product_category = Column(String(100))
@@ -50,7 +50,7 @@ class InboundDetail(Base):
     piece_count = Column(Integer, nullable=True)  # 件数（可选）
     piece_labor_cost = Column(Float, nullable=True)  # 件工费（元/件，可选）
     supplier = Column(String(100))  # 保留字符串字段（向后兼容）
-    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=True)  # 关联供应商表
+    supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="SET NULL"), nullable=True, index=True)  # 关联供应商表
     total_cost = Column(Float, nullable=False)  # 总成本 = 克工费 + 件工费
     fineness = Column(String(50), nullable=True)  # 成色（足金999、足金9999等）
     craft = Column(String(50), nullable=True)  # 工艺（3D硬金、古法、珐琅等）
@@ -87,7 +87,7 @@ class Supplier(Base):
     total_supply_weight = Column(Float, default=0.0)  # 总供货重量
     total_supply_count = Column(Integer, default=0)  # 供货次数
     last_supply_time = Column(DateTime)  # 最后供货时间
-    status = Column(String(20), default="active")
+    status = Column(String(20), default="active", index=True)
     create_time = Column(DateTime, server_default=func.now())
     remark = Column(Text)
     
@@ -112,7 +112,7 @@ class Customer(Base):
     total_purchase_weight = Column(Float, default=0.0)  # 总销售克重（克）
     total_purchase_count = Column(Integer, default=0)   # 购买次数
     last_purchase_time = Column(DateTime)
-    status = Column(String(20), default="active")
+    status = Column(String(20), default="active", index=True)
     create_time = Column(DateTime, server_default=func.now())
     remark = Column(Text)
     
@@ -128,16 +128,16 @@ class SalesOrder(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     order_no = Column(String(50), unique=True, index=True, nullable=False)
-    order_date = Column(DateTime, nullable=False, server_default=func.now())  # 日期
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)  # 客户ID（可选，兼容直接输入姓名）
-    customer_name = Column(String(100), nullable=False)  # 客户姓名（冗余字段，便于查询）
-    salesperson = Column(String(50), nullable=False)  # 业务员姓名
+    order_date = Column(DateTime, nullable=False, server_default=func.now(), index=True)  # 日期
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)  # 客户ID（可选，兼容直接输入姓名）
+    customer_name = Column(String(100), nullable=False, index=True)  # 客户姓名（冗余字段，便于查询）
+    salesperson = Column(String(50), nullable=False, index=True)  # 业务员姓名
     store_code = Column(String(50))  # 门店代码
     total_labor_cost = Column(Float, default=0.0)  # 总工费
     total_weight = Column(Float, default=0.0)  # 总克重
     remark = Column(Text)  # 备注信息
-    status = Column(String(20), default="待结算")  # 待结算/已结算/已取消
-    create_time = Column(DateTime, server_default=func.now())
+    status = Column(String(20), default="待结算", index=True)  # 待结算/已结算/已取消
+    create_time = Column(DateTime, server_default=func.now(), index=True)
     operator = Column(String(50), default="系统管理员")
     
     # 关系
@@ -149,14 +149,14 @@ class SalesDetail(Base):
     __tablename__ = "sales_details"
     
     id = Column(Integer, primary_key=True, index=True)
-    order_id = Column(Integer, ForeignKey("sales_orders.id"), nullable=False)
+    order_id = Column(Integer, ForeignKey("sales_orders.id", ondelete="CASCADE"), nullable=False, index=True)
     product_name = Column(String(200), nullable=False)  # 商品名称
     weight = Column(Float, nullable=False)  # 克重
     labor_cost = Column(Float, nullable=False)  # 工费（元/克）
     piece_count = Column(Integer, nullable=True)  # 件数（可选）
     piece_labor_cost = Column(Float, nullable=True)  # 件工费（元/件，可选）
     total_labor_cost = Column(Float, nullable=False)  # 总工费 = (克重 * 克工费) + (件数 * 件工费)
-    inventory_id = Column(Integer, ForeignKey("inventory.id"), nullable=True)  # 关联库存（可选）
+    inventory_id = Column(Integer, ForeignKey("inventory.id", ondelete="SET NULL"), nullable=True)  # 关联库存（可选）
 
 
 # ============= 结算单模型 =============
@@ -167,7 +167,7 @@ class SettlementOrder(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     settlement_no = Column(String(50), unique=True, index=True, nullable=False)  # 结算单号
-    sales_order_id = Column(Integer, ForeignKey("sales_orders.id"), nullable=False)  # 关联销售单
+    sales_order_id = Column(Integer, ForeignKey("sales_orders.id", ondelete="CASCADE"), nullable=False, index=True)  # 关联销售单
     
     # 原料支付方式
     payment_method = Column(String(20), nullable=False)  # 'cash_price' 结价 / 'physical_gold' 结料 / 'mixed' 混合支付
@@ -195,7 +195,7 @@ class SettlementOrder(Base):
     payment_status = Column(String(20), default="full")  # full全额 / overpaid多付 / underpaid少付
     
     # 状态和操作信息
-    status = Column(String(20), default="pending")  # pending待结算 / confirmed已确认 / printed已打印
+    status = Column(String(20), default="pending", index=True)  # pending待结算 / confirmed已确认 / printed已打印
     created_by = Column(String(50))  # 创建人（柜台）
     confirmed_by = Column(String(50), nullable=True)  # 确认人（结算专员）
     confirmed_at = Column(DateTime, nullable=True)  # 确认时间
@@ -272,7 +272,7 @@ class LocationInventory(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     product_name = Column(String(200), nullable=False, index=True)  # 商品名称
-    location_id = Column(Integer, ForeignKey("locations.id"), nullable=False)  # 所在位置
+    location_id = Column(Integer, ForeignKey("locations.id", ondelete="CASCADE"), nullable=False)  # 所在位置
     weight = Column(Float, default=0.0)  # 库存重量
     last_update = Column(DateTime, server_default=func.now(), onupdate=func.now())
     
@@ -290,9 +290,9 @@ class InventoryTransfer(Base):
     transfer_no = Column(String(50), unique=True, index=True, nullable=False)  # 转移单号
     product_name = Column(String(200), nullable=False)  # 商品名称
     weight = Column(Float, nullable=False)  # 转移重量
-    from_location_id = Column(Integer, ForeignKey("locations.id"), nullable=False)  # 发出位置
-    to_location_id = Column(Integer, ForeignKey("locations.id"), nullable=False)  # 目标位置
-    status = Column(String(20), default="pending")  # 状态: pending(待接收), received(已接收), rejected(已拒收)
+    from_location_id = Column(Integer, ForeignKey("locations.id", ondelete="CASCADE"), nullable=False, index=True)  # 发出位置
+    to_location_id = Column(Integer, ForeignKey("locations.id", ondelete="CASCADE"), nullable=False, index=True)  # 目标位置
+    status = Column(String(20), default="pending", index=True)  # 状态: pending(待接收), received(已接收), rejected(已拒收)
     
     # 发起信息
     created_by = Column(String(50))  # 发起人
@@ -343,13 +343,13 @@ class ReturnOrder(Base):
     return_weight = Column(Float, nullable=False)  # 退货克重
     
     # 来源位置（发起退货的位置）
-    from_location_id = Column(Integer, ForeignKey("locations.id"), nullable=True)
+    from_location_id = Column(Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True)
     
     # 退给供应商时的供应商ID
-    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=True)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="SET NULL"), nullable=True, index=True)
     
     # 关联原入库单（可选，便于追溯）
-    inbound_order_id = Column(Integer, ForeignKey("inbound_orders.id"), nullable=True)
+    inbound_order_id = Column(Integer, ForeignKey("inbound_orders.id", ondelete="SET NULL"), nullable=True, index=True)
     
     # 退货原因
     return_reason = Column(String(50), nullable=False)  # 原因分类: 质量问题/款式不符/数量差异/工艺瑕疵/其他
@@ -394,13 +394,13 @@ class GoldMaterialTransaction(Base):
     transaction_type = Column(String(20), nullable=False, index=True)  # 'income' 收入（收料）/ 'expense' 支出（付料）
     
     # 收入场景（从客户收料）
-    settlement_order_id = Column(Integer, ForeignKey("settlement_orders.id"), nullable=True)  # 关联结算单
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)  # 客户ID
+    settlement_order_id = Column(Integer, ForeignKey("settlement_orders.id", ondelete="SET NULL"), nullable=True, index=True)  # 关联结算单
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)  # 客户ID
     customer_name = Column(String(100), nullable=True)  # 客户名称（冗余，便于查询）
     
     # 支出场景（支付供应商）
-    inbound_order_id = Column(Integer, ForeignKey("inbound_orders.id"), nullable=True)  # 关联入库单
-    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=True)  # 供应商ID
+    inbound_order_id = Column(Integer, ForeignKey("inbound_orders.id", ondelete="SET NULL"), nullable=True, index=True)  # 关联入库单
+    supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="SET NULL"), nullable=True, index=True)  # 供应商ID
     supplier_name = Column(String(100), nullable=True)  # 供应商名称（冗余）
     
     # 金料信息
@@ -432,7 +432,7 @@ class CustomerGoldDeposit(Base):
     __tablename__ = "customer_gold_deposits"
     
     id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, unique=True, index=True)  # 客户ID（唯一）
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)  # 客户ID（唯一）
     customer_name = Column(String(100), nullable=False)  # 客户名称（冗余）
     
     # 存料余额
@@ -455,15 +455,15 @@ class CustomerGoldDepositTransaction(Base):
     __tablename__ = "customer_gold_deposit_transactions"
     
     id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
     customer_name = Column(String(100), nullable=False)  # 客户名称（冗余）
     
     # 交易类型
     transaction_type = Column(String(20), nullable=False, index=True)  # 'deposit' 存入 / 'use' 使用 / 'refund' 退还
     
     # 关联单据
-    gold_transaction_id = Column(Integer, ForeignKey("gold_material_transactions.id"), nullable=True)  # 收料单（存入时）
-    settlement_order_id = Column(Integer, ForeignKey("settlement_orders.id"), nullable=True)  # 结算单（使用时）
+    gold_transaction_id = Column(Integer, ForeignKey("gold_material_transactions.id", ondelete="SET NULL"), nullable=True, index=True)  # 收料单（存入时）
+    settlement_order_id = Column(Integer, ForeignKey("settlement_orders.id", ondelete="SET NULL"), nullable=True, index=True)  # 结算单（使用时）
     
     # 存料信息
     amount = Column(Float, nullable=False)  # 本次交易金额（克）
@@ -471,7 +471,7 @@ class CustomerGoldDepositTransaction(Base):
     balance_after = Column(Float, nullable=False)  # 交易后余额
     
     # 状态和时间
-    status = Column(String(20), default="active")  # active有效 / cancelled已取消
+    status = Column(String(20), default="active", index=True)  # active有效 / cancelled已取消
     created_at = Column(DateTime, server_default=func.now())
     created_by = Column(String(50))  # 操作人
     remark = Column(Text, nullable=True)  # 备注
@@ -487,7 +487,7 @@ class CustomerTransaction(Base):
     __tablename__ = "customer_transactions"
     
     id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
     customer_name = Column(String(100), nullable=False)  # 客户名称（冗余）
     
     # 交易类型
@@ -495,9 +495,9 @@ class CustomerTransaction(Base):
     # 'sales' 销售 / 'settlement' 结算 / 'gold_receipt' 收料 / 'payment' 付款
     
     # 关联单据
-    sales_order_id = Column(Integer, ForeignKey("sales_orders.id"), nullable=True)
-    settlement_order_id = Column(Integer, ForeignKey("settlement_orders.id"), nullable=True)
-    gold_transaction_id = Column(Integer, ForeignKey("gold_material_transactions.id"), nullable=True)
+    sales_order_id = Column(Integer, ForeignKey("sales_orders.id", ondelete="SET NULL"), nullable=True, index=True)
+    settlement_order_id = Column(Integer, ForeignKey("settlement_orders.id", ondelete="SET NULL"), nullable=True, index=True)
+    gold_transaction_id = Column(Integer, ForeignKey("gold_material_transactions.id", ondelete="SET NULL"), nullable=True, index=True)
     
     # 金额信息
     amount = Column(Float, default=0.0)  # 金额（元）
@@ -508,7 +508,7 @@ class CustomerTransaction(Base):
     gold_due_after = Column(Float, default=0.0)  # 本次交易后金料欠款
     
     # 状态和时间
-    status = Column(String(20), default="active")  # active有效 / cancelled已取消
+    status = Column(String(20), default="active", index=True)  # active有效 / cancelled已取消
     created_at = Column(DateTime, server_default=func.now())
     remark = Column(Text, nullable=True)  # 备注
     
@@ -529,7 +529,7 @@ class CustomerWithdrawal(Base):
     withdrawal_no = Column(String(50), unique=True, index=True, nullable=False)  # 取料单号（QL开头）
     
     # 客户信息
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
     customer_name = Column(String(100), nullable=False)  # 客户名称
     
     # 取料信息
@@ -575,11 +575,11 @@ class CustomerTransfer(Base):
     transfer_no = Column(String(50), unique=True, index=True, nullable=False)  # 转料单号（ZL开头）
     
     # 转出客户信息
-    from_customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    from_customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
     from_customer_name = Column(String(100), nullable=False)
     
     # 转入客户信息
-    to_customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    to_customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
     to_customer_name = Column(String(100), nullable=False)
     
     # 转料信息
@@ -661,7 +661,7 @@ class SupplierGoldAccount(Base):
     __tablename__ = "supplier_gold_accounts"
     
     id = Column(Integer, primary_key=True, index=True)
-    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False, unique=True, index=True)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
     supplier_name = Column(String(100), nullable=False)  # 供应商名称（冗余）
     
     # 金料账户余额（单一账户模式）
@@ -684,7 +684,7 @@ class SupplierGoldTransaction(Base):
     __tablename__ = "supplier_gold_transactions"
     
     id = Column(Integer, primary_key=True, index=True)
-    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False, index=True)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="CASCADE"), nullable=False, index=True)
     supplier_name = Column(String(100), nullable=False)  # 供应商名称（冗余）
     
     # 交易类型
@@ -693,8 +693,8 @@ class SupplierGoldTransaction(Base):
     # 'pay' 付料（我们付料，我们欠料减少）
     
     # 关联单据
-    inbound_order_id = Column(Integer, ForeignKey("inbound_orders.id"), nullable=True)  # 收货时关联入库单
-    payment_transaction_id = Column(Integer, ForeignKey("gold_material_transactions.id"), nullable=True)  # 付料时关联付料单
+    inbound_order_id = Column(Integer, ForeignKey("inbound_orders.id", ondelete="SET NULL"), nullable=True, index=True)  # 收货时关联入库单
+    payment_transaction_id = Column(Integer, ForeignKey("gold_material_transactions.id", ondelete="SET NULL"), nullable=True, index=True)  # 付料时关联付料单
     
     # 金料信息
     gold_weight = Column(Float, nullable=False)  # 本次交易金料克重
@@ -702,7 +702,7 @@ class SupplierGoldTransaction(Base):
     balance_after = Column(Float, nullable=False)  # 交易后余额
     
     # 状态和时间
-    status = Column(String(20), default="active")  # active有效 / cancelled已取消
+    status = Column(String(20), default="active", index=True)  # active有效 / cancelled已取消
     created_at = Column(DateTime, server_default=func.now())
     created_by = Column(String(50))  # 操作人
     remark = Column(Text, nullable=True)  # 备注
@@ -723,7 +723,7 @@ class LoanOrder(Base):
     loan_no = Column(String(50), unique=True, index=True, nullable=False)  # 暂借单号（ZJ+日期+序号）
     
     # 借出客户信息
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)  # 客户ID
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)  # 客户ID
     customer_name = Column(String(100), nullable=False)  # 客户姓名（冗余字段，便于查询）
     
     # 产品信息
@@ -768,7 +768,7 @@ class LoanOrderLog(Base):
     __tablename__ = "loan_order_logs"
     
     id = Column(Integer, primary_key=True, index=True)
-    loan_order_id = Column(Integer, ForeignKey("loan_orders.id"), nullable=False, index=True)
+    loan_order_id = Column(Integer, ForeignKey("loan_orders.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # 操作信息
     action = Column(String(50), nullable=False)  # create创建 / confirm确认借出 / return归还 / cancel撤销

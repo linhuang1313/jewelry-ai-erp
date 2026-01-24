@@ -2157,22 +2157,38 @@ async def handle_inbound(ai_response, db: Session) -> Dict[str, Any]:
 
 # ==================== 入库管理API ====================
 
+def safe_float(value, default=0.0, field_name="数值"):
+    """安全的浮点数转换，带异常处理"""
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail=f"{field_name}格式无效: {value}")
+
+def safe_int(value, default=None, field_name="数值"):
+    """安全的整数转换，带异常处理"""
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail=f"{field_name}格式无效: {value}")
+
 async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, Any]:
     """执行实际的入库操作（从卡片数据）"""
     try:
         product_name = card_data.get("product_name")
         product_code = card_data.get("product_code")  # 商品编码
-        weight = float(card_data.get("weight", 0))
-        labor_cost = float(card_data.get("labor_cost", 0))
+        weight = safe_float(card_data.get("weight", 0), field_name="重量")
+        labor_cost = safe_float(card_data.get("labor_cost", 0), field_name="工费")
         piece_count = card_data.get("piece_count")  # 件数（可选）
         piece_labor_cost = card_data.get("piece_labor_cost")  # 件工费（可选）
         supplier_name = card_data.get("supplier")
         
-        # 转换件数和件工费
-        if piece_count is not None:
-            piece_count = int(piece_count)
-        if piece_labor_cost is not None:
-            piece_labor_cost = float(piece_labor_cost)
+        # 转换件数和件工费（带异常处理）
+        piece_count = safe_int(piece_count, field_name="件数")
+        piece_labor_cost = safe_float(piece_labor_cost, default=None, field_name="件工费") if piece_labor_cost is not None else None
         
         # ========== 商品编码与名称关联处理 ==========
         # 如果提供了商品编码，查询对应的商品名称
@@ -2279,7 +2295,7 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
         # 更新或创建库存（总库存表）
         inventory = db.query(Inventory).filter(Inventory.product_name == product_name).first()
         if inventory:
-            inventory.total_weight += weight
+            inventory.total_weight = round(inventory.total_weight + weight, 3)  # 保留3位小数防止精度误差
         else:
             inventory = Inventory(product_name=product_name, total_weight=weight)
             db.add(inventory)
@@ -2315,8 +2331,8 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
         
         # 更新供应商统计信息
         if supplier_obj:
-            supplier_obj.total_supply_amount += total_cost
-            supplier_obj.total_supply_weight += weight
+            supplier_obj.total_supply_amount = round(supplier_obj.total_supply_amount + total_cost, 2)
+            supplier_obj.total_supply_weight = round(supplier_obj.total_supply_weight + weight, 3)
             supplier_obj.total_supply_count += 1
             supplier_obj.last_supply_time = datetime.now()
             
@@ -2340,8 +2356,8 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
                 db.flush()
             
             balance_before = supplier_gold_account.current_balance
-            supplier_gold_account.current_balance += weight  # 我们欠供应商的料增加
-            supplier_gold_account.total_received += weight
+            supplier_gold_account.current_balance = round(supplier_gold_account.current_balance + weight, 3)  # 我们欠供应商的料增加
+            supplier_gold_account.total_received = round(supplier_gold_account.total_received + weight, 3)
             supplier_gold_account.last_transaction_at = china_now()
             
             # 创建供应商金料交易记录
@@ -2834,12 +2850,12 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
                 # 更新或创建总库存（使用本地缓存避免重复插入）
                 if product_name in inventory_cache:
                     # 已在本批次中处理过，直接累加
-                    inventory_cache[product_name].total_weight += weight
+                    inventory_cache[product_name].total_weight = round(inventory_cache[product_name].total_weight + weight, 3)
                 else:
                     # 首次处理，查询数据库
                     inventory = db.query(Inventory).filter(Inventory.product_name == product_name).first()
                     if inventory:
-                        inventory.total_weight += weight
+                        inventory.total_weight = round(inventory.total_weight + weight, 3)  # 保留3位小数防止精度误差
                         inventory_cache[product_name] = inventory
                     else:
                         inventory = Inventory(product_name=product_name, total_weight=weight)
@@ -2890,8 +2906,8 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
         
         # 更新供应商统计信息
         if supplier_obj and success_count > 0:
-            supplier_obj.total_supply_amount += total_cost
-            supplier_obj.total_supply_weight += total_weight
+            supplier_obj.total_supply_amount = round(supplier_obj.total_supply_amount + total_cost, 2)
+            supplier_obj.total_supply_weight = round(supplier_obj.total_supply_weight + total_weight, 3)
             supplier_obj.total_supply_count += success_count
             supplier_obj.last_supply_time = datetime.now()
         
@@ -4051,11 +4067,11 @@ async def handle_return(ai_response, db: Session, user_role: str) -> Dict[str, A
         from .models import Inventory
         total_inventory = db.query(Inventory).filter(Inventory.product_name == product_name).first()
         if total_inventory:
-            total_inventory.total_weight -= weight
+            total_inventory.total_weight = round(total_inventory.total_weight - weight, 3)
         
         # 如果是退给供应商，更新供应商统计和金料账户
         if return_type == "to_supplier" and supplier_id:
-            supplier.total_supply_weight -= weight
+            supplier.total_supply_weight = round(supplier.total_supply_weight - weight, 3)
             if supplier.total_supply_count > 0:
                 supplier.total_supply_count -= 1
             
@@ -4079,8 +4095,8 @@ async def handle_return(ai_response, db: Session, user_role: str) -> Dict[str, A
                 db.flush()
             
             balance_before = supplier_gold_account.current_balance
-            supplier_gold_account.current_balance -= weight  # 我们欠供应商的料减少
-            supplier_gold_account.total_received -= weight  # 累计收货减少（退回了）
+            supplier_gold_account.current_balance = round(supplier_gold_account.current_balance - weight, 3)  # 我们欠供应商的料减少
+            supplier_gold_account.total_received = round(supplier_gold_account.total_received - weight, 3)  # 累计收货减少（退回了）
             supplier_gold_account.last_transaction_at = china_now()
             
             # 创建供应商金料交易记录
@@ -6016,7 +6032,7 @@ async def merge_duplicate_inventory(db: Session = Depends(get_db)):
             # 合并总库存
             if name_inventory:
                 # 将编码库存合并到名称库存
-                name_inventory.total_weight += code_inventory.total_weight
+                name_inventory.total_weight = round(name_inventory.total_weight + code_inventory.total_weight, 3)
                 db.delete(code_inventory)
             else:
                 # 将编码库存重命名为名称
@@ -6087,7 +6103,7 @@ async def merge_inventory_manual(
         
         # 合并总库存
         if target_inventory:
-            target_inventory.total_weight += source_weight
+            target_inventory.total_weight = round(target_inventory.total_weight + source_weight, 3)
             db.delete(source_inventory)
         else:
             # 目标不存在，直接重命名
@@ -6224,7 +6240,7 @@ async def merge_product_names(
         if old_inv:
             if new_inv:
                 # 合并克重
-                new_inv.total_weight += old_inv.total_weight
+                new_inv.total_weight = round(new_inv.total_weight + old_inv.total_weight, 3)
                 db.delete(old_inv)
                 changes["inventory"] = 1
                 logger.info(f"库存合并: {old_name} ({old_inv.total_weight}g) -> {new_name}")
