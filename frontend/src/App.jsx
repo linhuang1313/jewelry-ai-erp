@@ -3996,6 +3996,16 @@ function App() {
                                         })(),
                                         font: { size: 14, weight: 'bold' }
                         },
+                        tooltip: {
+                          callbacks: {
+                            label: function(context) {
+                              const label = context.dataset.label || '';
+                              const value = context.parsed.y;
+                              const unit = label.includes('工费') ? ' 元' : ' 克';
+                              return `${label}: ${value.toLocaleString()}${unit}`;
+                            }
+                          }
+                        }
                       },
                       scales: {
                         y: {
@@ -4030,6 +4040,17 @@ function App() {
                                         })(),
                                         font: { size: 14, weight: 'bold' }
                                       },
+                            tooltip: {
+                              callbacks: {
+                                label: function(context) {
+                                  const label = context.label || '';
+                                  const value = context.parsed;
+                                  const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                  const percentage = ((value / total) * 100).toFixed(1);
+                                  return `${label}: ${value.toLocaleString()} 元 (${percentage}%)`;
+                                }
+                              }
+                            }
                                     },
                                     cutout: '50%',
                         }} 
