@@ -2163,46 +2163,45 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen bg-[#f5f5f7] overflow-hidden">
+    <div className="flex h-screen bg-jewelry-gold-50 overflow-hidden">
       {/* 左侧边栏 - 历史对话记录 */}
       <aside className={`
         ${sidebarOpen ? 'w-80' : 'w-0'} 
         ${sidebarOpen ? 'flex' : 'hidden'}
         lg:!flex lg:w-80
         transition-all duration-300 ease-in-out
-        bg-white border-r border-gray-200/60
+        bg-gradient-to-b from-jewelry-navy to-jewelry-navy-dark
         flex-col
         overflow-hidden
-        shadow-[0_0_24px_rgba(0,0,0,0.08)]
       `}>
         {/* 侧边栏头部 */}
-        <div className="px-6 py-5 border-b border-gray-200/60 flex items-center justify-between">
-          <h2 className="text-[17px] font-semibold text-gray-900 tracking-tight">对话记录</h2>
+        <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between">
+          <h2 className="text-[17px] font-semibold text-white tracking-tight">对话记录</h2>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
           >
-            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
         
         {/* 新建对话按钮 */}
-        <div className="px-6 py-4 border-b border-gray-200/60">
+        <div className="px-6 py-4 border-b border-white/10">
           <button
             onClick={newConversation}
-            className="w-full px-4 py-2.5 bg-[#007aff] text-white rounded-xl hover:bg-[#0051d5] 
-                       transition-all duration-200 font-medium text-[15px] shadow-sm hover:shadow-md"
+            className="w-full px-4 py-2.5 bg-gradient-to-r from-jewelry-gold to-jewelry-gold-light text-white rounded-xl 
+                       hover:from-jewelry-gold-dark hover:to-jewelry-gold transition-all duration-200 font-medium text-[15px] shadow-md"
           >
             + 新建对话
           </button>
         </div>
         
         {/* 对话列表 */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20">
           {conversationHistory.length === 0 ? (
-            <div className="px-6 py-8 text-center text-gray-400 text-sm">
+            <div className="px-6 py-8 text-center text-white/50 text-sm">
               暂无对话记录
             </div>
           ) : (
@@ -2214,8 +2213,8 @@ function App() {
                     mx-3 mb-1 px-4 py-3 rounded-xl cursor-pointer
                     transition-all duration-200
                     ${currentConversationId === conv.id 
-                      ? 'bg-[#007aff]/10 border border-[#007aff]/20' 
-                      : 'hover:bg-gray-50 border border-transparent'
+                      ? 'bg-jewelry-gold/20 border border-jewelry-gold/40' 
+                      : 'hover:bg-white/10 border border-transparent'
                     }
                     group
                   `}
@@ -2223,10 +2222,10 @@ function App() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <div className="text-[15px] font-medium text-gray-900 truncate mb-1">
+                      <div className={`text-[15px] font-medium truncate mb-1 ${currentConversationId === conv.id ? 'text-jewelry-gold-light' : 'text-white'}`}>
                         {conv.title}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-white/50">
                         {new Date(conv.updatedAt).toLocaleDateString('zh-CN', {
                           month: 'short',
                           day: 'numeric',
@@ -2239,10 +2238,10 @@ function App() {
                     {userRole === 'manager' && (
                       <button
                         onClick={(e) => deleteConversation(conv.id, e)}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded-lg transition-all"
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded-lg transition-all"
                         title="删除对话"
                       >
-                        <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
@@ -2390,9 +2389,8 @@ function App() {
                   {(hasPermission(userRole, 'canReceiveTransfer') || hasPermission(userRole, 'canTransfer')) && (
                     <button
                       onClick={() => setCurrentPage('warehouse')}
-                      className="relative flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-xl 
-                                 hover:bg-orange-600 transition-all duration-200 font-medium text-[15px] 
-                                 shadow-sm hover:shadow-md"
+                      className="relative flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
+                                 hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <Warehouse className="w-4 h-4" />
                       <span>分仓库存</span>
@@ -2410,9 +2408,8 @@ function App() {
                   {hasPermission(userRole, 'canCreateSettlement') && (
                     <button
                       onClick={() => setCurrentPage('settlement')}
-                      className="relative flex items-center space-x-2 px-4 py-2 bg-cyan-500 text-white rounded-xl 
-                                 hover:bg-cyan-600 transition-all duration-200 font-medium text-[15px] 
-                                 shadow-sm hover:shadow-md"
+                      className="relative flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
+                                 hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <Calculator className="w-4 h-4" />
                       <span>结算管理</span>
@@ -2430,8 +2427,8 @@ function App() {
                   {hasPermission(userRole, 'canCreateSales') && (
                     <button
                       onClick={() => setShowQuickOrderModal(true)}
-                      className="flex items-center space-x-2 px-4 py-2 bg-emerald-500 text-white rounded-xl 
-                                 hover:bg-emerald-600 transition-all duration-200 font-medium text-[15px] 
+                      className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-jewelry-gold to-jewelry-gold-light text-white rounded-xl 
+                                 hover:from-jewelry-gold-dark hover:to-jewelry-gold transition-all duration-200 font-medium text-[15px] 
                                  shadow-sm hover:shadow-md"
                     >
                       <FileText className="w-4 h-4" />
@@ -2442,9 +2439,8 @@ function App() {
                   {(hasPermission(userRole, 'canViewCustomers') || hasPermission(userRole, 'canManageCustomers')) && (
                     <button
                       onClick={() => setCurrentPage('customer')}
-                      className="flex items-center space-x-2 px-4 py-2 bg-teal-500 text-white rounded-xl 
-                                 hover:bg-teal-600 transition-all duration-200 font-medium text-[15px] 
-                                 shadow-sm hover:shadow-md"
+                      className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
+                                 hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <UserPlus className="w-4 h-4" />
                       <span>客户管理</span>
@@ -2454,9 +2450,8 @@ function App() {
                   {hasPermission(userRole, 'canManageSuppliers') && (
                     <button
                       onClick={() => setCurrentPage('supplier')}
-                      className="flex items-center space-x-2 px-4 py-2 bg-amber-500 text-white rounded-xl 
-                                 hover:bg-amber-600 transition-all duration-200 font-medium text-[15px] 
-                                 shadow-sm hover:shadow-md"
+                      className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
+                                 hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <Building2 className="w-4 h-4" />
                       <span>供应商管理</span>
@@ -2466,9 +2461,8 @@ function App() {
                   {(hasPermission(userRole, 'canReturnToSupplier') || hasPermission(userRole, 'canReturnToWarehouse')) && (
                     <button
                       onClick={() => setCurrentPage('returns')}
-                      className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-xl 
-                                 hover:bg-red-600 transition-all duration-200 font-medium text-[15px] 
-                                 shadow-sm hover:shadow-md"
+                      className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
+                                 hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <RotateCcw className="w-4 h-4" />
                       <span>退货管理</span>
@@ -2478,9 +2472,8 @@ function App() {
                   {(hasPermission(userRole, 'canViewGoldMaterial') || hasPermission(userRole, 'canManageGoldMaterial')) && (
                     <button
                       onClick={() => setCurrentPage('gold-material')}
-                      className="flex items-center space-x-2 px-4 py-2 bg-yellow-500 text-white rounded-xl 
-                                 hover:bg-yellow-600 transition-all duration-200 font-medium text-[15px] 
-                                 shadow-sm hover:shadow-md"
+                      className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-gold text-jewelry-gold rounded-xl 
+                                 hover:bg-jewelry-gold hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <Scale className="w-4 h-4" />
                       <span>金料管理</span>
@@ -2490,9 +2483,8 @@ function App() {
                   {hasPermission(userRole, 'canManageLoan') && (
                     <button
                       onClick={() => setCurrentPage('loan')}
-                      className="flex items-center space-x-2 px-4 py-2 bg-teal-500 text-white rounded-xl 
-                                 hover:bg-teal-600 transition-all duration-200 font-medium text-[15px] 
-                                 shadow-sm hover:shadow-md"
+                      className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
+                                 hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <Package className="w-4 h-4" />
                       <span>暂借管理</span>
@@ -2502,9 +2494,8 @@ function App() {
                   {hasPermission(userRole, 'canManageProductCodes') && (
                     <button
                       onClick={() => setCurrentPage('product-codes')}
-                      className="flex items-center space-x-2 px-4 py-2 bg-amber-500 text-white rounded-xl 
-                                 hover:bg-amber-600 transition-all duration-200 font-medium text-[15px] 
-                                 shadow-sm hover:shadow-md"
+                      className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
+                                 hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <Package className="w-4 h-4" />
                       <span>商品编码</span>
@@ -2514,9 +2505,8 @@ function App() {
                   {(userRole === 'product' || userRole === 'manager') && (
                     <button
                       onClick={() => setCurrentPage('inbound-orders')}
-                      className="flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-xl 
-                                 hover:bg-orange-600 transition-all duration-200 font-medium text-[15px] 
-                                 shadow-sm hover:shadow-md"
+                      className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
+                                 hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <FileText className="w-4 h-4" />
                       <span>入库单据</span>
@@ -2526,9 +2516,8 @@ function App() {
                   {hasPermission(userRole, 'canViewFinance') && (
                     <button
                       onClick={() => setCurrentPage('finance')}
-                      className="flex items-center space-x-2 px-4 py-2 bg-[#007aff] text-white rounded-xl 
-                                 hover:bg-[#0051d5] transition-all duration-200 font-medium text-[15px] 
-                                 shadow-sm hover:shadow-md"
+                      className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
+                                 hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <DollarSign className="w-4 h-4" />
                       <span>财务对账</span>
@@ -2537,9 +2526,8 @@ function App() {
                   {/* 历史回溯按钮 - 所有角色都可用 */}
                   <button
                     onClick={() => setShowHistoryPanel(true)}
-                    className="flex items-center space-x-2 px-4 py-2 bg-slate-600 text-white rounded-xl 
-                               hover:bg-slate-700 transition-all duration-200 font-medium text-[15px] 
-                               shadow-sm hover:shadow-md"
+                    className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
+                               hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                   >
                     <History className="w-4 h-4" />
                     <span>历史回溯</span>
@@ -3286,7 +3274,7 @@ function App() {
               if (msg.type === 'user') {
                 return (
                   <div key={msg.id || idx} className="flex justify-end">
-                    <div className="bg-[#007aff] text-white rounded-3xl px-5 py-4 shadow-sm max-w-2xl">
+                    <div className="bg-gradient-to-r from-jewelry-navy to-jewelry-navy-light text-white rounded-3xl px-5 py-4 shadow-md max-w-2xl">
                       <div className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</div>
                     </div>
                   </div>
@@ -3299,10 +3287,10 @@ function App() {
                   <React.Fragment key={msg.id || idx}>
                     <div className="flex justify-start items-start gap-3">
                       {/* AI头像 - 招财猫 */}
-                      <img src="/ai-avatar.png" alt="AI" className="flex-shrink-0 w-8 h-8 rounded-full object-cover shadow-md" />
+                      <img src="/ai-avatar.png" alt="AI" className="flex-shrink-0 w-8 h-8 rounded-full object-cover shadow-md ring-2 ring-jewelry-gold/30" />
                       <div className={`
                         ${msg.id ? 'max-w-2xl' : 'max-w-[85%] md:max-w-[75%]'}
-                        rounded-3xl px-5 py-4 shadow-sm border border-gray-200/60 bg-white
+                        rounded-3xl px-5 py-4 shadow-sm border border-jewelry-gold/20 bg-gradient-to-br from-amber-50/80 to-yellow-50/80
                       `}>
                         {/* 意图识别可视化标签 - 珠宝风格 */}
                         {msg.detectedIntent && (
@@ -4376,7 +4364,7 @@ function App() {
                   h-[52px] flex items-center font-medium text-[15px]
                   ${loading || uploading
                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-[#34c759] text-white hover:bg-[#28a745] shadow-sm hover:shadow-md'
+                    : 'border-2 border-jewelry-navy text-jewelry-navy hover:bg-jewelry-navy hover:text-white'
                   }
                 `}
               >
@@ -4388,14 +4376,14 @@ function App() {
             <>
               <button
                 onClick={openQuickReceiptModal}
-                className="px-4 py-3 rounded-2xl h-[52px] flex items-center font-medium text-[15px] bg-gradient-to-r from-yellow-500 to-amber-500 text-white hover:from-yellow-600 hover:to-amber-600 shadow-sm hover:shadow-md transition-all duration-200"
+                className="px-4 py-3 rounded-2xl h-[52px] flex items-center font-medium text-[15px] bg-gradient-to-r from-jewelry-gold to-jewelry-gold-light text-white hover:from-jewelry-gold-dark hover:to-jewelry-gold shadow-sm hover:shadow-md transition-all duration-200"
                 title="快捷收料"
               >
                 📦 收料
               </button>
               <button
                 onClick={openQuickWithdrawalModal}
-                className="px-4 py-3 rounded-2xl h-[52px] flex items-center font-medium text-[15px] bg-gradient-to-r from-blue-500 to-indigo-500 text-white hover:from-blue-600 hover:to-indigo-600 shadow-sm hover:shadow-md transition-all duration-200"
+                className="px-4 py-3 rounded-2xl h-[52px] flex items-center font-medium text-[15px] border-2 border-jewelry-navy text-jewelry-navy hover:bg-jewelry-navy hover:text-white transition-all duration-200"
                 title="快捷提料"
               >
                 ⬆️ 提料
@@ -4416,7 +4404,7 @@ function App() {
             placeholder="输入您的指令...（Shift+Enter换行）"
             rows={1}
                   className="w-full px-5 py-4 border-2 border-gray-200 rounded-2xl 
-                             focus:outline-none focus:border-[#007aff] focus:ring-4 focus:ring-blue-500/10
+                             focus:outline-none focus:border-jewelry-gold focus:ring-4 focus:ring-jewelry-gold/10
                              resize-none min-h-[52px] max-h-[200px] overflow-y-auto
                              text-[15px] bg-white transition-all duration-200"
             disabled={loading || uploading}
@@ -4436,7 +4424,7 @@ function App() {
                   transition-all duration-200 shadow-sm hover:shadow-md
                   ${loading || uploading || !input.trim()
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'bg-[#007aff] text-white hover:bg-[#0051d5]'
+                    : 'bg-gradient-to-r from-jewelry-gold to-jewelry-gold-light text-white hover:from-jewelry-gold-dark hover:to-jewelry-gold'
                   }
                 `}
           >
