@@ -65,6 +65,7 @@ function App() {
   const [uploading, setUploading] = useState(false)  // 图片上传状态
   const messagesEndRef = useRef(null)
   const fileInputRef = useRef(null)  // 文件输入引用
+  const abortControllerRef = useRef(null)  // SSE 请求取消控制器
   
   // OCR编辑对话框相关状态
   const [showOCRModal, setShowOCRModal] = useState(false)
@@ -372,6 +373,15 @@ function App() {
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // 组件卸载时取消正在进行的 SSE 请求
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
   }, [])
 
   // 加载当前角色的历史对话记录
@@ -971,6 +981,12 @@ function App() {
       console.log('发送流式请求到:', API_ENDPOINTS.CHAT_STREAM)
       console.log('请求消息:', userMessage)
       
+      // 取消之前的请求（如果有）
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+      abortControllerRef.current = new AbortController()
+      
       const response = await fetch(API_ENDPOINTS.CHAT_STREAM, {
         method: 'POST',
         headers: {
@@ -981,6 +997,7 @@ function App() {
           user_role: userRole,
           session_id: currentSessionId  // 传递会话ID，确保同一对话的消息关联在一起
         }),
+        signal: abortControllerRef.current.signal  // 添加取消信号
       })
 
       console.log('收到响应，状态码:', response.status)
@@ -1376,6 +1393,14 @@ function App() {
         }
       }
     } catch (error) {
+      // 如果是请求被取消（用户切换页面或发送新消息），静默处理
+      if (error.name === 'AbortError') {
+        console.log('SSE 请求已取消')
+        setLoading(false)
+        setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
+        return
+      }
+      
       setLoading(false)
       // 移除思考过程消息
       setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
@@ -1384,8 +1409,6 @@ function App() {
       
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
         errorMessage = '❌ 无法连接到服务器，请检查后端服务是否运行（http://localhost:8000）'
-      } else if (error.name === 'AbortError') {
-        errorMessage = '❌ 请求超时，请稍后重试'
       }
       
       setMessages(prev => [...prev, { 
