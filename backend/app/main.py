@@ -1761,12 +1761,26 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             # 使用流式AI分析
             full_response = ""
             chunk_count = 0
+            import time
+            stream_start_time = time.time()
+            MAX_ANALYSIS_TIME = 60  # 最大分析时间60秒
+            analysis_timed_out = False
+            
             try:
                 for text_chunk in ai_analyzer.analyze_stream(
                     request.message,
                     ai_response.action,
                     data
                 ):
+                    # 检查是否超时
+                    if time.time() - stream_start_time > MAX_ANALYSIS_TIME:
+                        logger.warning(f"[流式] AI分析超时，已用时{time.time() - stream_start_time:.1f}秒")
+                        timeout_msg = "\n\n[分析超时] AI分析时间过长，已自动中断。请尝试简化问题或稍后重试。"
+                        full_response += timeout_msg
+                        yield f"data: {json.dumps({'type': 'content', 'chunk': timeout_msg}, ensure_ascii=False)}\n\n"
+                        analysis_timed_out = True
+                        break
+                    
                     full_response += text_chunk
                     chunk_count += 1
                     # 立即发送每个文本块
@@ -1775,6 +1789,9 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     # 每5个块发送一个心跳注释，强制刷新代理缓冲
                     if chunk_count % 5 == 0:
                         yield ": heartbeat\n\n"
+                        
+                if not analysis_timed_out:
+                    logger.info(f"[流式] AI分析完成，用时{time.time() - stream_start_time:.1f}秒")
             except Exception as e:
                 logger.error(f"流式AI分析失败: {e}", exc_info=True)
                 error_msg = f"AI分析过程中出现错误：{str(e)}。请稍后重试。"
