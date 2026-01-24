@@ -896,19 +896,24 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 else:
                     fast_result = {"success": False, "message": f"未找到名为 **{customer_name}** 的客户"}
             
-            # 3. 库存查询：xxx库存、xxx有多少
+            # 3. 库存查询：xxx库存、xxx有多少（需要权限检查）
             inventory_match = re.search(r'^(.+?)(的)?(库存|有多少|还有多少)(量)?[？?]?$', user_msg)
             if not fast_result and inventory_match:
-                product_name = inventory_match.group(1).strip()
-                logger.info(f"[快速路径] 检测到库存查询: {product_name}")
-                yield f"data: {json.dumps({'type': 'thinking', 'step': '快速查询', 'message': f'正在查询 {product_name} 的库存...', 'progress': 30}, ensure_ascii=False)}\n\n"
-                
-                inventory = db.query(Inventory).filter(Inventory.product_name.contains(product_name)).first()
-                if inventory:
-                    msg = f"**{inventory.product_name}** 当前库存：**{inventory.total_weight:.2f}克**"
-                    fast_result = {"success": True, "action": "查询库存", "message": msg}
+                # 检查库存查询权限
+                if user_role in ['settlement', 'sales']:
+                    logger.warning(f"[快速路径] 权限不足: 角色={user_role} 尝试查询库存")
+                    fast_result = {"success": False, "message": "⚠️ 您的角色无权查看库存信息，请联系商品专员或管理层。"}
                 else:
-                    fast_result = {"success": False, "message": f"未找到 **{product_name}** 的库存记录"}
+                    product_name = inventory_match.group(1).strip()
+                    logger.info(f"[快速路径] 检测到库存查询: {product_name}")
+                    yield f"data: {json.dumps({'type': 'thinking', 'step': '快速查询', 'message': f'正在查询 {product_name} 的库存...', 'progress': 30}, ensure_ascii=False)}\n\n"
+                    
+                    inventory = db.query(Inventory).filter(Inventory.product_name.contains(product_name)).first()
+                    if inventory:
+                        msg = f"**{inventory.product_name}** 当前库存：**{inventory.total_weight:.2f}克**"
+                        fast_result = {"success": True, "action": "查询库存", "message": msg}
+                    else:
+                        fast_result = {"success": False, "message": f"未找到 **{product_name}** 的库存记录"}
             
             # 如果匹配到快速路径，直接返回结果
             if fast_result:
@@ -1306,28 +1311,39 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     yield f"data: {json.dumps({'type': 'error', 'message': error_msg}, ensure_ascii=False)}\n\n"
                     return
             
-            # ========== 查询操作权限检查 ==========
-            # 定义各角色不允许的查询操作
+            # ========== 查询操作权限检查（基于 action 和关键词）==========
+            # 定义各角色不允许的查询操作和关键词
             QUERY_PERMISSION_RULES = {
                 'settlement': {  # 结算专员
-                    'forbidden': ['查询入库单', '查询库存', '库存分析', '入库统计'],
-                    'message': '结算专员无权查看入库和库存信息，请联系商品专员或管理层。'
+                    'forbidden_actions': ['查询入库单', '查询库存', '库存分析', '入库统计', '统计分析'],
+                    'forbidden_keywords': ['入库', '库存', '供应商'],
+                    'message': '结算专员无权查看入库、库存和供应商信息，请联系商品专员或管理层。'
                 },
                 'counter': {  # 柜台
-                    'forbidden': ['查询入库单', '入库统计'],
+                    'forbidden_actions': ['查询入库单', '入库统计'],
+                    'forbidden_keywords': ['入库'],
                     'message': '柜台人员无权查看入库信息，请联系商品专员。'
                 },
                 'sales': {  # 业务员
-                    'forbidden': ['查询入库单', '查询库存', '库存分析', '入库统计', '查询供应商'],
+                    'forbidden_actions': ['查询入库单', '查询库存', '库存分析', '入库统计', '统计分析', '查询供应商'],
+                    'forbidden_keywords': ['入库', '库存', '供应商'],
                     'message': '业务员只能查询客户相关信息，无权查看入库、库存和供应商信息。'
                 }
             }
             
-            # 检查查询权限
+            # 检查查询权限（同时检查 action 和消息关键词）
             if user_role in QUERY_PERMISSION_RULES:
                 rules = QUERY_PERMISSION_RULES[user_role]
-                if ai_response.action in rules['forbidden']:
-                    logger.warning(f"[流式] 查询权限不足: 角色={user_role}, 操作={ai_response.action}")
+                user_msg_lower = request.message.lower()
+                
+                # 检查 action 是否被禁止
+                action_forbidden = ai_response.action in rules['forbidden_actions']
+                
+                # 检查消息是否包含被禁止的关键词
+                keyword_forbidden = any(kw in user_msg_lower for kw in rules['forbidden_keywords'])
+                
+                if action_forbidden or keyword_forbidden:
+                    logger.warning(f"[流式] 查询权限不足: 角色={user_role}, 操作={ai_response.action}, 消息含禁止关键词={keyword_forbidden}")
                     yield f"data: {json.dumps({'type': 'thinking', 'step': '权限检查', 'message': '权限验证失败', 'progress': 25, 'status': 'error'}, ensure_ascii=False)}\n\n"
                     await asyncio.sleep(0.1)
                     error_msg = f"⚠️ {rules['message']}"
