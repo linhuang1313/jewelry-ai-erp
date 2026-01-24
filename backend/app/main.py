@@ -1311,61 +1311,57 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     yield f"data: {json.dumps({'type': 'error', 'message': error_msg}, ensure_ascii=False)}\n\n"
                     return
             
-            # ========== 查询操作权限检查（基于 action 和关键词）==========
-            # 定义各角色不允许的查询操作和关键词
-            QUERY_PERMISSION_RULES = {
+            # ========== 阶段2: 数据收集（基于角色的数据过滤）==========
+            # 定义各角色的数据访问权限（数据层过滤，不拦截请求）
+            ROLE_DATA_ACCESS = {
                 'settlement': {  # 结算专员
-                    'forbidden_actions': ['查询入库单', '查询库存', '库存分析', '入库统计', '统计分析'],
-                    'forbidden_keywords': ['入库', '库存', '供应商'],
-                    'message': '结算专员无权查看入库、库存和供应商信息，请联系商品专员或管理层。'
-                },
-                'counter': {  # 柜台
-                    'forbidden_actions': ['查询入库单', '入库统计'],
-                    'forbidden_keywords': ['入库'],
-                    'message': '柜台人员无权查看入库信息，请联系商品专员。'
+                    'can_view_inbound': False,      # 不能看入库数据
+                    'can_view_inventory': False,    # 不能看库存数据
+                    'can_view_suppliers': False,    # 不能看供应商数据
+                    'restriction_hint': '如需查看入库、库存或供应商信息，请联系商品专员或管理层。'
                 },
                 'sales': {  # 业务员
-                    'forbidden_actions': ['查询入库单', '查询库存', '库存分析', '入库统计', '统计分析', '查询供应商'],
-                    'forbidden_keywords': ['入库', '库存', '供应商'],
-                    'message': '业务员只能查询客户相关信息，无权查看入库、库存和供应商信息。'
+                    'can_view_inbound': False,
+                    'can_view_inventory': False,
+                    'can_view_suppliers': False,
+                    'restriction_hint': '您只能查看客户相关信息。如需其他数据，请联系相关部门。'
+                },
+                'counter': {  # 柜台
+                    'can_view_inbound': False,
+                    'can_view_inventory': True,     # 可以看展厅库存
+                    'can_view_suppliers': False,
+                    'restriction_hint': '如需查看入库或供应商信息，请联系商品专员。'
+                },
+                'product': {  # 商品专员
+                    'can_view_inbound': True,
+                    'can_view_inventory': True,
+                    'can_view_suppliers': True,
+                    'restriction_hint': None
+                },
+                'material': {  # 料部
+                    'can_view_inbound': True,
+                    'can_view_inventory': True,
+                    'can_view_suppliers': True,
+                    'restriction_hint': None
+                },
+                'finance': {  # 财务
+                    'can_view_inbound': True,
+                    'can_view_inventory': True,
+                    'can_view_suppliers': True,
+                    'restriction_hint': None
+                },
+                'manager': {  # 管理层
+                    'can_view_inbound': True,
+                    'can_view_inventory': True,
+                    'can_view_suppliers': True,
+                    'restriction_hint': None
                 }
             }
             
-            # 检查查询权限（同时检查 action 和消息关键词）
-            if user_role in QUERY_PERMISSION_RULES:
-                rules = QUERY_PERMISSION_RULES[user_role]
-                user_msg_lower = request.message.lower()
-                
-                # 检查 action 是否被禁止
-                action_forbidden = ai_response.action in rules['forbidden_actions']
-                
-                # 检查消息是否包含被禁止的关键词
-                keyword_forbidden = any(kw in user_msg_lower for kw in rules['forbidden_keywords'])
-                
-                if action_forbidden or keyword_forbidden:
-                    logger.warning(f"[流式] 查询权限不足: 角色={user_role}, 操作={ai_response.action}, 消息含禁止关键词={keyword_forbidden}")
-                    yield f"data: {json.dumps({'type': 'thinking', 'step': '权限检查', 'message': '权限验证失败', 'progress': 25, 'status': 'error'}, ensure_ascii=False)}\n\n"
-                    await asyncio.sleep(0.1)
-                    error_msg = f"⚠️ {rules['message']}"
-                    yield f"data: {json.dumps({'type': 'complete', 'data': {'success': False, 'message': error_msg}}, ensure_ascii=False)}\n\n"
-                    
-                    # 记录权限不足到日志
-                    end_time = datetime.now()
-                    response_time_ms = int((end_time - start_time).total_seconds() * 1000)
-                    log_chat_message(
-                        db=db,
-                        session_id=session_id,
-                        user_role=request.user_role,
-                        message_type="assistant",
-                        content=error_msg,
-                        intent=ai_response.action,
-                        response_time_ms=response_time_ms,
-                        is_successful=False,
-                        error_message="查询权限不足"
-                    )
-                    return
+            # 获取当前角色的数据访问权限
+            role_access = ROLE_DATA_ACCESS.get(user_role, ROLE_DATA_ACCESS['manager'])
             
-            # ========== 阶段2: 数据收集（分步骤发送）==========
+            # ========== 开始数据收集 ==========
             yield f"data: {json.dumps({'type': 'thinking', 'step': '数据收集', 'message': '正在从数据库收集相关数据...', 'progress': 30}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0.05)
             
@@ -1377,66 +1373,31 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             
             # 开始收集数据
             data = {}
+            
+            # 记录数据访问限制（传递给 AI 让它智能提示用户）
+            data_restrictions = []
+            if not role_access['can_view_inbound']:
+                data_restrictions.append('入库信息')
+            if not role_access['can_view_inventory']:
+                data_restrictions.append('库存信息')
+            if not role_access['can_view_suppliers']:
+                data_restrictions.append('供应商信息')
+            
             data['context'] = {
                 'intent': ai_response.action,
                 'user_message': request.message,
                 'timestamp': datetime.now().isoformat(),
-                'order_no': ai_response.order_no if hasattr(ai_response, 'order_no') else None,  # 添加入库单号（RK开头）
-                'sales_order_no': ai_response.sales_order_no if hasattr(ai_response, 'sales_order_no') else None  # 添加销售单号（XS开头）
+                'order_no': ai_response.order_no if hasattr(ai_response, 'order_no') else None,
+                'sales_order_no': ai_response.sales_order_no if hasattr(ai_response, 'sales_order_no') else None,
+                'user_role': user_role,
+                'data_restrictions': data_restrictions,  # 告诉 AI 哪些数据被限制
+                'restriction_hint': role_access.get('restriction_hint')  # 权限提示语
             }
             
-            # 收集库存数据（根据用户角色显示对应仓位的库存）
-            # 管理层：显示总库存
-            # 商品专员：只显示商品部仓库库存
-            # 柜台/结算：只显示展厅库存
-            if user_role == "manager":
-                # 管理层看总库存
-                inventories = db.query(Inventory).all()
-                data['inventory'] = [
-                    {
-                        'product_name': inv.product_name,
-                        'total_weight': inv.total_weight,
-                        'location': '全部仓位',
-                        'last_update': str(inv.last_update) if inv.last_update else None
-                    }
-                    for inv in inventories
-                ]
-                data['inventory_location'] = '全部仓位（总库存）'
-            else:
-                # 根据角色确定仓位
-                if user_role == "product":
-                    location_code = "warehouse"
-                    location_display = "商品部仓库"
-                elif user_role in ["counter", "settlement"]:
-                    location_code = "showroom"
-                    location_display = "展厅"
-                else:
-                    # 其他角色（如业务员）看总库存
-                    location_code = None
-                    location_display = "全部仓位"
-                
-                if location_code:
-                    # 查询对应仓位的库存
-                    location = db.query(Location).filter(Location.code == location_code).first()
-                    if location:
-                        location_inventories = db.query(LocationInventory).filter(
-                            LocationInventory.location_id == location.id,
-                            LocationInventory.weight > 0
-                        ).all()
-                        data['inventory'] = [
-                            {
-                                'product_name': li.product_name,
-                                'total_weight': li.weight,
-                                'location': location_display,
-                                'last_update': str(li.last_update) if li.last_update else None
-                            }
-                            for li in location_inventories
-                        ]
-                    else:
-                        data['inventory'] = []
-                    data['inventory_location'] = location_display
-                else:
-                    # 没有指定仓位，显示总库存
+            # 收集库存数据（根据权限和角色）
+            if role_access['can_view_inventory']:
+                if user_role == "manager":
+                    # 管理层看总库存
                     inventories = db.query(Inventory).all()
                     data['inventory'] = [
                         {
@@ -1448,30 +1409,83 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         for inv in inventories
                     ]
                     data['inventory_location'] = '全部仓位（总库存）'
+                else:
+                    # 根据角色确定仓位
+                    if user_role == "product":
+                        location_code = "warehouse"
+                        location_display = "商品部仓库"
+                    elif user_role in ["counter"]:
+                        location_code = "showroom"
+                        location_display = "展厅"
+                    else:
+                        location_code = None
+                        location_display = "全部仓位"
+                    
+                    if location_code:
+                        location = db.query(Location).filter(Location.code == location_code).first()
+                        if location:
+                            location_inventories = db.query(LocationInventory).filter(
+                                LocationInventory.location_id == location.id,
+                                LocationInventory.weight > 0
+                            ).all()
+                            data['inventory'] = [
+                                {
+                                    'product_name': li.product_name,
+                                    'total_weight': li.weight,
+                                    'location': location_display,
+                                    'last_update': str(li.last_update) if li.last_update else None
+                                }
+                                for li in location_inventories
+                            ]
+                        else:
+                            data['inventory'] = []
+                        data['inventory_location'] = location_display
+                    else:
+                        inventories = db.query(Inventory).all()
+                        data['inventory'] = [
+                            {
+                                'product_name': inv.product_name,
+                                'total_weight': inv.total_weight,
+                                'location': '全部仓位',
+                                'last_update': str(inv.last_update) if inv.last_update else None
+                            }
+                            for inv in inventories
+                        ]
+                        data['inventory_location'] = '全部仓位（总库存）'
+            else:
+                # 无权限查看库存
+                data['inventory'] = []
+                data['inventory_location'] = '无权限'
+                logger.info(f"[数据过滤] 角色 {user_role} 无权查看库存数据")
             
             yield f"data: {json.dumps({'type': 'thinking', 'step': '数据收集', 'message': '正在收集供应商数据...', 'progress': 45}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0.05)
             
-            # 收集供应商数据
-            suppliers = db.query(Supplier).filter(Supplier.status == "active").all()
-            data['suppliers'] = []
-            for s in suppliers:
-                supplier_name = s.name
-                product_count = db.query(func.count(func.distinct(InboundDetail.product_name))).filter(
-                    InboundDetail.supplier == supplier_name
-                ).scalar() or 0
-                data['suppliers'].append({
-                    'name': s.name,
-                    'supplier_no': s.supplier_no,
-                    'phone': s.phone,
-                    'address': s.address,
-                    'contact_person': s.contact_person,
-                    'total_cost': float(s.total_supply_amount) if s.total_supply_amount else 0,
-                    'total_weight': float(s.total_supply_weight) if s.total_supply_weight else 0,
-                    'supply_count': s.total_supply_count,
-                    'last_supply_time': str(s.last_supply_time) if s.last_supply_time else None,
-                    'product_count': product_count
-                })
+            # 收集供应商数据（根据权限）
+            if role_access['can_view_suppliers']:
+                suppliers = db.query(Supplier).filter(Supplier.status == "active").all()
+                data['suppliers'] = []
+                for s in suppliers:
+                    supplier_name = s.name
+                    product_count = db.query(func.count(func.distinct(InboundDetail.product_name))).filter(
+                        InboundDetail.supplier == supplier_name
+                    ).scalar() or 0
+                    data['suppliers'].append({
+                        'name': s.name,
+                        'supplier_no': s.supplier_no,
+                        'phone': s.phone,
+                        'address': s.address,
+                        'contact_person': s.contact_person,
+                        'total_cost': float(s.total_supply_amount) if s.total_supply_amount else 0,
+                        'total_weight': float(s.total_supply_weight) if s.total_supply_weight else 0,
+                        'supply_count': s.total_supply_count,
+                        'last_supply_time': str(s.last_supply_time) if s.last_supply_time else None,
+                        'product_count': product_count
+                    })
+            else:
+                # 无权限查看供应商
+                data['suppliers'] = []
+                logger.info(f"[数据过滤] 角色 {user_role} 无权查看供应商数据")
             
             yield f"data: {json.dumps({'type': 'thinking', 'step': '数据收集', 'message': '正在收集客户数据...', 'progress': 55}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0.05)
@@ -1561,97 +1575,98 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             yield f"data: {json.dumps({'type': 'thinking', 'step': '数据收集', 'message': '正在收集订单数据...', 'progress': 65}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0.05)
             
-            # 收集入库单数据（支持筛选条件）
-            order_no = ai_response.order_no if hasattr(ai_response, 'order_no') else None
-            inbound_supplier = getattr(ai_response, 'inbound_supplier', None)
-            inbound_product = getattr(ai_response, 'inbound_product', None)
-            inbound_date_start = getattr(ai_response, 'inbound_date_start', None)
-            inbound_date_end = getattr(ai_response, 'inbound_date_end', None)
-            
-            if order_no:
-                # 精确查询指定入库单
-                order = db.query(InboundOrder).filter(InboundOrder.order_no == order_no).first()
-                if order:
-                    details = db.query(InboundDetail).filter(InboundDetail.order_id == order.id).all()
-                    data['inbound_orders'] = [{
-                        'order_id': order.id,  # 添加 order_id 用于下载和打印
-                        'order_no': order.order_no,
-                        'create_time': str(order.create_time) if order.create_time else None,
-                        'status': order.status,
-                        'details': [
-                            {
-                                'product_name': d.product_name,
-                                'weight': d.weight,
-                                'labor_cost': d.labor_cost,
-                                'piece_count': d.piece_count if hasattr(d, 'piece_count') and d.piece_count else None,  # 添加件数
-                                'piece_labor_cost': d.piece_labor_cost if hasattr(d, 'piece_labor_cost') and d.piece_labor_cost else None,  # 添加件工费
-                                'supplier': d.supplier,
-                                'total_cost': d.total_cost
-                            }
-                            for d in details
-                        ]
-                    }]
+            # 收集入库单数据（根据权限）
+            if role_access['can_view_inbound']:
+                order_no = ai_response.order_no if hasattr(ai_response, 'order_no') else None
+                inbound_supplier = getattr(ai_response, 'inbound_supplier', None)
+                inbound_product = getattr(ai_response, 'inbound_product', None)
+                inbound_date_start = getattr(ai_response, 'inbound_date_start', None)
+                inbound_date_end = getattr(ai_response, 'inbound_date_end', None)
+                
+                if order_no:
+                    # 精确查询指定入库单
+                    order = db.query(InboundOrder).filter(InboundOrder.order_no == order_no).first()
+                    if order:
+                        details = db.query(InboundDetail).filter(InboundDetail.order_id == order.id).all()
+                        data['inbound_orders'] = [{
+                            'order_id': order.id,
+                            'order_no': order.order_no,
+                            'create_time': str(order.create_time) if order.create_time else None,
+                            'status': order.status,
+                            'details': [
+                                {
+                                    'product_name': d.product_name,
+                                    'weight': d.weight,
+                                    'labor_cost': d.labor_cost,
+                                    'piece_count': d.piece_count if hasattr(d, 'piece_count') and d.piece_count else None,
+                                    'piece_labor_cost': d.piece_labor_cost if hasattr(d, 'piece_labor_cost') and d.piece_labor_cost else None,
+                                    'supplier': d.supplier,
+                                    'total_cost': d.total_cost
+                                }
+                                for d in details
+                            ]
+                        }]
+                    else:
+                        data['inbound_orders'] = []
                 else:
-                    # 入库单不存在
+                    # 查询入库单（支持筛选）
+                    inbound_query = db.query(InboundOrder).order_by(desc(InboundOrder.create_time))
+                    
+                    if inbound_date_start:
+                        try:
+                            start_dt = datetime.strptime(inbound_date_start, "%Y-%m-%d")
+                            inbound_query = inbound_query.filter(InboundOrder.create_time >= start_dt)
+                        except:
+                            pass
+                    if inbound_date_end:
+                        try:
+                            end_dt = datetime.strptime(inbound_date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+                            inbound_query = inbound_query.filter(InboundOrder.create_time <= end_dt)
+                        except:
+                            pass
+                    
+                    inbound_orders = inbound_query.limit(100).all()
                     data['inbound_orders'] = []
+                    data['inbound_filters'] = {
+                        'supplier': inbound_supplier,
+                        'product': inbound_product,
+                        'date_start': inbound_date_start,
+                        'date_end': inbound_date_end
+                    }
+                    
+                    for order in inbound_orders:
+                        details = db.query(InboundDetail).filter(InboundDetail.order_id == order.id).all()
+                        
+                        if inbound_supplier:
+                            suppliers_in_order = [d.supplier for d in details if d.supplier]
+                            if not any(inbound_supplier.lower() in (s or '').lower() for s in suppliers_in_order):
+                                continue
+                        
+                        if inbound_product:
+                            products_in_order = [d.product_name for d in details if d.product_name]
+                            if not any(inbound_product.lower() in (p or '').lower() for p in products_in_order):
+                                continue
+                        
+                        data['inbound_orders'].append({
+                            'order_id': order.id,
+                            'order_no': order.order_no,
+                            'create_time': str(order.create_time) if order.create_time else None,
+                            'status': order.status,
+                            'details': [
+                                {
+                                    'product_name': d.product_name,
+                                    'weight': d.weight,
+                                    'labor_cost': d.labor_cost,
+                                    'supplier': d.supplier,
+                                    'total_cost': d.total_cost
+                                }
+                                for d in details
+                            ]
+                        })
             else:
-                # 查询入库单（支持筛选）
-                inbound_query = db.query(InboundOrder).order_by(desc(InboundOrder.create_time))
-                
-                # 按日期筛选
-                if inbound_date_start:
-                    try:
-                        start_dt = datetime.strptime(inbound_date_start, "%Y-%m-%d")
-                        inbound_query = inbound_query.filter(InboundOrder.create_time >= start_dt)
-                    except:
-                        pass
-                if inbound_date_end:
-                    try:
-                        end_dt = datetime.strptime(inbound_date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
-                        inbound_query = inbound_query.filter(InboundOrder.create_time <= end_dt)
-                    except:
-                        pass
-                
-                inbound_orders = inbound_query.limit(100).all()
+                # 无权限查看入库数据
                 data['inbound_orders'] = []
-                data['inbound_filters'] = {
-                    'supplier': inbound_supplier,
-                    'product': inbound_product,
-                    'date_start': inbound_date_start,
-                    'date_end': inbound_date_end
-                }
-                
-                for order in inbound_orders:
-                    details = db.query(InboundDetail).filter(InboundDetail.order_id == order.id).all()
-                    
-                    # 按供应商筛选
-                    if inbound_supplier:
-                        suppliers_in_order = [d.supplier for d in details if d.supplier]
-                        if not any(inbound_supplier.lower() in (s or '').lower() for s in suppliers_in_order):
-                            continue
-                    
-                    # 按商品名称筛选
-                    if inbound_product:
-                        products_in_order = [d.product_name for d in details if d.product_name]
-                        if not any(inbound_product.lower() in (p or '').lower() for p in products_in_order):
-                            continue
-                    
-                    data['inbound_orders'].append({
-                        'order_id': order.id,
-                        'order_no': order.order_no,
-                        'create_time': str(order.create_time) if order.create_time else None,
-                        'status': order.status,
-                        'details': [
-                            {
-                                'product_name': d.product_name,
-                                'weight': d.weight,
-                                'labor_cost': d.labor_cost,
-                                'supplier': d.supplier,
-                                'total_cost': d.total_cost
-                            }
-                            for d in details
-                        ]
-                    })
+                logger.info(f"[数据过滤] 角色 {user_role} 无权查看入库数据")
             
             # 收集销售单数据（如果指定了销售单号，只查询该销售单）
             sales_order_no = ai_response.sales_order_no if hasattr(ai_response, 'sales_order_no') else None

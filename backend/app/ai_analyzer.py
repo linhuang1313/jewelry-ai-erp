@@ -872,6 +872,25 @@ class AIAnalyzer:
         # 格式化数据
         data_text = self.format_data_for_ai(data)
         
+        # 检查数据访问限制（方案C：数据层过滤 + 智能提示）
+        context = data.get("context", {})
+        data_restrictions = context.get("data_restrictions", [])
+        restriction_hint = context.get("restriction_hint")
+        user_role = context.get("user_role", "unknown")
+        
+        # 如果有数据限制，在数据文本前添加提示
+        if data_restrictions:
+            restriction_note = f"""
+【数据访问说明】
+当前用户角色：{user_role}
+以下数据因权限限制未提供：{', '.join(data_restrictions)}
+{f'提示：{restriction_hint}' if restriction_hint else ''}
+
+如果用户询问了被限制的数据，请友好地告知用户权限情况，并建议联系相关部门。
+---
+"""
+            data_text = restriction_note + data_text
+        
         # 检查是否是查询入库单（RK开头）或查询销售单（XS开头）
         order_no = data.get("context", {}).get("order_no")
         sales_order_no = data.get("context", {}).get("sales_order_no")
