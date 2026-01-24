@@ -52,6 +52,12 @@ Usage notes:
 </skill>
 
 <skill>
+<name>jewelry-erp-lessons-learned</name>
+<description>Use when writing or modifying code for the jewelry ERP project - contains project-specific bug patterns and validation rules learned from 26 historical bugs to prevent recurring issues</description>
+<location>project</location>
+</skill>
+
+<skill>
 <name>jewelry-ui-design</name>
 <description>珠宝ERP系统UI/UX设计规范 - 包含色彩系统、字体、组件样式、布局模板和动效规范，体现珠宝行业高端定位</description>
 <location>project</location>
