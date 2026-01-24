@@ -896,6 +896,74 @@ class AIAnalyzer:
                     }]
                 }
         
+        # 入库分析 - 从入库订单数据生成图表
+        elif "入库" in intent or intent == "查询入库单":
+            inbound_orders = data.get("inbound_orders", [])
+            if inbound_orders:
+                # 聚合各供应商数据
+                supplier_stats = {}
+                for order in inbound_orders:
+                    for detail in order.get("details", []):
+                        supplier = detail.get("supplier") or "未知供应商"
+                        if supplier not in supplier_stats:
+                            supplier_stats[supplier] = {"weight": 0, "cost": 0, "count": 0}
+                        supplier_stats[supplier]["weight"] += detail.get("weight", 0) or 0
+                        supplier_stats[supplier]["cost"] += detail.get("total_cost", 0) or 0
+                        supplier_stats[supplier]["count"] += 1
+                
+                if supplier_stats:
+                    # 按供货重量排序
+                    sorted_suppliers = sorted(supplier_stats.items(), key=lambda x: x[1]["weight"], reverse=True)
+                    labels = [s[0] for s in sorted_suppliers]
+                    weights = [s[1]["weight"] for s in sorted_suppliers]
+                    costs = [s[1]["cost"] for s in sorted_suppliers]
+                    
+                    # 定义渐变色调色板
+                    colors = [
+                        "rgba(201, 168, 108, 0.7)",   # 香槟金
+                        "rgba(30, 58, 95, 0.7)",      # 深海蓝
+                        "rgba(59, 130, 246, 0.7)",    # 蓝色
+                        "rgba(16, 185, 129, 0.7)",    # 绿色
+                        "rgba(245, 158, 11, 0.7)",    # 橙色
+                        "rgba(239, 68, 68, 0.7)",     # 红色
+                        "rgba(139, 92, 246, 0.7)",    # 紫色
+                        "rgba(236, 72, 153, 0.7)",    # 粉色
+                        "rgba(20, 184, 166, 0.7)",    # 青色
+                        "rgba(251, 191, 36, 0.7)",    # 黄色
+                    ]
+                    
+                    # 柱状图数据 - 供货重量和工费对比
+                    chart_result["chart_data"] = {
+                        "labels": labels,
+                        "datasets": [
+                            {
+                                "label": "供货重量（克）",
+                                "data": weights,
+                                "backgroundColor": "rgba(201, 168, 108, 0.7)",
+                                "borderColor": "rgba(201, 168, 108, 1)",
+                                "borderWidth": 1,
+                            },
+                            {
+                                "label": "总工费（元）",
+                                "data": costs,
+                                "backgroundColor": "rgba(30, 58, 95, 0.7)",
+                                "borderColor": "rgba(30, 58, 95, 1)",
+                                "borderWidth": 1,
+                            }
+                        ]
+                    }
+                    
+                    # 饼图数据 - 供货重量占比
+                    chart_result["pie_data"] = {
+                        "labels": labels,
+                        "datasets": [{
+                            "data": weights,
+                            "backgroundColor": colors[:len(labels)],
+                            "borderColor": "#ffffff",
+                            "borderWidth": 2,
+                        }]
+                    }
+        
         return chart_result
     
     def analyze_stream(self, user_message: str, intent: str, data: Dict[str, Any]):
