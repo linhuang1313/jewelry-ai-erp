@@ -24,7 +24,8 @@ class AIAnalyzer:
         # DeepSeek API 客户端（使用 OpenAI 兼容格式）
         self.client = OpenAI(
             api_key=os.getenv("DEEPSEEK_API_KEY"),
-            base_url="https://api.deepseek.com"
+            base_url="https://api.deepseek.com",
+            timeout=60.0  # 60秒超时，避免无限等待
         )
     
     def collect_all_data(self, intent: str, user_message: str, db: Session, order_no: Optional[str] = None, sales_order_no: Optional[str] = None, user_role: str = "manager", inbound_supplier: Optional[str] = None, inbound_product: Optional[str] = None, inbound_date_start: Optional[str] = None, inbound_date_end: Optional[str] = None) -> Dict[str, Any]:
