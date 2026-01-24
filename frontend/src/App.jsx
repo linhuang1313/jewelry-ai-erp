@@ -2535,9 +2535,9 @@ function App() {
               <div className="text-center pt-8">
                 {/* 智能时间问候 + AI标识 */}
                 <div className="mb-6">
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded-full border border-blue-100">
-                    <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                      <span className="text-white text-xs">🤖</span>
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-full border border-amber-200">
+                    <div className="w-6 h-6 bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 rounded-full flex items-center justify-center ring-2 ring-amber-300/30 shadow-sm shadow-amber-200/50">
+                      <span className="text-white text-xs drop-shadow-sm">💎</span>
                     </div>
                     <span className="text-sm text-gray-700">
                       {(() => {
@@ -3265,19 +3265,19 @@ function App() {
                 return (
                   <React.Fragment key={msg.id || idx}>
                     <div className="flex justify-start items-start gap-3">
-                      {/* AI头像 */}
-                      <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-md">
-                        <span className="text-white text-xs">🤖</span>
+                      {/* AI头像 - 珠宝风格 */}
+                      <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 rounded-full flex items-center justify-center shadow-lg shadow-amber-200/50 ring-2 ring-amber-300/30">
+                        <span className="text-white text-xs drop-shadow-sm">💎</span>
                       </div>
                       <div className={`
                         ${msg.id ? 'max-w-2xl' : 'max-w-[85%] md:max-w-[75%]'}
                         rounded-3xl px-5 py-4 shadow-sm border border-gray-200/60 bg-white
                       `}>
-                        {/* 意图识别可视化标签 */}
+                        {/* 意图识别可视化标签 - 珠宝风格 */}
                         {msg.detectedIntent && (
                           <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-gray-100">
                             <span className="text-xs text-gray-400">🎯 识别到：</span>
-                            <span className="px-2 py-0.5 text-xs font-medium bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 rounded-full">
+                            <span className="px-2 py-0.5 text-xs font-medium bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 rounded-full">
                               {msg.detectedIntent}
                             </span>
                           </div>
@@ -4101,25 +4101,25 @@ function App() {
               return null
             })}
 
-        {/* AI思考状态动画 - 增强AI感 */}
+        {/* AI思考状态动画 - 珠宝风格 */}
         {(loading || uploading) && (
           <div className="flex justify-start items-start gap-3">
             {/* AI头像 + 脉冲动画 */}
             <div className="relative flex-shrink-0">
-              <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
-                <span className="text-white text-sm">🤖</span>
+              <div className="w-9 h-9 bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 rounded-full flex items-center justify-center shadow-lg shadow-amber-200/50 ring-2 ring-amber-300/30">
+                <span className="text-white text-sm drop-shadow-sm">💎</span>
               </div>
-              <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-30"></div>
+              <div className="absolute inset-0 bg-amber-400 rounded-full animate-ping opacity-30"></div>
             </div>
             {/* 思考气泡 */}
-            <div className="bg-gradient-to-br from-white to-blue-50 rounded-3xl px-5 py-4 shadow-sm border border-blue-100">
+            <div className="bg-gradient-to-br from-white to-amber-50 rounded-3xl px-5 py-4 shadow-sm border border-amber-100">
               <div className="flex items-center gap-3">
                 <div className="flex space-x-1.5">
-                  <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce"></div>
-                  <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></div>
-                  <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
+                  <div className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-bounce"></div>
+                  <div className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></div>
+                  <div className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
                 </div>
-                <span className="text-sm text-blue-600 font-medium">
+                <span className="text-sm text-amber-600 font-medium">
                   {uploading ? 'AI正在识别图片...' : 'AI正在分析...'}
                 </span>
               </div>
