@@ -746,8 +746,11 @@ async def chat(request: AIRequest, db: Session = Depends(get_db)):
             
             # 检测图表需求并生成图表数据
             chart_keywords = ["图表", "chart", "可视化", "用图表", "画图", "画个图", "生成图表", "给我看图表", "用图标", "饼图", "柱状图", "折线图", "趋势图", "分布图", "占比"]
+            # 数据分析类 action 自动生成图表（无需用户明确说"画图表"）
+            auto_chart_actions = ["供应商分析", "查询库存", "库存分析", "销售分析"]
             needs_chart = (
                 ai_response.action == "生成图表" or 
+                ai_response.action in auto_chart_actions or
                 any(keyword in request.message for keyword in chart_keywords)
             )
             
@@ -1780,8 +1783,11 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             
             # ========== 检测图表需求并生成图表数据 ==========
             chart_keywords = ["图表", "chart", "可视化", "用图表", "画图", "画个图", "生成图表", "给我看图表", "用图标", "饼图", "柱状图", "折线图", "趋势图", "分布图", "占比"]
+            # 数据分析类 action 自动生成图表（无需用户明确说"画图表"）
+            auto_chart_actions = ["供应商分析", "查询库存", "库存分析", "销售分析"]
             needs_chart = (
                 ai_response.action == "生成图表" or 
+                ai_response.action in auto_chart_actions or
                 any(keyword in request.message for keyword in chart_keywords)
             )
             

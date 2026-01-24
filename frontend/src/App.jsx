@@ -1291,6 +1291,7 @@ function App() {
                       chartData: data.data.chart_data,
                       pieData: data.data.pie_data,
                       chartType: data.data.action,
+                      rawData: data.data.raw_data,  // 原始数据（用于详细数据展示）
                       // AI意图识别结果（用于可视化显示）
                       detectedIntent: data.data.action,
                       // 添加入库卡片数据（单商品或多商品）
@@ -1321,6 +1322,7 @@ function App() {
                       if (data.data?.order) updatedMsg.order = data.data.order
                       if (data.data?.detail) updatedMsg.detail = data.data.detail
                       if (data.data?.inventory) updatedMsg.inventory = data.data.inventory
+                      if (data.data?.raw_data) updatedMsg.rawData = data.data.raw_data
                       
                       // 如果是入库操作，创建卡片数据
                       if (data.data?.success && data.data?.order && data.data?.detail) {
@@ -4035,6 +4037,60 @@ function App() {
                     </div>
                   )}
                       </div>
+                          {/* 查看详细数据折叠面板 */}
+                          {msg.rawData && (msg.rawData.suppliers || msg.rawData.inventory) && (
+                            <details className="mt-4 border-t border-gray-100 pt-4">
+                              <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
+                                <span>📊 查看详细数据</span>
+                              </summary>
+                              <div className="mt-3 overflow-x-auto">
+                                {/* 供应商数据表格 */}
+                                {msg.rawData.suppliers && msg.rawData.suppliers.length > 0 && (
+                                  <table className="min-w-full text-sm">
+                                    <thead className="bg-gray-50">
+                                      <tr>
+                                        <th className="px-3 py-2 text-left font-medium text-gray-600">供应商</th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-600">供货重量(克)</th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-600">总工费(元)</th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-600">供货次数</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                      {msg.rawData.suppliers.map((s, i) => (
+                                        <tr key={i} className="hover:bg-gray-50">
+                                          <td className="px-3 py-2 text-gray-800">{s.name}</td>
+                                          <td className="px-3 py-2 text-right text-gray-600">{s.total_weight?.toFixed(2) || '-'}</td>
+                                          <td className="px-3 py-2 text-right text-gray-600">{s.total_cost?.toFixed(2) || '-'}</td>
+                                          <td className="px-3 py-2 text-right text-gray-600">{s.supply_count || '-'}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                )}
+                                {/* 库存数据表格 */}
+                                {msg.rawData.inventory && msg.rawData.inventory.length > 0 && (
+                                  <table className="min-w-full text-sm">
+                                    <thead className="bg-gray-50">
+                                      <tr>
+                                        <th className="px-3 py-2 text-left font-medium text-gray-600">商品名称</th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-600">库存重量(克)</th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-600">入库次数</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                      {msg.rawData.inventory.map((inv, i) => (
+                                        <tr key={i} className="hover:bg-gray-50">
+                                          <td className="px-3 py-2 text-gray-800">{inv.product_name}</td>
+                                          <td className="px-3 py-2 text-right text-gray-600">{inv.total_weight?.toFixed(2) || '-'}</td>
+                                          <td className="px-3 py-2 text-right text-gray-600">{inv.inbound_count || '-'}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                )}
+                              </div>
+                            </details>
+                          )}
                 </div>
               </div>
             )}
