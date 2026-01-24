@@ -897,7 +897,7 @@ class AIAnalyzer:
                 }
         
         # 入库分析 - 从入库订单数据生成图表
-        elif "入库" in intent or intent == "查询入库单":
+        elif "入库" in intent or intent == "查询入库单" or intent == "统计分析":
             inbound_orders = data.get("inbound_orders", [])
             if inbound_orders:
                 # 聚合各供应商数据
