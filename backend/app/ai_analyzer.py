@@ -1119,7 +1119,7 @@ class AIAnalyzer:
             # 使用流式API（DeepSeek/OpenAI 格式）
             stream = self.client.chat.completions.create(
                 model="deepseek-chat",
-                max_tokens=1500,  # 降低token限制以加快响应
+                max_tokens=3000,  # 恢复较高的token限制，避免截断
                 temperature=0.3,  # 更确定性的回复，减少生成时间
                 stream=True,
                 messages=[
@@ -1150,7 +1150,7 @@ class AIAnalyzer:
             try:
                 response = self.client.chat.completions.create(
                     model="deepseek-chat",
-                    max_tokens=1500,  # 降低token限制以加快响应
+                    max_tokens=3000,  # 恢复较高的token限制，避免截断
                     temperature=0.3,  # 更确定性的回复，减少生成时间
                     messages=[
                         {

@@ -1306,6 +1306,49 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     yield f"data: {json.dumps({'type': 'error', 'message': error_msg}, ensure_ascii=False)}\n\n"
                     return
             
+            # ========== 查询操作权限检查 ==========
+            # 定义各角色不允许的查询操作
+            QUERY_PERMISSION_RULES = {
+                'settlement': {  # 结算专员
+                    'forbidden': ['查询入库单', '查询库存', '库存分析', '入库统计'],
+                    'message': '结算专员无权查看入库和库存信息，请联系商品专员或管理层。'
+                },
+                'counter': {  # 柜台
+                    'forbidden': ['查询入库单', '入库统计'],
+                    'message': '柜台人员无权查看入库信息，请联系商品专员。'
+                },
+                'sales': {  # 业务员
+                    'forbidden': ['查询入库单', '查询库存', '库存分析', '入库统计', '查询供应商'],
+                    'message': '业务员只能查询客户相关信息，无权查看入库、库存和供应商信息。'
+                }
+            }
+            
+            # 检查查询权限
+            if user_role in QUERY_PERMISSION_RULES:
+                rules = QUERY_PERMISSION_RULES[user_role]
+                if ai_response.action in rules['forbidden']:
+                    logger.warning(f"[流式] 查询权限不足: 角色={user_role}, 操作={ai_response.action}")
+                    yield f"data: {json.dumps({'type': 'thinking', 'step': '权限检查', 'message': '权限验证失败', 'progress': 25, 'status': 'error'}, ensure_ascii=False)}\n\n"
+                    await asyncio.sleep(0.1)
+                    error_msg = f"⚠️ {rules['message']}"
+                    yield f"data: {json.dumps({'type': 'complete', 'data': {'success': False, 'message': error_msg}}, ensure_ascii=False)}\n\n"
+                    
+                    # 记录权限不足到日志
+                    end_time = datetime.now()
+                    response_time_ms = int((end_time - start_time).total_seconds() * 1000)
+                    log_chat_message(
+                        db=db,
+                        session_id=session_id,
+                        user_role=request.user_role,
+                        message_type="assistant",
+                        content=error_msg,
+                        intent=ai_response.action,
+                        response_time_ms=response_time_ms,
+                        is_successful=False,
+                        error_message="查询权限不足"
+                    )
+                    return
+            
             # ========== 阶段2: 数据收集（分步骤发送）==========
             yield f"data: {json.dumps({'type': 'thinking', 'step': '数据收集', 'message': '正在从数据库收集相关数据...', 'progress': 30}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0.05)
