@@ -4359,6 +4359,7 @@ function App() {
           />
           <label
             htmlFor="image-upload"
+            title="OCR识别入库单据 - 支持拍照或上传单据图片自动识别"
                 className={`
                   px-4 py-3 rounded-2xl cursor-pointer transition-all duration-200
                   h-[52px] flex items-center font-medium text-[15px]
@@ -4368,7 +4369,7 @@ function App() {
                   }
                 `}
               >
-                {uploading ? '📷 识别中...' : '📷'}
+                {uploading ? '📷 识别中...' : '📷 扫描'}
           </label>
 
           {/* 快捷收料/提料按钮 - 结算专员和管理层可见 */}
