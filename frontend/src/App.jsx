@@ -2536,9 +2536,7 @@ function App() {
                 {/* 智能时间问候 + AI标识 */}
                 <div className="mb-6">
                   <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-full border border-amber-200">
-                    <div className="w-6 h-6 bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 rounded-full flex items-center justify-center ring-2 ring-amber-300/30 shadow-sm shadow-amber-200/50">
-                      <span className="text-white text-xs drop-shadow-sm">💎</span>
-                    </div>
+                    <img src="/ai-avatar.png" alt="AI" className="w-6 h-6 rounded-full object-cover" />
                     <span className="text-sm text-gray-700">
                       {(() => {
                         const hour = new Date().getHours()
@@ -3265,10 +3263,8 @@ function App() {
                 return (
                   <React.Fragment key={msg.id || idx}>
                     <div className="flex justify-start items-start gap-3">
-                      {/* AI头像 - 珠宝风格 */}
-                      <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 rounded-full flex items-center justify-center shadow-lg shadow-amber-200/50 ring-2 ring-amber-300/30">
-                        <span className="text-white text-xs drop-shadow-sm">💎</span>
-                      </div>
+                      {/* AI头像 - 招财猫 */}
+                      <img src="/ai-avatar.png" alt="AI" className="flex-shrink-0 w-8 h-8 rounded-full object-cover shadow-md" />
                       <div className={`
                         ${msg.id ? 'max-w-2xl' : 'max-w-[85%] md:max-w-[75%]'}
                         rounded-3xl px-5 py-4 shadow-sm border border-gray-200/60 bg-white
@@ -4127,9 +4123,7 @@ function App() {
           <div className="flex justify-start items-start gap-3">
             {/* AI头像 + 脉冲动画 */}
             <div className="relative flex-shrink-0">
-              <div className="w-9 h-9 bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 rounded-full flex items-center justify-center shadow-lg shadow-amber-200/50 ring-2 ring-amber-300/30">
-                <span className="text-white text-sm drop-shadow-sm">💎</span>
-              </div>
+              <img src="/ai-avatar.png" alt="AI" className="w-9 h-9 rounded-full object-cover shadow-lg" />
               <div className="absolute inset-0 bg-amber-400 rounded-full animate-ping opacity-30"></div>
             </div>
             {/* 思考气泡 */}
