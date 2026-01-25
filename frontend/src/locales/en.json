@@ -1,0 +1,155 @@
+{
+  "app": {
+    "title": "Jewelry ERP System",
+    "subtitle": "AI Assistant"
+  },
+  "common": {
+    "send": "Send",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "search": "Search",
+    "loading": "Loading...",
+    "noData": "No Data",
+    "success": "Success",
+    "error": "Error",
+    "back": "Back",
+    "close": "Close",
+    "submit": "Submit",
+    "reset": "Reset",
+    "view": "View",
+    "download": "Download",
+    "print": "Print",
+    "export": "Export",
+    "import": "Import",
+    "refresh": "Refresh",
+    "more": "More",
+    "all": "All",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "sidebar": {
+    "title": "Chat History",
+    "newChat": "+ New Chat",
+    "noRecords": "No chat history",
+    "deleteConfirm": "Delete chat"
+  },
+  "nav": {
+    "quickOrder": "Quick Order",
+    "customers": "Customers",
+    "suppliers": "Suppliers",
+    "warehouse": "Warehouse",
+    "settlement": "Settlement",
+    "returns": "Returns",
+    "goldMaterial": "Gold Material",
+    "loan": "Loan Management",
+    "productCodes": "Product Codes",
+    "inboundOrders": "Inbound Orders",
+    "finance": "Finance",
+    "history": "History",
+    "salesperson": "Salesperson",
+    "backToChat": "Back to Chat"
+  },
+  "chat": {
+    "inputPlaceholder": "Enter your command... (Shift+Enter for new line)",
+    "scanning": "Scanning...",
+    "scan": "Scan",
+    "scanTooltip": "OCR Recognition - Upload or capture document images for automatic recognition",
+    "receipt": "Receipt",
+    "withdrawal": "Withdrawal",
+    "quickReturn": "Return",
+    "welcome": "Hello! I'm the Jewelry ERP AI Assistant. I can help you with inventory, sales, stock queries and more. How can I assist you?",
+    "thinking": "Thinking...",
+    "analyzing": "AI is analyzing...",
+    "intentParsing": "Intent Parsing",
+    "dataCollection": "Data Collection",
+    "aiAnalysis": "AI Analysis",
+    "progress": "Progress",
+    "detectedIntent": "Detected",
+    "analysisTimeout": "AI analysis timed out. Please simplify your question or try again later."
+  },
+  "roles": {
+    "manager": "Manager",
+    "product": "Product Specialist",
+    "counter": "Counter",
+    "settlement": "Settlement Specialist",
+    "finance": "Finance",
+    "goldMaterial": "Gold Material"
+  },
+  "inbound": {
+    "title": "Inbound",
+    "orderNo": "Order No.",
+    "product": "Product Name",
+    "weight": "Weight (g)",
+    "laborCost": "Labor Cost ($/g)",
+    "pieceCount": "Pieces",
+    "pieceLaborCost": "Piece Labor Cost ($/pc)",
+    "supplier": "Supplier",
+    "totalCost": "Total Cost",
+    "createTime": "Created At",
+    "status": "Status",
+    "confirmInbound": "Confirm Inbound",
+    "batchInbound": "Batch Inbound"
+  },
+  "sales": {
+    "title": "Sales",
+    "orderNo": "Order No.",
+    "customer": "Customer",
+    "salesperson": "Salesperson",
+    "totalWeight": "Total Weight",
+    "totalLaborCost": "Total Labor Cost",
+    "orderDate": "Order Date",
+    "status": "Status"
+  },
+  "inventory": {
+    "title": "Inventory",
+    "productName": "Product Name",
+    "totalWeight": "Total Weight (g)",
+    "location": "Location",
+    "lastUpdate": "Last Update"
+  },
+  "customer": {
+    "title": "Customer Management",
+    "name": "Customer Name",
+    "phone": "Phone",
+    "address": "Address",
+    "balance": "Balance",
+    "goldDeposit": "Gold Deposit",
+    "goldDebt": "Gold Debt",
+    "cashDebt": "Cash Debt",
+    "createCustomer": "New Customer"
+  },
+  "supplier": {
+    "title": "Supplier Management",
+    "name": "Supplier Name",
+    "contact": "Contact",
+    "phone": "Phone",
+    "totalWeight": "Total Supply Weight",
+    "totalCost": "Total Cost",
+    "createSupplier": "New Supplier"
+  },
+  "finance": {
+    "title": "Finance",
+    "receivable": "Accounts Receivable",
+    "payable": "Accounts Payable",
+    "payment": "Payment Records",
+    "reminder": "Payment Reminders",
+    "reconciliation": "Reconciliation"
+  },
+  "language": {
+    "selectTitle": "选择语言 / Select Language",
+    "chinese": "中文",
+    "english": "English",
+    "switchLanguage": "Language"
+  },
+  "messages": {
+    "noPermission": "No permission to view this content",
+    "loadError": "Failed to load, please try again",
+    "saveSuccess": "Saved successfully",
+    "deleteSuccess": "Deleted successfully",
+    "operationSuccess": "Operation successful",
+    "networkError": "Network error, please check connection"
+  }
+}

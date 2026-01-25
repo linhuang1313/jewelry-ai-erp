@@ -966,11 +966,21 @@ class AIAnalyzer:
         
         return chart_result
     
-    def analyze_stream(self, user_message: str, intent: str, data: Dict[str, Any]):
-        """使用Claude AI进行流式分析和计算（生成器函数）"""
+    def analyze_stream(self, user_message: str, intent: str, data: Dict[str, Any], language: str = "zh"):
+        """使用Claude AI进行流式分析和计算（生成器函数）
+        
+        Args:
+            user_message: 用户消息
+            intent: 意图
+            data: 数据
+            language: 语言 (zh/en)
+        """
         
         # 格式化数据
         data_text = self.format_data_for_ai(data)
+        
+        # 语言相关的基础提示
+        is_english = language == "en"
         
         # 检查数据访问限制（方案C：数据层过滤 + 智能提示）
         context = data.get("context", {})
@@ -1264,6 +1274,11 @@ class AIAnalyzer:
 
 现在请简短回答："""
                 system_prompt = "你是珠宝ERP助手。这是简单查询，必须用50字以内直接回答，不要分析，不要建议，不要表格。"
+        
+        # 根据语言设置调整 system_prompt
+        if is_english:
+            # 英文模式：在 system_prompt 后追加英文输出要求
+            system_prompt += "\n\nIMPORTANT: You MUST respond in English. This is a Jewelry ERP system. Translate all Chinese terms to English in your response."
         
         try:
             # 使用流式API（DeepSeek/OpenAI 格式）

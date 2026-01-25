@@ -1,0 +1,155 @@
+{
+  "app": {
+    "title": "珠宝ERP系统",
+    "subtitle": "智能对话助手"
+  },
+  "common": {
+    "send": "发送",
+    "cancel": "取消",
+    "confirm": "确认",
+    "save": "保存",
+    "delete": "删除",
+    "edit": "编辑",
+    "search": "搜索",
+    "loading": "加载中...",
+    "noData": "暂无数据",
+    "success": "操作成功",
+    "error": "操作失败",
+    "back": "返回",
+    "close": "关闭",
+    "submit": "提交",
+    "reset": "重置",
+    "view": "查看",
+    "download": "下载",
+    "print": "打印",
+    "export": "导出",
+    "import": "导入",
+    "refresh": "刷新",
+    "more": "更多",
+    "all": "全部",
+    "yes": "是",
+    "no": "否"
+  },
+  "sidebar": {
+    "title": "对话记录",
+    "newChat": "+ 新建对话",
+    "noRecords": "暂无对话记录",
+    "deleteConfirm": "删除对话"
+  },
+  "nav": {
+    "quickOrder": "快捷开单",
+    "customers": "客户管理",
+    "suppliers": "供应商管理",
+    "warehouse": "分仓库存",
+    "settlement": "结算管理",
+    "returns": "退货管理",
+    "goldMaterial": "金料管理",
+    "loan": "暂借管理",
+    "productCodes": "商品编码",
+    "inboundOrders": "入库单据",
+    "finance": "财务对账",
+    "history": "历史回溯",
+    "salesperson": "业务员管理",
+    "backToChat": "返回聊天"
+  },
+  "chat": {
+    "inputPlaceholder": "输入您的指令...（Shift+Enter换行）",
+    "scanning": "识别中...",
+    "scan": "扫描",
+    "scanTooltip": "OCR识别入库单据 - 支持拍照或上传单据图片自动识别",
+    "receipt": "收料",
+    "withdrawal": "提料",
+    "quickReturn": "退货",
+    "welcome": "您好！我是珠宝ERP智能助手，可以帮您处理入库、销售、库存查询等业务。请问有什么可以帮您？",
+    "thinking": "思考中...",
+    "analyzing": "正在使用AI进行智能分析...",
+    "intentParsing": "意图解析",
+    "dataCollection": "数据收集",
+    "aiAnalysis": "AI分析",
+    "progress": "处理进度",
+    "detectedIntent": "识别到",
+    "analysisTimeout": "AI分析时间过长，已自动中断。请尝试简化问题或稍后重试。"
+  },
+  "roles": {
+    "manager": "管理层",
+    "product": "商品专员",
+    "counter": "柜台",
+    "settlement": "结算专员",
+    "finance": "财务",
+    "goldMaterial": "料部"
+  },
+  "inbound": {
+    "title": "入库",
+    "orderNo": "入库单号",
+    "product": "商品名称",
+    "weight": "重量(克)",
+    "laborCost": "克工费(元/克)",
+    "pieceCount": "件数",
+    "pieceLaborCost": "件工费(元/件)",
+    "supplier": "供应商",
+    "totalCost": "总成本",
+    "createTime": "创建时间",
+    "status": "状态",
+    "confirmInbound": "确认入库",
+    "batchInbound": "批量入库"
+  },
+  "sales": {
+    "title": "销售",
+    "orderNo": "销售单号",
+    "customer": "客户",
+    "salesperson": "业务员",
+    "totalWeight": "总重量",
+    "totalLaborCost": "总工费",
+    "orderDate": "销售日期",
+    "status": "状态"
+  },
+  "inventory": {
+    "title": "库存",
+    "productName": "商品名称",
+    "totalWeight": "总重量(克)",
+    "location": "仓位",
+    "lastUpdate": "最后更新"
+  },
+  "customer": {
+    "title": "客户管理",
+    "name": "客户名称",
+    "phone": "电话",
+    "address": "地址",
+    "balance": "余额",
+    "goldDeposit": "存料",
+    "goldDebt": "欠料",
+    "cashDebt": "现金欠款",
+    "createCustomer": "新建客户"
+  },
+  "supplier": {
+    "title": "供应商管理",
+    "name": "供应商名称",
+    "contact": "联系人",
+    "phone": "电话",
+    "totalWeight": "总供货重量",
+    "totalCost": "总工费",
+    "createSupplier": "新建供应商"
+  },
+  "finance": {
+    "title": "财务对账",
+    "receivable": "应收账款",
+    "payable": "应付账款",
+    "payment": "收款记录",
+    "reminder": "催款管理",
+    "reconciliation": "对账单"
+  },
+  "language": {
+    "selectTitle": "选择语言 / Select Language",
+    "chinese": "中文",
+    "english": "English",
+    "switchLanguage": "切换语言"
+  },
+  "messages": {
+    "noPermission": "无权限查看此内容",
+    "loadError": "加载失败，请重试",
+    "saveSuccess": "保存成功",
+    "deleteSuccess": "删除成功",
+    "operationSuccess": "操作成功",
+    "networkError": "网络错误，请检查连接"
+  }
+}

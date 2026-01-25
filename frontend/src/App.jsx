@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Toaster } from 'react-hot-toast'
 import { Bar, Pie, Line, Doughnut } from 'react-chartjs-2'
 import { API_ENDPOINTS, API_BASE_URL } from './config'
+import LanguageSelector from './components/LanguageSelector'
 import { hasPermission, canAccessPage, getPermissionDeniedMessage } from './config/permissions'
 import { JewelryInboundCardComponent } from './components/JewelryInboundCard'
 import { createCardFromBackend, updateCard, createNewCard } from './utils/inboundHelpers'
@@ -59,6 +61,17 @@ ChartJS.register(
 )
 
 function App() {
+  // 国际化
+  const { t, i18n } = useTranslation()
+  const [showLanguageSelector, setShowLanguageSelector] = useState(() => {
+    // 首次访问显示语言选择页
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('languageSelected') !== 'true'
+    }
+    return true
+  })
+  const currentLanguage = i18n.language || 'zh'
+  
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -1007,7 +1020,8 @@ function App() {
         body: JSON.stringify({ 
           message: userMessage, 
           user_role: userRole,
-          session_id: currentSessionId  // 传递会话ID，确保同一对话的消息关联在一起
+          session_id: currentSessionId,  // 传递会话ID，确保同一对话的消息关联在一起
+          language: currentLanguage  // 传递当前语言设置
         }),
         signal: abortControllerRef.current.signal  // 添加取消信号
       })
@@ -2162,6 +2176,11 @@ function App() {
     }
   }
 
+  // 语言选择页
+  if (showLanguageSelector) {
+    return <LanguageSelector onSelect={() => setShowLanguageSelector(false)} />
+  }
+
   return (
     <div className="flex h-screen bg-jewelry-gold-50 overflow-hidden">
       {/* 左侧边栏 - 历史对话记录 */}
@@ -2176,7 +2195,7 @@ function App() {
       `}>
         {/* 侧边栏头部 */}
         <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between">
-          <h2 className="text-[17px] font-semibold text-white tracking-tight">对话记录</h2>
+          <h2 className="text-[17px] font-semibold text-white tracking-tight">{t('sidebar.title')}</h2>
           <button
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
@@ -2194,7 +2213,7 @@ function App() {
             className="w-full px-4 py-2.5 bg-gradient-to-r from-jewelry-gold to-jewelry-gold-light text-white rounded-xl 
                        hover:from-jewelry-gold-dark hover:to-jewelry-gold transition-all duration-200 font-medium text-[15px] shadow-md"
           >
-            + 新建对话
+            {t('sidebar.newChat')}
           </button>
         </div>
         
@@ -2202,7 +2221,7 @@ function App() {
         <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20">
           {conversationHistory.length === 0 ? (
             <div className="px-6 py-8 text-center text-white/50 text-sm">
-              暂无对话记录
+              {t('sidebar.noRecords')}
             </div>
           ) : (
             <div className="py-2">
@@ -2274,12 +2293,12 @@ function App() {
               <div 
                 className="cursor-pointer hover:opacity-80 transition-opacity"
                 onClick={() => setCurrentPage('chat')}
-                title="点击返回首页"
+                title={currentLanguage === 'en' ? 'Click to return home' : '点击返回首页'}
               >
                 <h1 className="text-[28px] font-semibold text-gray-900 tracking-tight">
-                  珠宝ERP系统
+                  {t('app.title')}
                 </h1>
-                <p className="text-[13px] text-gray-500 mt-0.5">智能对话助手</p>
+                <p className="text-[13px] text-gray-500 mt-0.5">{t('app.subtitle')}</p>
               </div>
             </div>
             
@@ -2305,7 +2324,7 @@ function App() {
                 {roleDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 
                                   py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="px-3 py-2 text-xs text-gray-400 font-medium">选择角色</div>
+                    <div className="px-3 py-2 text-xs text-gray-400 font-medium">{currentLanguage === 'en' ? 'Select Role' : '选择角色'}</div>
                     {USER_ROLES.map((role) => {
                       const IconComponent = role.icon
                       const isActive = userRole === role.id
@@ -2334,6 +2353,21 @@ function App() {
                   </div>
                 )}
               </div>
+
+              {/* 语言切换按钮 */}
+              <button
+                onClick={() => {
+                  const newLang = currentLanguage === 'zh' ? 'en' : 'zh'
+                  i18n.changeLanguage(newLang)
+                  localStorage.setItem('i18nextLng', newLang)
+                }}
+                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl border border-gray-200
+                           hover:bg-gray-50 transition-all duration-200 font-medium text-[14px] text-gray-600"
+                title={t('language.switchLanguage')}
+              >
+                <span className="text-base">{currentLanguage === 'zh' ? '🇨🇳' : '🇺🇸'}</span>
+                <span>{currentLanguage === 'zh' ? '中文' : 'EN'}</span>
+              </button>
 
               {/* 导航按钮 */}
               {currentPage === 'chat' ? (
@@ -2393,7 +2427,7 @@ function App() {
                                  hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <Warehouse className="w-4 h-4" />
-                      <span>分仓库存</span>
+                      <span>{t('nav.warehouse')}</span>
                       {/* 待处理转移单数量badge */}
                       {pendingTransferCount > 0 && (
                         <span className="absolute -top-2 -right-2 min-w-[20px] h-5 flex items-center justify-center 
@@ -2412,7 +2446,7 @@ function App() {
                                  hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <Calculator className="w-4 h-4" />
-                      <span>结算管理</span>
+                      <span>{t('nav.settlement')}</span>
                       {/* 待结算销售单数量badge */}
                       {pendingSalesCount > 0 && (
                         <span className="absolute -top-2 -right-2 min-w-[20px] h-5 flex items-center justify-center 
@@ -2432,7 +2466,7 @@ function App() {
                                  shadow-sm hover:shadow-md"
                     >
                       <FileText className="w-4 h-4" />
-                      <span>快捷开单</span>
+                      <span>{t('nav.quickOrder')}</span>
                     </button>
                   )}
                   {/* 客户管理按钮 - 使用权限检查（查看或管理权限） */}
@@ -2443,7 +2477,7 @@ function App() {
                                  hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <UserPlus className="w-4 h-4" />
-                      <span>客户管理</span>
+                      <span>{t('nav.customers')}</span>
                     </button>
                   )}
                   {/* 供应商管理按钮 - 使用权限检查 */}
@@ -2454,7 +2488,7 @@ function App() {
                                  hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <Building2 className="w-4 h-4" />
-                      <span>供应商管理</span>
+                      <span>{t('nav.suppliers')}</span>
                     </button>
                   )}
                   {/* 退货管理按钮 - 使用权限检查 */}
@@ -2465,7 +2499,7 @@ function App() {
                                  hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <RotateCcw className="w-4 h-4" />
-                      <span>退货管理</span>
+                      <span>{t('nav.returns')}</span>
                     </button>
                   )}
                   {/* 金料管理按钮 - 料部和管理层可见 */}
@@ -2476,7 +2510,7 @@ function App() {
                                  hover:bg-jewelry-gold hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <Scale className="w-4 h-4" />
-                      <span>金料管理</span>
+                      <span>{t('nav.goldMaterial')}</span>
                     </button>
                   )}
                   {/* 暂借管理按钮 - 结算专员和管理层可见 */}
@@ -2487,7 +2521,7 @@ function App() {
                                  hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <Package className="w-4 h-4" />
-                      <span>暂借管理</span>
+                      <span>{t('nav.loan')}</span>
                     </button>
                   )}
                   {/* 商品编码按钮 - 商品专员和管理层可见 */}
@@ -2498,7 +2532,7 @@ function App() {
                                  hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <Package className="w-4 h-4" />
-                      <span>商品编码</span>
+                      <span>{t('nav.productCodes')}</span>
                     </button>
                   )}
                   {/* 入库单据按钮 - 商品专员和管理层可见 */}
@@ -2509,7 +2543,7 @@ function App() {
                                  hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <FileText className="w-4 h-4" />
-                      <span>入库单据</span>
+                      <span>{t('nav.inboundOrders')}</span>
                     </button>
                   )}
                   {/* 财务对账按钮 - 使用权限检查 */}
@@ -2520,7 +2554,7 @@ function App() {
                                  hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                     >
                       <DollarSign className="w-4 h-4" />
-                      <span>财务对账</span>
+                      <span>{t('nav.finance')}</span>
                     </button>
                   )}
                   {/* 历史回溯按钮 - 所有角色都可用 */}
@@ -2530,7 +2564,7 @@ function App() {
                                hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
                   >
                     <History className="w-4 h-4" />
-                    <span>历史回溯</span>
+                    <span>{t('nav.history')}</span>
                   </button>
                 </>
               ) : (
@@ -2541,7 +2575,7 @@ function App() {
                              shadow-sm hover:shadow-md"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  <span>返回聊天</span>
+                  <span>{t('nav.backToChat')}</span>
                 </button>
               )}
             </div>
@@ -4369,7 +4403,7 @@ function App() {
                   }
                 `}
               >
-                {uploading ? '📷 识别中...' : '📷 扫描'}
+                {uploading ? `📷 ${t('chat.scanning')}` : `📷 ${t('chat.scan')}`}
           </label>
 
           {/* 快捷收料/提料按钮 - 结算专员和管理层可见 */}
@@ -4378,16 +4412,16 @@ function App() {
               <button
                 onClick={openQuickReceiptModal}
                 className="px-4 py-3 rounded-2xl h-[52px] flex items-center font-medium text-[15px] bg-gradient-to-r from-jewelry-gold to-jewelry-gold-light text-white hover:from-jewelry-gold-dark hover:to-jewelry-gold shadow-sm hover:shadow-md transition-all duration-200"
-                title="快捷收料"
+                title={currentLanguage === 'en' ? 'Quick Receipt' : '快捷收料'}
               >
-                📦 收料
+                📦 {t('chat.receipt')}
               </button>
               <button
                 onClick={openQuickWithdrawalModal}
                 className="px-4 py-3 rounded-2xl h-[52px] flex items-center font-medium text-[15px] border-2 border-jewelry-navy text-jewelry-navy hover:bg-jewelry-navy hover:text-white transition-all duration-200"
-                title="快捷提料"
+                title={currentLanguage === 'en' ? 'Quick Withdrawal' : '快捷提料'}
               >
-                ⬆️ 提料
+                ⬆️ {t('chat.withdrawal')}
               </button>
             </>
           )}
@@ -4402,7 +4436,7 @@ function App() {
                 sendMessage()
               }
             }}
-            placeholder="输入您的指令...（Shift+Enter换行）"
+            placeholder={t('chat.inputPlaceholder')}
             rows={1}
                   className="w-full px-5 py-4 border-2 border-gray-200 rounded-2xl 
                              focus:outline-none focus:border-jewelry-gold focus:ring-4 focus:ring-jewelry-gold/10
@@ -4429,7 +4463,7 @@ function App() {
                   }
                 `}
           >
-            发送
+            {t('common.send')}
           </button>
             </div>
         </div>

@@ -35,6 +35,7 @@ class AIRequest(BaseModel):
     message: str
     user_role: Optional[str] = "sales"  # 用户角色: sales/finance/product/manager
     session_id: Optional[str] = None  # 对话会话ID
+    language: Optional[str] = "zh"  # 语言: zh/en
 
 
 class ProductItem(BaseModel):

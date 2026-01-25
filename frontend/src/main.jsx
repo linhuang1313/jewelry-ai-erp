@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import './locales'  // 初始化 i18n
 import './styles/jewelry-theme.css'
 import './index.css'
 

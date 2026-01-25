@@ -1770,10 +1770,14 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             analysis_timed_out = False
             
             try:
+                # 获取语言设置
+                language = getattr(request, 'language', 'zh') or 'zh'
+                
                 for text_chunk in ai_analyzer.analyze_stream(
                     request.message,
                     ai_response.action,
-                    data
+                    data,
+                    language=language
                 ):
                     # 检查是否超时
                     if time.time() - stream_start_time > MAX_ANALYSIS_TIME:
