@@ -100,41 +100,15 @@ def generate_inbound_order_no(db) -> str:
 app = FastAPI(title="AI-ERP珠宝入库BETA测试")
 
 # ========== 配置CORS（必须在路由注册之前）==========
-# 配置CORS - 支持所有来源（包括 Vercel 和 Railway）
-# 从环境变量读取允许的域名，如果没有则使用默认值
-vercel_origin = "https://jewelry-ai-erp.vercel.app"
-cors_allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
-if cors_allowed_origins_env:
-    # 从环境变量读取，支持逗号分隔的多个域名
-    allowed_origins = [origin.strip() for origin in cors_allowed_origins_env.split(",") if origin.strip()]
-    # 确保 Vercel 域名在列表中（即使环境变量中没有）
-    if vercel_origin not in allowed_origins:
-        allowed_origins.append(vercel_origin)
-else:
-    # 默认允许的域名列表
-    allowed_origins = [
-        vercel_origin,
-        "https://jewelry-ai-erp-production.up.railway.app",
-        "http://localhost:5173",  # Vite 开发服务器
-        "http://localhost:3000",  # React 开发服务器
-        "http://localhost:8000",  # 本地后端
-    ]
+# 配置CORS - 允许所有来源（简化配置，避免跨域问题）
+# 生产环境直接允许所有来源，确保前端能正常访问后端API
 
-# 如果环境变量设置为 "ALLOW_ALL" 或包含 "*"，则允许所有域名
-cors_allow_all = os.getenv("CORS_ALLOW_ALL", "false").lower() == "true"
-if cors_allow_all or "*" in allowed_origins:
-    allow_origins = ["*"]
-    allow_credentials = False
-else:
-    allow_origins = allowed_origins
-    allow_credentials = True
-
-logger.info(f"CORS配置: allow_origins={allow_origins}, allow_credentials={allow_credentials}")
+logger.info("CORS配置: 允许所有来源")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allow_origins,  # 允许的域名列表
-    allow_credentials=allow_credentials,  # 允许携带凭证
+    allow_origins=["*"],  # 允许所有域名
+    allow_credentials=False,  # 使用 * 时不能携带凭证
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],  # 允许的HTTP方法
     allow_headers=["*"],  # 允许所有头
     expose_headers=["*"],  # 暴露所有头
