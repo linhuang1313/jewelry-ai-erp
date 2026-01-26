@@ -24,7 +24,8 @@ export const API_ENDPOINTS = {
   TRANSFER_ORDER: (id) => `${API_BASE_URL}/api/warehouse/transfer-orders/${id}`,  // 转移单详情
   TRANSFER_ORDER_RECEIVE: (id) => `${API_BASE_URL}/api/warehouse/transfer-orders/${id}/receive`,  // 整单接收
   TRANSFER_ORDER_REJECT: (id) => `${API_BASE_URL}/api/warehouse/transfer-orders/${id}/reject`,  // 整单拒收
-  TRANSFER_ORDER_CONFIRM: (id) => `${API_BASE_URL}/api/warehouse/transfer-orders/${id}/confirm`,  // 商品部确认
+  TRANSFER_ORDER_CONFIRM: (id) => `${API_BASE_URL}/api/warehouse/transfer-orders/${id}/confirm`,  // 商品部确认（同意）
+  TRANSFER_ORDER_REJECT_CONFIRM: (id) => `${API_BASE_URL}/api/warehouse/transfer-orders/${id}/reject-confirm`,  // 商品部拒绝确认
   
   INIT_DEFAULT_LOCATIONS: `${API_BASE_URL}/api/warehouse/init-default-locations`,  // 初始化默认位置
   

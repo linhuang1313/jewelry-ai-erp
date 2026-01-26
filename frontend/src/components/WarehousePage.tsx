@@ -887,7 +887,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     }
   };
   
-  // 商品部确认转移单（新版）
+  // 商品部确认转移单（同意）
   const handleConfirmTransferOrder = async (order: TransferOrder) => {
     try {
       const response = await fetch(`${API_ENDPOINTS.TRANSFER_ORDER_CONFIRM(order.id)}?user_role=${userRole}`, {
@@ -905,6 +905,31 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       }
     } catch (error) {
       toast.error('确认失败');
+    }
+  };
+  
+  // 商品部拒绝确认转移单（库存退回商品部仓库）
+  const handleRejectConfirmTransferOrder = async (order: TransferOrder) => {
+    const reason = prompt('请输入拒绝原因（库存将退回商品部仓库）:');
+    if (!reason) return;
+
+    try {
+      const response = await fetch(
+        `${API_ENDPOINTS.TRANSFER_ORDER_REJECT_CONFIRM(order.id)}?reason=${encodeURIComponent(reason)}&user_role=${userRole}`,
+        { method: 'POST' }
+      );
+
+      if (response.ok) {
+        const totalWeight = order.items.reduce((sum, item) => sum + item.weight, 0);
+        toast.success(`已拒绝，${totalWeight.toFixed(2)}g 已退回商品部仓库`);
+        loadTransfers();
+        loadInventorySummary();
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || '拒绝失败');
+      }
+    } catch (error) {
+      toast.error('拒绝失败');
     }
   };
 
@@ -2040,6 +2065,13 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                             >
                               <Check className="w-4 h-4" />
                               <span>同意</span>
+                            </button>
+                            <button
+                              onClick={() => handleRejectConfirmTransferOrder(order)}
+                              className="flex items-center justify-center space-x-1 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                            >
+                              <X className="w-4 h-4" />
+                              <span>拒绝</span>
                             </button>
                           </div>
                         </div>

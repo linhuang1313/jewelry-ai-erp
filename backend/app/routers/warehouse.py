@@ -1353,6 +1353,65 @@ async def confirm_transfer_order(
     )
 
 
+@router.post("/transfer-orders/{order_id}/reject-confirm")
+async def reject_confirm_transfer_order(
+    order_id: int,
+    reason: str = Query(..., description="拒绝原因"),
+    rejected_by: str = Query(default="系统管理员", description="拒绝人"),
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """商品部拒绝确认转移单（库存退回发出位置）
+    
+    当柜台接收的实际重量与预期不符，转移单进入 pending_confirm 状态。
+    商品专员可以拒绝确认，此时：
+    1. 库存按预期重量退回发出位置（商品部仓库）
+    2. 转移单状态变为 returned（已退回，转移单结束）
+    3. 转移单记录保留，用于留痕
+    """
+    if user_role not in ['product', 'manager']:
+        raise HTTPException(status_code=403, detail="权限不足：只有商品专员可以拒绝确认转移单")
+    
+    order = db.query(InventoryTransferOrder).filter(InventoryTransferOrder.id == order_id).first()
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="转移单不存在")
+    if order.status != "pending_confirm":
+        raise HTTPException(status_code=400, detail=f"转移单状态为 {order.status}，无法拒绝确认")
+    
+    # 恢复发出位置库存（按预期重量，因为实际重量有差异不被认可）
+    for item in order.items:
+        from_inventory = db.query(LocationInventory).filter(
+            LocationInventory.location_id == order.from_location_id,
+            LocationInventory.product_name == item.product_name
+        ).first()
+        
+        if from_inventory:
+            from_inventory.weight += item.weight
+        else:
+            from_inventory = LocationInventory(
+                product_name=item.product_name,
+                location_id=order.from_location_id,
+                weight=item.weight
+            )
+            db.add(from_inventory)
+    
+    # 状态变为 returned（已退回，转移单结束，保留记录用于留痕）
+    order.status = "returned"
+    order.remark = f"{order.remark or ''}\n拒绝确认原因: {reason}\n拒绝人: {rejected_by}".strip()
+    
+    db.commit()
+    
+    total_weight = sum(item.weight for item in order.items)
+    logger.info(f"拒绝确认转移单: {order.transfer_no}, 原因: {reason}, {total_weight}g 已退回发出位置")
+    
+    return {
+        "success": True,
+        "message": f"已拒绝确认，{total_weight}g 已退回商品部仓库",
+        "new_status": "returned"
+    }
+
+
 # ============= 数据迁移 API =============
 
 @router.post("/migrate-old-transfers")
