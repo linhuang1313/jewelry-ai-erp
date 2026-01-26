@@ -199,10 +199,10 @@ export const FinancePage: React.FC = () => {
         f.endDate,
         f.salesOrderNo
       );
-      if (result.success && result.data) {
+      if (result.success && Array.isArray(result.data)) {
         const converted = result.data.map(convertPaymentRecord);
         setPaymentRecords(converted);
-      } else {
+      } else if (!result.success) {
         toast.error(result.error || '加载收款记录失败');
       }
     } catch (error) {
@@ -328,7 +328,7 @@ export const FinancePage: React.FC = () => {
         getPayables('all'),
         getPayablesStatistics()
       ]);
-      if (listResult.success && listResult.data) {
+      if (listResult.success && Array.isArray(listResult.data)) {
         setPayables(listResult.data);
       }
       if (statsResult.success && statsResult.data) {
@@ -336,7 +336,6 @@ export const FinancePage: React.FC = () => {
       }
     } catch (error) {
       console.error('加载应付账款失败:', error);
-      toast.error('加载应付账款失败');
     } finally {
       setPayablesLoading(false);
     }
@@ -351,10 +350,10 @@ export const FinancePage: React.FC = () => {
         getCashFlows(),
         getCashFlowSummary()
       ]);
-      if (accountsResult.success && accountsResult.data) {
+      if (accountsResult.success && Array.isArray(accountsResult.data)) {
         setBankAccounts(accountsResult.data);
       }
-      if (flowsResult.success && flowsResult.data) {
+      if (flowsResult.success && Array.isArray(flowsResult.data)) {
         setCashFlows(flowsResult.data);
       }
       if (summaryResult.success && summaryResult.data) {
@@ -362,7 +361,6 @@ export const FinancePage: React.FC = () => {
       }
     } catch (error) {
       console.error('加载资金流水失败:', error);
-      toast.error('加载资金流水失败');
     } finally {
       setCashFlowLoading(false);
     }
@@ -377,10 +375,10 @@ export const FinancePage: React.FC = () => {
         getExpenses(),
         getExpensesSummary()
       ]);
-      if (categoriesResult.success && categoriesResult.data) {
+      if (categoriesResult.success && Array.isArray(categoriesResult.data)) {
         setExpenseCategories(categoriesResult.data);
       }
-      if (expensesResult.success && expensesResult.data) {
+      if (expensesResult.success && Array.isArray(expensesResult.data)) {
         setExpenses(expensesResult.data);
       }
       if (summaryResult.success && summaryResult.data) {
@@ -388,7 +386,6 @@ export const FinancePage: React.FC = () => {
       }
     } catch (error) {
       console.error('加载费用失败:', error);
-      toast.error('加载费用失败');
     } finally {
       setExpensesLoading(false);
     }
