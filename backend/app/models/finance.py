@@ -212,6 +212,41 @@ class ReconciliationStatement(Base):
     customer = relationship("Customer", backref="reconciliation_statements")
 
 
+# ==================== 银行账户（需先定义，被其他模型引用） ====================
+
+class BankAccount(Base):
+    """银行账户表 - 管理公司的所有资金账户"""
+    __tablename__ = "bank_accounts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # 账户信息
+    account_name = Column(String(100), nullable=False)  # 账户名称
+    account_no = Column(String(50))  # 账号
+    bank_name = Column(String(100))  # 开户银行
+    account_type = Column(String(20), nullable=False, default="bank")  # bank/cash/alipay/wechat
+    
+    # 余额信息
+    initial_balance = Column(Float, default=0.0)  # 期初余额
+    current_balance = Column(Float, default=0.0)  # 当前余额
+    
+    # 状态
+    is_default = Column(Boolean, default=False)  # 是否默认账户
+    status = Column(String(20), default="active")  # active/inactive
+    
+    # 其他信息
+    description = Column(Text)  # 描述
+    remark = Column(Text)  # 备注
+    
+    # 操作记录
+    create_time = Column(DateTime, server_default=func.now())
+    update_time = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_by = Column(String(50), default="系统管理员")
+    
+    # 关系
+    cash_flows = relationship("CashFlow", back_populates="bank_account", cascade="all, delete-orphan")
+
+
 # ==================== 应付账款模块 ====================
 
 class AccountPayable(Base):
@@ -290,39 +325,6 @@ class SupplierPayment(Base):
 
 
 # ==================== 资金流水模块 ====================
-
-class BankAccount(Base):
-    """银行账户表 - 管理公司的所有资金账户"""
-    __tablename__ = "bank_accounts"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    
-    # 账户信息
-    account_name = Column(String(100), nullable=False)  # 账户名称
-    account_no = Column(String(50))  # 账号
-    bank_name = Column(String(100))  # 开户银行
-    account_type = Column(String(20), nullable=False, default="bank")  # bank/cash/alipay/wechat
-    
-    # 余额信息
-    initial_balance = Column(Float, default=0.0)  # 期初余额
-    current_balance = Column(Float, default=0.0)  # 当前余额
-    
-    # 状态
-    is_default = Column(Boolean, default=False)  # 是否默认账户
-    status = Column(String(20), default="active")  # active/inactive
-    
-    # 其他信息
-    description = Column(Text)  # 描述
-    remark = Column(Text)  # 备注
-    
-    # 操作记录
-    create_time = Column(DateTime, server_default=func.now())
-    update_time = Column(DateTime, server_default=func.now(), onupdate=func.now())
-    created_by = Column(String(50), default="系统管理员")
-    
-    # 关系
-    cash_flows = relationship("CashFlow", back_populates="bank_account", cascade="all, delete-orphan")
-
 
 class CashFlow(Base):
     """资金流水表 - 记录所有资金进出"""
