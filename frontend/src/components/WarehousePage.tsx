@@ -1211,7 +1211,19 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       {(selectedLocation 
                         ? getInventoryByLocation(selectedLocation) 
                         : filteredInventory
-                      ).map(item => (
+                      )
+                      .filter(item => {
+                        // 柜台用户：只显示展厅有库存的商品
+                        if (userRole === 'counter') {
+                          const showroomWeight = item.locations
+                            .filter(l => l.location_name === '展厅')
+                            .reduce((s, l) => s + l.weight, 0);
+                          return showroomWeight > 0;
+                        }
+                        // 其他角色：显示总库存大于0的商品
+                        return item.total_weight > 0;
+                      })
+                      .map(item => (
                         <React.Fragment key={item.product_name}>
                           {/* 商品行 - 可点击展开 */}
                           <tr 
