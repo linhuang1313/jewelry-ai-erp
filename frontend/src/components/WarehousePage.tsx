@@ -1141,7 +1141,9 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                             <th className="px-4 py-3 text-left font-medium text-gray-600">饰品名称</th>
                             <th className="px-4 py-3 text-right font-medium text-gray-600">明细数量</th>
                             <th className="px-4 py-3 text-right font-medium text-gray-600">库存重量</th>
-                            <th className="px-4 py-3 text-right font-medium text-gray-600">库存金额</th>
+                            {userRole !== 'counter' && (
+                              <th className="px-4 py-3 text-right font-medium text-gray-600">库存金额</th>
+                            )}
                             <th className="px-4 py-3 text-left font-medium text-gray-600">仓库分布</th>
                           </tr>
                         </thead>
@@ -1166,7 +1168,9 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                             <td className="px-4 py-3 font-medium text-gray-900">{item.product_name}</td>
                             <td className="px-4 py-3 text-right text-gray-700">{item.quantity || 0}</td>
                             <td className="px-4 py-3 text-right font-semibold text-blue-600">{item.total_weight.toFixed(2)}g</td>
-                            <td className="px-4 py-3 text-right text-green-600">¥{(item.total_amount || 0).toFixed(2)}</td>
+                            {userRole !== 'counter' && (
+                              <td className="px-4 py-3 text-right text-green-600">¥{(item.total_amount || 0).toFixed(2)}</td>
+                            )}
                             <td className="px-4 py-3">
                               <div className="flex flex-wrap gap-1">
                                 {item.locations.map(loc => (
