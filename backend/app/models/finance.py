@@ -257,7 +257,7 @@ class AccountPayable(Base):
     payable_no = Column(String(50), unique=True, index=True, nullable=False)  # 应付单号 YF20260126001
     
     # 关联信息
-    supplier_id = Column(Integer, ForeignKey("supplier.id", ondelete="CASCADE"), nullable=False, index=True)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="CASCADE"), nullable=False, index=True)
     inbound_order_id = Column(Integer, ForeignKey("inbound_orders.id", ondelete="SET NULL"), nullable=True, index=True)  # 关联入库单
     
     # 金额信息
@@ -297,7 +297,7 @@ class SupplierPayment(Base):
     payment_no = Column(String(50), unique=True, index=True, nullable=False)  # 付款单号 FK20260126001
     
     # 关联信息
-    supplier_id = Column(Integer, ForeignKey("supplier.id", ondelete="CASCADE"), nullable=False, index=True)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="CASCADE"), nullable=False, index=True)
     payable_id = Column(Integer, ForeignKey("account_payables.id", ondelete="SET NULL"), nullable=True, index=True)  # 关联应付账款
     
     # 付款信息
