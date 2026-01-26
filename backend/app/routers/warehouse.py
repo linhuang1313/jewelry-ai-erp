@@ -1641,3 +1641,40 @@ async def migrate_old_transfers(
     }
 
 
+@router.post("/migrate-add-source-order-id")
+async def migrate_add_source_order_id(
+    user_role: str = Query(default="manager"),
+    db: Session = Depends(get_db)
+):
+    """添加 source_order_id 列到 inventory_transfer_orders 表
+    
+    用于修复因模型更新但数据库未同步导致的列缺失问题。
+    """
+    if user_role != 'manager':
+        raise HTTPException(status_code=403, detail="只有管理员可以执行数据库迁移")
+    
+    from sqlalchemy import text
+    try:
+        # 检查列是否存在
+        result = db.execute(text("""
+            SELECT column_name FROM information_schema.columns 
+            WHERE table_name = 'inventory_transfer_orders' 
+            AND column_name = 'source_order_id'
+        """))
+        if result.fetchone():
+            return {"message": "列已存在，无需迁移"}
+        
+        # 添加列
+        db.execute(text("""
+            ALTER TABLE inventory_transfer_orders 
+            ADD COLUMN source_order_id INTEGER REFERENCES inventory_transfer_orders(id)
+        """))
+        db.commit()
+        logger.info("数据库迁移: 已添加 source_order_id 列到 inventory_transfer_orders 表")
+        return {"success": True, "message": "已成功添加 source_order_id 列"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"数据库迁移失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
