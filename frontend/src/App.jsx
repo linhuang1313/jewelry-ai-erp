@@ -190,6 +190,8 @@ function App() {
   // ========== 消息解析优化（性能优化：合并正则匹配） ==========
   // 解析消息中的隐藏标记，恢复所有特殊消息的额外字段
   const parseMessageHiddenMarkers = (messages) => {
+    // 添加数组安全检查
+    if (!Array.isArray(messages)) return messages || [];
     // 合并所有标记的正则表达式，一次匹配多种类型
     const combinedRegex = /<!-- (WITHDRAWAL_ORDER|GOLD_RECEIPT|INBOUND_ORDER|RETURN_ORDER|SALES_ORDER|SETTLEMENT_ORDER):(\d+):?([^>]*) -->/g
     
@@ -2875,7 +2877,7 @@ function App() {
 
             {messages.map((msg, idx) => {
               // 思考过程消息
-              if (msg.type === 'thinking' && msg.steps) {
+              if (msg.type === 'thinking' && Array.isArray(msg.steps)) {
                 return (
                   <div key={msg.id || idx} className="flex justify-start">
                     <div className="bg-white rounded-3xl px-5 py-4 shadow-sm border border-gray-200/60 max-w-2xl">
@@ -3621,7 +3623,7 @@ function App() {
               </div>
             </div>
             {/* 工费明细表格（单个商品查询） */}
-            {msg.laborCostDetails && msg.laborCostDetails.length > 0 && (
+            {Array.isArray(msg.laborCostDetails) && msg.laborCostDetails.length > 0 && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-4xl w-full bg-white rounded-2xl shadow-sm border border-gray-200/60 p-6">
                   <h3 className="text-lg font-semibold mb-2">工费明细表</h3>
@@ -3737,7 +3739,7 @@ function App() {
                       </div>
                     )}
                     {/* 多商品入库卡片展示 */}
-                    {msg.inboundCards && msg.inboundCards.length > 0 && (
+                    {Array.isArray(msg.inboundCards) && msg.inboundCards.length > 0 && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-4xl w-full space-y-4">
                           <div className="text-sm text-gray-600 mb-2 font-medium">
@@ -3927,7 +3929,7 @@ function App() {
                             </div>
                           </div>
                           {/* 商品明细表格 */}
-                          {msg.salesOrder.details && msg.salesOrder.details.length > 0 && (
+                          {Array.isArray(msg.salesOrder?.details) && msg.salesOrder.details.length > 0 && (
                             <div className="mt-4">
                               <h4 className="font-semibold mb-2 text-gray-700">商品明细</h4>
                               <div className="overflow-x-auto">
@@ -3962,7 +3964,7 @@ function App() {
                       </div>
                     )}
                     {/* 库存检查错误提示卡片 */}
-                    {msg.inventoryErrors && msg.inventoryErrors.length > 0 && (
+                    {Array.isArray(msg.inventoryErrors) && msg.inventoryErrors.length > 0 && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-4xl w-full bg-red-50 rounded-2xl shadow-sm p-6 border border-red-200/60">
                           <h3 className="text-xl font-bold text-red-800 mb-4">❌ 库存检查失败</h3>
@@ -4488,7 +4490,7 @@ function App() {
             <SettlementPage 
               onSettlementConfirmed={(data) => {
                 // 结算单确认后，在聊天框显示明细
-                const itemsList = data.details.map((item, idx) => 
+                const itemsList = (Array.isArray(data?.details) ? data.details : []).map((item, idx) => 
                   `${idx + 1}. ${item.product_name}：${item.weight}克 × ¥${item.labor_cost}/克 = ¥${item.total_labor_cost.toFixed(2)}`
                 ).join('\n')
                 
@@ -4619,7 +4621,7 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
           onClose={() => setShowQuickOrderModal(false)}
           onSuccess={(result) => {
             // 开单成功后在聊天框显示销售单明细
-            const itemsList = result.items.map((item, idx) => 
+            const itemsList = (Array.isArray(result?.items) ? result.items : []).map((item, idx) => 
               `${idx + 1}. ${item.product_name}：${item.weight}克 × ¥${item.labor_cost}/克 = ¥${(item.weight * item.labor_cost).toFixed(2)}`
             ).join('\n')
             
@@ -4700,7 +4702,7 @@ ${itemsList}
           onClose={() => setShowQuickInboundModal(false)}
           onSuccess={async (result) => {
             // 构建入库成功的消息内容（包含隐藏的ID标记，用于历史记录中显示打印按钮）
-            const productList = result.products.slice(0, 5).map(p => {
+            const productList = (Array.isArray(result?.products) ? result.products : []).slice(0, 5).map(p => {
               let info = `  • ${p.name}：${p.weight}克 (工费¥${p.labor_cost}/g)`
               const pieceCount = parseInt(p.piece_count) || 0
               const pieceLaborCost = parseFloat(p.piece_labor_cost) || 0
