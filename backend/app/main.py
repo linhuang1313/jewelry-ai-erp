@@ -1153,6 +1153,15 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         else:
                             yield f"data: {json.dumps({'type': 'complete', 'data': result}, ensure_ascii=False)}\n\n"
                             return
+                    elif ai_response.action == "供应商付款":
+                        # 供应商付款：给供应商付工费
+                        result = await handle_supplier_cash_payment(ai_response, db)
+                        if result.get("success"):
+                            yield f"data: {json.dumps({'type': 'supplier_payment_confirm', 'data': result}, ensure_ascii=False)}\n\n"
+                            return
+                        else:
+                            yield f"data: {json.dumps({'type': 'complete', 'data': result}, ensure_ascii=False)}\n\n"
+                            return
                     elif ai_response.action == "批量转移":
                         # 批量转移：返回确认卡片数据
                         result = await handle_batch_transfer(ai_response, db)
@@ -4556,6 +4565,85 @@ async def handle_gold_withdrawal(ai_response, db: Session) -> Dict[str, Any]:
         return {
             "success": False,
             "message": f"提料失败: {str(e)}"
+        }
+
+
+async def handle_supplier_cash_payment(ai_response, db: Session) -> Dict[str, Any]:
+    """处理供应商付款：给供应商付工费款项"""
+    try:
+        from .models import Supplier
+        from .models.finance import AccountPayable
+        
+        supplier_name = ai_response.supplier_payment_name
+        amount = ai_response.supplier_payment_amount
+        payment_method = ai_response.supplier_payment_method or "转账"
+        remark = ai_response.supplier_payment_remark or ""
+        
+        # 验证必填信息
+        if not supplier_name:
+            return {
+                "success": False,
+                "message": "请提供付款的供应商名称，例如：付2000给梵贝琳"
+            }
+        
+        if not amount or amount <= 0:
+            return {
+                "success": False,
+                "message": "请提供付款金额，例如：付2000给梵贝琳"
+            }
+        
+        # 模糊查询供应商
+        supplier = db.query(Supplier).filter(
+            Supplier.name.ilike(f"%{supplier_name}%")
+        ).first()
+        
+        if not supplier:
+            return {
+                "success": False,
+                "message": f"未找到供应商【{supplier_name}】，请确认供应商名称是否正确"
+            }
+        
+        # 查询该供应商的应付账款
+        payables = db.query(AccountPayable).filter(
+            AccountPayable.supplier_id == supplier.id,
+            AccountPayable.status.in_(["unpaid", "partial"]),
+            AccountPayable.unpaid_amount > 0
+        ).order_by(AccountPayable.due_date.asc()).all()
+        
+        total_unpaid = sum(p.unpaid_amount for p in payables)
+        
+        # 转换付款方式
+        method_map = {
+            "转账": "bank_transfer",
+            "现金": "cash",
+            "支票": "check",
+            "承兑": "acceptance"
+        }
+        method_code = method_map.get(payment_method, "bank_transfer")
+        
+        return {
+            "success": True,
+            "action": "供应商付款",
+            "confirm_required": True,
+            "supplier": {
+                "id": supplier.id,
+                "name": supplier.name,
+                "phone": supplier.phone
+            },
+            "amount": round(amount, 2),
+            "payment_method": payment_method,
+            "payment_method_code": method_code,
+            "total_unpaid": round(total_unpaid, 2),
+            "payable_count": len(payables),
+            "remark": remark,
+            "message": f"确认给供应商【{supplier.name}】付款 ¥{amount:.2f}？\n\n当前该供应商待付账款：¥{total_unpaid:.2f}（{len(payables)}笔）\n付款方式：{payment_method}"
+        }
+        
+    except Exception as e:
+        logger.error(f"处理供应商付款失败: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"供应商付款失败: {str(e)}"
         }
 
 

@@ -122,6 +122,11 @@ class AIResponse(BaseModel):
     withdrawal_customer_name: Optional[str] = None  # 提料客户名称
     withdrawal_gold_weight: Optional[float] = None  # 提料克重
     withdrawal_remark: Optional[str] = None  # 提料备注
+    # 供应商付款相关字段
+    supplier_payment_name: Optional[str] = None  # 付款供应商名称
+    supplier_payment_amount: Optional[float] = None  # 付款金额（元）
+    supplier_payment_method: Optional[str] = None  # 付款方式：转账/现金/支票/承兑
+    supplier_payment_remark: Optional[str] = None  # 付款备注
 
 
 # ============= 入库相关 Schema =============

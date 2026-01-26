@@ -46,6 +46,14 @@ export const FinancePage: React.FC = () => {
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
   const [expensesSummary, setExpensesSummary] = useState<any>(null);
   const [expensesLoading, setExpensesLoading] = useState(false);
+  
+  // 供应商付款对话框状态
+  const [showSupplierPaymentDialog, setShowSupplierPaymentDialog] = useState(false);
+  const [selectedPayable, setSelectedPayable] = useState<PayableItem | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('bank_transfer');
+  const [paymentRemark, setPaymentRemark] = useState('');
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
 
   // 安全的日期解析函数
   const safeParseDate = (dateStr: string | null | undefined): Date => {
@@ -260,6 +268,56 @@ export const FinancePage: React.FC = () => {
   const handleGenerateReconciliation = (customerId: number, startDate: Date, endDate: Date) => {
     console.log('生成对账单:', { customerId, startDate, endDate });
     toast.success('对账单生成成功');
+  };
+
+  // 打开供应商付款对话框
+  const handleOpenPaymentDialog = (payable: PayableItem) => {
+    setSelectedPayable(payable);
+    setPaymentAmount(payable.unpaid_amount?.toString() || '');
+    setPaymentMethod('bank_transfer');
+    setPaymentRemark('');
+    setShowSupplierPaymentDialog(true);
+  };
+
+  // 提交供应商付款
+  const handleSubmitSupplierPayment = async () => {
+    if (!selectedPayable) return;
+    
+    const amount = parseFloat(paymentAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('请输入有效的付款金额');
+      return;
+    }
+    
+    if (amount > selectedPayable.unpaid_amount) {
+      toast.error('付款金额不能超过未付金额');
+      return;
+    }
+    
+    setPaymentSubmitting(true);
+    try {
+      const result = await recordSupplierPayment(
+        selectedPayable.supplier_id,
+        amount,
+        paymentMethod,
+        undefined,
+        paymentRemark || `付款：${selectedPayable.payable_no}`
+      );
+      
+      if (result.success) {
+        toast.success(result.message || '付款成功');
+        setShowSupplierPaymentDialog(false);
+        loadPayables(); // 刷新列表
+        loadCashFlows(); // 刷新资金流水
+      } else {
+        toast.error(result.error || '付款失败');
+      }
+    } catch (error) {
+      console.error('付款失败:', error);
+      toast.error('付款失败');
+    } finally {
+      setPaymentSubmitting(false);
+    }
   };
 
   // 加载应付账款
@@ -531,12 +589,13 @@ export const FinancePage: React.FC = () => {
                             <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">未付金额</th>
                             <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">到期日</th>
                             <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">状态</th>
+                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">操作</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                           {payables.length === 0 ? (
                             <tr>
-                              <td colSpan={8} className="px-4 py-8 text-center text-gray-500">暂无应付账款数据</td>
+                              <td colSpan={9} className="px-4 py-8 text-center text-gray-500">暂无应付账款数据</td>
                             </tr>
                           ) : (
                             payables.map((item) => (
@@ -559,6 +618,16 @@ export const FinancePage: React.FC = () => {
                                      item.is_overdue ? `逾期${item.overdue_days}天` :
                                      item.status === 'partial' ? '部分付款' : '待付款'}
                                   </span>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  {item.status !== 'paid' && (
+                                    <button
+                                      onClick={() => handleOpenPaymentDialog(item)}
+                                      className="px-3 py-1 text-sm text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
+                                    >
+                                      付款
+                                    </button>
+                                  )}
                                 </td>
                               </tr>
                             ))
@@ -796,6 +865,96 @@ export const FinancePage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* 供应商付款对话框 */}
+      {showSupplierPaymentDialog && selectedPayable && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4">
+            <div className="p-6 border-b border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-900">供应商付款</h3>
+              <p className="text-sm text-gray-500 mt-1">应付单号：{selectedPayable.payable_no}</p>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              {/* 供应商信息 */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">供应商</span>
+                  <span className="font-medium text-gray-900">{selectedPayable.supplier_name}</span>
+                </div>
+                <div className="flex justify-between text-sm mt-2">
+                  <span className="text-gray-500">应付金额</span>
+                  <span className="text-gray-900">¥{selectedPayable.total_amount?.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm mt-2">
+                  <span className="text-gray-500">已付金额</span>
+                  <span className="text-green-600">¥{selectedPayable.paid_amount?.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm mt-2">
+                  <span className="text-gray-500">未付金额</span>
+                  <span className="font-medium text-red-600">¥{selectedPayable.unpaid_amount?.toLocaleString()}</span>
+                </div>
+              </div>
+              
+              {/* 付款金额 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">付款金额</label>
+                <input
+                  type="number"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  placeholder="请输入付款金额"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              {/* 付款方式 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">付款方式</label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="bank_transfer">银行转账</option>
+                  <option value="cash">现金</option>
+                  <option value="check">支票</option>
+                  <option value="acceptance">承兑</option>
+                </select>
+              </div>
+              
+              {/* 备注 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+                <input
+                  type="text"
+                  value={paymentRemark}
+                  onChange={(e) => setPaymentRemark(e.target.value)}
+                  placeholder="选填"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            
+            <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
+              <button
+                onClick={() => setShowSupplierPaymentDialog(false)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                disabled={paymentSubmitting}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSubmitSupplierPayment}
+                disabled={paymentSubmitting}
+                className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
+              >
+                {paymentSubmitting ? '提交中...' : '确认付款'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
