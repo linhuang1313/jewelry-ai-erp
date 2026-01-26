@@ -1661,7 +1661,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                     />
                   </div>
                   <button
-                    onClick={handleSearchByOrderNo}
+                    onClick={() => handleSearchByOrderNo()}
                     disabled={batchLoading}
                     className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 flex items-center space-x-2"
                   >
