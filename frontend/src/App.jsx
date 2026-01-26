@@ -251,7 +251,7 @@ function App() {
       const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-sessions?user_role=${role}&limit=50`)
       const data = await response.json()
       
-      if (data.success && data.sessions) {
+      if (data.success && Array.isArray(data.sessions)) {
         // 将后端会话数据转换为前端对话记录格式
         const history = data.sessions.map(session => ({
           id: session.session_id,
@@ -450,7 +450,7 @@ function App() {
             const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-history/${savedSessionId}`)
             if (response.ok) {
               const data = await response.json()
-              if (data.success && data.messages && data.messages.length > 0) {
+              if (data.success && Array.isArray(data.messages) && data.messages.length > 0) {
                 const backendMessages = data.messages.map(msg => ({
                   type: msg.message_type === 'user' ? 'user' : 'system',
                   content: msg.content || '',
@@ -826,7 +826,7 @@ function App() {
       const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-history/${conversationId}`)
       const data = await response.json()
       
-      if (data.success && data.messages) {
+      if (data.success && Array.isArray(data.messages)) {
         // 将后端消息格式转换为前端消息格式
         const messages = data.messages.map(msg => {
           const message = {
