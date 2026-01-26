@@ -1058,6 +1058,55 @@ async def get_payables(
         return {"success": False, "error": str(e)}
 
 
+@router.get("/payables/statistics")
+async def get_payables_statistics(db: Session = Depends(get_db)):
+    """获取应付账款统计"""
+    try:
+        from ..models.finance import AccountPayable
+        from sqlalchemy import func
+        from datetime import date
+        
+        # 总应付账款
+        total_payable = db.query(func.sum(AccountPayable.unpaid_amount)).filter(
+            AccountPayable.status.in_(["unpaid", "partial"])
+        ).scalar() or 0
+        
+        # 本月应付
+        today = date.today()
+        month_start = today.replace(day=1)
+        month_payable = db.query(func.sum(AccountPayable.unpaid_amount)).filter(
+            AccountPayable.status.in_(["unpaid", "partial"]),
+            AccountPayable.due_date >= month_start,
+            AccountPayable.due_date <= today.replace(day=28)  # 简化处理
+        ).scalar() or 0
+        
+        # 逾期金额
+        overdue_amount = db.query(func.sum(AccountPayable.unpaid_amount)).filter(
+            AccountPayable.status.in_(["unpaid", "partial"]),
+            AccountPayable.is_overdue == True
+        ).scalar() or 0
+        
+        # 逾期供应商数
+        overdue_suppliers = db.query(func.count(func.distinct(AccountPayable.supplier_id))).filter(
+            AccountPayable.status.in_(["unpaid", "partial"]),
+            AccountPayable.is_overdue == True
+        ).scalar() or 0
+        
+        return {
+            "success": True,
+            "data": {
+                "total_payable": round(total_payable, 2),
+                "month_payable": round(month_payable, 2),
+                "overdue_amount": round(overdue_amount, 2),
+                "overdue_suppliers": overdue_suppliers
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"获取应付账款统计失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
 @router.get("/payables/{payable_id}")
 async def get_payable_detail(
     payable_id: int,
@@ -1299,55 +1348,6 @@ async def get_supplier_payments(
         
     except Exception as e:
         logger.error(f"获取供应商付款记录失败: {e}", exc_info=True)
-        return {"success": False, "error": str(e)}
-
-
-@router.get("/payables/statistics")
-async def get_payables_statistics(db: Session = Depends(get_db)):
-    """获取应付账款统计"""
-    try:
-        from ..models.finance import AccountPayable
-        from sqlalchemy import func
-        from datetime import date
-        
-        # 总应付账款
-        total_payable = db.query(func.sum(AccountPayable.unpaid_amount)).filter(
-            AccountPayable.status.in_(["unpaid", "partial"])
-        ).scalar() or 0
-        
-        # 本月应付
-        today = date.today()
-        month_start = today.replace(day=1)
-        month_payable = db.query(func.sum(AccountPayable.unpaid_amount)).filter(
-            AccountPayable.status.in_(["unpaid", "partial"]),
-            AccountPayable.due_date >= month_start,
-            AccountPayable.due_date <= today.replace(day=28)  # 简化处理
-        ).scalar() or 0
-        
-        # 逾期金额
-        overdue_amount = db.query(func.sum(AccountPayable.unpaid_amount)).filter(
-            AccountPayable.status.in_(["unpaid", "partial"]),
-            AccountPayable.is_overdue == True
-        ).scalar() or 0
-        
-        # 逾期供应商数
-        overdue_suppliers = db.query(func.count(func.distinct(AccountPayable.supplier_id))).filter(
-            AccountPayable.status.in_(["unpaid", "partial"]),
-            AccountPayable.is_overdue == True
-        ).scalar() or 0
-        
-        return {
-            "success": True,
-            "data": {
-                "total_payable": round(total_payable, 2),
-                "month_payable": round(month_payable, 2),
-                "overdue_amount": round(overdue_amount, 2),
-                "overdue_suppliers": overdue_suppliers
-            }
-        }
-        
-    except Exception as e:
-        logger.error(f"获取应付账款统计失败: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
