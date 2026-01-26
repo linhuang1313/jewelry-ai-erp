@@ -1135,9 +1135,11 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                     className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">全部位置</option>
-                    {locations.map(loc => (
-                      <option key={loc.id} value={loc.id}>{loc.name}</option>
-                    ))}
+                    {locations
+                      .filter(loc => userRole !== 'counter' || loc.location_type === 'showroom')
+                      .map(loc => (
+                        <option key={loc.id} value={loc.id}>{loc.name}</option>
+                      ))}
                   </select>
                 )}
               </div>
@@ -1145,10 +1147,12 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
               {/* 按品名视图 */}
               {inventoryViewMode === 'byName' && (
                 <>
-                  {/* 位置卡片 */}
+                  {/* 位置卡片 - 柜台只显示展厅 */}
                   {!selectedLocation && (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                      {locations.map(loc => {
+                      {locations
+                        .filter(loc => userRole !== 'counter' || loc.location_type === 'showroom')
+                        .map(loc => {
                         const locInventory = getInventoryByLocation(loc.id);
                         const totalWeight = locInventory.reduce((sum, item) => 
                           sum + item.locations.reduce((s, l) => s + l.weight, 0), 0
@@ -1223,20 +1227,27 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                             </td>
                             <td className="px-4 py-3 font-medium text-gray-900">{item.product_name}</td>
                             <td className="px-4 py-3 text-right text-gray-700">{item.quantity || 0}</td>
-                            <td className="px-4 py-3 text-right font-semibold text-blue-600">{item.total_weight.toFixed(2)}g</td>
+                            <td className="px-4 py-3 text-right font-semibold text-blue-600">
+                              {(userRole === 'counter'
+                                ? item.locations.filter(l => l.location_name === '展厅').reduce((s, l) => s + l.weight, 0)
+                                : item.total_weight
+                              ).toFixed(2)}g
+                            </td>
                             {userRole !== 'counter' && (
                               <td className="px-4 py-3 text-right text-green-600">¥{(item.total_amount || 0).toFixed(2)}</td>
                             )}
                             <td className="px-4 py-3">
                               <div className="flex flex-wrap gap-1">
-                                {item.locations.map(loc => (
-                                  <span
-                                    key={loc.id}
-                                    className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600"
-                                  >
-                                    {loc.location_name}: {loc.weight.toFixed(1)}g
-                                  </span>
-                                ))}
+                                {item.locations
+                                  .filter(loc => userRole !== 'counter' || loc.location_name === '展厅')
+                                  .map(loc => (
+                                    <span
+                                      key={loc.id}
+                                      className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600"
+                                    >
+                                      {loc.location_name}: {loc.weight.toFixed(1)}g
+                                    </span>
+                                  ))}
                               </div>
                             </td>
                           </tr>
