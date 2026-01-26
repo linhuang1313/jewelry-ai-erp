@@ -75,6 +75,11 @@ interface TransferOrder {
   items: TransferItem[];
   total_weight: number | null;
   total_actual_weight: number | null;
+  // 关联信息
+  source_order_id: number | null;  // 来源转移单ID
+  source_transfer_no: string | null;  // 来源转移单号
+  related_order_id: number | null;  // 关联的新转移单ID
+  related_transfer_no: string | null;  // 关联的新转移单号
 }
 
 // Tab 组件 - 珠宝风格
@@ -932,6 +937,32 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       toast.error('拒绝失败');
     }
   };
+  
+  // 重新发起退回的转移单
+  const handleResubmitTransferOrder = async (order: TransferOrder) => {
+    if (!confirm(`确定要重新发起转移单 ${order.transfer_no} 吗？\n\n将基于原单创建新的转移单，原单记录保留用于审计追溯。`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_ENDPOINTS.TRANSFER_ORDER_RESUBMIT(order.id)}?user_role=${userRole}`,
+        { method: 'POST' }
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        toast.success(`已重新发起，新单号: ${result.transfer_no}`);
+        loadTransfers();
+        loadInventorySummary();
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || '重新发起失败');
+      }
+    } catch (error) {
+      toast.error('重新发起失败');
+    }
+  };
 
   // 过滤库存
   const filteredInventory = inventorySummary.filter(item =>
@@ -1612,11 +1643,31 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                               {order.to_location_name}
                             </span>
                             <StatusBadge status={order.status} />
+                            {/* 关联信息 */}
+                            {order.source_transfer_no && (
+                              <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                                来源: {order.source_transfer_no}
+                              </span>
+                            )}
+                            {order.related_transfer_no && (
+                              <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded">
+                                已重新发起: {order.related_transfer_no}
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center space-x-4 text-sm text-gray-500">
                             <span>{order.items.length} 个商品</span>
                             <span className="font-semibold">{order.total_weight?.toFixed(2) || 0}g</span>
                             <span>{new Date(order.created_at).toLocaleString('zh-CN')}</span>
+                            {/* 重新发起按钮 - 仅已退回状态且未重新发起过的转移单 */}
+                            {order.status === 'returned' && !order.related_transfer_no && (userRole === 'product' || userRole === 'manager') && (
+                              <button
+                                onClick={() => handleResubmitTransferOrder(order)}
+                                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+                              >
+                                重新发起
+                              </button>
+                            )}
                           </div>
                         </div>
                         {/* 商品明细列表 */}

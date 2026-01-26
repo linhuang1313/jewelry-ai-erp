@@ -1063,6 +1063,20 @@ async def get_transfer_orders(
         total_weight = sum(item.weight for item in order.items)
         total_actual_weight = sum(item.actual_weight or 0 for item in order.items) if order.status in ["received", "pending_confirm"] else None
         
+        # 获取来源转移单信息（如果是重新发起的）
+        source_transfer_no = None
+        if order.source_order_id:
+            source_order = db.query(InventoryTransferOrder).filter(
+                InventoryTransferOrder.id == order.source_order_id
+            ).first()
+            if source_order:
+                source_transfer_no = source_order.transfer_no
+        
+        # 获取关联的新转移单（如果被重新发起过）
+        related_order = db.query(InventoryTransferOrder).filter(
+            InventoryTransferOrder.source_order_id == order.id
+        ).first()
+        
         result.append(TransferOrderResponse(
             id=order.id,
             transfer_no=order.transfer_no,
@@ -1085,7 +1099,11 @@ async def get_transfer_orders(
                 diff_reason=item.diff_reason
             ) for item in order.items],
             total_weight=total_weight,
-            total_actual_weight=total_actual_weight
+            total_actual_weight=total_actual_weight,
+            source_order_id=order.source_order_id,
+            source_transfer_no=source_transfer_no,
+            related_order_id=related_order.id if related_order else None,
+            related_transfer_no=related_order.transfer_no if related_order else None
         ))
     
     return result
@@ -1104,6 +1122,20 @@ async def get_transfer_order(
     
     total_weight = sum(item.weight for item in order.items)
     total_actual_weight = sum(item.actual_weight or 0 for item in order.items) if order.status in ["received", "pending_confirm"] else None
+    
+    # 获取来源转移单信息
+    source_transfer_no = None
+    if order.source_order_id:
+        source_order = db.query(InventoryTransferOrder).filter(
+            InventoryTransferOrder.id == order.source_order_id
+        ).first()
+        if source_order:
+            source_transfer_no = source_order.transfer_no
+    
+    # 获取关联的新转移单
+    related_order = db.query(InventoryTransferOrder).filter(
+        InventoryTransferOrder.source_order_id == order.id
+    ).first()
     
     return TransferOrderResponse(
         id=order.id,
@@ -1127,7 +1159,11 @@ async def get_transfer_order(
             diff_reason=item.diff_reason
         ) for item in order.items],
         total_weight=total_weight,
-        total_actual_weight=total_actual_weight
+        total_actual_weight=total_actual_weight,
+        source_order_id=order.source_order_id,
+        source_transfer_no=source_transfer_no,
+        related_order_id=related_order.id if related_order else None,
+        related_transfer_no=related_order.transfer_no if related_order else None
     )
 
 
@@ -1410,6 +1446,131 @@ async def reject_confirm_transfer_order(
         "message": f"已拒绝确认，{total_weight}g 已退回商品部仓库",
         "new_status": "returned"
     }
+
+
+@router.post("/transfer-orders/{order_id}/resubmit", response_model=TransferOrderResponse)
+async def resubmit_transfer_order(
+    order_id: int,
+    created_by: str = Query(default="系统管理员", description="发起人"),
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """重新发起退回的转移单
+    
+    基于已退回的转移单创建新单，保留原单记录用于审计追溯：
+    1. 验证原单状态必须是 returned
+    2. 复制原单商品信息，创建新转移单
+    3. 设置 source_order_id 关联原单
+    4. 扣减发出位置库存
+    """
+    if user_role not in ['product', 'manager']:
+        raise HTTPException(status_code=403, detail="权限不足：只有商品专员可以重新发起转移单")
+    
+    # 查找原转移单
+    source_order = db.query(InventoryTransferOrder).filter(InventoryTransferOrder.id == order_id).first()
+    
+    if not source_order:
+        raise HTTPException(status_code=404, detail="原转移单不存在")
+    if source_order.status != "returned":
+        raise HTTPException(status_code=400, detail=f"只有已退回的转移单才能重新发起，当前状态为 {source_order.status}")
+    
+    # 检查是否已经重新发起过（防止重复）
+    existing_resubmit = db.query(InventoryTransferOrder).filter(
+        InventoryTransferOrder.source_order_id == order_id
+    ).first()
+    if existing_resubmit:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"该转移单已重新发起过，新单号为 {existing_resubmit.transfer_no}"
+        )
+    
+    # 生成新转移单号
+    from datetime import datetime
+    today = datetime.now().strftime("%Y%m%d")
+    last_order = db.query(InventoryTransferOrder).filter(
+        InventoryTransferOrder.transfer_no.like(f"TR{today}%")
+    ).order_by(InventoryTransferOrder.transfer_no.desc()).first()
+    
+    if last_order:
+        last_seq = int(last_order.transfer_no[-3:])
+        new_seq = last_seq + 1
+    else:
+        new_seq = 1
+    
+    new_transfer_no = f"TR{today}{new_seq:03d}"
+    
+    # 验证并扣减发出位置库存
+    for item in source_order.items:
+        from_inventory = db.query(LocationInventory).filter(
+            LocationInventory.location_id == source_order.from_location_id,
+            LocationInventory.product_name == item.product_name
+        ).first()
+        
+        if not from_inventory or from_inventory.weight < item.weight:
+            available = from_inventory.weight if from_inventory else 0
+            raise HTTPException(
+                status_code=400,
+                detail=f"发出位置库存不足：{item.product_name} 需要 {item.weight}g，可用 {available}g"
+            )
+        
+        from_inventory.weight -= item.weight
+    
+    # 创建新转移单
+    new_order = InventoryTransferOrder(
+        transfer_no=new_transfer_no,
+        from_location_id=source_order.from_location_id,
+        to_location_id=source_order.to_location_id,
+        status="pending",
+        created_by=created_by,
+        created_at=china_now(),
+        remark=f"来源于退回的转移单 {source_order.transfer_no}",
+        source_order_id=source_order.id  # 关联原单
+    )
+    db.add(new_order)
+    db.flush()
+    
+    # 复制商品明细
+    for item in source_order.items:
+        new_item = InventoryTransferItem(
+            order_id=new_order.id,
+            product_name=item.product_name,
+            weight=item.weight
+        )
+        db.add(new_item)
+    
+    db.commit()
+    db.refresh(new_order)
+    
+    logger.info(f"重新发起转移单: {new_transfer_no}, 来源: {source_order.transfer_no}")
+    
+    total_weight = sum(item.weight for item in new_order.items)
+    
+    return TransferOrderResponse(
+        id=new_order.id,
+        transfer_no=new_order.transfer_no,
+        from_location_id=new_order.from_location_id,
+        to_location_id=new_order.to_location_id,
+        from_location_name=new_order.from_location.name if new_order.from_location else None,
+        to_location_name=new_order.to_location.name if new_order.to_location else None,
+        status=new_order.status,
+        created_by=new_order.created_by,
+        created_at=new_order.created_at,
+        remark=new_order.remark,
+        received_by=new_order.received_by,
+        received_at=new_order.received_at,
+        items=[TransferItemResponse(
+            id=item.id,
+            product_name=item.product_name,
+            weight=item.weight,
+            actual_weight=item.actual_weight,
+            weight_diff=item.weight_diff,
+            diff_reason=item.diff_reason
+        ) for item in new_order.items],
+        total_weight=total_weight,
+        total_actual_weight=None,
+        source_order_id=new_order.source_order_id,
+        source_transfer_no=source_order.transfer_no
+    )
 
 
 # ============= 数据迁移 API =============

@@ -528,6 +528,11 @@ class TransferOrderResponse(BaseModel):
     items: List[TransferItemResponse] = []
     total_weight: Optional[float] = None  # 总预期重量
     total_actual_weight: Optional[float] = None  # 总实际重量
+    # 关联信息
+    source_order_id: Optional[int] = None  # 来源转移单ID（重新发起时的原单）
+    source_transfer_no: Optional[str] = None  # 来源转移单号
+    related_order_id: Optional[int] = None  # 关联的新转移单ID（被重新发起后产生的）
+    related_transfer_no: Optional[str] = None  # 关联的新转移单号
 
 
 # ============= 退货单相关 Schema =============

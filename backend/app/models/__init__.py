@@ -337,10 +337,14 @@ class InventoryTransferOrder(Base):
     received_by = Column(String(50), nullable=True)
     received_at = Column(DateTime, nullable=True)
     
+    # 关联信息（重新发起时关联原单）
+    source_order_id = Column(Integer, ForeignKey("inventory_transfer_orders.id"), nullable=True)  # 来源转移单ID
+    
     # 关系
     from_location = relationship("Location", foreign_keys=[from_location_id])
     to_location = relationship("Location", foreign_keys=[to_location_id])
     items = relationship("InventoryTransferItem", back_populates="order", cascade="all, delete-orphan")
+    source_order = relationship("InventoryTransferOrder", remote_side=[id], foreign_keys=[source_order_id])  # 来源转移单
 
 
 class InventoryTransferItem(Base):
