@@ -127,6 +127,11 @@ class AIResponse(BaseModel):
     supplier_payment_amount: Optional[float] = None  # 付款金额（元）
     supplier_payment_method: Optional[str] = None  # 付款方式：转账/现金/支票/承兑
     supplier_payment_remark: Optional[str] = None  # 付款备注
+    # 转移单/调拨单查询相关字段
+    transfer_order_no: Optional[str] = None  # 转移单号（TR开头）
+    transfer_status: Optional[str] = None  # 转移单状态筛选
+    transfer_date_start: Optional[str] = None  # 转移单开始日期
+    transfer_date_end: Optional[str] = None  # 转移单结束日期
 
 
 # ============= 入库相关 Schema =============

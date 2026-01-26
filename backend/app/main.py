@@ -40,7 +40,7 @@ from .schemas import (
     SalesOrderCreate, SalesOrderResponse, SalesDetailResponse, SalesDetailItem,
     SalespersonCreate, SalespersonResponse
 )
-from .models import InboundOrder, InboundDetail, Inventory, Customer, SalesOrder, SalesDetail, Supplier, ChatLog, Location, LocationInventory, Salesperson, ReturnOrder
+from .models import InboundOrder, InboundDetail, Inventory, Customer, SalesOrder, SalesDetail, Supplier, ChatLog, Location, LocationInventory, Salesperson, ReturnOrder, InventoryTransferOrder, InventoryTransferItem
 from .ai_parser import parse_user_message
 from .utils import to_pinyin_initials
 from . import context_manager as ctx
@@ -708,7 +708,11 @@ async def chat(request: AIRequest, db: Session = Depends(get_db)):
                 inbound_supplier=ai_response.inbound_supplier,  # 入库单供应商筛选
                 inbound_product=ai_response.inbound_product,  # 入库单商品筛选
                 inbound_date_start=ai_response.inbound_date_start,  # 入库单开始日期
-                inbound_date_end=ai_response.inbound_date_end  # 入库单结束日期
+                inbound_date_end=ai_response.inbound_date_end,  # 入库单结束日期
+                transfer_order_no=ai_response.transfer_order_no,  # TR开头的转移单号
+                transfer_status=ai_response.transfer_status,  # 转移单状态筛选
+                transfer_date_start=ai_response.transfer_date_start,  # 转移单开始日期
+                transfer_date_end=ai_response.transfer_date_end  # 转移单结束日期
             )
             
             # 使用AI进行分析
@@ -1711,6 +1715,85 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                             for d in details
                         ]
                     })
+            
+            # 收集转移单/调拨单数据（用于转移单查询）
+            transfer_order_no = getattr(ai_response, 'transfer_order_no', None)
+            transfer_status = getattr(ai_response, 'transfer_status', None)
+            transfer_date_start = getattr(ai_response, 'transfer_date_start', None)
+            transfer_date_end = getattr(ai_response, 'transfer_date_end', None)
+            
+            transfer_query = db.query(InventoryTransferOrder).order_by(desc(InventoryTransferOrder.created_at))
+            
+            if transfer_order_no:
+                transfer_query = transfer_query.filter(InventoryTransferOrder.transfer_no == transfer_order_no)
+            if transfer_status:
+                transfer_query = transfer_query.filter(InventoryTransferOrder.status == transfer_status)
+            if transfer_date_start:
+                try:
+                    start_dt = datetime.strptime(transfer_date_start, "%Y-%m-%d")
+                    transfer_query = transfer_query.filter(InventoryTransferOrder.created_at >= start_dt)
+                except:
+                    pass
+            if transfer_date_end:
+                try:
+                    end_dt = datetime.strptime(transfer_date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+                    transfer_query = transfer_query.filter(InventoryTransferOrder.created_at <= end_dt)
+                except:
+                    pass
+            
+            transfer_orders = transfer_query.limit(100).all()
+            data['transfer_orders'] = []
+            data['transfer_filters'] = {
+                'transfer_order_no': transfer_order_no,
+                'status': transfer_status,
+                'date_start': transfer_date_start,
+                'date_end': transfer_date_end
+            }
+            
+            for order in transfer_orders:
+                # 获取来源转移单号
+                source_transfer_no = None
+                if order.source_order_id:
+                    source_order = db.query(InventoryTransferOrder).filter(
+                        InventoryTransferOrder.id == order.source_order_id
+                    ).first()
+                    if source_order:
+                        source_transfer_no = source_order.transfer_no
+                
+                # 获取关联的新转移单
+                related_order = db.query(InventoryTransferOrder).filter(
+                    InventoryTransferOrder.source_order_id == order.id
+                ).first()
+                
+                data['transfer_orders'].append({
+                    'transfer_no': order.transfer_no,
+                    'from_location': order.from_location.name if order.from_location else None,
+                    'to_location': order.to_location.name if order.to_location else None,
+                    'status': order.status,
+                    'status_display': {
+                        'pending': '待接收', 'received': '已接收', 'rejected': '已拒收',
+                        'pending_confirm': '待确认', 'returned': '已退回'
+                    }.get(order.status, order.status),
+                    'created_by': order.created_by,
+                    'created_at': str(order.created_at) if order.created_at else None,
+                    'received_by': order.received_by,
+                    'received_at': str(order.received_at) if order.received_at else None,
+                    'remark': order.remark,
+                    'source_transfer_no': source_transfer_no,
+                    'related_transfer_no': related_order.transfer_no if related_order else None,
+                    'items': [
+                        {
+                            'product_name': item.product_name,
+                            'weight': item.weight,
+                            'actual_weight': item.actual_weight,
+                            'weight_diff': item.weight_diff,
+                            'diff_reason': item.diff_reason
+                        }
+                        for item in order.items
+                    ],
+                    'total_weight': sum(item.weight for item in order.items),
+                    'total_actual_weight': sum(item.actual_weight or 0 for item in order.items) if order.status in ['received', 'pending_confirm'] else None
+                })
             
             # 收集总体统计（根据角色计算库存总重量）
             # 库存总重量使用已收集的库存数据计算，这样就是角色对应仓位的库存

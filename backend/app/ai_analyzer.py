@@ -9,7 +9,8 @@ from datetime import datetime
 from .models import (
     InboundOrder, InboundDetail, Inventory, 
     Customer, SalesOrder, SalesDetail, Supplier,
-    Location, LocationInventory
+    Location, LocationInventory,
+    InventoryTransferOrder, InventoryTransferItem
 )
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ class AIAnalyzer:
             timeout=60.0  # 60秒超时，避免无限等待
         )
     
-    def collect_all_data(self, intent: str, user_message: str, db: Session, order_no: Optional[str] = None, sales_order_no: Optional[str] = None, user_role: str = "manager", inbound_supplier: Optional[str] = None, inbound_product: Optional[str] = None, inbound_date_start: Optional[str] = None, inbound_date_end: Optional[str] = None) -> Dict[str, Any]:
+    def collect_all_data(self, intent: str, user_message: str, db: Session, order_no: Optional[str] = None, sales_order_no: Optional[str] = None, user_role: str = "manager", inbound_supplier: Optional[str] = None, inbound_product: Optional[str] = None, inbound_date_start: Optional[str] = None, inbound_date_end: Optional[str] = None, transfer_order_no: Optional[str] = None, transfer_status: Optional[str] = None, transfer_date_start: Optional[str] = None, transfer_date_end: Optional[str] = None) -> Dict[str, Any]:
         """根据用户意图智能收集所有相关数据
         
         Args:
@@ -42,6 +43,10 @@ class AIAnalyzer:
             order_no: 入库单号（可选，RK开头，用于精确查询入库单）
             sales_order_no: 销售单号（可选，XS开头，用于精确查询销售单）
             user_role: 用户角色，决定显示哪个仓位的库存
+            transfer_order_no: 转移单号（可选，TR开头，用于精确查询转移单）
+            transfer_status: 转移单状态筛选
+            transfer_date_start: 转移单开始日期筛选
+            transfer_date_end: 转移单结束日期筛选
         """
         data = {
             "context": {
@@ -242,6 +247,88 @@ class AIAnalyzer:
                 ]
             })
         
+        # 收集转移单/调拨单数据
+        transfer_query = db.query(InventoryTransferOrder).order_by(desc(InventoryTransferOrder.created_at))
+        
+        # 按单号筛选
+        if transfer_order_no:
+            transfer_query = transfer_query.filter(InventoryTransferOrder.transfer_no == transfer_order_no)
+        
+        # 按状态筛选
+        if transfer_status:
+            transfer_query = transfer_query.filter(InventoryTransferOrder.status == transfer_status)
+        
+        # 按日期筛选
+        if transfer_date_start:
+            try:
+                start_dt = datetime.strptime(transfer_date_start, "%Y-%m-%d")
+                transfer_query = transfer_query.filter(InventoryTransferOrder.created_at >= start_dt)
+            except:
+                pass
+        if transfer_date_end:
+            try:
+                end_dt = datetime.strptime(transfer_date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+                transfer_query = transfer_query.filter(InventoryTransferOrder.created_at <= end_dt)
+            except:
+                pass
+        
+        transfer_orders = transfer_query.limit(100).all()
+        data["transfer_orders"] = []
+        data["transfer_filters"] = {
+            "transfer_order_no": transfer_order_no,
+            "status": transfer_status,
+            "date_start": transfer_date_start,
+            "date_end": transfer_date_end
+        }
+        
+        for order in transfer_orders:
+            # 获取来源转移单号（重新发起时的原单）
+            source_transfer_no = None
+            if order.source_order_id:
+                source_order = db.query(InventoryTransferOrder).filter(
+                    InventoryTransferOrder.id == order.source_order_id
+                ).first()
+                if source_order:
+                    source_transfer_no = source_order.transfer_no
+            
+            # 获取关联的新转移单（被重新发起后产生的）
+            related_order = db.query(InventoryTransferOrder).filter(
+                InventoryTransferOrder.source_order_id == order.id
+            ).first()
+            
+            data["transfer_orders"].append({
+                "transfer_no": order.transfer_no,
+                "from_location": order.from_location.name if order.from_location else None,
+                "to_location": order.to_location.name if order.to_location else None,
+                "status": order.status,
+                "status_display": {
+                    "pending": "待接收",
+                    "received": "已接收",
+                    "rejected": "已拒收",
+                    "pending_confirm": "待确认",
+                    "returned": "已退回"
+                }.get(order.status, order.status),
+                "created_by": order.created_by,
+                "created_at": str(order.created_at) if order.created_at else None,
+                "received_by": order.received_by,
+                "received_at": str(order.received_at) if order.received_at else None,
+                "remark": order.remark,
+                "source_transfer_no": source_transfer_no,  # 来源单号（重新发起时的原单）
+                "related_transfer_no": related_order.transfer_no if related_order else None,  # 关联新单号（被重新发起后产生的）
+                "items": [
+                    {
+                        "product_name": item.product_name,
+                        "weight": item.weight,
+                        "actual_weight": item.actual_weight,
+                        "weight_diff": item.weight_diff,
+                        "diff_reason": item.diff_reason
+                    }
+                    for item in order.items
+                ],
+                "total_weight": sum(item.weight for item in order.items),
+                "total_actual_weight": sum(item.actual_weight or 0 for item in order.items) if order.status in ["received", "pending_confirm"] else None
+            })
+        
         # 收集总体统计（根据角色计算库存总重量）
         # 库存总重量使用已收集的库存数据计算，这样就是角色对应仓位的库存
         inventory_total = sum(inv.get("total_weight", 0) for inv in data.get("inventory", []))
@@ -404,6 +491,54 @@ class AIAnalyzer:
                     text += f"   - {detail['product_name']}：{detail['weight']}克，工费{detail['labor_cost']}元/克\n"
                 if len(order.get('details', [])) > 3:
                     text += f"   ... 还有{len(order['details']) - 3}个商品\n"
+                text += "\n"
+        
+        # 转移单/调拨单详情
+        if data.get("transfer_orders"):
+            transfer_filters = data.get("transfer_filters", {})
+            filter_desc = ""
+            if transfer_filters.get("transfer_order_no"):
+                filter_desc = f"（单号：{transfer_filters['transfer_order_no']}）"
+            elif transfer_filters.get("status"):
+                status_map = {"pending": "待接收", "received": "已接收", "rejected": "已拒收", "pending_confirm": "待确认", "returned": "已退回"}
+                filter_desc = f"（状态：{status_map.get(transfer_filters['status'], transfer_filters['status'])}）"
+            elif transfer_filters.get("date_start") or transfer_filters.get("date_end"):
+                filter_desc = f"（日期：{transfer_filters.get('date_start', '')} 至 {transfer_filters.get('date_end', '')}）"
+            
+            text += f"=== 转移单/调拨单{filter_desc}（共{len(data['transfer_orders'])}个）===\n"
+            for idx, order in enumerate(data["transfer_orders"][:20], 1):
+                text += f"{idx}. 单号：{order['transfer_no']}\n"
+                text += f"   路径：{order['from_location']} → {order['to_location']}\n"
+                text += f"   状态：{order['status_display']}\n"
+                text += f"   创建时间：{order.get('created_at', 'N/A')}\n"
+                text += f"   创建人：{order.get('created_by', 'N/A')}\n"
+                
+                # 显示关联信息
+                if order.get('source_transfer_no'):
+                    text += f"   来源单号：{order['source_transfer_no']}（该单由原单重新发起）\n"
+                if order.get('related_transfer_no'):
+                    text += f"   关联新单：{order['related_transfer_no']}（该单已被重新发起）\n"
+                
+                # 显示备注
+                if order.get('remark'):
+                    text += f"   备注：{order['remark']}\n"
+                
+                # 显示商品明细
+                text += f"   商品（共{len(order.get('items', []))}种，总重量{order.get('total_weight', 0):.2f}克）：\n"
+                for item in order.get('items', [])[:5]:
+                    diff_info = ""
+                    if item.get('actual_weight') is not None and item['actual_weight'] != item['weight']:
+                        diff_info = f"，实际{item['actual_weight']}克，差异{item.get('weight_diff', 0):.2f}克"
+                        if item.get('diff_reason'):
+                            diff_info += f"（{item['diff_reason']}）"
+                    text += f"      • {item['product_name']}：{item['weight']}克{diff_info}\n"
+                if len(order.get('items', [])) > 5:
+                    text += f"      ... 还有{len(order['items']) - 5}种商品\n"
+                
+                # 显示接收信息
+                if order.get('received_by'):
+                    text += f"   接收人：{order['received_by']}，接收时间：{order.get('received_at', 'N/A')}\n"
+                
                 text += "\n"
         
         # 客户账务数据（聊天查询用）
