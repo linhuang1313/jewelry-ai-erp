@@ -191,12 +191,13 @@ export async function getReceivables(
     const result = await response.json();
     
     if (result.success) {
-      // 转换后端 snake_case 数据为前端 camelCase
-      const convertedData = (result.data || []).map(convertReceivableFromBackend);
+      // 转换后端 snake_case 数据为前端 camelCase - 添加数组安全检查
+      const rawData = Array.isArray(result.data) ? result.data : [];
+      const convertedData = rawData.map(convertReceivableFromBackend);
       return {
         success: true,
         data: convertedData,
-        total: result.total,
+        total: result.total || convertedData.length,
       };
     } else {
       return {
@@ -344,7 +345,7 @@ export async function getUnpaidSalesOrders(customerId: number): Promise<Array<{
     const response = await fetch(`${API_BASE_URL}/api/finance/receivables?filter_type=unpaid&customer_id=${customerId}`);
     const result = await response.json();
     
-    if (result.success && result.data) {
+    if (result.success && Array.isArray(result.data)) {
       return result.data.map((r: ReceivableItem) => ({
         id: r.salesOrderId,
         orderNo: r.salesOrder?.orderNo || '',
@@ -521,8 +522,10 @@ export async function getPaymentRecords(
     const result = await response.json();
     
     if (result.success && result.data) {
-      // 转换字段名为前端格式
-      const records = result.data.records.map((r: any) => ({
+      // 转换字段名为前端格式 - 添加数组安全检查
+      const rawRecords = Array.isArray(result.data.records) ? result.data.records : 
+                         Array.isArray(result.data) ? result.data : [];
+      const records = rawRecords.map((r: any) => ({
         id: r.id,
         accountReceivableId: r.account_receivable_id,
         customerId: r.customer_id,
@@ -540,7 +543,7 @@ export async function getPaymentRecords(
       return {
         success: true,
         data: records,
-        total: result.data.total,
+        total: result.data.total || records.length,
       };
     } else {
       return {
