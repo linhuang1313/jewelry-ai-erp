@@ -212,4 +212,236 @@ class ReconciliationStatement(Base):
     customer = relationship("Customer", backref="reconciliation_statements")
 
 
+# ==================== 应付账款模块 ====================
+
+class AccountPayable(Base):
+    """应付账款表 - 记录欠供应商的款项"""
+    __tablename__ = "account_payables"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    payable_no = Column(String(50), unique=True, index=True, nullable=False)  # 应付单号 YF20260126001
+    
+    # 关联信息
+    supplier_id = Column(Integer, ForeignKey("supplier.id", ondelete="CASCADE"), nullable=False, index=True)
+    inbound_order_id = Column(Integer, ForeignKey("inbound_orders.id", ondelete="SET NULL"), nullable=True, index=True)  # 关联入库单
+    
+    # 金额信息
+    total_amount = Column(Float, nullable=False, default=0.0)  # 应付总额（工费金额）
+    paid_amount = Column(Float, default=0.0)  # 已付金额
+    unpaid_amount = Column(Float, default=0.0)  # 未付金额
+    
+    # 账期信息
+    credit_days = Column(Integer, default=30)  # 账期天数
+    credit_start_date = Column(Date, nullable=False)  # 账期开始日期（入库日期）
+    due_date = Column(Date, nullable=False)  # 到期日期
+    overdue_days = Column(Integer, default=0)  # 逾期天数
+    
+    # 状态
+    status = Column(String(20), default="unpaid", index=True)  # unpaid/partial/paid/cancelled
+    is_overdue = Column(Boolean, default=False)  # 是否逾期
+    
+    # 其他信息
+    remark = Column(Text)  # 备注
+    
+    # 操作记录
+    create_time = Column(DateTime, server_default=func.now())
+    update_time = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    operator = Column(String(50), default="系统管理员")
+    
+    # 关系
+    supplier = relationship("Supplier", backref="account_payables")
+    inbound_order = relationship("InboundOrder", backref="account_payables")
+    supplier_payments = relationship("SupplierPayment", back_populates="account_payable", cascade="all, delete-orphan")
+
+
+class SupplierPayment(Base):
+    """供应商付款记录表 - 记录给供应商的每一笔付款"""
+    __tablename__ = "supplier_payments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    payment_no = Column(String(50), unique=True, index=True, nullable=False)  # 付款单号 FK20260126001
+    
+    # 关联信息
+    supplier_id = Column(Integer, ForeignKey("supplier.id", ondelete="CASCADE"), nullable=False, index=True)
+    payable_id = Column(Integer, ForeignKey("account_payables.id", ondelete="SET NULL"), nullable=True, index=True)  # 关联应付账款
+    
+    # 付款信息
+    payment_date = Column(Date, nullable=False, index=True)  # 付款日期
+    amount = Column(Float, nullable=False)  # 付款金额
+    payment_method = Column(String(20), nullable=False)  # 付款方式: bank_transfer/cash/check/acceptance
+    
+    # 银行信息
+    bank_account_id = Column(Integer, ForeignKey("bank_accounts.id", ondelete="SET NULL"), nullable=True)  # 付款账户
+    bank_name = Column(String(100))  # 银行名称
+    transfer_no = Column(String(100))  # 转账流水号
+    
+    # 其他信息
+    remark = Column(Text)  # 备注
+    
+    # 操作记录
+    created_by = Column(String(50), default="系统管理员")
+    create_time = Column(DateTime, server_default=func.now())
+    update_time = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    
+    # 关系
+    supplier = relationship("Supplier", backref="supplier_payments")
+    account_payable = relationship("AccountPayable", back_populates="supplier_payments")
+    bank_account = relationship("BankAccount", backref="supplier_payments")
+
+
+# ==================== 资金流水模块 ====================
+
+class BankAccount(Base):
+    """银行账户表 - 管理公司的所有资金账户"""
+    __tablename__ = "bank_accounts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # 账户信息
+    account_name = Column(String(100), nullable=False)  # 账户名称
+    account_no = Column(String(50))  # 账号
+    bank_name = Column(String(100))  # 开户银行
+    account_type = Column(String(20), nullable=False, default="bank")  # bank/cash/alipay/wechat
+    
+    # 余额信息
+    initial_balance = Column(Float, default=0.0)  # 期初余额
+    current_balance = Column(Float, default=0.0)  # 当前余额
+    
+    # 状态
+    is_default = Column(Boolean, default=False)  # 是否默认账户
+    status = Column(String(20), default="active")  # active/inactive
+    
+    # 其他信息
+    description = Column(Text)  # 描述
+    remark = Column(Text)  # 备注
+    
+    # 操作记录
+    create_time = Column(DateTime, server_default=func.now())
+    update_time = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_by = Column(String(50), default="系统管理员")
+    
+    # 关系
+    cash_flows = relationship("CashFlow", back_populates="bank_account", cascade="all, delete-orphan")
+
+
+class CashFlow(Base):
+    """资金流水表 - 记录所有资金进出"""
+    __tablename__ = "cash_flows"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    flow_no = Column(String(50), unique=True, index=True, nullable=False)  # 流水号 LS20260126001
+    
+    # 账户信息
+    account_id = Column(Integer, ForeignKey("bank_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # 流水信息
+    flow_type = Column(String(20), nullable=False, index=True)  # income/expense
+    category = Column(String(50), nullable=False)  # 分类：销售收款/供应商付款/费用支出/其他收入/其他支出
+    amount = Column(Float, nullable=False)  # 金额
+    balance_before = Column(Float, nullable=False)  # 交易前余额
+    balance_after = Column(Float, nullable=False)  # 交易后余额
+    
+    # 关联业务
+    related_type = Column(String(50))  # 关联类型：payment_record/supplier_payment/expense/transfer
+    related_id = Column(Integer)  # 关联ID
+    
+    # 时间信息
+    flow_date = Column(DateTime, nullable=False, index=True)  # 流水日期
+    
+    # 其他信息
+    counterparty = Column(String(100))  # 交易对方
+    remark = Column(Text)  # 备注
+    
+    # 操作记录
+    created_by = Column(String(50), default="系统管理员")
+    create_time = Column(DateTime, server_default=func.now())
+    
+    # 关系
+    bank_account = relationship("BankAccount", back_populates="cash_flows")
+
+
+# ==================== 费用管理模块 ====================
+
+class ExpenseCategory(Base):
+    """费用类别表 - 管理费用分类"""
+    __tablename__ = "expense_categories"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # 类别信息
+    code = Column(String(20), unique=True, nullable=False)  # 类别编码
+    name = Column(String(50), nullable=False)  # 类别名称
+    parent_id = Column(Integer, ForeignKey("expense_categories.id", ondelete="SET NULL"), nullable=True)  # 父类别
+    
+    # 其他信息
+    description = Column(Text)  # 描述
+    sort_order = Column(Integer, default=0)  # 排序
+    is_active = Column(Boolean, default=True)  # 是否启用
+    
+    # 操作记录
+    create_time = Column(DateTime, server_default=func.now())
+    update_time = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    
+    # 关系
+    parent = relationship("ExpenseCategory", remote_side=[id], backref="children")
+    expenses = relationship("Expense", back_populates="category")
+
+
+class Expense(Base):
+    """费用记录表 - 记录日常运营费用"""
+    __tablename__ = "expenses"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    expense_no = Column(String(50), unique=True, index=True, nullable=False)  # 费用单号 FY20260126001
+    
+    # 类别和账户
+    category_id = Column(Integer, ForeignKey("expense_categories.id", ondelete="SET NULL"), nullable=True, index=True)
+    account_id = Column(Integer, ForeignKey("bank_accounts.id", ondelete="SET NULL"), nullable=True, index=True)
+    
+    # 费用信息
+    amount = Column(Float, nullable=False)  # 费用金额
+    expense_date = Column(Date, nullable=False, index=True)  # 费用日期
+    
+    # 收款方信息
+    payee = Column(String(100))  # 收款方
+    payment_method = Column(String(20))  # 支付方式
+    
+    # 附件信息
+    attachment = Column(String(500))  # 附件路径（发票等）
+    
+    # 审批信息
+    status = Column(String(20), default="pending", index=True)  # pending/approved/rejected
+    approved_by = Column(String(50))  # 审批人
+    approved_at = Column(DateTime)  # 审批时间
+    reject_reason = Column(Text)  # 驳回原因
+    
+    # 其他信息
+    remark = Column(Text)  # 备注
+    
+    # 操作记录
+    created_by = Column(String(50), default="系统管理员")
+    create_time = Column(DateTime, server_default=func.now())
+    update_time = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    
+    # 关系
+    category = relationship("ExpenseCategory", back_populates="expenses")
+    bank_account = relationship("BankAccount", backref="expenses")
+
+
+# 预置费用类别
+DEFAULT_EXPENSE_CATEGORIES = [
+    {"code": "rent", "name": "房租", "sort_order": 1},
+    {"code": "salary", "name": "工资", "sort_order": 2},
+    {"code": "utilities", "name": "水电费", "sort_order": 3},
+    {"code": "communication", "name": "通讯费", "sort_order": 4},
+    {"code": "office", "name": "办公用品", "sort_order": 5},
+    {"code": "transport", "name": "交通费", "sort_order": 6},
+    {"code": "entertainment", "name": "业务招待", "sort_order": 7},
+    {"code": "tax", "name": "税费", "sort_order": 8},
+    {"code": "maintenance", "name": "维修费", "sort_order": 9},
+    {"code": "insurance", "name": "保险费", "sort_order": 10},
+    {"code": "other", "name": "其他费用", "sort_order": 99},
+]
+
+
 

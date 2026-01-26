@@ -556,3 +556,337 @@ export async function getPaymentRecords(
     };
   }
 }
+
+
+// ==================== 应付账款API ====================
+
+export interface PayableItem {
+  id: number;
+  payable_no: string;
+  supplier_id: number;
+  supplier_name: string;
+  inbound_order_id?: number;
+  inbound_order_no?: string;
+  total_amount: number;
+  paid_amount: number;
+  unpaid_amount: number;
+  credit_days: number;
+  credit_start_date: string;
+  due_date: string;
+  overdue_days: number;
+  status: string;
+  is_overdue: boolean;
+  remark?: string;
+  create_time: string;
+}
+
+export interface PayablesResponse {
+  success: boolean;
+  data?: PayableItem[];
+  total?: number;
+  error?: string;
+}
+
+export async function getPayables(
+  filterType: string = 'all',
+  supplierId?: number,
+  skip: number = 0,
+  limit: number = 100
+): Promise<PayablesResponse> {
+  try {
+    const params = new URLSearchParams({
+      filter_type: filterType,
+      skip: skip.toString(),
+      limit: limit.toString(),
+    });
+    if (supplierId) {
+      params.append('supplier_id', supplierId.toString());
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/api/finance/payables?${params}`);
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('获取应付账款失败:', error);
+    return { success: false, error: '网络错误' };
+  }
+}
+
+export async function getPayablesStatistics(): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/finance/payables/statistics`);
+    return await response.json();
+  } catch (error) {
+    console.error('获取应付账款统计失败:', error);
+    return { success: false, error: '网络错误' };
+  }
+}
+
+export async function recordSupplierPayment(
+  supplierId: number,
+  amount: number,
+  paymentMethod: string = 'bank_transfer',
+  paymentDate?: string,
+  remark?: string
+): Promise<{ success: boolean; message?: string; data?: any; error?: string }> {
+  try {
+    const params = new URLSearchParams({
+      supplier_id: supplierId.toString(),
+      amount: amount.toString(),
+      payment_method: paymentMethod,
+    });
+    if (paymentDate) params.append('payment_date', paymentDate);
+    if (remark) params.append('remark', remark);
+    
+    const response = await fetch(`${API_BASE_URL}/api/finance/supplier-payment?${params}`, {
+      method: 'POST',
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('供应商付款失败:', error);
+    return { success: false, error: '网络错误' };
+  }
+}
+
+
+// ==================== 资金流水API ====================
+
+export interface BankAccountItem {
+  id: number;
+  account_name: string;
+  account_no?: string;
+  bank_name?: string;
+  account_type: string;
+  initial_balance: number;
+  current_balance: number;
+  is_default: boolean;
+  status: string;
+  description?: string;
+  create_time: string;
+}
+
+export interface CashFlowItem {
+  id: number;
+  flow_no: string;
+  account_id: number;
+  account_name?: string;
+  flow_type: string;
+  category: string;
+  amount: number;
+  balance_before: number;
+  balance_after: number;
+  related_type?: string;
+  related_id?: number;
+  flow_date: string;
+  counterparty?: string;
+  remark?: string;
+  created_by: string;
+  create_time: string;
+}
+
+export async function getBankAccounts(): Promise<{ success: boolean; data?: BankAccountItem[]; error?: string }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/finance/accounts`);
+    return await response.json();
+  } catch (error) {
+    console.error('获取银行账户失败:', error);
+    return { success: false, error: '网络错误' };
+  }
+}
+
+export async function createBankAccount(
+  accountName: string,
+  accountType: string = 'bank',
+  initialBalance: number = 0,
+  isDefault: boolean = false
+): Promise<{ success: boolean; message?: string; data?: any; error?: string }> {
+  try {
+    const params = new URLSearchParams({
+      account_name: accountName,
+      account_type: accountType,
+      initial_balance: initialBalance.toString(),
+      is_default: isDefault.toString(),
+    });
+    
+    const response = await fetch(`${API_BASE_URL}/api/finance/accounts?${params}`, {
+      method: 'POST',
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('创建银行账户失败:', error);
+    return { success: false, error: '网络错误' };
+  }
+}
+
+export async function getCashFlows(
+  accountId?: number,
+  flowType?: string,
+  startDate?: string,
+  endDate?: string,
+  skip: number = 0,
+  limit: number = 100
+): Promise<{ success: boolean; data?: CashFlowItem[]; total?: number; error?: string }> {
+  try {
+    const params = new URLSearchParams({
+      skip: skip.toString(),
+      limit: limit.toString(),
+    });
+    if (accountId) params.append('account_id', accountId.toString());
+    if (flowType) params.append('flow_type', flowType);
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    
+    const response = await fetch(`${API_BASE_URL}/api/finance/cashflow?${params}`);
+    return await response.json();
+  } catch (error) {
+    console.error('获取资金流水失败:', error);
+    return { success: false, error: '网络错误' };
+  }
+}
+
+export async function getCashFlowSummary(
+  accountId?: number,
+  startDate?: string,
+  endDate?: string
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const params = new URLSearchParams();
+    if (accountId) params.append('account_id', accountId.toString());
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    
+    const response = await fetch(`${API_BASE_URL}/api/finance/cashflow/summary?${params}`);
+    return await response.json();
+  } catch (error) {
+    console.error('获取资金流水汇总失败:', error);
+    return { success: false, error: '网络错误' };
+  }
+}
+
+
+// ==================== 费用管理API ====================
+
+export interface ExpenseCategory {
+  id: number;
+  code: string;
+  name: string;
+  parent_id?: number;
+  description?: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface ExpenseItem {
+  id: number;
+  expense_no: string;
+  category_id: number;
+  category_name?: string;
+  account_id?: number;
+  account_name?: string;
+  amount: number;
+  expense_date: string;
+  payee?: string;
+  payment_method?: string;
+  status: string;
+  remark?: string;
+  created_by: string;
+  approved_by?: string;
+  approved_at?: string;
+  create_time: string;
+}
+
+export async function getExpenseCategories(): Promise<{ success: boolean; data?: ExpenseCategory[]; error?: string }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/finance/expense-categories`);
+    return await response.json();
+  } catch (error) {
+    console.error('获取费用类别失败:', error);
+    return { success: false, error: '网络错误' };
+  }
+}
+
+export async function initExpenseCategories(): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/finance/expense-categories/init`, {
+      method: 'POST',
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('初始化费用类别失败:', error);
+    return { success: false, error: '网络错误' };
+  }
+}
+
+export async function getExpenses(
+  categoryId?: number,
+  status?: string,
+  startDate?: string,
+  endDate?: string,
+  skip: number = 0,
+  limit: number = 100
+): Promise<{ success: boolean; data?: ExpenseItem[]; total?: number; error?: string }> {
+  try {
+    const params = new URLSearchParams({
+      skip: skip.toString(),
+      limit: limit.toString(),
+    });
+    if (categoryId) params.append('category_id', categoryId.toString());
+    if (status) params.append('status', status);
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    
+    const response = await fetch(`${API_BASE_URL}/api/finance/expenses?${params}`);
+    return await response.json();
+  } catch (error) {
+    console.error('获取费用列表失败:', error);
+    return { success: false, error: '网络错误' };
+  }
+}
+
+export async function createExpense(
+  categoryId: number,
+  amount: number,
+  expenseDate: string,
+  accountId?: number,
+  payee?: string,
+  remark?: string,
+  autoApprove: boolean = true
+): Promise<{ success: boolean; message?: string; data?: any; error?: string }> {
+  try {
+    const params = new URLSearchParams({
+      category_id: categoryId.toString(),
+      amount: amount.toString(),
+      expense_date: expenseDate,
+      auto_approve: autoApprove.toString(),
+    });
+    if (accountId) params.append('account_id', accountId.toString());
+    if (payee) params.append('payee', payee);
+    if (remark) params.append('remark', remark);
+    
+    const response = await fetch(`${API_BASE_URL}/api/finance/expenses?${params}`, {
+      method: 'POST',
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('创建费用失败:', error);
+    return { success: false, error: '网络错误' };
+  }
+}
+
+export async function getExpensesSummary(
+  startDate?: string,
+  endDate?: string,
+  groupBy: string = 'category'
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const params = new URLSearchParams({ group_by: groupBy });
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    
+    const response = await fetch(`${API_BASE_URL}/api/finance/expenses/summary?${params}`);
+    return await response.json();
+  } catch (error) {
+    console.error('获取费用汇总失败:', error);
+    return { success: false, error: '网络错误' };
+  }
+}

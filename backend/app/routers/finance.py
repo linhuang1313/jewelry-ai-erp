@@ -285,6 +285,46 @@ async def record_payment_from_chat(
                 prepayment = remaining_amount
                 logger.info(f"预收款: 客户={customer.name}, 金额={remaining_amount}")
         
+        # ========== 记录资金流水 ==========
+        try:
+            from ..models.finance import BankAccount, CashFlow
+            
+            # 查找默认账户
+            default_account = db.query(BankAccount).filter(
+                BankAccount.is_default == True,
+                BankAccount.status == "active"
+            ).first()
+            
+            if default_account:
+                balance_before = default_account.current_balance
+                default_account.current_balance += amount
+                
+                flow_count = db.query(CashFlow).filter(
+                    CashFlow.create_time >= now.replace(hour=0, minute=0, second=0)
+                ).count()
+                flow_no = f"LS{now.strftime('%Y%m%d')}{flow_count + 1:04d}"
+                
+                cash_flow = CashFlow(
+                    flow_no=flow_no,
+                    account_id=default_account.id,
+                    flow_type="income",
+                    category="销售收款",
+                    amount=amount,
+                    balance_before=balance_before,
+                    balance_after=default_account.current_balance,
+                    related_type="payment_record",
+                    related_id=payment.id,
+                    flow_date=now,
+                    counterparty=customer.name,
+                    remark=f"收款单：{payment_no}",
+                    created_by="财务"
+                )
+                db.add(cash_flow)
+                logger.info(f"记录资金流水: {flow_no}, 收入={amount}")
+        except Exception as e:
+            logger.warning(f"记录资金流水失败（不影响收款）: {e}")
+        # ========== 资金流水记录结束 ==========
+        
         db.commit()
         db.refresh(payment)
         
@@ -926,6 +966,1126 @@ async def get_reminder_records(
             success=False,
             error=str(e)
         )
+
+
+# ==================== 应付账款管理 ====================
+
+@router.get("/payables")
+async def get_payables(
+    filter_type: str = Query("all", description="筛选类型: all/unpaid/partial/paid/overdue"),
+    search: Optional[str] = Query(None, description="搜索供应商名称"),
+    supplier_id: Optional[int] = Query(None, description="供应商ID"),
+    start_date: Optional[str] = Query(None, description="开始日期 (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="结束日期 (YYYY-MM-DD)"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    db: Session = Depends(get_db)
+):
+    """获取应付账款列表"""
+    try:
+        from ..models.finance import AccountPayable
+        from ..models import Supplier, InboundOrder
+        from sqlalchemy.orm import joinedload
+        from datetime import datetime, date
+        
+        query = db.query(AccountPayable).options(
+            joinedload(AccountPayable.supplier),
+            joinedload(AccountPayable.inbound_order)
+        )
+        
+        # 筛选条件
+        if filter_type == "unpaid":
+            query = query.filter(AccountPayable.status == "unpaid")
+        elif filter_type == "partial":
+            query = query.filter(AccountPayable.status == "partial")
+        elif filter_type == "paid":
+            query = query.filter(AccountPayable.status == "paid")
+        elif filter_type == "overdue":
+            query = query.filter(AccountPayable.is_overdue == True)
+        
+        if supplier_id:
+            query = query.filter(AccountPayable.supplier_id == supplier_id)
+        
+        if search:
+            query = query.join(Supplier).filter(Supplier.name.contains(search))
+        
+        if start_date:
+            query = query.filter(AccountPayable.credit_start_date >= datetime.strptime(start_date, "%Y-%m-%d").date())
+        if end_date:
+            query = query.filter(AccountPayable.credit_start_date <= datetime.strptime(end_date, "%Y-%m-%d").date())
+        
+        total = query.count()
+        payables = query.order_by(AccountPayable.due_date.asc()).offset(skip).limit(limit).all()
+        
+        # 更新逾期状态
+        today = date.today()
+        for p in payables:
+            if p.status != "paid" and p.due_date < today:
+                p.is_overdue = True
+                p.overdue_days = (today - p.due_date).days
+        db.commit()
+        
+        data = []
+        for p in payables:
+            data.append({
+                "id": p.id,
+                "payable_no": p.payable_no,
+                "supplier_id": p.supplier_id,
+                "supplier_name": p.supplier.name if p.supplier else None,
+                "inbound_order_id": p.inbound_order_id,
+                "inbound_order_no": p.inbound_order.order_no if p.inbound_order else None,
+                "total_amount": p.total_amount,
+                "paid_amount": p.paid_amount,
+                "unpaid_amount": p.unpaid_amount,
+                "credit_days": p.credit_days,
+                "credit_start_date": p.credit_start_date.isoformat() if p.credit_start_date else None,
+                "due_date": p.due_date.isoformat() if p.due_date else None,
+                "overdue_days": p.overdue_days,
+                "status": p.status,
+                "is_overdue": p.is_overdue,
+                "remark": p.remark,
+                "create_time": p.create_time.isoformat() if p.create_time else None
+            })
+        
+        return {
+            "success": True,
+            "data": data,
+            "total": total
+        }
+        
+    except Exception as e:
+        logger.error(f"获取应付账款列表失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/payables/{payable_id}")
+async def get_payable_detail(
+    payable_id: int,
+    db: Session = Depends(get_db)
+):
+    """获取应付账款详情"""
+    try:
+        from ..models.finance import AccountPayable, SupplierPayment
+        from sqlalchemy.orm import joinedload
+        
+        payable = db.query(AccountPayable).options(
+            joinedload(AccountPayable.supplier),
+            joinedload(AccountPayable.inbound_order),
+            joinedload(AccountPayable.supplier_payments)
+        ).filter(AccountPayable.id == payable_id).first()
+        
+        if not payable:
+            return {"success": False, "error": "应付账款不存在"}
+        
+        # 付款记录
+        payments = []
+        for p in payable.supplier_payments:
+            payments.append({
+                "id": p.id,
+                "payment_no": p.payment_no,
+                "payment_date": p.payment_date.isoformat() if p.payment_date else None,
+                "amount": p.amount,
+                "payment_method": p.payment_method,
+                "remark": p.remark,
+                "created_by": p.created_by,
+                "create_time": p.create_time.isoformat() if p.create_time else None
+            })
+        
+        return {
+            "success": True,
+            "data": {
+                "id": payable.id,
+                "payable_no": payable.payable_no,
+                "supplier_id": payable.supplier_id,
+                "supplier_name": payable.supplier.name if payable.supplier else None,
+                "inbound_order_id": payable.inbound_order_id,
+                "inbound_order_no": payable.inbound_order.order_no if payable.inbound_order else None,
+                "total_amount": payable.total_amount,
+                "paid_amount": payable.paid_amount,
+                "unpaid_amount": payable.unpaid_amount,
+                "credit_days": payable.credit_days,
+                "credit_start_date": payable.credit_start_date.isoformat() if payable.credit_start_date else None,
+                "due_date": payable.due_date.isoformat() if payable.due_date else None,
+                "overdue_days": payable.overdue_days,
+                "status": payable.status,
+                "is_overdue": payable.is_overdue,
+                "remark": payable.remark,
+                "create_time": payable.create_time.isoformat() if payable.create_time else None,
+                "payments": payments
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"获取应付账款详情失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/supplier-payment")
+async def record_supplier_payment(
+    supplier_id: int,
+    amount: float,
+    payment_method: str = Query("bank_transfer", description="付款方式: bank_transfer/cash/check/acceptance"),
+    payment_date: Optional[str] = Query(None, description="付款日期 YYYY-MM-DD"),
+    bank_account_id: Optional[int] = Query(None, description="付款账户ID"),
+    remark: str = "",
+    created_by: str = "财务专员",
+    db: Session = Depends(get_db)
+):
+    """
+    登记供应商付款
+    FIFO方式冲抵最早的应付账款
+    """
+    try:
+        from ..models.finance import AccountPayable, SupplierPayment, BankAccount, CashFlow
+        from ..models import Supplier
+        from datetime import datetime, date, timedelta
+        
+        # 验证供应商
+        supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+        if not supplier:
+            return {"success": False, "error": "供应商不存在"}
+        
+        # 解析日期
+        pay_date = datetime.strptime(payment_date, "%Y-%m-%d").date() if payment_date else date.today()
+        
+        # 生成付款单号
+        now = datetime.now()
+        count = db.query(SupplierPayment).filter(
+            SupplierPayment.create_time >= now.replace(hour=0, minute=0, second=0)
+        ).count()
+        payment_no = f"FK{now.strftime('%Y%m%d')}{count + 1:03d}"
+        
+        # 创建付款记录
+        payment = SupplierPayment(
+            payment_no=payment_no,
+            supplier_id=supplier_id,
+            payment_date=pay_date,
+            amount=amount,
+            payment_method=payment_method,
+            bank_account_id=bank_account_id,
+            remark=remark,
+            created_by=created_by
+        )
+        db.add(payment)
+        db.flush()
+        
+        # FIFO方式冲抵应付账款
+        unpaid_payables = db.query(AccountPayable).filter(
+            AccountPayable.supplier_id == supplier_id,
+            AccountPayable.status.in_(["unpaid", "partial"]),
+            AccountPayable.unpaid_amount > 0
+        ).order_by(AccountPayable.due_date.asc()).all()
+        
+        remaining_amount = amount
+        offset_details = []
+        
+        for payable in unpaid_payables:
+            if remaining_amount <= 0:
+                break
+            
+            offset_amount = min(remaining_amount, payable.unpaid_amount)
+            payable.paid_amount += offset_amount
+            payable.unpaid_amount = payable.total_amount - payable.paid_amount
+            
+            if payable.unpaid_amount <= 0:
+                payable.status = "paid"
+            else:
+                payable.status = "partial"
+            
+            offset_details.append({
+                "payable_no": payable.payable_no,
+                "offset_amount": offset_amount
+            })
+            remaining_amount -= offset_amount
+        
+        # 记录资金流水（如果有账户）
+        if bank_account_id:
+            account = db.query(BankAccount).filter(BankAccount.id == bank_account_id).first()
+            if account:
+                balance_before = account.current_balance
+                account.current_balance -= amount
+                
+                flow_count = db.query(CashFlow).filter(
+                    CashFlow.create_time >= now.replace(hour=0, minute=0, second=0)
+                ).count()
+                flow_no = f"LS{now.strftime('%Y%m%d')}{flow_count + 1:04d}"
+                
+                cash_flow = CashFlow(
+                    flow_no=flow_no,
+                    account_id=bank_account_id,
+                    flow_type="expense",
+                    category="供应商付款",
+                    amount=amount,
+                    balance_before=balance_before,
+                    balance_after=account.current_balance,
+                    related_type="supplier_payment",
+                    related_id=payment.id,
+                    flow_date=now,
+                    counterparty=supplier.name,
+                    remark=f"付款单：{payment_no}",
+                    created_by=created_by
+                )
+                db.add(cash_flow)
+        
+        db.commit()
+        
+        logger.info(f"供应商付款: {payment_no}, 供应商={supplier.name}, 金额={amount}, 冲抵{len(offset_details)}笔应付账款")
+        
+        return {
+            "success": True,
+            "message": f"付款成功，冲抵{len(offset_details)}笔应付账款",
+            "data": {
+                "payment_no": payment_no,
+                "amount": amount,
+                "offset_details": offset_details,
+                "remaining": remaining_amount if remaining_amount > 0 else 0
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"供应商付款失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/supplier-payments")
+async def get_supplier_payments(
+    supplier_id: Optional[int] = Query(None, description="供应商ID"),
+    start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    db: Session = Depends(get_db)
+):
+    """获取供应商付款记录列表"""
+    try:
+        from ..models.finance import SupplierPayment
+        from ..models import Supplier
+        from sqlalchemy.orm import joinedload
+        from datetime import datetime
+        
+        query = db.query(SupplierPayment).options(joinedload(SupplierPayment.supplier))
+        
+        if supplier_id:
+            query = query.filter(SupplierPayment.supplier_id == supplier_id)
+        if start_date:
+            query = query.filter(SupplierPayment.payment_date >= datetime.strptime(start_date, "%Y-%m-%d").date())
+        if end_date:
+            query = query.filter(SupplierPayment.payment_date <= datetime.strptime(end_date, "%Y-%m-%d").date())
+        
+        total = query.count()
+        payments = query.order_by(SupplierPayment.payment_date.desc()).offset(skip).limit(limit).all()
+        
+        data = []
+        for p in payments:
+            data.append({
+                "id": p.id,
+                "payment_no": p.payment_no,
+                "supplier_id": p.supplier_id,
+                "supplier_name": p.supplier.name if p.supplier else None,
+                "payment_date": p.payment_date.isoformat() if p.payment_date else None,
+                "amount": p.amount,
+                "payment_method": p.payment_method,
+                "remark": p.remark,
+                "created_by": p.created_by,
+                "create_time": p.create_time.isoformat() if p.create_time else None
+            })
+        
+        return {
+            "success": True,
+            "data": data,
+            "total": total
+        }
+        
+    except Exception as e:
+        logger.error(f"获取供应商付款记录失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/payables/statistics")
+async def get_payables_statistics(db: Session = Depends(get_db)):
+    """获取应付账款统计"""
+    try:
+        from ..models.finance import AccountPayable
+        from sqlalchemy import func
+        from datetime import date
+        
+        # 总应付账款
+        total_payable = db.query(func.sum(AccountPayable.unpaid_amount)).filter(
+            AccountPayable.status.in_(["unpaid", "partial"])
+        ).scalar() or 0
+        
+        # 本月应付
+        today = date.today()
+        month_start = today.replace(day=1)
+        month_payable = db.query(func.sum(AccountPayable.unpaid_amount)).filter(
+            AccountPayable.status.in_(["unpaid", "partial"]),
+            AccountPayable.due_date >= month_start,
+            AccountPayable.due_date <= today.replace(day=28)  # 简化处理
+        ).scalar() or 0
+        
+        # 逾期金额
+        overdue_amount = db.query(func.sum(AccountPayable.unpaid_amount)).filter(
+            AccountPayable.status.in_(["unpaid", "partial"]),
+            AccountPayable.is_overdue == True
+        ).scalar() or 0
+        
+        # 逾期供应商数
+        overdue_suppliers = db.query(func.count(func.distinct(AccountPayable.supplier_id))).filter(
+            AccountPayable.status.in_(["unpaid", "partial"]),
+            AccountPayable.is_overdue == True
+        ).scalar() or 0
+        
+        return {
+            "success": True,
+            "data": {
+                "total_payable": round(total_payable, 2),
+                "month_payable": round(month_payable, 2),
+                "overdue_amount": round(overdue_amount, 2),
+                "overdue_suppliers": overdue_suppliers
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"获取应付账款统计失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+# ==================== 资金流水管理 ====================
+
+@router.get("/accounts")
+async def get_bank_accounts(
+    account_type: Optional[str] = Query(None, description="账户类型: bank/cash/alipay/wechat"),
+    status: str = Query("active", description="状态: active/inactive/all"),
+    db: Session = Depends(get_db)
+):
+    """获取银行账户列表"""
+    try:
+        from ..models.finance import BankAccount
+        
+        query = db.query(BankAccount)
+        
+        if account_type:
+            query = query.filter(BankAccount.account_type == account_type)
+        if status != "all":
+            query = query.filter(BankAccount.status == status)
+        
+        accounts = query.order_by(BankAccount.is_default.desc(), BankAccount.id.asc()).all()
+        
+        data = []
+        for a in accounts:
+            data.append({
+                "id": a.id,
+                "account_name": a.account_name,
+                "account_no": a.account_no,
+                "bank_name": a.bank_name,
+                "account_type": a.account_type,
+                "initial_balance": a.initial_balance,
+                "current_balance": a.current_balance,
+                "is_default": a.is_default,
+                "status": a.status,
+                "description": a.description,
+                "create_time": a.create_time.isoformat() if a.create_time else None
+            })
+        
+        return {"success": True, "data": data}
+        
+    except Exception as e:
+        logger.error(f"获取银行账户列表失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/accounts")
+async def create_bank_account(
+    account_name: str,
+    account_type: str = Query("bank", description="账户类型: bank/cash/alipay/wechat"),
+    account_no: str = "",
+    bank_name: str = "",
+    initial_balance: float = 0.0,
+    is_default: bool = False,
+    description: str = "",
+    created_by: str = "系统管理员",
+    db: Session = Depends(get_db)
+):
+    """创建银行账户"""
+    try:
+        from ..models.finance import BankAccount
+        
+        # 如果设为默认，取消其他默认账户
+        if is_default:
+            db.query(BankAccount).filter(BankAccount.is_default == True).update({"is_default": False})
+        
+        account = BankAccount(
+            account_name=account_name,
+            account_no=account_no,
+            bank_name=bank_name,
+            account_type=account_type,
+            initial_balance=initial_balance,
+            current_balance=initial_balance,
+            is_default=is_default,
+            description=description,
+            created_by=created_by
+        )
+        db.add(account)
+        db.commit()
+        db.refresh(account)
+        
+        logger.info(f"创建银行账户: {account_name}, 类型={account_type}, 期初余额={initial_balance}")
+        
+        return {
+            "success": True,
+            "message": "账户创建成功",
+            "data": {
+                "id": account.id,
+                "account_name": account.account_name
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"创建银行账户失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.put("/accounts/{account_id}")
+async def update_bank_account(
+    account_id: int,
+    account_name: Optional[str] = None,
+    account_no: Optional[str] = None,
+    bank_name: Optional[str] = None,
+    is_default: Optional[bool] = None,
+    status: Optional[str] = None,
+    description: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """更新银行账户"""
+    try:
+        from ..models.finance import BankAccount
+        
+        account = db.query(BankAccount).filter(BankAccount.id == account_id).first()
+        if not account:
+            return {"success": False, "error": "账户不存在"}
+        
+        if account_name is not None:
+            account.account_name = account_name
+        if account_no is not None:
+            account.account_no = account_no
+        if bank_name is not None:
+            account.bank_name = bank_name
+        if description is not None:
+            account.description = description
+        if status is not None:
+            account.status = status
+        if is_default is not None:
+            if is_default:
+                db.query(BankAccount).filter(BankAccount.is_default == True).update({"is_default": False})
+            account.is_default = is_default
+        
+        db.commit()
+        
+        return {"success": True, "message": "账户更新成功"}
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"更新银行账户失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/cashflow")
+async def get_cash_flows(
+    account_id: Optional[int] = Query(None, description="账户ID"),
+    flow_type: Optional[str] = Query(None, description="流水类型: income/expense"),
+    category: Optional[str] = Query(None, description="分类"),
+    start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    db: Session = Depends(get_db)
+):
+    """获取资金流水列表"""
+    try:
+        from ..models.finance import CashFlow, BankAccount
+        from sqlalchemy.orm import joinedload
+        from datetime import datetime
+        
+        query = db.query(CashFlow).options(joinedload(CashFlow.bank_account))
+        
+        if account_id:
+            query = query.filter(CashFlow.account_id == account_id)
+        if flow_type:
+            query = query.filter(CashFlow.flow_type == flow_type)
+        if category:
+            query = query.filter(CashFlow.category == category)
+        if start_date:
+            query = query.filter(CashFlow.flow_date >= datetime.strptime(start_date, "%Y-%m-%d"))
+        if end_date:
+            query = query.filter(CashFlow.flow_date <= datetime.strptime(end_date + " 23:59:59", "%Y-%m-%d %H:%M:%S"))
+        
+        total = query.count()
+        flows = query.order_by(CashFlow.flow_date.desc()).offset(skip).limit(limit).all()
+        
+        data = []
+        for f in flows:
+            data.append({
+                "id": f.id,
+                "flow_no": f.flow_no,
+                "account_id": f.account_id,
+                "account_name": f.bank_account.account_name if f.bank_account else None,
+                "flow_type": f.flow_type,
+                "category": f.category,
+                "amount": f.amount,
+                "balance_before": f.balance_before,
+                "balance_after": f.balance_after,
+                "related_type": f.related_type,
+                "related_id": f.related_id,
+                "flow_date": f.flow_date.isoformat() if f.flow_date else None,
+                "counterparty": f.counterparty,
+                "remark": f.remark,
+                "created_by": f.created_by,
+                "create_time": f.create_time.isoformat() if f.create_time else None
+            })
+        
+        return {
+            "success": True,
+            "data": data,
+            "total": total
+        }
+        
+    except Exception as e:
+        logger.error(f"获取资金流水失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/cashflow/summary")
+async def get_cashflow_summary(
+    account_id: Optional[int] = Query(None, description="账户ID"),
+    start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+    db: Session = Depends(get_db)
+):
+    """获取资金流水汇总"""
+    try:
+        from ..models.finance import CashFlow, BankAccount
+        from sqlalchemy import func
+        from datetime import datetime
+        
+        # 收入汇总
+        income_query = db.query(func.sum(CashFlow.amount)).filter(CashFlow.flow_type == "income")
+        # 支出汇总
+        expense_query = db.query(func.sum(CashFlow.amount)).filter(CashFlow.flow_type == "expense")
+        
+        if account_id:
+            income_query = income_query.filter(CashFlow.account_id == account_id)
+            expense_query = expense_query.filter(CashFlow.account_id == account_id)
+        
+        if start_date:
+            start = datetime.strptime(start_date, "%Y-%m-%d")
+            income_query = income_query.filter(CashFlow.flow_date >= start)
+            expense_query = expense_query.filter(CashFlow.flow_date >= start)
+        if end_date:
+            end = datetime.strptime(end_date + " 23:59:59", "%Y-%m-%d %H:%M:%S")
+            income_query = income_query.filter(CashFlow.flow_date <= end)
+            expense_query = expense_query.filter(CashFlow.flow_date <= end)
+        
+        total_income = income_query.scalar() or 0
+        total_expense = expense_query.scalar() or 0
+        
+        # 账户余额
+        if account_id:
+            account = db.query(BankAccount).filter(BankAccount.id == account_id).first()
+            current_balance = account.current_balance if account else 0
+        else:
+            current_balance = db.query(func.sum(BankAccount.current_balance)).filter(
+                BankAccount.status == "active"
+            ).scalar() or 0
+        
+        return {
+            "success": True,
+            "data": {
+                "total_income": round(total_income, 2),
+                "total_expense": round(total_expense, 2),
+                "net_flow": round(total_income - total_expense, 2),
+                "current_balance": round(current_balance, 2)
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"获取资金流水汇总失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/cashflow/daily")
+async def get_daily_cashflow(
+    account_id: Optional[int] = Query(None, description="账户ID"),
+    start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+    db: Session = Depends(get_db)
+):
+    """获取日记账（按日汇总）"""
+    try:
+        from ..models.finance import CashFlow
+        from sqlalchemy import func, cast, Date
+        from datetime import datetime, date, timedelta
+        
+        # 默认最近30天
+        if not end_date:
+            end_date = date.today().isoformat()
+        if not start_date:
+            start_date = (date.today() - timedelta(days=30)).isoformat()
+        
+        start = datetime.strptime(start_date, "%Y-%m-%d")
+        end = datetime.strptime(end_date + " 23:59:59", "%Y-%m-%d %H:%M:%S")
+        
+        query = db.query(
+            func.date(CashFlow.flow_date).label("date"),
+            CashFlow.flow_type,
+            func.sum(CashFlow.amount).label("total_amount"),
+            func.count(CashFlow.id).label("count")
+        ).filter(
+            CashFlow.flow_date >= start,
+            CashFlow.flow_date <= end
+        )
+        
+        if account_id:
+            query = query.filter(CashFlow.account_id == account_id)
+        
+        results = query.group_by(func.date(CashFlow.flow_date), CashFlow.flow_type).all()
+        
+        # 按日期整理数据
+        daily_data = {}
+        for r in results:
+            date_str = r.date.isoformat() if hasattr(r.date, 'isoformat') else str(r.date)
+            if date_str not in daily_data:
+                daily_data[date_str] = {"date": date_str, "income": 0, "expense": 0, "income_count": 0, "expense_count": 0}
+            
+            if r.flow_type == "income":
+                daily_data[date_str]["income"] = round(r.total_amount, 2)
+                daily_data[date_str]["income_count"] = r.count
+            else:
+                daily_data[date_str]["expense"] = round(r.total_amount, 2)
+                daily_data[date_str]["expense_count"] = r.count
+        
+        # 转为列表并排序
+        data = sorted(daily_data.values(), key=lambda x: x["date"], reverse=True)
+        
+        return {
+            "success": True,
+            "data": data
+        }
+        
+    except Exception as e:
+        logger.error(f"获取日记账失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+# ==================== 费用管理 ====================
+
+@router.get("/expense-categories")
+async def get_expense_categories(
+    include_inactive: bool = Query(False, description="是否包含停用的类别"),
+    db: Session = Depends(get_db)
+):
+    """获取费用类别列表"""
+    try:
+        from ..models.finance import ExpenseCategory
+        
+        query = db.query(ExpenseCategory)
+        if not include_inactive:
+            query = query.filter(ExpenseCategory.is_active == True)
+        
+        categories = query.order_by(ExpenseCategory.sort_order.asc()).all()
+        
+        data = []
+        for c in categories:
+            data.append({
+                "id": c.id,
+                "code": c.code,
+                "name": c.name,
+                "parent_id": c.parent_id,
+                "description": c.description,
+                "sort_order": c.sort_order,
+                "is_active": c.is_active
+            })
+        
+        return {"success": True, "data": data}
+        
+    except Exception as e:
+        logger.error(f"获取费用类别失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/expense-categories")
+async def create_expense_category(
+    code: str,
+    name: str,
+    parent_id: Optional[int] = None,
+    description: str = "",
+    sort_order: int = 0,
+    db: Session = Depends(get_db)
+):
+    """创建费用类别"""
+    try:
+        from ..models.finance import ExpenseCategory
+        
+        # 检查编码是否重复
+        existing = db.query(ExpenseCategory).filter(ExpenseCategory.code == code).first()
+        if existing:
+            return {"success": False, "error": "类别编码已存在"}
+        
+        category = ExpenseCategory(
+            code=code,
+            name=name,
+            parent_id=parent_id,
+            description=description,
+            sort_order=sort_order
+        )
+        db.add(category)
+        db.commit()
+        db.refresh(category)
+        
+        return {
+            "success": True,
+            "message": "类别创建成功",
+            "data": {"id": category.id, "code": category.code, "name": category.name}
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"创建费用类别失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/expense-categories/init")
+async def init_expense_categories(db: Session = Depends(get_db)):
+    """初始化默认费用类别"""
+    try:
+        from ..models.finance import ExpenseCategory, DEFAULT_EXPENSE_CATEGORIES
+        
+        created = 0
+        for cat in DEFAULT_EXPENSE_CATEGORIES:
+            existing = db.query(ExpenseCategory).filter(ExpenseCategory.code == cat["code"]).first()
+            if not existing:
+                category = ExpenseCategory(**cat)
+                db.add(category)
+                created += 1
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": f"初始化完成，新增{created}个类别"
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"初始化费用类别失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/expenses")
+async def get_expenses(
+    category_id: Optional[int] = Query(None, description="费用类别ID"),
+    status: Optional[str] = Query(None, description="状态: pending/approved/rejected"),
+    start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    db: Session = Depends(get_db)
+):
+    """获取费用列表"""
+    try:
+        from ..models.finance import Expense, ExpenseCategory
+        from sqlalchemy.orm import joinedload
+        from datetime import datetime
+        
+        query = db.query(Expense).options(
+            joinedload(Expense.category),
+            joinedload(Expense.bank_account)
+        )
+        
+        if category_id:
+            query = query.filter(Expense.category_id == category_id)
+        if status:
+            query = query.filter(Expense.status == status)
+        if start_date:
+            query = query.filter(Expense.expense_date >= datetime.strptime(start_date, "%Y-%m-%d").date())
+        if end_date:
+            query = query.filter(Expense.expense_date <= datetime.strptime(end_date, "%Y-%m-%d").date())
+        
+        total = query.count()
+        expenses = query.order_by(Expense.expense_date.desc()).offset(skip).limit(limit).all()
+        
+        data = []
+        for e in expenses:
+            data.append({
+                "id": e.id,
+                "expense_no": e.expense_no,
+                "category_id": e.category_id,
+                "category_name": e.category.name if e.category else None,
+                "account_id": e.account_id,
+                "account_name": e.bank_account.account_name if e.bank_account else None,
+                "amount": e.amount,
+                "expense_date": e.expense_date.isoformat() if e.expense_date else None,
+                "payee": e.payee,
+                "payment_method": e.payment_method,
+                "status": e.status,
+                "remark": e.remark,
+                "created_by": e.created_by,
+                "approved_by": e.approved_by,
+                "approved_at": e.approved_at.isoformat() if e.approved_at else None,
+                "create_time": e.create_time.isoformat() if e.create_time else None
+            })
+        
+        return {
+            "success": True,
+            "data": data,
+            "total": total
+        }
+        
+    except Exception as e:
+        logger.error(f"获取费用列表失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/expenses")
+async def create_expense(
+    category_id: int,
+    amount: float,
+    expense_date: str = Query(..., description="费用日期 YYYY-MM-DD"),
+    account_id: Optional[int] = Query(None, description="付款账户ID"),
+    payee: str = "",
+    payment_method: str = "bank_transfer",
+    remark: str = "",
+    created_by: str = "财务专员",
+    auto_approve: bool = Query(False, description="是否自动审批"),
+    db: Session = Depends(get_db)
+):
+    """录入费用"""
+    try:
+        from ..models.finance import Expense, ExpenseCategory, BankAccount, CashFlow
+        from datetime import datetime
+        
+        # 验证类别
+        category = db.query(ExpenseCategory).filter(ExpenseCategory.id == category_id).first()
+        if not category:
+            return {"success": False, "error": "费用类别不存在"}
+        
+        # 生成费用单号
+        now = datetime.now()
+        count = db.query(Expense).filter(
+            Expense.create_time >= now.replace(hour=0, minute=0, second=0)
+        ).count()
+        expense_no = f"FY{now.strftime('%Y%m%d')}{count + 1:03d}"
+        
+        # 解析日期
+        exp_date = datetime.strptime(expense_date, "%Y-%m-%d").date()
+        
+        # 创建费用记录
+        expense = Expense(
+            expense_no=expense_no,
+            category_id=category_id,
+            account_id=account_id,
+            amount=amount,
+            expense_date=exp_date,
+            payee=payee,
+            payment_method=payment_method,
+            remark=remark,
+            created_by=created_by,
+            status="approved" if auto_approve else "pending"
+        )
+        
+        if auto_approve:
+            expense.approved_by = created_by
+            expense.approved_at = now
+        
+        db.add(expense)
+        db.flush()
+        
+        # 如果自动审批且有账户，记录资金流水
+        if auto_approve and account_id:
+            account = db.query(BankAccount).filter(BankAccount.id == account_id).first()
+            if account:
+                balance_before = account.current_balance
+                account.current_balance -= amount
+                
+                flow_count = db.query(CashFlow).filter(
+                    CashFlow.create_time >= now.replace(hour=0, minute=0, second=0)
+                ).count()
+                flow_no = f"LS{now.strftime('%Y%m%d')}{flow_count + 1:04d}"
+                
+                cash_flow = CashFlow(
+                    flow_no=flow_no,
+                    account_id=account_id,
+                    flow_type="expense",
+                    category=f"费用支出-{category.name}",
+                    amount=amount,
+                    balance_before=balance_before,
+                    balance_after=account.current_balance,
+                    related_type="expense",
+                    related_id=expense.id,
+                    flow_date=now,
+                    counterparty=payee,
+                    remark=f"费用单：{expense_no}",
+                    created_by=created_by
+                )
+                db.add(cash_flow)
+        
+        db.commit()
+        
+        logger.info(f"录入费用: {expense_no}, 类别={category.name}, 金额={amount}")
+        
+        return {
+            "success": True,
+            "message": "费用录入成功",
+            "data": {
+                "id": expense.id,
+                "expense_no": expense_no,
+                "status": expense.status
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"录入费用失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/expenses/{expense_id}/approve")
+async def approve_expense(
+    expense_id: int,
+    action: str = Query(..., description="操作: approve/reject"),
+    approved_by: str = "财务经理",
+    reject_reason: str = "",
+    db: Session = Depends(get_db)
+):
+    """审批费用"""
+    try:
+        from ..models.finance import Expense, BankAccount, CashFlow
+        from datetime import datetime
+        
+        expense = db.query(Expense).filter(Expense.id == expense_id).first()
+        if not expense:
+            return {"success": False, "error": "费用记录不存在"}
+        
+        if expense.status != "pending":
+            return {"success": False, "error": "该费用已审批"}
+        
+        now = datetime.now()
+        
+        if action == "approve":
+            expense.status = "approved"
+            expense.approved_by = approved_by
+            expense.approved_at = now
+            
+            # 记录资金流水
+            if expense.account_id:
+                account = db.query(BankAccount).filter(BankAccount.id == expense.account_id).first()
+                if account:
+                    balance_before = account.current_balance
+                    account.current_balance -= expense.amount
+                    
+                    flow_count = db.query(CashFlow).filter(
+                        CashFlow.create_time >= now.replace(hour=0, minute=0, second=0)
+                    ).count()
+                    flow_no = f"LS{now.strftime('%Y%m%d')}{flow_count + 1:04d}"
+                    
+                    cash_flow = CashFlow(
+                        flow_no=flow_no,
+                        account_id=expense.account_id,
+                        flow_type="expense",
+                        category=f"费用支出-{expense.category.name if expense.category else '其他'}",
+                        amount=expense.amount,
+                        balance_before=balance_before,
+                        balance_after=account.current_balance,
+                        related_type="expense",
+                        related_id=expense.id,
+                        flow_date=now,
+                        counterparty=expense.payee,
+                        remark=f"费用单：{expense.expense_no}",
+                        created_by=approved_by
+                    )
+                    db.add(cash_flow)
+            
+            message = "费用已审批通过"
+        else:
+            expense.status = "rejected"
+            expense.reject_reason = reject_reason
+            message = "费用已驳回"
+        
+        db.commit()
+        
+        logger.info(f"费用审批: {expense.expense_no}, 操作={action}, 审批人={approved_by}")
+        
+        return {"success": True, "message": message}
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"费用审批失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/expenses/summary")
+async def get_expenses_summary(
+    start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+    group_by: str = Query("category", description="分组方式: category/month"),
+    db: Session = Depends(get_db)
+):
+    """获取费用汇总"""
+    try:
+        from ..models.finance import Expense, ExpenseCategory
+        from sqlalchemy import func
+        from datetime import datetime, date
+        
+        # 默认本月
+        if not start_date:
+            start_date = date.today().replace(day=1).isoformat()
+        if not end_date:
+            end_date = date.today().isoformat()
+        
+        start = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end = datetime.strptime(end_date, "%Y-%m-%d").date()
+        
+        if group_by == "category":
+            results = db.query(
+                ExpenseCategory.name,
+                func.sum(Expense.amount).label("total_amount"),
+                func.count(Expense.id).label("count")
+            ).join(ExpenseCategory).filter(
+                Expense.status == "approved",
+                Expense.expense_date >= start,
+                Expense.expense_date <= end
+            ).group_by(ExpenseCategory.name).all()
+            
+            data = [{"category": r.name, "amount": round(r.total_amount, 2), "count": r.count} for r in results]
+        else:
+            results = db.query(
+                func.strftime("%Y-%m", Expense.expense_date).label("month"),
+                func.sum(Expense.amount).label("total_amount"),
+                func.count(Expense.id).label("count")
+            ).filter(
+                Expense.status == "approved",
+                Expense.expense_date >= start,
+                Expense.expense_date <= end
+            ).group_by(func.strftime("%Y-%m", Expense.expense_date)).all()
+            
+            data = [{"month": r.month, "amount": round(r.total_amount, 2), "count": r.count} for r in results]
+        
+        # 总计
+        total = sum(d["amount"] for d in data)
+        
+        return {
+            "success": True,
+            "data": {
+                "details": data,
+                "total": round(total, 2),
+                "period": {"start": start_date, "end": end_date}
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"获取费用汇总失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
 
 
 

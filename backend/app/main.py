@@ -2938,6 +2938,43 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
             supplier_obj.total_supply_count += success_count
             supplier_obj.last_supply_time = datetime.now()
         
+        # ========== 创建应付账款 ==========
+        # 只有当有工费金额时才创建应付账款
+        if supplier_obj and total_cost > 0:
+            try:
+                from .models.finance import AccountPayable
+                from datetime import timedelta
+                
+                # 生成应付单号
+                payable_count = db.query(AccountPayable).filter(
+                    AccountPayable.create_time >= china_now().replace(hour=0, minute=0, second=0)
+                ).count()
+                payable_no = f"YF{china_now().strftime('%Y%m%d')}{payable_count + 1:03d}"
+                
+                # 账期默认30天
+                credit_days = 30
+                credit_start_date = china_now().date()
+                due_date = credit_start_date + timedelta(days=credit_days)
+                
+                payable = AccountPayable(
+                    payable_no=payable_no,
+                    supplier_id=supplier_obj.id,
+                    inbound_order_id=order.id,
+                    total_amount=total_cost,
+                    paid_amount=0,
+                    unpaid_amount=total_cost,
+                    credit_days=credit_days,
+                    credit_start_date=credit_start_date,
+                    due_date=due_date,
+                    status="unpaid",
+                    remark=f"入库单：{order.order_no}"
+                )
+                db.add(payable)
+                logger.info(f"创建应付账款: {payable_no}, 供应商={supplier_obj.name}, 金额={total_cost}")
+            except Exception as e:
+                logger.warning(f"创建应付账款失败（不影响入库）: {e}")
+        # ========== 应付账款创建结束 ==========
+        
         # 提交事务
         db.commit()
         db.refresh(order)

@@ -210,7 +210,12 @@ class SettlementOrder(Base):
 
 # ============= 财务相关模型 =============
 # 从 finance.py 导入
-from .finance import AccountReceivable, PaymentRecord, ReminderRecord, ReconciliationStatement, GoldReceipt
+from .finance import (
+    AccountReceivable, PaymentRecord, ReminderRecord, ReconciliationStatement, GoldReceipt,
+    # 新增财务模块
+    AccountPayable, SupplierPayment, BankAccount, CashFlow, ExpenseCategory, Expense,
+    DEFAULT_EXPENSE_CATEGORIES
+)
 
 
 # ============= 对话日志模型 =============
@@ -806,6 +811,14 @@ __all__ = [
     'PaymentRecord',
     'ReminderRecord',
     'ReconciliationStatement',
+    # 财务增强模块
+    'AccountPayable',
+    'SupplierPayment',
+    'BankAccount',
+    'CashFlow',
+    'ExpenseCategory',
+    'Expense',
+    'DEFAULT_EXPENSE_CATEGORIES',
     # 对话日志
     'ChatLog',
     # 分仓库存
