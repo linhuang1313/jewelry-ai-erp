@@ -477,7 +477,10 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
     );
     
     if (data?.success) {
-      setSupplierDebt({ summary: data.summary, suppliers: data.suppliers });
+      setSupplierDebt({ 
+        summary: data.summary || { total_inbound_weight: 0, total_paid_weight: 0, total_debt_weight: 0, supplier_count: 0 }, 
+        suppliers: Array.isArray(data.suppliers) ? data.suppliers : [] 
+      });
     }
     setSupplierDebtLoading(false);
   }, [userRole]);
@@ -512,7 +515,12 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
       }>(`/api/suppliers/daily-transactions?${params.toString()}`, { showErrorToast: false });
       
       if (data?.success) {
-        setDailyTransactions(data.data);
+        // 确保 daily_summary 是数组
+        const safeData = data.data || {};
+        if (safeData.daily_summary && !Array.isArray(safeData.daily_summary)) {
+          safeData.daily_summary = [];
+        }
+        setDailyTransactions(safeData);
       }
     } catch (error) {
       console.error('加载每日明细失败:', error);
@@ -534,7 +542,12 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
       }>(`/api/gold-material/supplier-gold-accounts/${supplierId}?user_role=${userRole}`, { showErrorToast: false });
       
       if (data?.success) {
-        setSupplierDetail(data.data);
+        // 确保 transactions 是数组
+        const safeData = data.data || {};
+        if (safeData.transactions && !Array.isArray(safeData.transactions)) {
+          safeData.transactions = [];
+        }
+        setSupplierDetail(safeData);
       }
     } catch (error) {
       console.error('加载供应商详情失败:', error);
@@ -1038,7 +1051,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                       共 {summaryData.receipt_summary?.total_count || 0} 笔收料
                     </div>
                     {/* 客户汇总 */}
-                    {summaryData.receipt_summary?.by_customer?.length > 0 && (
+                    {Array.isArray(summaryData.receipt_summary?.by_customer) && summaryData.receipt_summary.by_customer.length > 0 && (
                       <div className="border-t border-green-200 pt-3 space-y-2">
                         <div className="text-xs text-gray-500 font-medium">客户明细</div>
                         {summaryData.receipt_summary.by_customer.map((item: any) => (
@@ -1050,7 +1063,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                       </div>
                     )}
                     {/* 每笔收料明细 */}
-                    {summaryData.receipt_summary?.receipts?.length > 0 && (
+                    {Array.isArray(summaryData.receipt_summary?.receipts) && summaryData.receipt_summary.receipts.length > 0 && (
                       <div className="border-t border-green-200 pt-3 mt-3 space-y-2">
                         <div className="text-xs text-gray-500 font-medium">收料明细</div>
                         {summaryData.receipt_summary.receipts.map((receipt: any) => (
@@ -1090,7 +1103,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                       共 {summaryData.payment_summary?.total_count || 0} 笔付料
                     </div>
                     {/* 付料明细 */}
-                    {summaryData.payment_summary?.by_supplier?.length > 0 && (
+                    {Array.isArray(summaryData.payment_summary?.by_supplier) && summaryData.payment_summary.by_supplier.length > 0 && (
                       <div className="border-t border-orange-200 pt-3 space-y-2">
                         <div className="text-xs text-gray-500 font-medium">供应商明细</div>
                         {summaryData.payment_summary.by_supplier.map((item: any) => (
@@ -1123,7 +1136,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                     共 {summaryData.withdrawal_summary?.total_count || 0} 笔提料
                   </div>
                   {/* 客户汇总 */}
-                  {summaryData.withdrawal_summary?.by_customer?.length > 0 && (
+                  {Array.isArray(summaryData.withdrawal_summary?.by_customer) && summaryData.withdrawal_summary.by_customer.length > 0 && (
                     <div className="border-t border-blue-200 pt-3 space-y-2">
                       <div className="text-xs text-gray-500 font-medium">客户明细</div>
                       {summaryData.withdrawal_summary.by_customer.map((item: any) => (
@@ -1135,7 +1148,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                     </div>
                   )}
                   {/* 每笔提料明细 */}
-                  {summaryData.withdrawal_summary?.withdrawals?.length > 0 && (
+                  {Array.isArray(summaryData.withdrawal_summary?.withdrawals) && summaryData.withdrawal_summary.withdrawals.length > 0 && (
                     <div className="border-t border-blue-200 pt-3 mt-3 space-y-2">
                       <div className="text-xs text-gray-500 font-medium">提料明细</div>
                       {summaryData.withdrawal_summary.withdrawals.map((w: any) => (
@@ -1218,7 +1231,9 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
               </div>
             </div>
 
-            {ledgerLoading ? renderLoading() : (
+            {ledgerLoading ? renderLoading() : !Array.isArray(ledger) || ledger.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">暂无台账数据</div>
+            ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -1232,7 +1247,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {ledger.map((day) => {
                       const isExpanded = expandedDates.has(day.date);
-                      const hasTransactions = day.transactions && day.transactions.length > 0;
+                      const hasTransactions = Array.isArray(day.transactions) && day.transactions.length > 0;
                       return (
                         <React.Fragment key={day.date}>
                           <tr 
@@ -1268,7 +1283,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                             </td>
                           </tr>
                           {/* 展开的交易明细 */}
-                          {isExpanded && day.transactions?.map((tx, idx) => (
+                          {isExpanded && Array.isArray(day.transactions) && day.transactions.map((tx, idx) => (
                             <tr key={`${day.date}-${tx.id || idx}`} className="bg-gray-50">
                               <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-600" colSpan={1}>
                                 <div className="flex items-center gap-2 pl-8">
@@ -1322,7 +1337,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
 
             {/* 所有角色统一使用新系统收料单 */}
             {loadingGoldReceipts ? renderLoading() : (
-              pendingGoldReceipts.length === 0 ? (
+              !Array.isArray(pendingGoldReceipts) || pendingGoldReceipts.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">暂无收料单</div>
               ) : (
                 <div className="space-y-4">
@@ -1395,7 +1410,9 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
               </button>
             </div>
 
-            {paymentsLoading ? renderLoading() : (
+            {paymentsLoading ? renderLoading() : !Array.isArray(payments) || payments.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">暂无付料单</div>
+            ) : (
               <div className="space-y-4">
                 {payments.map((payment) => (
                   <div key={payment.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -1582,7 +1599,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
             )}
             
             {/* 可视化图表 */}
-            {dailyTransactions && dailyTransactions.daily_summary && dailyTransactions.daily_summary.length > 0 && (
+            {dailyTransactions && Array.isArray(dailyTransactions.daily_summary) && dailyTransactions.daily_summary.length > 0 && (
               <div className="mb-6 p-4 bg-white border rounded-lg">
                 <h3 className="text-lg font-semibold mb-4">每日趋势图</h3>
                 <div style={{ height: '300px' }}>
@@ -1634,7 +1651,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                 <h3 className="text-lg font-semibold mb-4">每日明细</h3>
                 {dailyTransactionsLoading ? (
                   renderLoading()
-                ) : dailyTransactions && dailyTransactions.daily_summary && dailyTransactions.daily_summary.length > 0 ? (
+                ) : dailyTransactions && Array.isArray(dailyTransactions.daily_summary) && dailyTransactions.daily_summary.length > 0 ? (
                   <div className="overflow-x-auto border rounded-lg">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50">
@@ -1668,7 +1685,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
             )}
             
             {/* 供应商欠料列表 */}
-            {supplierDebtLoading ? renderLoading() : supplierDebt && supplierDebt.suppliers.length > 0 ? (
+            {supplierDebtLoading ? renderLoading() : supplierDebt && Array.isArray(supplierDebt.suppliers) && supplierDebt.suppliers.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50">
@@ -1765,7 +1782,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                   {/* 交易记录 */}
                   <div>
                     <h4 className="font-semibold mb-4">交易记录</h4>
-                    {supplierDetail.transactions && supplierDetail.transactions.length > 0 ? (
+                    {Array.isArray(supplierDetail.transactions) && supplierDetail.transactions.length > 0 ? (
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead className="bg-gray-50">
@@ -1977,7 +1994,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
               )}
             </div>
             
-            {withdrawalsLoading ? renderLoading() : withdrawals.length === 0 ? renderEmpty('暂无取料单') : (
+            {withdrawalsLoading ? renderLoading() : !Array.isArray(withdrawals) || withdrawals.length === 0 ? renderEmpty('暂无取料单') : (
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -2082,7 +2099,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
               )}
             </div>
             
-            {transfersLoading ? renderLoading() : transfers.length === 0 ? renderEmpty('暂无转料单') : (
+            {transfersLoading ? renderLoading() : !Array.isArray(transfers) || transfers.length === 0 ? renderEmpty('暂无转料单') : (
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
