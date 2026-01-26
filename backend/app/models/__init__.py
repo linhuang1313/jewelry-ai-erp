@@ -316,6 +316,49 @@ class InventoryTransfer(Base):
     to_location = relationship("Location", foreign_keys=[to_location_id])
 
 
+# ============= 转移单（新版：主表+明细表）=============
+
+class InventoryTransferOrder(Base):
+    """转移单主表 - 一个转移单可包含多个商品"""
+    __tablename__ = "inventory_transfer_orders"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    transfer_no = Column(String(50), unique=True, index=True, nullable=False)  # 转移单号
+    from_location_id = Column(Integer, ForeignKey("locations.id", ondelete="CASCADE"), nullable=False, index=True)
+    to_location_id = Column(Integer, ForeignKey("locations.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String(20), default="pending", index=True)  # pending/received/rejected/pending_confirm
+    
+    # 发起信息
+    created_by = Column(String(50))
+    created_at = Column(DateTime)
+    remark = Column(Text, nullable=True)
+    
+    # 接收信息
+    received_by = Column(String(50), nullable=True)
+    received_at = Column(DateTime, nullable=True)
+    
+    # 关系
+    from_location = relationship("Location", foreign_keys=[from_location_id])
+    to_location = relationship("Location", foreign_keys=[to_location_id])
+    items = relationship("InventoryTransferItem", back_populates="order", cascade="all, delete-orphan")
+
+
+class InventoryTransferItem(Base):
+    """转移单明细表 - 单个商品的转移信息"""
+    __tablename__ = "inventory_transfer_items"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, ForeignKey("inventory_transfer_orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_name = Column(String(200), nullable=False)  # 商品名称
+    weight = Column(Float, nullable=False)  # 预期重量
+    actual_weight = Column(Float, nullable=True)  # 实际接收重量
+    weight_diff = Column(Float, nullable=True)  # 重量差异
+    diff_reason = Column(Text, nullable=True)  # 差异原因
+    
+    # 关系
+    order = relationship("InventoryTransferOrder", back_populates="items")
+
+
 # ============= 库存预警设置模型 =============
 
 class InventoryAlertSetting(Base):

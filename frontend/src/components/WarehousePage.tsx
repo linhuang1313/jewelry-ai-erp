@@ -49,24 +49,32 @@ interface BarcodeInventoryItem {
   status: string;
 }
 
-interface InventoryTransfer {
+// 转移单类型
+interface TransferItem {
   id: number;
-  transfer_no: string;
   product_name: string;
   weight: number;
+  actual_weight: number | null;
+  weight_diff: number | null;
+  diff_reason: string | null;
+}
+
+interface TransferOrder {
+  id: number;
+  transfer_no: string;
   from_location_id: number;
   to_location_id: number;
-  from_location_name: string;
-  to_location_name: string;
+  from_location_name: string | null;
+  to_location_name: string | null;
   status: string;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
   remark: string | null;
   received_by: string | null;
   received_at: string | null;
-  actual_weight: number | null;
-  weight_diff: number | null;
-  diff_reason: string | null;
+  items: TransferItem[];
+  total_weight: number | null;
+  total_actual_weight: number | null;
 }
 
 // Tab 组件 - 珠宝风格
@@ -130,9 +138,11 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
   const hasAutoSwitched = useRef(false);  // 跟踪是否已自动切换标签页
   const [locations, setLocations] = useState<Location[]>([]);
   const [inventorySummary, setInventorySummary] = useState<InventorySummary[]>([]);
-  const [transfers, setTransfers] = useState<InventoryTransfer[]>([]);
-  const [pendingTransfers, setPendingTransfers] = useState<InventoryTransfer[]>([]);
-  const [pendingConfirmTransfers, setPendingConfirmTransfers] = useState<InventoryTransfer[]>([]);  // 待确认转移单（商品专员审批）
+  
+  // 转移单状态（支持多商品）
+  const [transferOrders, setTransferOrders] = useState<TransferOrder[]>([]);
+  const [pendingTransferOrders, setPendingTransferOrders] = useState<TransferOrder[]>([]);
+  const [pendingConfirmTransferOrders, setPendingConfirmTransferOrders] = useState<TransferOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocation, setSelectedLocation] = useState<number | null>(null);
@@ -159,15 +169,8 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
   const [transferItems, setTransferItems] = useState<Array<{ product_name: string; weight: number }>>([]);
 
   // 接收表单状态
-  const [receivingTransfer, setReceivingTransfer] = useState<InventoryTransfer | null>(null);
-  const [receiveForm, setReceiveForm] = useState({
-    actual_weight: '',
-    diff_reason: ''
-  });
-
-  // 转移单详情状态
-  const [selectedTransfer, setSelectedTransfer] = useState<InventoryTransfer | null>(null);
-  const [showTransferDetail, setShowTransferDetail] = useState(false);
+  const [receivingOrder, setReceivingOrder] = useState<TransferOrder | null>(null);
+  const [receiveItemForms, setReceiveItemForms] = useState<Record<number, { actual_weight: string; diff_reason: string }>>({});
 
   // 批量转移相关状态
   const [batchOrderNo, setBatchOrderNo] = useState('');
@@ -303,34 +306,30 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
 
   const loadTransfers = async () => {
     try {
-      const response = await fetch(API_ENDPOINTS.TRANSFERS);
+      const response = await fetch(API_ENDPOINTS.TRANSFER_ORDERS);
       if (response.ok) {
         const data = await response.json();
-        setTransfers(data);
+        setTransferOrders(data);
         
         // 根据角色过滤待接收的转移单
-        // 只显示目标仓库属于当前角色管辖的转移单
         const myResponsibleLocation = ROLE_LOCATION_MAP[userRole];
         if (myResponsibleLocation) {
-          // 有明确的责任仓库，只显示目标是该仓库的待接收单
-          setPendingTransfers(
-            data.filter((t: InventoryTransfer) => 
+          setPendingTransferOrders(
+            data.filter((t: TransferOrder) => 
               t.status === 'pending' && t.to_location_name === myResponsibleLocation
             )
           );
         } else {
-          // 管理员等角色可以看到所有待接收
-          setPendingTransfers(data.filter((t: InventoryTransfer) => t.status === 'pending'));
+          setPendingTransferOrders(data.filter((t: TransferOrder) => t.status === 'pending'));
         }
         
-        // 待确认转移单（商品专员审批）
-        // 只有商品专员和管理员可以看到待确认列表
+        // 待确认转移单
         if (userRole === 'product' || userRole === 'manager') {
-          setPendingConfirmTransfers(
-            data.filter((t: InventoryTransfer) => t.status === 'pending_confirm')
+          setPendingConfirmTransferOrders(
+            data.filter((t: TransferOrder) => t.status === 'pending_confirm')
           );
         } else {
-          setPendingConfirmTransfers([]);
+          setPendingConfirmTransferOrders([]);
         }
       }
     } catch (error) {
@@ -343,16 +342,16 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     if (hasAutoSwitched.current) return;
     
     // 柜台用户：如果有待接收的转移单，自动切换到"待接收"标签页
-    if ((userRole === 'counter' || userRole === 'manager') && pendingTransfers.length > 0) {
+    if ((userRole === 'counter' || userRole === 'manager') && pendingTransferOrders.length > 0) {
       setActiveTab('receive');
       hasAutoSwitched.current = true;
     }
     // 商品专员：如果有待确认的转移单，自动切换到"待确认"标签页
-    else if ((userRole === 'product' || userRole === 'manager') && pendingConfirmTransfers.length > 0) {
+    else if ((userRole === 'product' || userRole === 'manager') && pendingConfirmTransferOrders.length > 0) {
       setActiveTab('confirm');
       hasAutoSwitched.current = true;
     }
-  }, [pendingTransfers, pendingConfirmTransfers, userRole]);
+  }, [pendingTransferOrders, pendingConfirmTransferOrders, userRole]);
 
   // 加载最近入库单（供批量转移选择）
   const loadRecentInboundOrders = async () => {
@@ -753,8 +752,8 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     }
 
     try {
-      // 使用批量创建 API
-      const response = await fetch(`${API_ENDPOINTS.TRANSFERS_BATCH}?user_role=${userRole}`, {
+      // 使用新版转移单 API（支持多商品）
+      const response = await fetch(`${API_ENDPOINTS.TRANSFER_ORDERS}?user_role=${userRole}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -767,7 +766,8 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
 
       if (response.ok) {
         const result = await response.json();
-        toast.success(`成功创建 ${result.created_count} 个转移单，共 ${result.total_weight.toFixed(2)}g`);
+        const totalWeight = result.total_weight || itemsToTransfer.reduce((sum: number, item: { weight: number }) => sum + item.weight, 0);
+        toast.success(`成功创建转移单 ${result.transfer_no}，共 ${result.items.length} 个商品，${totalWeight.toFixed(2)}g`);
         setShowTransferForm(false);
         setTransferItems([]);
         // 重置表单但保留默认位置
@@ -794,27 +794,65 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     }
   };
 
-  // 接收转移
-  const handleReceiveTransfer = async () => {
-    if (!receivingTransfer || !receiveForm.actual_weight) {
-      toast.error('请输入实际接收重量');
-      return;
+  // ============= 转移单操作函数 =============
+  
+  // 打开新版接收弹窗
+  const openReceiveOrderModal = (order: TransferOrder) => {
+    setReceivingOrder(order);
+    // 初始化每个商品的接收表单
+    const forms: Record<number, { actual_weight: string; diff_reason: string }> = {};
+    order.items.forEach(item => {
+      forms[item.id] = { actual_weight: item.weight.toString(), diff_reason: '' };
+    });
+    setReceiveItemForms(forms);
+  };
+  
+  // 接收转移单（新版多商品）
+  const handleReceiveTransferOrder = async () => {
+    if (!receivingOrder) return;
+    
+    // 验证所有商品都填写了实际重量
+    const items = receivingOrder.items.map(item => {
+      const form = receiveItemForms[item.id];
+      const actualWeight = parseFloat(form?.actual_weight || '0');
+      const hasDiff = Math.abs(actualWeight - item.weight) >= 0.01;
+      return {
+        item_id: item.id,
+        actual_weight: actualWeight,
+        diff_reason: hasDiff ? (form?.diff_reason || '') : null
+      };
+    });
+    
+    // 检查有差异的商品是否填写了原因
+    for (const item of items) {
+      const originalItem = receivingOrder.items.find(i => i.id === item.item_id);
+      if (originalItem) {
+        const hasDiff = Math.abs(item.actual_weight - originalItem.weight) >= 0.01;
+        if (hasDiff && !item.diff_reason) {
+          toast.error(`商品 ${originalItem.product_name} 重量不符，请填写差异原因`);
+          return;
+        }
+      }
     }
-
+    
     try {
-      const response = await fetch(API_ENDPOINTS.TRANSFER_RECEIVE(receivingTransfer.id), {
+      const response = await fetch(`${API_ENDPOINTS.TRANSFER_ORDER_RECEIVE(receivingOrder.id)}?user_role=${userRole}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          actual_weight: parseFloat(receiveForm.actual_weight),
-          diff_reason: receiveForm.diff_reason || null
-        })
+        body: JSON.stringify({ items })
       });
 
       if (response.ok) {
-        toast.success('接收成功');
-        setReceivingTransfer(null);
-        setReceiveForm({ actual_weight: '', diff_reason: '' });
+        const result = await response.json();
+        
+        if (result.status === 'pending_confirm') {
+          toast.success('转移单已退回商品部待审核');
+        } else {
+          toast.success('接收成功');
+        }
+        
+        setReceivingOrder(null);
+        setReceiveItemForms({});
         loadTransfers();
         loadInventorySummary();
       } else {
@@ -825,19 +863,19 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       toast.error('接收失败');
     }
   };
-
-  // 拒收转移
-  const handleRejectTransfer = async (transfer: InventoryTransfer) => {
+  
+  // 拒收转移单（新版）
+  const handleRejectTransferOrder = async (order: TransferOrder) => {
     const reason = prompt('请输入拒收原因:');
     if (!reason) return;
 
     try {
-      const response = await fetch(`${API_ENDPOINTS.TRANSFER_REJECT(transfer.id)}?reason=${encodeURIComponent(reason)}`, {
+      const response = await fetch(`${API_ENDPOINTS.TRANSFER_ORDER_REJECT(order.id)}?reason=${encodeURIComponent(reason)}&user_role=${userRole}`, {
         method: 'POST'
       });
 
       if (response.ok) {
-        toast.success('已拒收');
+        toast.success('已拒收，库存已恢复');
         loadTransfers();
         loadInventorySummary();
       } else {
@@ -848,16 +886,17 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       toast.error('拒收失败');
     }
   };
-
-  // 商品专员审批确认转移单
-  const handleApproveTransfer = async (transfer: InventoryTransfer) => {
+  
+  // 商品部确认转移单（新版）
+  const handleConfirmTransferOrder = async (order: TransferOrder) => {
     try {
-      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/warehouse/transfers/${transfer.id}/confirm?user_role=${userRole}`, {
+      const response = await fetch(`${API_ENDPOINTS.TRANSFER_ORDER_CONFIRM(order.id)}?user_role=${userRole}`, {
         method: 'POST'
       });
 
       if (response.ok) {
-        toast.success(`已确认，${transfer.actual_weight}g 已入库到展厅`);
+        const totalActual = order.items.reduce((sum, item) => sum + (item.actual_weight || 0), 0);
+        toast.success(`已确认，${totalActual.toFixed(2)}g 已入库`);
         loadTransfers();
         loadInventorySummary();
       } else {
@@ -866,29 +905,6 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       }
     } catch (error) {
       toast.error('确认失败');
-    }
-  };
-
-  // 商品专员拒绝确认转移单（状态变为 returned，转移单结束）
-  const handleRejectConfirmTransfer = async (transfer: InventoryTransfer) => {
-    const reason = prompt('请输入拒绝原因（库存将退回商品部仓库）:');
-    if (!reason) return;
-
-    try {
-      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/warehouse/transfers/${transfer.id}/reject-confirm?reason=${encodeURIComponent(reason)}&user_role=${userRole}`, {
-        method: 'POST'
-      });
-
-      if (response.ok) {
-        toast.success(`已拒绝，${transfer.weight}g 已退回商品部仓库。如需重新转移请新建转移单。`);
-        loadTransfers();
-        loadInventorySummary();
-      } else {
-        const error = await response.json();
-        toast.error(error.detail || '拒绝失败');
-      }
-    } catch (error) {
-      toast.error('拒绝失败');
     }
   };
 
@@ -976,7 +992,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
               onClick={() => setActiveTab('receive')}
               icon={<Inbox className="w-4 h-4" />}
               label="待接收"
-              count={pendingTransfers.length}
+              count={pendingTransferOrders.length}
             />
           )}
           {/* 待确认标签页 - 仅商品专员和管理员可见 */}
@@ -986,7 +1002,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
               onClick={() => setActiveTab('confirm')}
               icon={<Check className="w-4 h-4" />}
               label="待确认"
-              count={pendingConfirmTransfers.length}
+              count={pendingConfirmTransferOrders.length}
             />
           )}
         </div>
@@ -1550,51 +1566,52 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                 </form>
               )}
 
-              {/* 转移记录 */}
-              {transfers.length > 0 && (
+              {/* 转移记录（新版：多商品） */}
+              {transferOrders.length > 0 && (
                 <div className="mt-8">
                   <h3 className="text-lg font-semibold mb-4">转移记录</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">转移单号</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">商品</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">重量</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">路径</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">状态</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">时间</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {transfers.slice(0, 10).map(t => (
-                          <tr 
-                            key={t.id} 
-                            className="hover:bg-gray-50 cursor-pointer"
-                            onClick={() => {
-                              setSelectedTransfer(t);
-                              setShowTransferDetail(true);
-                            }}
-                          >
-                            <td className="px-4 py-3 text-sm font-mono">{t.transfer_no}</td>
-                            <td className="px-4 py-3 text-sm">{t.product_name}</td>
-                            <td className="px-4 py-3 text-sm font-semibold">{t.weight}g</td>
-                            <td className="px-4 py-3 text-sm">
-                              <span className="text-gray-600">{t.from_location_name}</span>
+                  <div className="space-y-3">
+                    {transferOrders.slice(0, 10).map(order => (
+                      <div key={order.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                        {/* 转移单主信息 */}
+                        <div className="px-4 py-3 bg-gray-50 flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            <span className="font-mono text-sm font-medium">{order.transfer_no}</span>
+                            <span className="text-sm text-gray-600">
+                              {order.from_location_name}
                               <ArrowRight className="w-4 h-4 inline mx-2 text-gray-400" />
-                              <span className="text-gray-600">{t.to_location_name}</span>
-                            </td>
-                            <td className="px-4 py-3"><StatusBadge status={t.status} /></td>
-                            <td className="px-4 py-3 text-sm text-gray-500">
-                              {new Date(t.created_at).toLocaleString('zh-CN')}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                              {order.to_location_name}
+                            </span>
+                            <StatusBadge status={order.status} />
+                          </div>
+                          <div className="flex items-center space-x-4 text-sm text-gray-500">
+                            <span>{order.items.length} 个商品</span>
+                            <span className="font-semibold">{order.total_weight?.toFixed(2) || 0}g</span>
+                            <span>{new Date(order.created_at).toLocaleString('zh-CN')}</span>
+                          </div>
+                        </div>
+                        {/* 商品明细列表 */}
+                        <div className="divide-y divide-gray-100">
+                          {order.items.map(item => (
+                            <div key={item.id} className="px-4 py-2 flex items-center justify-between text-sm">
+                              <span className="text-gray-800">{item.product_name}</span>
+                              <div className="flex items-center space-x-4">
+                                <span className="font-medium">{item.weight}g</span>
+                                {item.actual_weight !== null && item.actual_weight !== item.weight && (
+                                  <span className={`text-xs ${item.weight_diff && item.weight_diff > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    实际: {item.actual_weight}g ({item.weight_diff && item.weight_diff > 0 ? '+' : ''}{item.weight_diff?.toFixed(2)}g)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
+              
             </div>
           )}
 
@@ -1891,59 +1908,81 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
           {/* 待接收 */}
           {activeTab === 'receive' && (
             <div>
-              {pendingTransfers.length === 0 ? (
+              {pendingTransferOrders.length === 0 ? (
                 <div className="text-center py-12">
                   <Inbox className="w-12 h-12 mx-auto text-gray-300 mb-4" />
                   <p className="text-gray-500">暂无待接收的货品</p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {pendingTransfers.map(t => (
-                    <div key={t.id} className="border border-yellow-200 bg-yellow-50 rounded-lg p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-2">
-                            <span className="font-mono text-sm text-gray-500">{t.transfer_no}</span>
-                            <StatusBadge status={t.status} />
+                  {/* 新版转移单（多商品） */}
+                  {pendingTransferOrders.map(order => (
+                    <div key={order.id} className="border border-yellow-200 bg-yellow-50 rounded-lg overflow-hidden">
+                      <div className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3 mb-2">
+                              <span className="font-mono text-sm text-gray-500">{order.transfer_no}</span>
+                              <StatusBadge status={order.status} />
+                              <span className="text-sm bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                                {order.items.length} 个商品
+                              </span>
+                            </div>
+                            <div className="flex items-center text-gray-600 mb-2">
+                              <MapPin className="w-4 h-4 mr-1" />
+                              <span>{order.from_location_name}</span>
+                              <ArrowRight className="w-4 h-4 mx-2" />
+                              <span className="font-semibold">{order.to_location_name}</span>
+                            </div>
+                            <div className="flex items-center space-x-4 text-sm text-gray-500">
+                              <span>总重量: <strong className="text-gray-900">{order.total_weight?.toFixed(2) || 0}g</strong></span>
+                              <span>发起人: {order.created_by}</span>
+                              <span>时间: {new Date(order.created_at).toLocaleString('zh-CN')}</span>
+                            </div>
+                            {order.remark && (
+                              <p className="mt-2 text-sm text-gray-600">备注: {order.remark}</p>
+                            )}
                           </div>
-                          <h4 className="font-semibold text-gray-900 text-lg mb-2">{t.product_name}</h4>
-                          <div className="flex items-center text-gray-600 mb-2">
-                            <MapPin className="w-4 h-4 mr-1" />
-                            <span>{t.from_location_name}</span>
-                            <ArrowRight className="w-4 h-4 mx-2" />
-                            <span className="font-semibold">{t.to_location_name}</span>
+                          <div className="flex space-x-2 ml-4">
+                            <button
+                              onClick={() => openReceiveOrderModal(order)}
+                              className="flex items-center space-x-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                            >
+                              <Check className="w-4 h-4" />
+                              <span>确认接收</span>
+                            </button>
+                            <button
+                              onClick={() => handleRejectTransferOrder(order)}
+                              className="flex items-center space-x-1 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                            >
+                              <X className="w-4 h-4" />
+                              <span>拒收</span>
+                            </button>
                           </div>
-                          <div className="flex items-center space-x-4 text-sm text-gray-500">
-                            <span>预期重量: <strong className="text-gray-900">{t.weight}g</strong></span>
-                            <span>发起人: {t.created_by}</span>
-                            <span>时间: {new Date(t.created_at).toLocaleString('zh-CN')}</span>
-                          </div>
-                          {t.remark && (
-                            <p className="mt-2 text-sm text-gray-600">备注: {t.remark}</p>
-                          )}
                         </div>
-                        <div className="flex space-x-2 ml-4">
-                          <button
-                            onClick={() => {
-                              setReceivingTransfer(t);
-                              setReceiveForm({ actual_weight: t.weight.toString(), diff_reason: '' });
-                            }}
-                            className="flex items-center space-x-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                          >
-                            <Check className="w-4 h-4" />
-                            <span>确认接收</span>
-                          </button>
-                          <button
-                            onClick={() => handleRejectTransfer(t)}
-                            className="flex items-center space-x-1 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                          >
-                            <X className="w-4 h-4" />
-                            <span>拒收</span>
-                          </button>
-                        </div>
+                      </div>
+                      {/* 商品明细 */}
+                      <div className="border-t border-yellow-200 bg-white/50">
+                        <table className="w-full text-sm">
+                          <thead className="bg-yellow-100/50">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-gray-600">商品名称</th>
+                              <th className="px-4 py-2 text-right text-gray-600">预期重量</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-yellow-100">
+                            {order.items.map(item => (
+                              <tr key={item.id}>
+                                <td className="px-4 py-2">{item.product_name}</td>
+                                <td className="px-4 py-2 text-right font-medium">{item.weight}g</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   ))}
+                  
                 </div>
               )}
             </div>
@@ -1952,7 +1991,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
           {/* 待确认（商品专员审批） */}
           {activeTab === 'confirm' && (
             <div>
-              {pendingConfirmTransfers.length === 0 ? (
+              {pendingConfirmTransferOrders.length === 0 ? (
                 <div className="text-center py-12">
                   <Check className="w-12 h-12 mx-auto text-gray-300 mb-4" />
                   <p className="text-gray-500">暂无待确认的转移单</p>
@@ -1966,298 +2005,203 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                     </div>
                   </div>
                   
-                  {pendingConfirmTransfers.map(t => (
-                    <div key={t.id} className="border border-orange-200 bg-orange-50 rounded-lg p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-2">
-                            <span className="font-mono text-sm text-gray-500">{t.transfer_no}</span>
-                            <StatusBadge status={t.status} />
-                          </div>
-                          <h4 className="font-semibold text-gray-900 text-lg mb-2">{t.product_name}</h4>
-                          <div className="flex items-center text-gray-600 mb-2">
-                            <MapPin className="w-4 h-4 mr-1" />
-                            <span>{t.from_location_name}</span>
-                            <ArrowRight className="w-4 h-4 mx-2" />
-                            <span className="font-semibold">{t.to_location_name}</span>
-                          </div>
-                          
-                          {/* 重量差异信息 */}
-                          <div className="bg-white rounded-lg p-3 mt-3 border border-orange-200">
-                            <div className="grid grid-cols-3 gap-4 text-sm">
-                              <div>
-                                <span className="text-gray-500">预期重量</span>
-                                <p className="font-semibold text-gray-900">{t.weight}g</p>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">实际重量</span>
-                                <p className="font-semibold text-blue-600">{t.actual_weight}g</p>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">差异</span>
-                                <p className={`font-semibold ${(t.weight_diff || 0) > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {(t.weight_diff || 0) > 0 ? '+' : ''}{t.weight_diff?.toFixed(2)}g
-                                </p>
-                              </div>
+                  {/* 新版转移单（多商品） */}
+                  {pendingConfirmTransferOrders.map(order => (
+                    <div key={order.id} className="border border-orange-200 bg-orange-50 rounded-lg overflow-hidden">
+                      <div className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3 mb-2">
+                              <span className="font-mono text-sm text-gray-500">{order.transfer_no}</span>
+                              <StatusBadge status={order.status} />
+                              <span className="text-sm bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                                {order.items.length} 个商品
+                              </span>
                             </div>
-                            {t.diff_reason && (
-                              <div className="mt-2 pt-2 border-t border-gray-200">
-                                <span className="text-gray-500 text-sm">差异原因：</span>
-                                <span className="text-gray-700 text-sm">{t.diff_reason}</span>
-                              </div>
-                            )}
+                            <div className="flex items-center text-gray-600 mb-2">
+                              <MapPin className="w-4 h-4 mr-1" />
+                              <span>{order.from_location_name}</span>
+                              <ArrowRight className="w-4 h-4 mx-2" />
+                              <span className="font-semibold">{order.to_location_name}</span>
+                            </div>
+                            <div className="flex items-center space-x-4 text-sm text-gray-500 mt-3">
+                              <span>接收人: {order.received_by}</span>
+                              <span>接收时间: {order.received_at ? new Date(order.received_at).toLocaleString('zh-CN') : '-'}</span>
+                            </div>
                           </div>
-                          
-                          <div className="flex items-center space-x-4 text-sm text-gray-500 mt-3">
-                            <span>接收人: {t.received_by}</span>
-                            <span>接收时间: {t.received_at ? new Date(t.received_at).toLocaleString('zh-CN') : '-'}</span>
+                          <div className="flex flex-col space-y-2 ml-4">
+                            <button
+                              onClick={() => handleConfirmTransferOrder(order)}
+                              className="flex items-center justify-center space-x-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                            >
+                              <Check className="w-4 h-4" />
+                              <span>同意</span>
+                            </button>
                           </div>
                         </div>
-                        
-                        <div className="flex flex-col space-y-2 ml-4">
-                          <button
-                            onClick={() => handleApproveTransfer(t)}
-                            className="flex items-center justify-center space-x-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                          >
-                            <Check className="w-4 h-4" />
-                            <span>同意</span>
-                          </button>
-                          <button
-                            onClick={() => handleRejectConfirmTransfer(t)}
-                            className="flex items-center justify-center space-x-1 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                          >
-                            <X className="w-4 h-4" />
-                            <span>拒绝</span>
-                          </button>
-                        </div>
+                      </div>
+                      {/* 商品明细及重量差异 */}
+                      <div className="border-t border-orange-200 bg-white/50">
+                        <table className="w-full text-sm">
+                          <thead className="bg-orange-100/50">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-gray-600">商品名称</th>
+                              <th className="px-4 py-2 text-right text-gray-600">预期重量</th>
+                              <th className="px-4 py-2 text-right text-gray-600">实际重量</th>
+                              <th className="px-4 py-2 text-right text-gray-600">差异</th>
+                              <th className="px-4 py-2 text-left text-gray-600">原因</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-orange-100">
+                            {order.items.map(item => {
+                              const diff = (item.actual_weight || 0) - item.weight;
+                              const hasDiff = Math.abs(diff) >= 0.01;
+                              return (
+                                <tr key={item.id} className={hasDiff ? 'bg-orange-50' : ''}>
+                                  <td className="px-4 py-2">{item.product_name}</td>
+                                  <td className="px-4 py-2 text-right">{item.weight}g</td>
+                                  <td className="px-4 py-2 text-right font-medium text-blue-600">{item.actual_weight}g</td>
+                                  <td className={`px-4 py-2 text-right font-medium ${diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : ''}`}>
+                                    {hasDiff ? `${diff > 0 ? '+' : ''}${diff.toFixed(2)}g` : '-'}
+                                  </td>
+                                  <td className="px-4 py-2 text-gray-600">{item.diff_reason || '-'}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   ))}
+                  
                 </div>
               )}
             </div>
           )}
         </div>
 
-        {/* 接收确认弹窗 */}
-        {receivingTransfer && (() => {
-          const actualWeight = parseFloat(receiveForm.actual_weight) || 0;
-          const expectedWeight = receivingTransfer.weight;
-          const hasDiff = Math.abs(actualWeight - expectedWeight) >= 0.01;
-          const diffValue = actualWeight - expectedWeight;
+        {/* 接收确认弹窗（多商品） */}
+        {receivingOrder && (() => {
+          // 计算是否有任何商品存在差异
+          const hasAnyDiff = receivingOrder.items.some(item => {
+            const form = receiveItemForms[item.id];
+            const actualWeight = parseFloat(form?.actual_weight || '0');
+            return Math.abs(actualWeight - item.weight) >= 0.01;
+          });
+          
+          // 检查所有有差异的商品是否都填写了原因
+          const allDiffReasonsProvided = receivingOrder.items.every(item => {
+            const form = receiveItemForms[item.id];
+            const actualWeight = parseFloat(form?.actual_weight || '0');
+            const hasDiff = Math.abs(actualWeight - item.weight) >= 0.01;
+            return !hasDiff || (form?.diff_reason?.trim() || '');
+          });
           
           return (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+              <div className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                 <h3 className="text-lg font-semibold mb-4">确认接收货品</h3>
                 
                 <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                  <p className="text-sm text-gray-600 mb-1">转移单号: {receivingTransfer.transfer_no}</p>
-                  <p className="font-semibold">{receivingTransfer.product_name}</p>
-                  <p className="text-sm text-gray-600">预期重量: <span className="font-semibold text-gray-900">{expectedWeight}g</span></p>
+                  <p className="text-sm text-gray-600 mb-1">转移单号: {receivingOrder.transfer_no}</p>
+                  <p className="text-sm text-gray-600">
+                    {receivingOrder.from_location_name} → {receivingOrder.to_location_name}
+                  </p>
+                  <p className="font-semibold mt-1">{receivingOrder.items.length} 个商品，共 {receivingOrder.total_weight?.toFixed(2) || 0}g</p>
                 </div>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">实际接收重量 (g)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={receiveForm.actual_weight}
-                      onChange={(e) => setReceiveForm({ ...receiveForm, actual_weight: e.target.value })}
-                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                        hasDiff ? 'border-orange-300 focus:ring-orange-500' : 'border-gray-200 focus:ring-blue-500'
-                      }`}
-                      required
-                    />
+                {/* 商品明细列表 */}
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  {receivingOrder.items.map(item => {
+                    const form = receiveItemForms[item.id] || { actual_weight: item.weight.toString(), diff_reason: '' };
+                    const actualWeight = parseFloat(form.actual_weight) || 0;
+                    const hasDiff = Math.abs(actualWeight - item.weight) >= 0.01;
+                    const diffValue = actualWeight - item.weight;
+                    
+                    return (
+                      <div key={item.id} className={`border rounded-lg p-4 ${hasDiff ? 'border-orange-300 bg-orange-50' : 'border-gray-200'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium">{item.product_name}</span>
+                          <span className="text-sm text-gray-500">预期: {item.weight}g</span>
+                        </div>
+                        
+                        <div className="flex items-center space-x-4">
+                          <div className="flex-1">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={form.actual_weight}
+                              onChange={(e) => setReceiveItemForms({
+                                ...receiveItemForms,
+                                [item.id]: { ...form, actual_weight: e.target.value }
+                              })}
+                              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
+                                hasDiff ? 'border-orange-300 focus:ring-orange-500' : 'border-gray-200 focus:ring-blue-500'
+                              }`}
+                              placeholder="实际重量 (g)"
+                            />
+                          </div>
+                          {hasDiff && (
+                            <span className={`text-sm font-medium ${diffValue > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {diffValue > 0 ? '+' : ''}{diffValue.toFixed(2)}g
+                            </span>
+                          )}
+                        </div>
+                        
+                        {hasDiff && (
+                          <div className="mt-2">
+                            <input
+                              type="text"
+                              value={form.diff_reason}
+                              onChange={(e) => setReceiveItemForms({
+                                ...receiveItemForms,
+                                [item.id]: { ...form, diff_reason: e.target.value }
+                              })}
+                              className="w-full px-3 py-2 border border-orange-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                              placeholder="差异原因（必填）"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {hasAnyDiff && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-4">
+                    <div className="flex items-center text-orange-700">
+                      <AlertTriangle className="w-5 h-5 mr-2" />
+                      <span className="font-medium">存在重量差异，提交后需商品部确认</span>
+                    </div>
                   </div>
-
-                  {hasDiff && (
-                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                      <div className="flex items-center text-orange-700 mb-2">
-                        <AlertTriangle className="w-5 h-5 mr-2" />
-                        <span className="font-medium">重量不符，需商品部确认</span>
-                      </div>
-                      <div className="text-sm text-orange-600 space-y-1">
-                        <p>预期: {expectedWeight}g → 实际: {actualWeight}g</p>
-                        <p className="font-semibold">差异: {diffValue > 0 ? '+' : ''}{diffValue.toFixed(2)}g</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {hasDiff && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        差异原因 <span className="text-red-500">*</span>
-                      </label>
-                      <textarea
-                        value={receiveForm.diff_reason}
-                        onChange={(e) => setReceiveForm({ ...receiveForm, diff_reason: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        rows={2}
-                        placeholder="请说明重量差异的原因（必填）"
-                        required
-                      />
-                    </div>
-                  )}
-                </div>
+                )}
 
                 <div className="flex space-x-3 mt-6">
                   <button
-                    onClick={() => setReceivingTransfer(null)}
+                    onClick={() => {
+                      setReceivingOrder(null);
+                      setReceiveItemForms({});
+                    }}
                     className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     取消
                   </button>
                   <button
-                    onClick={handleReceiveTransfer}
-                    disabled={hasDiff && !receiveForm.diff_reason.trim()}
+                    onClick={handleReceiveTransferOrder}
+                    disabled={hasAnyDiff && !allDiffReasonsProvided}
                     className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors ${
-                      hasDiff 
+                      hasAnyDiff 
                         ? 'bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400' 
                         : 'bg-green-600 hover:bg-green-700'
                     }`}
                   >
-                    {hasDiff ? '提交待商品部确认' : '确认接收'}
+                    {hasAnyDiff ? '提交待商品部确认' : '确认接收'}
                   </button>
                 </div>
               </div>
             </div>
           );
         })()}
-
-        {/* 转移单详情弹窗 */}
-        {showTransferDetail && selectedTransfer && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowTransferDetail(false)}>
-            <div className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-semibold">转移单详情</h3>
-                <button
-                  onClick={() => setShowTransferDetail(false)}
-                  className="text-gray-400 hover:text-gray-600 text-2xl"
-                >
-                  ×
-                </button>
-              </div>
-
-              <div className="space-y-6">
-                {/* 基本信息 */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="font-semibold mb-3 text-gray-700">基本信息</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm text-gray-600 mb-1">转移单号</div>
-                      <div className="font-mono font-medium">{selectedTransfer.transfer_no}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600 mb-1">商品名称</div>
-                      <div className="font-medium">{selectedTransfer.product_name}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600 mb-1">转移重量</div>
-                      <div className="font-semibold text-lg">{selectedTransfer.weight}g</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600 mb-1">路径</div>
-                      <div className="flex items-center">
-                        <span className="text-gray-700">{selectedTransfer.from_location_name}</span>
-                        <ArrowRight className="w-4 h-4 mx-2 text-gray-400" />
-                        <span className="text-gray-700">{selectedTransfer.to_location_name}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 状态信息 */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="font-semibold mb-3 text-gray-700">状态信息</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm text-gray-600 mb-1">状态</div>
-                      <div><StatusBadge status={selectedTransfer.status} /></div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600 mb-1">创建人</div>
-                      <div className="font-medium">{selectedTransfer.created_by || '-'}</div>
-                    </div>
-                    <div className="col-span-2">
-                      <div className="text-sm text-gray-600 mb-1">创建时间</div>
-                      <div className="font-medium">{new Date(selectedTransfer.created_at).toLocaleString('zh-CN')}</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 接收信息（如果已接收或拒收） */}
-                {(selectedTransfer.status === 'received' || selectedTransfer.status === 'rejected') && (
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="font-semibold mb-3 text-gray-700">
-                      {selectedTransfer.status === 'received' ? '接收信息' : '拒收信息'}
-                    </h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-sm text-gray-600 mb-1">
-                          {selectedTransfer.status === 'received' ? '接收人' : '拒收人'}
-                        </div>
-                        <div className="font-medium">{selectedTransfer.received_by || '-'}</div>
-                      </div>
-                      <div>
-                        <div className="text-sm text-gray-600 mb-1">
-                          {selectedTransfer.status === 'received' ? '接收时间' : '拒收时间'}
-                        </div>
-                        <div className="font-medium">
-                          {selectedTransfer.received_at 
-                            ? new Date(selectedTransfer.received_at).toLocaleString('zh-CN')
-                            : '-'}
-                        </div>
-                      </div>
-                      {selectedTransfer.status === 'received' && selectedTransfer.actual_weight !== null && (
-                        <>
-                          <div>
-                            <div className="text-sm text-gray-600 mb-1">实际接收重量</div>
-                            <div className="font-semibold">{selectedTransfer.actual_weight}g</div>
-                          </div>
-                          {selectedTransfer.weight_diff !== null && selectedTransfer.weight_diff !== 0 && (
-                            <div>
-                              <div className="text-sm text-gray-600 mb-1">重量差异</div>
-                              <div className={`font-semibold ${selectedTransfer.weight_diff > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {selectedTransfer.weight_diff > 0 ? '+' : ''}{selectedTransfer.weight_diff.toFixed(2)}g
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {(selectedTransfer.diff_reason || selectedTransfer.status === 'rejected') && (
-                        <div className="col-span-2">
-                          <div className="text-sm text-gray-600 mb-1">
-                            {selectedTransfer.status === 'received' ? '差异原因' : '拒收原因'}
-                          </div>
-                          <div className="font-medium">{selectedTransfer.diff_reason || '-'}</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* 备注 */}
-                {selectedTransfer.remark && (
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="font-semibold mb-3 text-gray-700">备注</h4>
-                    <div className="text-gray-700">{selectedTransfer.remark}</div>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-6 flex justify-end">
-                <button
-                  onClick={() => setShowTransferDetail(false)}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  关闭
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* 转移确认弹窗 */}
         {showConfirmModal && (

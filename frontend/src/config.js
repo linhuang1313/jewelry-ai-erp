@@ -19,11 +19,13 @@ export const API_ENDPOINTS = {
   LOCATION: (id) => `${API_BASE_URL}/api/warehouse/locations/${id}`,  // 仓库/位置详情
   LOCATION_INVENTORY: `${API_BASE_URL}/api/warehouse/inventory`,  // 分仓库存
   INVENTORY_SUMMARY: `${API_BASE_URL}/api/warehouse/inventory/summary`,  // 库存汇总
-  TRANSFERS: `${API_BASE_URL}/api/warehouse/transfers`,  // 货品转移单列表
-  TRANSFER: (id) => `${API_BASE_URL}/api/warehouse/transfers/${id}`,  // 转移单详情
-  TRANSFER_RECEIVE: (id) => `${API_BASE_URL}/api/warehouse/transfers/${id}/receive`,  // 接收转移
-  TRANSFER_REJECT: (id) => `${API_BASE_URL}/api/warehouse/transfers/${id}/reject`,  // 拒收转移
-  TRANSFERS_BATCH: `${API_BASE_URL}/api/warehouse/transfers/batch`,  // 批量创建转移单
+  // 转移单
+  TRANSFER_ORDERS: `${API_BASE_URL}/api/warehouse/transfer-orders`,  // 转移单列表
+  TRANSFER_ORDER: (id) => `${API_BASE_URL}/api/warehouse/transfer-orders/${id}`,  // 转移单详情
+  TRANSFER_ORDER_RECEIVE: (id) => `${API_BASE_URL}/api/warehouse/transfer-orders/${id}/receive`,  // 整单接收
+  TRANSFER_ORDER_REJECT: (id) => `${API_BASE_URL}/api/warehouse/transfer-orders/${id}/reject`,  // 整单拒收
+  TRANSFER_ORDER_CONFIRM: (id) => `${API_BASE_URL}/api/warehouse/transfer-orders/${id}/confirm`,  // 商品部确认
+  
   INIT_DEFAULT_LOCATIONS: `${API_BASE_URL}/api/warehouse/init-default-locations`,  // 初始化默认位置
   
   // 结算管理相关

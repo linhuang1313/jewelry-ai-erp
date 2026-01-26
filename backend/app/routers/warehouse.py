@@ -11,7 +11,7 @@ import logging
 
 from ..database import get_db
 from ..timezone_utils import china_now
-from ..models import Location, LocationInventory, InventoryTransfer, Inventory
+from ..models import Location, LocationInventory, InventoryTransfer, Inventory, InventoryTransferOrder, InventoryTransferItem
 from ..schemas import (
     LocationCreate,
     LocationResponse,
@@ -20,6 +20,10 @@ from ..schemas import (
     InventoryTransferCreate,
     InventoryTransferReceive,
     InventoryTransferResponse,
+    TransferOrderCreate,
+    TransferOrderReceive,
+    TransferOrderResponse,
+    TransferItemResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -321,7 +325,8 @@ async def create_transfer(
         to_location_id=transfer.to_location_id,
         status="pending",
         created_by=created_by,
-        remark=transfer.remark
+        remark=transfer.remark,
+        created_at=china_now()  # 显式设置中国时间
     )
     db.add(db_transfer)
     
@@ -921,6 +926,498 @@ async def get_inventory_overview(
         "success": True,
         "user_role": user_role,
         "overview": result
+    }
+
+
+# ============= 转移单（新版：主表+明细）API =============
+
+@router.post("/transfer-orders", response_model=TransferOrderResponse)
+async def create_transfer_order(
+    data: TransferOrderCreate,
+    created_by: str = Query(default="系统管理员", description="创建人"),
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """创建转移单（支持多商品）"""
+    from ..middleware.permissions import has_permission
+    if not has_permission(user_role, 'can_transfer'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【发起库存转移】的权限")
+    
+    # 验证位置
+    from_location = db.query(Location).filter(Location.id == data.from_location_id).first()
+    to_location = db.query(Location).filter(Location.id == data.to_location_id).first()
+    
+    if not from_location:
+        raise HTTPException(status_code=404, detail="发出位置不存在")
+    if not to_location:
+        raise HTTPException(status_code=404, detail="目标位置不存在")
+    if data.from_location_id == data.to_location_id:
+        raise HTTPException(status_code=400, detail="发出位置和目标位置不能相同")
+    
+    if not data.items or len(data.items) == 0:
+        raise HTTPException(status_code=400, detail="转移商品列表不能为空")
+    
+    # 验证所有商品库存
+    errors = []
+    for item in data.items:
+        inventory = db.query(LocationInventory).filter(
+            LocationInventory.location_id == data.from_location_id,
+            LocationInventory.product_name == item.product_name
+        ).first()
+        
+        if not inventory or inventory.weight < item.weight:
+            available = inventory.weight if inventory else 0
+            errors.append(f"{item.product_name}: 库存不足（可用 {available}g，需要 {item.weight}g）")
+    
+    if errors:
+        raise HTTPException(status_code=400, detail="; ".join(errors))
+    
+    # 生成转移单号
+    now = china_now()
+    count = db.query(InventoryTransferOrder).filter(
+        InventoryTransferOrder.transfer_no.like(f"TR{now.strftime('%Y%m%d')}%")
+    ).count()
+    transfer_no = f"TR{now.strftime('%Y%m%d')}{count + 1:03d}"
+    
+    # 创建转移单主表
+    order = InventoryTransferOrder(
+        transfer_no=transfer_no,
+        from_location_id=data.from_location_id,
+        to_location_id=data.to_location_id,
+        status="pending",
+        created_by=created_by,
+        created_at=china_now(),
+        remark=data.remark
+    )
+    db.add(order)
+    db.flush()  # 获取 order.id
+    
+    # 创建明细并扣减库存
+    total_weight = 0
+    for item in data.items:
+        # 扣减库存
+        inventory = db.query(LocationInventory).filter(
+            LocationInventory.location_id == data.from_location_id,
+            LocationInventory.product_name == item.product_name
+        ).first()
+        inventory.weight -= item.weight
+        inventory.updated_at = china_now()
+        
+        # 创建明细
+        transfer_item = InventoryTransferItem(
+            order_id=order.id,
+            product_name=item.product_name,
+            weight=item.weight
+        )
+        db.add(transfer_item)
+        total_weight += item.weight
+    
+    db.commit()
+    db.refresh(order)
+    
+    logger.info(f"创建转移单: {transfer_no}, {len(data.items)}个商品, 共{total_weight}g, "
+                f"{from_location.name} -> {to_location.name}")
+    
+    return TransferOrderResponse(
+        id=order.id,
+        transfer_no=order.transfer_no,
+        from_location_id=order.from_location_id,
+        to_location_id=order.to_location_id,
+        from_location_name=from_location.name,
+        to_location_name=to_location.name,
+        status=order.status,
+        created_by=order.created_by,
+        created_at=order.created_at,
+        remark=order.remark,
+        items=[TransferItemResponse(
+            id=item.id,
+            product_name=item.product_name,
+            weight=item.weight
+        ) for item in order.items],
+        total_weight=total_weight
+    )
+
+
+@router.get("/transfer-orders", response_model=List[TransferOrderResponse])
+async def get_transfer_orders(
+    status: Optional[str] = None,
+    from_location_id: Optional[int] = None,
+    to_location_id: Optional[int] = None,
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """获取转移单列表"""
+    query = db.query(InventoryTransferOrder)
+    
+    if status:
+        query = query.filter(InventoryTransferOrder.status == status)
+    if from_location_id:
+        query = query.filter(InventoryTransferOrder.from_location_id == from_location_id)
+    if to_location_id:
+        query = query.filter(InventoryTransferOrder.to_location_id == to_location_id)
+    
+    orders = query.order_by(InventoryTransferOrder.created_at.desc()).all()
+    
+    result = []
+    for order in orders:
+        total_weight = sum(item.weight for item in order.items)
+        total_actual_weight = sum(item.actual_weight or 0 for item in order.items) if order.status in ["received", "pending_confirm"] else None
+        
+        result.append(TransferOrderResponse(
+            id=order.id,
+            transfer_no=order.transfer_no,
+            from_location_id=order.from_location_id,
+            to_location_id=order.to_location_id,
+            from_location_name=order.from_location.name if order.from_location else None,
+            to_location_name=order.to_location.name if order.to_location else None,
+            status=order.status,
+            created_by=order.created_by,
+            created_at=order.created_at,
+            remark=order.remark,
+            received_by=order.received_by,
+            received_at=order.received_at,
+            items=[TransferItemResponse(
+                id=item.id,
+                product_name=item.product_name,
+                weight=item.weight,
+                actual_weight=item.actual_weight,
+                weight_diff=item.weight_diff,
+                diff_reason=item.diff_reason
+            ) for item in order.items],
+            total_weight=total_weight,
+            total_actual_weight=total_actual_weight
+        ))
+    
+    return result
+
+
+@router.get("/transfer-orders/{order_id}", response_model=TransferOrderResponse)
+async def get_transfer_order(
+    order_id: int,
+    db: Session = Depends(get_db)
+):
+    """获取单个转移单详情"""
+    order = db.query(InventoryTransferOrder).filter(InventoryTransferOrder.id == order_id).first()
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="转移单不存在")
+    
+    total_weight = sum(item.weight for item in order.items)
+    total_actual_weight = sum(item.actual_weight or 0 for item in order.items) if order.status in ["received", "pending_confirm"] else None
+    
+    return TransferOrderResponse(
+        id=order.id,
+        transfer_no=order.transfer_no,
+        from_location_id=order.from_location_id,
+        to_location_id=order.to_location_id,
+        from_location_name=order.from_location.name if order.from_location else None,
+        to_location_name=order.to_location.name if order.to_location else None,
+        status=order.status,
+        created_by=order.created_by,
+        created_at=order.created_at,
+        remark=order.remark,
+        received_by=order.received_by,
+        received_at=order.received_at,
+        items=[TransferItemResponse(
+            id=item.id,
+            product_name=item.product_name,
+            weight=item.weight,
+            actual_weight=item.actual_weight,
+            weight_diff=item.weight_diff,
+            diff_reason=item.diff_reason
+        ) for item in order.items],
+        total_weight=total_weight,
+        total_actual_weight=total_actual_weight
+    )
+
+
+@router.post("/transfer-orders/{order_id}/receive", response_model=TransferOrderResponse)
+async def receive_transfer_order(
+    order_id: int,
+    receive_data: TransferOrderReceive,
+    received_by: str = Query(default="系统管理员", description="接收人"),
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """整单接收转移单"""
+    from ..middleware.permissions import has_permission
+    if not has_permission(user_role, 'can_receive_transfer'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【接收库存】的权限")
+    
+    order = db.query(InventoryTransferOrder).filter(InventoryTransferOrder.id == order_id).first()
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="转移单不存在")
+    if order.status != "pending":
+        raise HTTPException(status_code=400, detail=f"转移单状态为 {order.status}，无法接收")
+    
+    # 构建 item_id -> receive_data 的映射
+    receive_map = {r.item_id: r for r in receive_data.items}
+    
+    # 检查是否所有明细都有接收数据
+    for item in order.items:
+        if item.id not in receive_map:
+            raise HTTPException(status_code=400, detail=f"缺少商品 {item.product_name} 的接收数据")
+    
+    # 更新明细并计算差异
+    has_diff = False
+    for item in order.items:
+        receive_item = receive_map[item.id]
+        item.actual_weight = receive_item.actual_weight
+        item.weight_diff = receive_item.actual_weight - item.weight
+        item.diff_reason = receive_item.diff_reason
+        
+        if abs(item.weight_diff) >= 0.01:
+            has_diff = True
+            if not receive_item.diff_reason:
+                raise HTTPException(status_code=400, detail=f"商品 {item.product_name} 重量不符，必须填写差异原因")
+    
+    # 更新主表
+    order.received_by = received_by
+    order.received_at = china_now()
+    
+    if has_diff:
+        # 有差异，需要商品部确认
+        order.status = "pending_confirm"
+        logger.info(f"接收转移单待确认: {order.transfer_no}")
+    else:
+        # 无差异，直接完成
+        order.status = "received"
+        
+        # 更新目标位置库存
+        for item in order.items:
+            to_inventory = db.query(LocationInventory).filter(
+                LocationInventory.location_id == order.to_location_id,
+                LocationInventory.product_name == item.product_name
+            ).first()
+            
+            if to_inventory:
+                to_inventory.weight += item.actual_weight
+            else:
+                to_inventory = LocationInventory(
+                    product_name=item.product_name,
+                    location_id=order.to_location_id,
+                    weight=item.actual_weight
+                )
+                db.add(to_inventory)
+        
+        logger.info(f"接收转移单完成: {order.transfer_no}")
+    
+    db.commit()
+    db.refresh(order)
+    
+    total_weight = sum(item.weight for item in order.items)
+    total_actual_weight = sum(item.actual_weight or 0 for item in order.items)
+    
+    return TransferOrderResponse(
+        id=order.id,
+        transfer_no=order.transfer_no,
+        from_location_id=order.from_location_id,
+        to_location_id=order.to_location_id,
+        from_location_name=order.from_location.name if order.from_location else None,
+        to_location_name=order.to_location.name if order.to_location else None,
+        status=order.status,
+        created_by=order.created_by,
+        created_at=order.created_at,
+        remark=order.remark,
+        received_by=order.received_by,
+        received_at=order.received_at,
+        items=[TransferItemResponse(
+            id=item.id,
+            product_name=item.product_name,
+            weight=item.weight,
+            actual_weight=item.actual_weight,
+            weight_diff=item.weight_diff,
+            diff_reason=item.diff_reason
+        ) for item in order.items],
+        total_weight=total_weight,
+        total_actual_weight=total_actual_weight
+    )
+
+
+@router.post("/transfer-orders/{order_id}/reject")
+async def reject_transfer_order(
+    order_id: int,
+    reason: str = Query(..., description="拒收原因"),
+    rejected_by: str = Query(default="系统管理员", description="拒收人"),
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """整单拒收转移单"""
+    from ..middleware.permissions import has_permission
+    if not has_permission(user_role, 'can_receive_transfer'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【接收库存】的权限")
+    
+    order = db.query(InventoryTransferOrder).filter(InventoryTransferOrder.id == order_id).first()
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="转移单不存在")
+    if order.status != "pending":
+        raise HTTPException(status_code=400, detail=f"转移单状态为 {order.status}，无法拒收")
+    
+    # 恢复发出位置库存
+    for item in order.items:
+        from_inventory = db.query(LocationInventory).filter(
+            LocationInventory.location_id == order.from_location_id,
+            LocationInventory.product_name == item.product_name
+        ).first()
+        
+        if from_inventory:
+            from_inventory.weight += item.weight
+        else:
+            from_inventory = LocationInventory(
+                product_name=item.product_name,
+                location_id=order.from_location_id,
+                weight=item.weight
+            )
+            db.add(from_inventory)
+    
+    order.status = "rejected"
+    order.remark = f"{order.remark or ''}\n拒收原因: {reason}".strip()
+    
+    db.commit()
+    
+    logger.info(f"拒收转移单: {order.transfer_no}, 原因: {reason}")
+    
+    return {"success": True, "message": "转移单已拒收，库存已恢复"}
+
+
+@router.post("/transfer-orders/{order_id}/confirm", response_model=TransferOrderResponse)
+async def confirm_transfer_order(
+    order_id: int,
+    confirmed_by: str = Query(default="系统管理员", description="确认人"),
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """商品部确认转移单（同意柜台填写的实际重量）"""
+    if user_role not in ['product', 'manager']:
+        raise HTTPException(status_code=403, detail="权限不足：只有商品专员可以确认转移单")
+    
+    order = db.query(InventoryTransferOrder).filter(InventoryTransferOrder.id == order_id).first()
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="转移单不存在")
+    if order.status != "pending_confirm":
+        raise HTTPException(status_code=400, detail=f"转移单状态为 {order.status}，无法确认")
+    
+    # 按实际重量更新目标位置库存
+    for item in order.items:
+        to_inventory = db.query(LocationInventory).filter(
+            LocationInventory.location_id == order.to_location_id,
+            LocationInventory.product_name == item.product_name
+        ).first()
+        
+        if to_inventory:
+            to_inventory.weight += item.actual_weight
+        else:
+            to_inventory = LocationInventory(
+                product_name=item.product_name,
+                location_id=order.to_location_id,
+                weight=item.actual_weight
+            )
+            db.add(to_inventory)
+    
+    order.status = "received"
+    
+    db.commit()
+    db.refresh(order)
+    
+    logger.info(f"确认转移单: {order.transfer_no}, 确认人: {confirmed_by}")
+    
+    total_weight = sum(item.weight for item in order.items)
+    total_actual_weight = sum(item.actual_weight or 0 for item in order.items)
+    
+    return TransferOrderResponse(
+        id=order.id,
+        transfer_no=order.transfer_no,
+        from_location_id=order.from_location_id,
+        to_location_id=order.to_location_id,
+        from_location_name=order.from_location.name if order.from_location else None,
+        to_location_name=order.to_location.name if order.to_location else None,
+        status=order.status,
+        created_by=order.created_by,
+        created_at=order.created_at,
+        remark=order.remark,
+        received_by=order.received_by,
+        received_at=order.received_at,
+        items=[TransferItemResponse(
+            id=item.id,
+            product_name=item.product_name,
+            weight=item.weight,
+            actual_weight=item.actual_weight,
+            weight_diff=item.weight_diff,
+            diff_reason=item.diff_reason
+        ) for item in order.items],
+        total_weight=total_weight,
+        total_actual_weight=total_actual_weight
+    )
+
+
+# ============= 数据迁移 API =============
+
+@router.post("/migrate-old-transfers")
+async def migrate_old_transfers(
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """将旧版转移单数据迁移到新表
+    
+    将 inventory_transfers 表中的数据迁移到 inventory_transfer_orders 和 inventory_transfer_items 表。
+    每条旧记录对应一个新的转移单主表记录和一条明细记录。
+    """
+    if user_role != 'manager':
+        raise HTTPException(status_code=403, detail="只有管理员可以执行数据迁移")
+    
+    old_transfers = db.query(InventoryTransfer).all()
+    migrated_count = 0
+    skipped_count = 0
+    
+    for transfer in old_transfers:
+        # 检查是否已经迁移过（通过 transfer_no 判断）
+        existing = db.query(InventoryTransferOrder).filter(
+            InventoryTransferOrder.transfer_no == transfer.transfer_no
+        ).first()
+        
+        if existing:
+            skipped_count += 1
+            continue
+        
+        # 创建新的转移单主表记录
+        order = InventoryTransferOrder(
+            transfer_no=transfer.transfer_no,
+            from_location_id=transfer.from_location_id,
+            to_location_id=transfer.to_location_id,
+            status=transfer.status,
+            created_by=transfer.created_by,
+            created_at=transfer.created_at,
+            remark=transfer.remark,
+            received_by=transfer.received_by,
+            received_at=transfer.received_at
+        )
+        db.add(order)
+        db.flush()
+        
+        # 创建明细记录
+        item = InventoryTransferItem(
+            order_id=order.id,
+            product_name=transfer.product_name,
+            weight=transfer.weight,
+            actual_weight=transfer.actual_weight,
+            weight_diff=transfer.weight_diff,
+            diff_reason=transfer.diff_reason
+        )
+        db.add(item)
+        migrated_count += 1
+    
+    db.commit()
+    
+    logger.info(f"数据迁移完成: 迁移 {migrated_count} 条, 跳过 {skipped_count} 条（已存在）")
+    
+    return {
+        "success": True,
+        "migrated": migrated_count,
+        "skipped": skipped_count,
+        "total_old_records": len(old_transfers)
     }
 
 

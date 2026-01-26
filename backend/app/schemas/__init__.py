@@ -471,6 +471,65 @@ class InventoryTransferResponse(BaseModel):
     diff_reason: Optional[str]
 
 
+# ============= 转移单（新版：主表+明细）Schema =============
+
+class TransferItemCreate(BaseModel):
+    """创建转移单明细项"""
+    product_name: str
+    weight: float
+
+
+class TransferOrderCreate(BaseModel):
+    """创建转移单（支持多商品）"""
+    from_location_id: int
+    to_location_id: int
+    items: List[TransferItemCreate]
+    remark: Optional[str] = None
+
+
+class TransferItemReceive(BaseModel):
+    """接收单个商品"""
+    item_id: int
+    actual_weight: float
+    diff_reason: Optional[str] = None
+
+
+class TransferOrderReceive(BaseModel):
+    """整单接收"""
+    items: List[TransferItemReceive]
+
+
+class TransferItemResponse(BaseModel):
+    """转移单明细响应"""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    product_name: str
+    weight: float
+    actual_weight: Optional[float] = None
+    weight_diff: Optional[float] = None
+    diff_reason: Optional[str] = None
+
+
+class TransferOrderResponse(BaseModel):
+    """转移单响应（包含明细）"""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    transfer_no: str
+    from_location_id: int
+    to_location_id: int
+    from_location_name: Optional[str] = None
+    to_location_name: Optional[str] = None
+    status: str
+    created_by: Optional[str] = None
+    created_at: datetime
+    remark: Optional[str] = None
+    received_by: Optional[str] = None
+    received_at: Optional[datetime] = None
+    items: List[TransferItemResponse] = []
+    total_weight: Optional[float] = None  # 总预期重量
+    total_actual_weight: Optional[float] = None  # 总实际重量
+
+
 # ============= 退货单相关 Schema =============
 
 class ReturnOrderCreate(BaseModel):
