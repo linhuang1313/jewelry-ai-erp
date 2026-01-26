@@ -129,15 +129,29 @@ def search_product_codes(
 @router.get("", response_model=List[ProductCodeResponse])
 def get_product_codes(
     code_type: Optional[str] = None,
+    include_used: bool = Query(False, description="是否包含已使用的编码（默认不包含）"),
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db)
 ):
-    """获取所有商品编码（支持按类型筛选）"""
+    """获取所有商品编码（支持按类型筛选）
+    
+    - 默认情况下，已使用的 F 编码不会返回（因为 F 编码是一次性的）
+    - 如需查看所有编码（包括已使用的），请传 include_used=true
+    """
     query = db.query(ProductCode)
     
     if code_type:
         query = query.filter(ProductCode.code_type == code_type)
+    
+    # 默认不显示已使用的 F 编码（F 编码是一次性唯一编码）
+    if not include_used:
+        query = query.filter(
+            or_(
+                ProductCode.code_type != "f_single",  # 非 F 编码不受影响
+                ProductCode.is_used == 0              # F 编码只显示未使用的
+            )
+        )
     
     codes = query.order_by(ProductCode.code).offset(skip).limit(limit).all()
     
