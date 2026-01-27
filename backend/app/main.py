@@ -465,6 +465,7 @@ async def root():
     return {
         "message": "珠宝ERP系统API", 
         "status": "running",
+        "code_version": "2026-01-27-v2",  # Bug #29 fix + diagnostic logging
         "python_version": sys.version,
         "python_executable": sys.executable,
         "paddle_available": paddle_available,
