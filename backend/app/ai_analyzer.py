@@ -954,12 +954,12 @@ class AIAnalyzer:
 
 4. **账务汇总**（必须根据系统提供的数据精确显示）：
    - 💰 **现金账户**：
-     - cash_debt > 0：显示"欠款 ¥{cash_debt}"
-     - cash_debt < 0：显示"预收款 ¥{abs(cash_debt)}"（客户有余额）
+     - cash_debt > 0：显示"欠款 ¥{{cash_debt}}"
+     - cash_debt < 0：显示"预收款 ¥{{abs(cash_debt)}}"（客户有余额）
      - cash_debt = 0：显示"已结清 ✓"
    - 💎 **金料账户**：
-     - net_gold > 0：显示"欠料 {net_gold}克"
-     - net_gold < 0：显示"存料 {abs(net_gold)}克"（客户有存料）
+     - net_gold > 0：显示"欠料 {{net_gold}}克"
+     - net_gold < 0：显示"存料 {{abs(net_gold)}}克"（客户有存料）
      - net_gold = 0：显示"已结清 ✓"
 
 **隐藏标记**（必须添加）：
@@ -1413,12 +1413,12 @@ class AIAnalyzer:
 
 4. **账务汇总**（必须根据系统提供的数据精确显示）：
    - 💰 **现金账户**：
-     - cash_debt > 0：显示"欠款 ¥{cash_debt}"
-     - cash_debt < 0：显示"预收款 ¥{abs(cash_debt)}"（客户有余额）
+     - cash_debt > 0：显示"欠款 ¥{{cash_debt}}"
+     - cash_debt < 0：显示"预收款 ¥{{abs(cash_debt)}}"（客户有余额）
      - cash_debt = 0：显示"已结清 ✓"
    - 💎 **金料账户**：
-     - net_gold > 0：显示"欠料 {net_gold}克"
-     - net_gold < 0：显示"存料 {abs(net_gold)}克"（客户有存料）
+     - net_gold > 0：显示"欠料 {{net_gold}}克"
+     - net_gold < 0：显示"存料 {{abs(net_gold)}}克"（客户有存料）
      - net_gold = 0：显示"已结清 ✓"
 
 **隐藏标记**（必须添加）：
