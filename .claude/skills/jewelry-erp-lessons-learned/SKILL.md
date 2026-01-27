@@ -1,11 +1,11 @@
 ---
 name: jewelry-erp-lessons-learned
-description: Use when writing or modifying code for the jewelry ERP project - contains project-specific bug patterns and validation rules learned from 27 historical bugs to prevent recurring issues
+description: Use when writing or modifying code for the jewelry ERP project - contains project-specific bug patterns and validation rules learned from 28 historical bugs to prevent recurring issues
 ---
 
 # Jewelry ERP Lessons Learned
 
-Project-specific bug patterns and validation rules from 27 historical bugs. Use alongside generic skills (verification-before-completion, systematic-debugging, code-reviewer).
+Project-specific bug patterns and validation rules from 28 historical bugs. Use alongside generic skills (verification-before-completion, systematic-debugging, code-reviewer).
 
 ## When to Use
 
@@ -29,6 +29,7 @@ Project-specific bug patterns and validation rules from 27 historical bugs. Use 
 | Business order | Validate first, then create (inventory check -> customer create) | Bug #5 |
 | Available inventory | Calculate: total_weight - reserved_weight (pending sales) | Bug #6 |
 | f-string escaping | Use `{{var}}` for literal braces in f-strings, not `{var}` | Bug #27 |
+| Route ordering | Static routes (`/chat-debt-query`) MUST be defined before dynamic routes (`/{id}`) | Bug #28 |
 
 ### Transaction Pattern
 
@@ -114,6 +115,25 @@ prompt = f"""
 显示方式：
 - cash_debt > 0：显示"欠款 ¥{{cash_debt}}"
 """  # Outputs: 欠款 ¥{cash_debt}
+```
+
+### FastAPI Route Ordering Pattern
+
+```python
+# BAD - Bug #28: Static route after dynamic route
+@router.get("/{customer_id}")  # Line 330
+async def get_customer(customer_id: int): ...
+
+@router.get("/chat-debt-query")  # Line 1028 - NEVER REACHED!
+async def chat_debt_query(): ...
+# Request to /chat-debt-query returns 422: "unable to parse string as integer"
+
+# GOOD - Static routes first
+@router.get("/chat-debt-query")  # Static route FIRST
+async def chat_debt_query(): ...
+
+@router.get("/{customer_id}")  # Dynamic route AFTER
+async def get_customer(customer_id: int): ...
 ```
 
 ## Frontend TypeScript/React Checklist
@@ -222,6 +242,7 @@ customer = create_customer(data)  # Safe to create now
 3. Are all numeric inputs validated for type AND range?
 4. Are business validations done before any creates?
 5. Do f-strings with literal `{var}` need `{{var}}` escaping?
+6. Are static routes defined before dynamic routes (e.g., `/{id}`)?
 
 **Before writing frontend code, ask:**
 1. Is array checked before filter/map?
