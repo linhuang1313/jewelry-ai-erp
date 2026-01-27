@@ -642,6 +642,10 @@ class AIAnalyzer:
         # 客户账务数据（聊天查询用）
         if data.get("customer_debt"):
             debt_data = data["customer_debt"]
+            # 诊断日志：记录接收到的 debt_data
+            logger.info(f"[诊断-AI] 接收到 customer_debt 数据")
+            logger.info(f"[诊断-AI] cash_debt = {debt_data.get('cash_debt', 'N/A')}")
+            logger.info(f"[诊断-AI] net_gold = {debt_data.get('net_gold', 'N/A')}")
             if debt_data.get("success"):
                 customer = debt_data.get("customer", {})
                 text += f"\n=== 客户账务详情 ===\n"

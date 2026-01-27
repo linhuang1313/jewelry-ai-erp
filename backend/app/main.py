@@ -1805,8 +1805,14 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         # 从 ApiResponse 格式中提取实际数据（Bug #29 fix）
                         if isinstance(debt_result, dict) and "data" in debt_result:
                             data['customer_debt'] = debt_result["data"]
+                            # 诊断日志：记录 cash_debt 和 net_gold 值
+                            extracted_data = debt_result["data"]
+                            logger.info(f"[诊断] debt_result['data'] 提取成功")
+                            logger.info(f"[诊断] cash_debt = {extracted_data.get('cash_debt', 'N/A')}")
+                            logger.info(f"[诊断] net_gold = {extracted_data.get('net_gold', 'N/A')}")
                         else:
                             data['customer_debt'] = debt_result
+                            logger.warning(f"[诊断] debt_result 不是预期格式，直接使用: {type(debt_result)}")
                         logger.info(f"[流式] 已收集客户账务数据: {debt_customer_name}")
                 else:
                     # 无权限查看客户账务
