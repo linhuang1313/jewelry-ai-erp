@@ -1,11 +1,11 @@
 ---
 name: jewelry-erp-lessons-learned
-description: Use when writing or modifying code for the jewelry ERP project - contains project-specific bug patterns and validation rules learned from 26 historical bugs to prevent recurring issues
+description: Use when writing or modifying code for the jewelry ERP project - contains project-specific bug patterns and validation rules learned from 27 historical bugs to prevent recurring issues
 ---
 
 # Jewelry ERP Lessons Learned
 
-Project-specific bug patterns and validation rules from 26 historical bugs. Use alongside generic skills (verification-before-completion, systematic-debugging, code-reviewer).
+Project-specific bug patterns and validation rules from 27 historical bugs. Use alongside generic skills (verification-before-completion, systematic-debugging, code-reviewer).
 
 ## When to Use
 
@@ -28,6 +28,7 @@ Project-specific bug patterns and validation rules from 26 historical bugs. Use 
 | Date parsing | `datetime.fromisoformat()` needs try-except with default fallback | Bug #9 |
 | Business order | Validate first, then create (inventory check -> customer create) | Bug #5 |
 | Available inventory | Calculate: total_weight - reserved_weight (pending sales) | Bug #6 |
+| f-string escaping | Use `{{var}}` for literal braces in f-strings, not `{var}` | Bug #27 |
 
 ### Transaction Pattern
 
@@ -97,6 +98,22 @@ while retry_count < max_retries:
         break
     except:
         retry_count += 1
+```
+
+### f-string Escaping Pattern
+
+```python
+# BAD - Bug #27: Literal braces interpreted as variables
+prompt = f"""
+显示方式：
+- cash_debt > 0：显示"欠款 ¥{cash_debt}"
+"""  # NameError: name 'cash_debt' is not defined
+
+# GOOD - Double braces for literal output
+prompt = f"""
+显示方式：
+- cash_debt > 0：显示"欠款 ¥{{cash_debt}}"
+"""  # Outputs: 欠款 ¥{cash_debt}
 ```
 
 ## Frontend TypeScript/React Checklist
@@ -204,6 +221,7 @@ customer = create_customer(data)  # Safe to create now
 2. Is there try-except with rollback?
 3. Are all numeric inputs validated for type AND range?
 4. Are business validations done before any creates?
+5. Do f-strings with literal `{var}` need `{{var}}` escaping?
 
 **Before writing frontend code, ask:**
 1. Is array checked before filter/map?
