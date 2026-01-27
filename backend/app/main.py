@@ -40,7 +40,7 @@ from .schemas import (
     SalesOrderCreate, SalesOrderResponse, SalesDetailResponse, SalesDetailItem,
     SalespersonCreate, SalespersonResponse
 )
-from .models import InboundOrder, InboundDetail, Inventory, Customer, SalesOrder, SalesDetail, Supplier, ChatLog, Location, LocationInventory, Salesperson, ReturnOrder, InventoryTransferOrder, InventoryTransferItem
+from .models import InboundOrder, InboundDetail, Inventory, Customer, SalesOrder, SalesDetail, Supplier, ChatLog, Location, LocationInventory, Salesperson, ReturnOrder, InventoryTransfer, InventoryTransferOrder, InventoryTransferItem
 from .ai_parser import parse_user_message
 from .utils import to_pinyin_initials
 from . import context_manager as ctx
@@ -548,8 +548,8 @@ async def recognize_inbound_sheet(file: UploadFile = File(...)):
                 "recognized_text": ""
             }
         
-            # 读取上传的文件内容
-            content = await file.read()
+        # 读取上传的文件内容
+        content = await file.read()
         
         # 确定使用哪种 OCR
         ocr_method = "百度云 OCR" if BAIDU_OCR_ENABLED else "本地 PaddleOCR"
@@ -4014,6 +4014,199 @@ async def get_sales_order(order_id: int, db: Session = Depends(get_db)):
             "success": False,
             "message": f"查询销售单详情失败: {str(e)}"
         }
+
+# ==================== AI对话辅助函数 ====================
+
+async def create_supplier(supplier_data: SupplierCreate, db: Session) -> Dict[str, Any]:
+    """创建供应商（内部辅助函数）"""
+    try:
+        # 检查是否已存在同名供应商
+        existing = db.query(Supplier).filter(
+            Supplier.name == supplier_data.name,
+            Supplier.status == "active"
+        ).first()
+        if existing:
+            return {"success": False, "message": f"供应商【{supplier_data.name}】已存在"}
+        
+        # 生成供应商编号
+        now = datetime.now()
+        count = db.query(Supplier).filter(
+            Supplier.supplier_no.like(f"SUP{now.strftime('%Y%m%d')}%")
+        ).count()
+        supplier_no = f"SUP{now.strftime('%Y%m%d')}{count + 1:03d}"
+        
+        # 创建供应商
+        supplier = Supplier(
+            supplier_no=supplier_no,
+            name=supplier_data.name,
+            phone=supplier_data.phone,
+            address=supplier_data.address,
+            contact_person=supplier_data.contact_person,
+            supplier_type=supplier_data.supplier_type or "个人",
+            remark=supplier_data.remark,
+            status="active"
+        )
+        db.add(supplier)
+        db.commit()
+        db.refresh(supplier)
+        
+        logger.info(f"创建供应商成功: {supplier.name} ({supplier.supplier_no})")
+        
+        return {
+            "success": True,
+            "message": f"供应商【{supplier.name}】创建成功",
+            "supplier": {
+                "id": supplier.id,
+                "supplier_no": supplier.supplier_no,
+                "name": supplier.name
+            }
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"创建供应商失败: {e}", exc_info=True)
+        return {"success": False, "message": f"创建供应商失败: {str(e)}"}
+
+
+async def create_customer(customer_data: CustomerCreate, db: Session) -> Dict[str, Any]:
+    """创建客户（内部辅助函数）"""
+    try:
+        # 检查是否已存在同名客户
+        existing = db.query(Customer).filter(
+            Customer.name == customer_data.name,
+            Customer.status == "active"
+        ).first()
+        if existing:
+            return {"success": False, "message": f"客户【{customer_data.name}】已存在"}
+        
+        # 生成客户编号
+        now = datetime.now()
+        count = db.query(Customer).filter(
+            Customer.customer_no.like(f"CUS{now.strftime('%Y%m%d')}%")
+        ).count()
+        customer_no = f"CUS{now.strftime('%Y%m%d')}{count + 1:03d}"
+        
+        # 创建客户
+        customer = Customer(
+            customer_no=customer_no,
+            name=customer_data.name,
+            phone=customer_data.phone,
+            wechat=customer_data.wechat,
+            address=customer_data.address,
+            customer_type=customer_data.customer_type or "个人",
+            status="active"
+        )
+        db.add(customer)
+        db.commit()
+        db.refresh(customer)
+        
+        logger.info(f"创建客户成功: {customer.name} ({customer.customer_no})")
+        
+        return {
+            "success": True,
+            "message": f"客户【{customer.name}】创建成功",
+            "customer": {
+                "id": customer.id,
+                "customer_no": customer.customer_no,
+                "name": customer.name
+            }
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"创建客户失败: {e}", exc_info=True)
+        return {"success": False, "message": f"创建客户失败: {str(e)}"}
+
+
+async def get_customers(name: str = None, db: Session = None) -> Dict[str, Any]:
+    """查询客户列表（内部辅助函数）"""
+    try:
+        query = db.query(Customer).filter(Customer.status == "active")
+        if name:
+            query = query.filter(Customer.name.contains(name))
+        customers = query.order_by(Customer.create_time.desc()).limit(20).all()
+        
+        return {
+            "success": True,
+            "customers": [
+                {
+                    "id": c.id,
+                    "customer_no": c.customer_no,
+                    "name": c.name,
+                    "phone": c.phone,
+                    "customer_type": c.customer_type
+                }
+                for c in customers
+            ],
+            "total": len(customers)
+        }
+    except Exception as e:
+        logger.error(f"查询客户失败: {e}", exc_info=True)
+        return {"success": False, "message": f"查询客户失败: {str(e)}"}
+
+
+async def create_sales_order(order_data: dict, db: Session) -> Dict[str, Any]:
+    """创建销售单（内部辅助函数）"""
+    try:
+        # 生成销售单号
+        now = datetime.now()
+        count = db.query(SalesOrder).filter(
+            SalesOrder.order_no.like(f"XS{now.strftime('%Y%m%d')}%")
+        ).count()
+        order_no = f"XS{now.strftime('%Y%m%d')}{count + 1:06d}"
+        
+        # 创建销售单
+        sales_order = SalesOrder(
+            order_no=order_no,
+            order_date=now,
+            customer_name=order_data.get('customer_name'),
+            salesperson=order_data.get('salesperson'),
+            store_code=order_data.get('store_code'),
+            remark=order_data.get('remark'),
+            status="待结算"
+        )
+        
+        # 处理商品明细
+        items = order_data.get('items', [])
+        total_labor_cost = 0.0
+        total_weight = 0.0
+        
+        for item in items:
+            detail = SalesDetail(
+                product_name=item.get('product_name'),
+                weight=item.get('weight', 0),
+                labor_cost=item.get('labor_cost', 0),
+                piece_count=item.get('piece_count'),
+                piece_labor_cost=item.get('piece_labor_cost'),
+                total_labor_cost=item.get('weight', 0) * item.get('labor_cost', 0)
+            )
+            sales_order.details.append(detail)
+            total_labor_cost += detail.total_labor_cost
+            total_weight += detail.weight
+        
+        sales_order.total_labor_cost = total_labor_cost
+        sales_order.total_weight = total_weight
+        
+        db.add(sales_order)
+        db.commit()
+        db.refresh(sales_order)
+        
+        logger.info(f"创建销售单成功: {order_no}")
+        
+        return {
+            "success": True,
+            "message": f"销售单【{order_no}】创建成功",
+            "order": {
+                "id": sales_order.id,
+                "order_no": sales_order.order_no,
+                "customer_name": sales_order.customer_name,
+                "total_weight": total_weight,
+                "total_labor_cost": total_labor_cost
+            }
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"创建销售单失败: {e}", exc_info=True)
+        return {"success": False, "message": f"创建销售单失败: {str(e)}"}
+
 
 # ==================== AI对话处理函数 ====================
 
