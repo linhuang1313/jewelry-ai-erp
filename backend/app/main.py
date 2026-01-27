@@ -1306,48 +1306,77 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             
             # ========== 阶段2: 数据收集（基于角色的数据过滤）==========
             # 定义各角色的数据访问权限（数据层过滤，不拦截请求）
+            # 权限矩阵与 ai_analyzer.py 中的 ROLE_DATA_ACCESS 保持一致
             ROLE_DATA_ACCESS = {
-                'settlement': {  # 结算专员
-                    'can_view_inbound': False,      # 不能看入库数据
-                    'can_view_inventory': False,    # 不能看库存数据
-                    'can_view_suppliers': False,    # 不能看供应商数据
-                    'restriction_hint': '如需查看入库、库存或供应商信息，请联系商品专员或管理层。'
+                'manager': {  # 管理层 - 全部权限
+                    'can_view_inventory': True,
+                    'can_view_inbound': True,
+                    'can_view_suppliers': True,
+                    'can_view_transfer_orders': True,
+                    'can_view_sales_orders': True,
+                    'can_view_customers': True,
+                    'can_view_customer_debt': True,
+                    'restriction_hint': None
                 },
-                'sales': {  # 业务员
-                    'can_view_inbound': False,
-                    'can_view_inventory': False,
-                    'can_view_suppliers': False,
-                    'restriction_hint': '您只能查看客户相关信息。如需其他数据，请联系相关部门。'
+                'product': {  # 商品专员 - 库存(商品部)、转移单、入库单、供应商
+                    'can_view_inventory': True,
+                    'can_view_inbound': True,
+                    'can_view_suppliers': True,
+                    'can_view_transfer_orders': True,
+                    'can_view_sales_orders': False,
+                    'can_view_customers': False,
+                    'can_view_customer_debt': False,
+                    'restriction_hint': '如需查看销售单或客户信息，请联系柜台或结算部。'
                 },
-                'counter': {  # 柜台
+                'counter': {  # 柜台 - 库存(展厅)、转移单、销售单、客户
+                    'can_view_inventory': True,
                     'can_view_inbound': False,
-                    'can_view_inventory': True,     # 可以看展厅库存
                     'can_view_suppliers': False,
+                    'can_view_transfer_orders': True,
+                    'can_view_sales_orders': True,
+                    'can_view_customers': True,
+                    'can_view_customer_debt': False,
                     'restriction_hint': '如需查看入库或供应商信息，请联系商品专员。'
                 },
-                'product': {  # 商品专员
-                    'can_view_inbound': True,
+                'settlement': {  # 结算专员 - 库存(展厅)、转移单、销售单、客户、客户账务
                     'can_view_inventory': True,
+                    'can_view_inbound': False,
+                    'can_view_suppliers': False,
+                    'can_view_transfer_orders': True,
+                    'can_view_sales_orders': True,
+                    'can_view_customers': True,
+                    'can_view_customer_debt': True,
+                    'restriction_hint': '如需查看入库或供应商信息，请联系商品专员或财务。'
+                },
+                'finance': {  # 财务 - 全部（库存为展厅）
+                    'can_view_inventory': True,
+                    'can_view_inbound': True,
                     'can_view_suppliers': True,
+                    'can_view_transfer_orders': True,
+                    'can_view_sales_orders': True,
+                    'can_view_customers': True,
+                    'can_view_customer_debt': True,
                     'restriction_hint': None
                 },
-                'material': {  # 料部
-                    'can_view_inbound': True,
-                    'can_view_inventory': True,
+                'material': {  # 料部 - 客户、供应商
+                    'can_view_inventory': False,
+                    'can_view_inbound': False,
                     'can_view_suppliers': True,
-                    'restriction_hint': None
+                    'can_view_transfer_orders': False,
+                    'can_view_sales_orders': False,
+                    'can_view_customers': True,
+                    'can_view_customer_debt': False,
+                    'restriction_hint': '如需查看库存、转移单或销售信息，请联系相关部门。'
                 },
-                'finance': {  # 财务
-                    'can_view_inbound': True,
+                'sales': {  # 业务员 - 库存(展厅)、销售单、客户、客户账务
                     'can_view_inventory': True,
-                    'can_view_suppliers': True,
-                    'restriction_hint': None
-                },
-                'manager': {  # 管理层
-                    'can_view_inbound': True,
-                    'can_view_inventory': True,
-                    'can_view_suppliers': True,
-                    'restriction_hint': None
+                    'can_view_inbound': False,
+                    'can_view_suppliers': False,
+                    'can_view_transfer_orders': False,
+                    'can_view_sales_orders': True,
+                    'can_view_customers': True,
+                    'can_view_customer_debt': True,
+                    'restriction_hint': '您只能查看客户和销售相关信息。如需其他数据，请联系相关部门。'
                 }
             }
             
@@ -1369,12 +1398,20 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             
             # 记录数据访问限制（传递给 AI 让它智能提示用户）
             data_restrictions = []
-            if not role_access['can_view_inbound']:
-                data_restrictions.append('入库信息')
-            if not role_access['can_view_inventory']:
-                data_restrictions.append('库存信息')
-            if not role_access['can_view_suppliers']:
-                data_restrictions.append('供应商信息')
+            if not role_access.get('can_view_inventory', True):
+                data_restrictions.append('库存')
+            if not role_access.get('can_view_inbound', True):
+                data_restrictions.append('入库单')
+            if not role_access.get('can_view_suppliers', True):
+                data_restrictions.append('供应商')
+            if not role_access.get('can_view_transfer_orders', True):
+                data_restrictions.append('转移单/调拨单')
+            if not role_access.get('can_view_sales_orders', True):
+                data_restrictions.append('销售单')
+            if not role_access.get('can_view_customers', True):
+                data_restrictions.append('客户')
+            if not role_access.get('can_view_customer_debt', True):
+                data_restrictions.append('客户账务')
             
             data['context'] = {
                 'intent': ai_response.action,
@@ -1483,39 +1520,48 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             yield f"data: {json.dumps({'type': 'thinking', 'step': '数据收集', 'message': '正在收集客户数据...', 'progress': 55}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0.05)
             
-            # 收集客户数据
-            customers = db.query(Customer).filter(Customer.status == "active").all()
-            data['customers'] = [
-                {
-                    'name': c.name,
-                    'phone': c.phone,
-                    'total_purchase_amount': c.total_purchase_amount or 0,  # 总工费金额
-                    'total_purchase_weight': getattr(c, 'total_purchase_weight', 0) or 0,  # 总销售克重
-                    'total_purchase_count': c.total_purchase_count or 0,
-                    'last_purchase_time': str(c.last_purchase_time) if c.last_purchase_time else None,
-                    'customer_type': c.customer_type
-                }
-                for c in customers
-            ]
+            # 收集客户数据（根据权限）
+            if role_access.get('can_view_customers', True):
+                customers = db.query(Customer).filter(Customer.status == "active").all()
+                data['customers'] = [
+                    {
+                        'name': c.name,
+                        'phone': c.phone,
+                        'total_purchase_amount': c.total_purchase_amount or 0,  # 总工费金额
+                        'total_purchase_weight': getattr(c, 'total_purchase_weight', 0) or 0,  # 总销售克重
+                        'total_purchase_count': c.total_purchase_count or 0,
+                        'last_purchase_time': str(c.last_purchase_time) if c.last_purchase_time else None,
+                        'customer_type': c.customer_type
+                    }
+                    for c in customers
+                ]
+            else:
+                # 无权限查看客户
+                data['customers'] = []
+                logger.info(f"[数据过滤] 角色 {user_role} 无权查看客户数据")
             
-            # 如果是查询客户账务，收集账务数据
+            # 如果是查询客户账务，收集账务数据（根据权限）
             if ai_response.action == "查询客户账务":
-                debt_customer_name = getattr(ai_response, 'debt_customer_name', None)
-                if debt_customer_name:
-                    yield f"data: {json.dumps({'type': 'thinking', 'step': '数据收集', 'message': f'正在查询 {debt_customer_name} 的账务信息...', 'progress': 60}, ensure_ascii=False)}\n\n"
-                    await asyncio.sleep(0.05)
-                    
-                    # 调用聊天查询API
-                    from .routers.customers import chat_debt_query
-                    debt_result = await chat_debt_query(
-                        customer_name=debt_customer_name,
-                        query_type=getattr(ai_response, 'debt_query_type', 'all') or 'all',
-                        date_start=getattr(ai_response, 'date_start', None),
-                        date_end=getattr(ai_response, 'date_end', None),
-                        db=db
-                    )
-                    data['customer_debt'] = debt_result
-                    logger.info(f"[流式] 已收集客户账务数据: {debt_customer_name}")
+                if role_access.get('can_view_customer_debt', True):
+                    debt_customer_name = getattr(ai_response, 'debt_customer_name', None)
+                    if debt_customer_name:
+                        yield f"data: {json.dumps({'type': 'thinking', 'step': '数据收集', 'message': f'正在查询 {debt_customer_name} 的账务信息...', 'progress': 60}, ensure_ascii=False)}\n\n"
+                        await asyncio.sleep(0.05)
+                        
+                        # 调用聊天查询API
+                        from .routers.customers import chat_debt_query
+                        debt_result = await chat_debt_query(
+                            customer_name=debt_customer_name,
+                            query_type=getattr(ai_response, 'debt_query_type', 'all') or 'all',
+                            date_start=getattr(ai_response, 'date_start', None),
+                            date_end=getattr(ai_response, 'date_end', None),
+                            db=db
+                        )
+                        data['customer_debt'] = debt_result
+                        logger.info(f"[流式] 已收集客户账务数据: {debt_customer_name}")
+                else:
+                    # 无权限查看客户账务
+                    logger.info(f"[数据过滤] 角色 {user_role} 无权查看客户账务数据")
             
             # 如果是销售数据查询，收集销售分析数据
             if ai_response.action == "销售数据查询":
@@ -1661,139 +1707,150 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 data['inbound_orders'] = []
                 logger.info(f"[数据过滤] 角色 {user_role} 无权查看入库数据")
             
-            # 收集销售单数据（如果指定了销售单号，只查询该销售单）
-            sales_order_no = ai_response.sales_order_no if hasattr(ai_response, 'sales_order_no') else None
-            if sales_order_no:
-                # 精确查询指定销售单
-                so = db.query(SalesOrder).filter(SalesOrder.order_no == sales_order_no).first()
-                if so:
-                    details = db.query(SalesDetail).filter(SalesDetail.order_id == so.id).all()
-                    data['sales_orders'] = [{
-                        'order_no': so.order_no,
-                        'customer_name': so.customer_name,
-                        'salesperson': so.salesperson,
-                        'store_code': so.store_code,
-                        'total_labor_cost': so.total_labor_cost,
-                        'total_weight': so.total_weight,
-                        'status': so.status,
-                        'order_date': str(so.order_date) if so.order_date else None,
-                        'details': [
-                            {
-                                'product_name': d.product_name,
-                                'weight': d.weight,
-                                'labor_cost': d.labor_cost,
-                                'total_labor_cost': d.total_labor_cost
-                            }
-                            for d in details
-                        ]
-                    }]
+            # 收集销售单数据（根据权限）
+            if role_access.get('can_view_sales_orders', True):
+                sales_order_no = ai_response.sales_order_no if hasattr(ai_response, 'sales_order_no') else None
+                if sales_order_no:
+                    # 精确查询指定销售单
+                    so = db.query(SalesOrder).filter(SalesOrder.order_no == sales_order_no).first()
+                    if so:
+                        details = db.query(SalesDetail).filter(SalesDetail.order_id == so.id).all()
+                        data['sales_orders'] = [{
+                            'order_no': so.order_no,
+                            'customer_name': so.customer_name,
+                            'salesperson': so.salesperson,
+                            'store_code': so.store_code,
+                            'total_labor_cost': so.total_labor_cost,
+                            'total_weight': so.total_weight,
+                            'status': so.status,
+                            'order_date': str(so.order_date) if so.order_date else None,
+                            'details': [
+                                {
+                                    'product_name': d.product_name,
+                                    'weight': d.weight,
+                                    'labor_cost': d.labor_cost,
+                                    'total_labor_cost': d.total_labor_cost
+                                }
+                                for d in details
+                            ]
+                        }]
+                    else:
+                        # 销售单不存在
+                        data['sales_orders'] = []
                 else:
-                    # 销售单不存在
+                    # 查询最近的销售单（最多50个）
+                    sales_orders = db.query(SalesOrder).order_by(desc(SalesOrder.order_date)).limit(50).all()
                     data['sales_orders'] = []
+                    for so in sales_orders:
+                        details = db.query(SalesDetail).filter(SalesDetail.order_id == so.id).all()
+                        data['sales_orders'].append({
+                            'order_no': so.order_no,
+                            'customer_name': so.customer_name,
+                            'salesperson': so.salesperson,
+                            'store_code': so.store_code,
+                            'total_labor_cost': so.total_labor_cost,
+                            'total_weight': so.total_weight,
+                            'status': so.status,
+                            'order_date': str(so.order_date) if so.order_date else None,
+                            'details': [
+                                {
+                                    'product_name': d.product_name,
+                                    'weight': d.weight,
+                                    'labor_cost': d.labor_cost,
+                                    'total_labor_cost': d.total_labor_cost
+                                }
+                                for d in details
+                            ]
+                        })
             else:
-                # 查询最近的销售单（最多50个）
-                sales_orders = db.query(SalesOrder).order_by(desc(SalesOrder.order_date)).limit(50).all()
+                # 无权限查看销售单
                 data['sales_orders'] = []
-                for so in sales_orders:
-                    details = db.query(SalesDetail).filter(SalesDetail.order_id == so.id).all()
-                    data['sales_orders'].append({
-                        'order_no': so.order_no,
-                        'customer_name': so.customer_name,
-                        'salesperson': so.salesperson,
-                        'store_code': so.store_code,
-                        'total_labor_cost': so.total_labor_cost,
-                        'total_weight': so.total_weight,
-                        'status': so.status,
-                        'order_date': str(so.order_date) if so.order_date else None,
-                        'details': [
-                            {
-                                'product_name': d.product_name,
-                                'weight': d.weight,
-                                'labor_cost': d.labor_cost,
-                                'total_labor_cost': d.total_labor_cost
-                            }
-                            for d in details
-                        ]
-                    })
+                logger.info(f"[数据过滤] 角色 {user_role} 无权查看销售单数据")
             
-            # 收集转移单/调拨单数据（用于转移单查询）
-            transfer_order_no = getattr(ai_response, 'transfer_order_no', None)
-            transfer_status = getattr(ai_response, 'transfer_status', None)
-            transfer_date_start = getattr(ai_response, 'transfer_date_start', None)
-            transfer_date_end = getattr(ai_response, 'transfer_date_end', None)
-            
-            transfer_query = db.query(InventoryTransferOrder).order_by(desc(InventoryTransferOrder.created_at))
-            
-            if transfer_order_no:
-                transfer_query = transfer_query.filter(InventoryTransferOrder.transfer_no == transfer_order_no)
-            if transfer_status:
-                transfer_query = transfer_query.filter(InventoryTransferOrder.status == transfer_status)
-            if transfer_date_start:
-                try:
-                    start_dt = datetime.strptime(transfer_date_start, "%Y-%m-%d")
-                    transfer_query = transfer_query.filter(InventoryTransferOrder.created_at >= start_dt)
-                except:
-                    pass
-            if transfer_date_end:
-                try:
-                    end_dt = datetime.strptime(transfer_date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
-                    transfer_query = transfer_query.filter(InventoryTransferOrder.created_at <= end_dt)
-                except:
-                    pass
-            
-            transfer_orders = transfer_query.limit(100).all()
-            data['transfer_orders'] = []
-            data['transfer_filters'] = {
-                'transfer_order_no': transfer_order_no,
-                'status': transfer_status,
-                'date_start': transfer_date_start,
-                'date_end': transfer_date_end
-            }
-            
-            for order in transfer_orders:
-                # 获取来源转移单号
-                source_transfer_no = None
-                if order.source_order_id:
-                    source_order = db.query(InventoryTransferOrder).filter(
-                        InventoryTransferOrder.id == order.source_order_id
+            # 收集转移单/调拨单数据（根据权限）
+            if role_access.get('can_view_transfer_orders', True):
+                transfer_order_no = getattr(ai_response, 'transfer_order_no', None)
+                transfer_status = getattr(ai_response, 'transfer_status', None)
+                transfer_date_start = getattr(ai_response, 'transfer_date_start', None)
+                transfer_date_end = getattr(ai_response, 'transfer_date_end', None)
+                
+                transfer_query = db.query(InventoryTransferOrder).order_by(desc(InventoryTransferOrder.created_at))
+                
+                if transfer_order_no:
+                    transfer_query = transfer_query.filter(InventoryTransferOrder.transfer_no == transfer_order_no)
+                if transfer_status:
+                    transfer_query = transfer_query.filter(InventoryTransferOrder.status == transfer_status)
+                if transfer_date_start:
+                    try:
+                        start_dt = datetime.strptime(transfer_date_start, "%Y-%m-%d")
+                        transfer_query = transfer_query.filter(InventoryTransferOrder.created_at >= start_dt)
+                    except:
+                        pass
+                if transfer_date_end:
+                    try:
+                        end_dt = datetime.strptime(transfer_date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+                        transfer_query = transfer_query.filter(InventoryTransferOrder.created_at <= end_dt)
+                    except:
+                        pass
+                
+                transfer_orders = transfer_query.limit(100).all()
+                data['transfer_orders'] = []
+                data['transfer_filters'] = {
+                    'transfer_order_no': transfer_order_no,
+                    'status': transfer_status,
+                    'date_start': transfer_date_start,
+                    'date_end': transfer_date_end
+                }
+                
+                for order in transfer_orders:
+                    # 获取来源转移单号
+                    source_transfer_no = None
+                    if order.source_order_id:
+                        source_order = db.query(InventoryTransferOrder).filter(
+                            InventoryTransferOrder.id == order.source_order_id
+                        ).first()
+                        if source_order:
+                            source_transfer_no = source_order.transfer_no
+                    
+                    # 获取关联的新转移单
+                    related_order = db.query(InventoryTransferOrder).filter(
+                        InventoryTransferOrder.source_order_id == order.id
                     ).first()
-                    if source_order:
-                        source_transfer_no = source_order.transfer_no
-                
-                # 获取关联的新转移单
-                related_order = db.query(InventoryTransferOrder).filter(
-                    InventoryTransferOrder.source_order_id == order.id
-                ).first()
-                
-                data['transfer_orders'].append({
-                    'transfer_no': order.transfer_no,
-                    'from_location': order.from_location.name if order.from_location else None,
-                    'to_location': order.to_location.name if order.to_location else None,
-                    'status': order.status,
-                    'status_display': {
-                        'pending': '待接收', 'received': '已接收', 'rejected': '已拒收',
-                        'pending_confirm': '待确认', 'returned': '已退回'
-                    }.get(order.status, order.status),
-                    'created_by': order.created_by,
-                    'created_at': str(order.created_at) if order.created_at else None,
-                    'received_by': order.received_by,
-                    'received_at': str(order.received_at) if order.received_at else None,
-                    'remark': order.remark,
-                    'source_transfer_no': source_transfer_no,
-                    'related_transfer_no': related_order.transfer_no if related_order else None,
-                    'items': [
-                        {
-                            'product_name': item.product_name,
-                            'weight': item.weight,
-                            'actual_weight': item.actual_weight,
-                            'weight_diff': item.weight_diff,
-                            'diff_reason': item.diff_reason
-                        }
-                        for item in order.items
-                    ],
-                    'total_weight': sum(item.weight for item in order.items),
-                    'total_actual_weight': sum(item.actual_weight or 0 for item in order.items) if order.status in ['received', 'pending_confirm'] else None
-                })
+                    
+                    data['transfer_orders'].append({
+                        'transfer_no': order.transfer_no,
+                        'from_location': order.from_location.name if order.from_location else None,
+                        'to_location': order.to_location.name if order.to_location else None,
+                        'status': order.status,
+                        'status_display': {
+                            'pending': '待接收', 'received': '已接收', 'rejected': '已拒收',
+                            'pending_confirm': '待确认', 'returned': '已退回'
+                        }.get(order.status, order.status),
+                        'created_by': order.created_by,
+                        'created_at': str(order.created_at) if order.created_at else None,
+                        'received_by': order.received_by,
+                        'received_at': str(order.received_at) if order.received_at else None,
+                        'remark': order.remark,
+                        'source_transfer_no': source_transfer_no,
+                        'related_transfer_no': related_order.transfer_no if related_order else None,
+                        'items': [
+                            {
+                                'product_name': item.product_name,
+                                'weight': item.weight,
+                                'actual_weight': item.actual_weight,
+                                'weight_diff': item.weight_diff,
+                                'diff_reason': item.diff_reason
+                            }
+                            for item in order.items
+                        ],
+                        'total_weight': sum(item.weight for item in order.items),
+                        'total_actual_weight': sum(item.actual_weight or 0 for item in order.items) if order.status in ['received', 'pending_confirm'] else None
+                    })
+            else:
+                # 无权限查看转移单
+                data['transfer_orders'] = []
+                data['transfer_filters'] = {}
+                logger.info(f"[数据过滤] 角色 {user_role} 无权查看转移单数据")
             
             # 收集总体统计（根据角色计算库存总重量）
             # 库存总重量使用已收集的库存数据计算，这样就是角色对应仓位的库存
