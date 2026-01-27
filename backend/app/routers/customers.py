@@ -20,8 +20,9 @@ from ..utils.response import (
 from ..models import (
     Customer, SalesOrder, SalesDetail, ReturnOrder,
     AccountReceivable, CustomerTransaction, CustomerGoldDeposit,
-    CustomerGoldDepositTransaction
+    CustomerGoldDepositTransaction, SettlementOrder
 )
+from ..models.finance import PaymentRecord, GoldReceipt
 from ..schemas import CustomerCreate, CustomerResponse
 
 logger = logging.getLogger(__name__)
@@ -1085,130 +1086,201 @@ async def chat_debt_query(
             }
         }
         
-        # 3. 查询现金欠款
+        # 3. 查询现金欠款（使用历史交易汇总方式，与财务对账单一致）
         if query_type in ["all", "cash_debt"]:
             cash_debt = 0.0
             cash_transactions = []
             try:
-                receivables_query = db.query(AccountReceivable).filter(
-                    AccountReceivable.customer_id == customer_id,
-                    AccountReceivable.status.in_(["unpaid", "overdue"])
+                # 计算结算金额（cash_price + mixed的现金部分 + labor_amount）
+                total_settlement_cash = 0.0
+                settlements_query = db.query(SettlementOrder).join(SalesOrder).filter(
+                    SalesOrder.customer_id == customer_id,
+                    SettlementOrder.status.in_(['confirmed', 'printed'])
                 )
                 
                 if start_date:
-                    receivables_query = receivables_query.filter(
-                        AccountReceivable.credit_start_date >= start_date.date()
+                    settlements_query = settlements_query.filter(
+                        SettlementOrder.created_at >= start_date
                     )
                 if end_date:
-                    receivables_query = receivables_query.filter(
-                        AccountReceivable.credit_start_date <= end_date.date()
+                    settlements_query = settlements_query.filter(
+                        SettlementOrder.created_at <= end_date
                     )
                 
-                receivables = receivables_query.all()
-                cash_debt = sum(r.unpaid_amount or 0 for r in receivables)
+                settlements = settlements_query.all()
+                for s in settlements:
+                    if s.payment_method == 'cash_price':
+                        total_settlement_cash += s.total_amount or 0
+                    elif s.payment_method == 'mixed':
+                        # 混合支付：只计算现金部分（cash_payment_weight * gold_price）
+                        if s.cash_payment_weight and s.gold_price:
+                            total_settlement_cash += s.cash_payment_weight * s.gold_price
+                        total_settlement_cash += s.labor_amount or 0  # 工费总是现金
                 
-                for r in receivables[:20]:
+                # 查询收款记录
+                payments_query = db.query(PaymentRecord).filter(
+                    PaymentRecord.customer_id == customer_id
+                )
+                
+                if start_date:
+                    payments_query = payments_query.filter(
+                        PaymentRecord.payment_date >= start_date.date()
+                    )
+                if end_date:
+                    payments_query = payments_query.filter(
+                        PaymentRecord.payment_date <= end_date.date()
+                    )
+                
+                total_payments = db.query(func.coalesce(func.sum(PaymentRecord.amount), 0)).filter(
+                    PaymentRecord.customer_id == customer_id
+                )
+                if start_date:
+                    total_payments = total_payments.filter(PaymentRecord.payment_date >= start_date.date())
+                if end_date:
+                    total_payments = total_payments.filter(PaymentRecord.payment_date <= end_date.date())
+                
+                total_payments = total_payments.scalar() or 0
+                
+                # 净欠款 = 结算现金 - 收款（正数=欠款，负数=预收款）
+                cash_debt = float(total_settlement_cash) - float(total_payments)
+                
+                # 获取交易明细用于展示
+                payments = payments_query.order_by(desc(PaymentRecord.create_time)).limit(20).all()
+                for p in payments:
+                    payment_method_label = {
+                        'bank_transfer': '银行转账',
+                        'cash': '现金',
+                        'wechat': '微信',
+                        'alipay': '支付宝',
+                        'card': '刷卡'
+                    }.get(p.payment_method, p.payment_method)
+                    
                     cash_transactions.append({
-                        "id": r.id,
-                        "type": "receivable",
-                        "description": f"应收账款（销售单ID: {r.sales_order_id}）",
-                        "total_amount": r.total_amount,
-                        "received_amount": r.received_amount,
-                        "unpaid_amount": r.unpaid_amount,
-                        "due_date": r.due_date.isoformat() if r.due_date else None,
-                        "status": r.status,
-                        "created_at": r.credit_start_date.isoformat() if r.credit_start_date else None
+                        "id": p.id,
+                        "type": "payment",
+                        "description": f"{payment_method_label} 收款",
+                        "amount": p.amount,
+                        "payment_date": p.payment_date.isoformat() if p.payment_date else None,
+                        "created_at": p.create_time.isoformat() if p.create_time else None
                     })
+                
+                # 添加结算单明细
+                for s in settlements[:20]:
+                    cash_transactions.append({
+                        "id": s.id,
+                        "type": "settlement",
+                        "description": f"销售结算（结算单号: {s.settlement_no}）",
+                        "amount": s.total_amount if s.payment_method == 'cash_price' else (s.cash_payment_weight * s.gold_price if s.payment_method == 'mixed' and s.cash_payment_weight and s.gold_price else 0) + (s.labor_amount or 0),
+                        "created_at": s.created_at.isoformat() if s.created_at else None
+                    })
+                
             except Exception as e:
-                logger.warning(f"查询现金欠款出错: {e}")
+                logger.warning(f"查询现金欠款出错: {e}", exc_info=True)
             
             result["cash_debt"] = cash_debt
             result["cash_transactions"] = cash_transactions
         
-        # 4. 查询金料账户（单一账户模式：current_balance 正数=存料，负数=欠料）
+        # 4. 查询金料账户（使用历史交易汇总方式，与财务对账单一致）
         if query_type in ["all", "gold_debt", "gold_deposit"]:
-            net_gold = 0.0  # 净金料值
+            net_gold = 0.0  # 净金料值（正数=欠料，负数=存料）
             gold_transactions = []
             deposit_transactions = []
             
             try:
-                # 从 CustomerGoldDeposit 获取净金料值
-                deposit = db.query(CustomerGoldDeposit).filter(
-                    CustomerGoldDeposit.customer_id == customer_id
-                ).first()
-                
-                if deposit:
-                    net_gold = deposit.current_balance or 0
-                
-                # 查询金料账户交易记录
-                dep_tx_query = db.query(CustomerGoldDepositTransaction).filter(
-                    CustomerGoldDepositTransaction.customer_id == customer_id,
-                    CustomerGoldDepositTransaction.status == "active"
+                # 计算结算金料（physical_gold + mixed的金料部分）
+                total_settlement_gold = 0.0
+                settlements_query = db.query(SettlementOrder).join(SalesOrder).filter(
+                    SalesOrder.customer_id == customer_id,
+                    SettlementOrder.status.in_(['confirmed', 'printed'])
                 )
                 
                 if start_date:
-                    dep_tx_query = dep_tx_query.filter(CustomerGoldDepositTransaction.created_at >= start_date)
+                    settlements_query = settlements_query.filter(
+                        SettlementOrder.created_at >= start_date
+                    )
                 if end_date:
-                    dep_tx_query = dep_tx_query.filter(CustomerGoldDepositTransaction.created_at <= end_date)
+                    settlements_query = settlements_query.filter(
+                        SettlementOrder.created_at <= end_date
+                    )
                 
-                dep_txs = dep_tx_query.order_by(desc(CustomerGoldDepositTransaction.created_at)).limit(20).all()
+                settlements = settlements_query.all()
+                for s in settlements:
+                    if s.payment_method == 'physical_gold':
+                        total_settlement_gold += s.physical_gold_weight or 0
+                    elif s.payment_method == 'mixed':
+                        total_settlement_gold += s.gold_payment_weight or 0
                 
-                for tx in dep_txs:
-                    tx_type_label = {
-                        "deposit": "存入/收料",
-                        "use": "使用/结算",
-                        "refund": "退还"
-                    }.get(tx.transaction_type, tx.transaction_type)
+                # 查询来料记录
+                receipts_query = db.query(GoldReceipt).filter(
+                    GoldReceipt.customer_id == customer_id,
+                    GoldReceipt.status == 'received'
+                )
+                
+                if start_date:
+                    receipts_query = receipts_query.filter(
+                        GoldReceipt.created_at >= start_date
+                    )
+                if end_date:
+                    receipts_query = receipts_query.filter(
+                        GoldReceipt.created_at <= end_date
+                    )
+                
+                total_receipts_gold = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
+                    GoldReceipt.customer_id == customer_id,
+                    GoldReceipt.status == 'received'
+                )
+                if start_date:
+                    total_receipts_gold = total_receipts_gold.filter(GoldReceipt.created_at >= start_date)
+                if end_date:
+                    total_receipts_gold = total_receipts_gold.filter(GoldReceipt.created_at <= end_date)
+                
+                total_receipts_gold = total_receipts_gold.scalar() or 0
+                
+                # 净金料 = 结算欠料 - 来料（正数=欠料，负数=存料）
+                net_gold = float(total_settlement_gold) - float(total_receipts_gold)
+                
+                # 获取结算单明细用于展示
+                for s in settlements[:20]:
+                    gold_amount = 0.0
+                    if s.payment_method == 'physical_gold':
+                        gold_amount = s.physical_gold_weight or 0
+                    elif s.payment_method == 'mixed':
+                        gold_amount = s.gold_payment_weight or 0
                     
+                    if gold_amount > 0:
+                        gold_transactions.append({
+                            "id": s.id,
+                            "type": "settlement",
+                            "type_label": "销售结算",
+                            "gold_weight": gold_amount,
+                            "order_no": s.settlement_no,
+                            "created_at": s.created_at.isoformat() if s.created_at else None,
+                            "remark": s.remark or ""
+                        })
+                
+                # 获取来料记录明细用于展示
+                receipts = receipts_query.order_by(desc(GoldReceipt.created_at)).limit(20).all()
+                for r in receipts:
                     deposit_transactions.append({
-                        "id": tx.id,
-                        "type": tx.transaction_type,
-                        "type_label": tx_type_label,
-                        "amount": tx.amount,
-                        "balance_before": tx.balance_before,
-                        "balance_after": tx.balance_after,
-                        "remark": tx.remark,
-                        "created_at": tx.created_at.isoformat() if tx.created_at else None
-                    })
-                
-                # 同时查询往来账记录（用于展示历史）
-                tx_query = db.query(CustomerTransaction).filter(
-                    CustomerTransaction.customer_id == customer_id
-                )
-                if start_date:
-                    tx_query = tx_query.filter(CustomerTransaction.created_at >= start_date)
-                if end_date:
-                    tx_query = tx_query.filter(CustomerTransaction.created_at <= end_date)
-                
-                transactions = tx_query.order_by(desc(CustomerTransaction.created_at)).limit(20).all()
-                
-                for tx in transactions:
-                    tx_type_label = {
-                        "sales": "销售",
-                        "settlement": "结算",
-                        "gold_receipt": "收料",
-                        "payment": "付款"
-                    }.get(tx.transaction_type, tx.transaction_type)
-                    
-                    gold_transactions.append({
-                        "id": tx.id,
-                        "type": tx.transaction_type,
-                        "type_label": tx_type_label,
-                        "amount": tx.amount,
-                        "gold_weight": tx.gold_weight,
-                        "remark": tx.remark,
-                        "created_at": tx.created_at.isoformat() if tx.created_at else None
+                        "id": r.id,
+                        "type": "receipt",
+                        "type_label": "客户来料",
+                        "amount": r.gold_weight,
+                        "gold_weight": r.gold_weight,
+                        "order_no": r.receipt_no,
+                        "gold_fineness": r.gold_fineness,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                        "remark": r.remark or ""
                     })
                     
             except Exception as e:
                 logger.warning(f"查询金料账户出错: {e}")
             
             # 单一账户模式：从 net_gold 计算兼容字段
-            # gold_debt = 负值的绝对值（客户欠我们的）
-            # gold_deposit = 正值部分（客户存的）
+            # 语义：net_gold = 结算欠料 - 来料（正数=欠料，负数=存料）
             result["net_gold"] = net_gold  # 净金料值（核心字段）
-            result["gold_debt"] = max(0, -net_gold)  # 兼容字段
-            result["gold_deposit"] = max(0, net_gold)  # 兼容字段
+            result["gold_debt"] = max(0, net_gold)  # 欠料（正数部分）
+            result["gold_deposit"] = max(0, -net_gold)  # 存料（负数的绝对值）
             result["gold_transactions"] = gold_transactions
             result["deposit_transactions"] = deposit_transactions
         
