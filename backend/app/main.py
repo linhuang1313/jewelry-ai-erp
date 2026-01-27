@@ -1796,9 +1796,13 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         
                         # 调用聊天查询API
                         from .routers.customers import chat_debt_query
+                        # 获取并记录 query_type 的实际值
+                        actual_query_type = getattr(ai_response, 'debt_query_type', 'all') or 'all'
+                        logger.info(f"[诊断] debt_query_type 原始值 = {getattr(ai_response, 'debt_query_type', 'NOT_SET')}")
+                        logger.info(f"[诊断] debt_query_type 实际值 = {actual_query_type}")
                         debt_result = await chat_debt_query(
                             customer_name=debt_customer_name,
-                            query_type=getattr(ai_response, 'debt_query_type', 'all') or 'all',
+                            query_type=actual_query_type,
                             date_start=getattr(ai_response, 'date_start', None),
                             date_end=getattr(ai_response, 'date_end', None),
                             db=db

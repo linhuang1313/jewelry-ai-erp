@@ -389,6 +389,8 @@ async def chat_debt_query(
         }
         
         # 3. 查询现金欠款（使用历史交易汇总方式，与财务对账单一致）
+        logger.info(f"[诊断-chat_debt_query] query_type = '{query_type}'")
+        logger.info(f"[诊断-chat_debt_query] query_type in ['all', 'cash_debt'] = {query_type in ['all', 'cash_debt']}")
         if query_type in ["all", "cash_debt"]:
             cash_debt = 0.0
             cash_transactions = []
