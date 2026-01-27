@@ -874,18 +874,40 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 logger.info(f"[快速路径] 检测到欠款查询: {customer_name}")
                 yield f"data: {json.dumps({'type': 'thinking', 'step': '快速查询', 'message': f'正在查询 {customer_name} 的欠款信息...', 'progress': 30}, ensure_ascii=False)}\n\n"
                 
-                from .models import CustomerTransaction
-                from .models.finance import AccountReceivable
+                from .models import SettlementOrder
+                from .models.finance import PaymentRecord
                 customer = db.query(Customer).filter(Customer.name.contains(customer_name)).first()
                 if customer:
-                    # 计算欠款（从应收账款表查询未收金额）
-                    unpaid = db.query(func.sum(AccountReceivable.unpaid_amount)).filter(
-                        AccountReceivable.customer_id == customer.id,
-                        AccountReceivable.unpaid_amount > 0,
-                        AccountReceivable.status.in_(["unpaid", "overdue"])
+                    # 计算欠款（使用历史交易汇总方式，与财务对账单一致）
+                    # 方法：结算金额 - 收款金额 = 净欠款
+                    
+                    # 1. 查询所有已确认的结算单现金部分
+                    total_settlement_cash = 0.0
+                    settlements = db.query(SettlementOrder).join(SalesOrder).filter(
+                        SalesOrder.customer_id == customer.id,
+                        SettlementOrder.status.in_(['confirmed', 'printed'])
+                    ).all()
+                    for s in settlements:
+                        if s.payment_method == 'cash_price':
+                            total_settlement_cash += s.total_amount or 0
+                        elif s.payment_method == 'mixed':
+                            # 混合支付：只计算现金部分（cash_payment_weight * gold_price）
+                            if s.cash_payment_weight and s.gold_price:
+                                total_settlement_cash += s.cash_payment_weight * s.gold_price
+                            total_settlement_cash += s.labor_amount or 0  # 工费总是现金
+                    
+                    # 2. 查询所有收款记录
+                    total_payments = db.query(func.coalesce(func.sum(PaymentRecord.amount), 0)).filter(
+                        PaymentRecord.customer_id == customer.id
                     ).scalar() or 0
-                    if unpaid > 0:
-                        msg = f"**{customer.name}** 当前欠款：**¥{unpaid:.2f}**"
+                    
+                    # 3. 净欠款 = 结算现金 - 收款
+                    net_debt = total_settlement_cash - float(total_payments)
+                    
+                    if net_debt > 0:
+                        msg = f"**{customer.name}** 当前欠款：**¥{net_debt:.2f}**"
+                    elif net_debt < 0:
+                        msg = f"**{customer.name}** 当前预收款（客户余额）：**¥{abs(net_debt):.2f}**"
                     else:
                         msg = f"**{customer.name}** 目前没有欠款 ✓"
                     fast_result = {"success": True, "action": "查询客户欠款", "message": msg}
@@ -937,15 +959,36 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                                 msg = f"**{customer.name}** 目前没有欠料 ✓"
                             fast_result = {"success": True, "action": "查询客户欠料", "message": msg}
                         elif query_type in ["欠款"]:
-                            # 查询现金欠款
-                            from .models.finance import AccountReceivable
-                            unpaid = db.query(func.sum(AccountReceivable.unpaid_amount)).filter(
-                                AccountReceivable.customer_id == customer.id,
-                                AccountReceivable.unpaid_amount > 0,
-                                AccountReceivable.status.in_(["unpaid", "overdue"])
+                            # 查询现金欠款（使用历史交易汇总方式，与财务对账单一致）
+                            from .models import SettlementOrder
+                            from .models.finance import PaymentRecord
+                            
+                            # 结算现金部分
+                            total_settlement_cash = 0.0
+                            settlements = db.query(SettlementOrder).join(SalesOrder).filter(
+                                SalesOrder.customer_id == customer.id,
+                                SettlementOrder.status.in_(['confirmed', 'printed'])
+                            ).all()
+                            for s in settlements:
+                                if s.payment_method == 'cash_price':
+                                    total_settlement_cash += s.total_amount or 0
+                                elif s.payment_method == 'mixed':
+                                    if s.cash_payment_weight and s.gold_price:
+                                        total_settlement_cash += s.cash_payment_weight * s.gold_price
+                                    total_settlement_cash += s.labor_amount or 0
+                            
+                            # 收款合计
+                            total_payments = db.query(func.coalesce(func.sum(PaymentRecord.amount), 0)).filter(
+                                PaymentRecord.customer_id == customer.id
                             ).scalar() or 0
-                            if unpaid > 0:
-                                msg = f"**{customer.name}** 当前欠款：**¥{unpaid:.2f}**"
+                            
+                            # 净欠款
+                            net_debt = total_settlement_cash - float(total_payments)
+                            
+                            if net_debt > 0:
+                                msg = f"**{customer.name}** 当前欠款：**¥{net_debt:.2f}**"
+                            elif net_debt < 0:
+                                msg = f"**{customer.name}** 当前预收款（客户余额）：**¥{abs(net_debt):.2f}**"
                             else:
                                 msg = f"**{customer.name}** 目前没有欠款 ✓"
                             fast_result = {"success": True, "action": "查询客户欠款", "message": msg}
