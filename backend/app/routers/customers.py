@@ -389,9 +389,10 @@ async def chat_debt_query(
         }
         
         # 3. 查询现金欠款（使用历史交易汇总方式，与财务对账单一致）
+        # Bug #30 fix: 始终查询 cash_debt，确保 AI 能看到完整账务数据
         logger.info(f"[诊断-chat_debt_query] query_type = '{query_type}'")
-        logger.info(f"[诊断-chat_debt_query] query_type in ['all', 'cash_debt'] = {query_type in ['all', 'cash_debt']}")
-        if query_type in ["all", "cash_debt"]:
+        # 不再根据 query_type 过滤，始终查询现金账户
+        if True:  # 原条件: query_type in ["all", "cash_debt"]
             cash_debt = 0.0
             cash_transactions = []
             try:
@@ -485,7 +486,8 @@ async def chat_debt_query(
             result["cash_transactions"] = cash_transactions
         
         # 4. 查询金料账户（使用历史交易汇总方式，与财务对账单一致）
-        if query_type in ["all", "gold_debt", "gold_deposit"]:
+        # Bug #30 fix: 始终查询 net_gold，确保 AI 能看到完整账务数据
+        if True:  # 原条件: query_type in ["all", "gold_debt", "gold_deposit"]
             net_gold = 0.0  # 净金料值（正数=欠料，负数=存料）
             gold_transactions = []
             deposit_transactions = []
