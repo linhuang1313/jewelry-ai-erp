@@ -2959,65 +2959,63 @@ async def get_inbound_orders(
         # 分页获取入库单
         orders = query.offset(offset).limit(limit).all()
         
-        # 获取每个入库单的明细并应用明细级别筛选
-        result = []
-        for order in orders:
-            details_query = db.query(InboundDetail).filter(InboundDetail.order_id == order.id)
+        # 性能优化：批量查询所有明细，避免 N+1 查询问题
+        order_ids = [order.id for order in orders]
+        
+        if order_ids:
+            # 一次性查询所有相关明细（只执行 1 次查询，而不是 N 次）
+            details_query = db.query(InboundDetail).filter(InboundDetail.order_id.in_(order_ids))
             
-            # 供应商筛选（明细级别）
+            # 应用明细级别筛选条件
             if supplier:
                 details_query = details_query.filter(InboundDetail.supplier.contains(supplier))
-            
-            # 商品名称筛选
             if product_name:
                 details_query = details_query.filter(InboundDetail.product_name.contains(product_name))
-            
-            # 商品编码筛选
             if product_code:
                 details_query = details_query.filter(InboundDetail.product_code.contains(product_code))
-            
-            # 重量范围筛选
             if weight_min is not None:
                 details_query = details_query.filter(InboundDetail.weight >= weight_min)
             if weight_max is not None:
                 details_query = details_query.filter(InboundDetail.weight <= weight_max)
-            
-            # 克工费范围筛选
             if labor_cost_min is not None:
                 details_query = details_query.filter(InboundDetail.labor_cost >= labor_cost_min)
             if labor_cost_max is not None:
                 details_query = details_query.filter(InboundDetail.labor_cost <= labor_cost_max)
-            
-            # 总成本范围筛选
             if total_cost_min is not None:
                 details_query = details_query.filter(InboundDetail.total_cost >= total_cost_min)
             if total_cost_max is not None:
                 details_query = details_query.filter(InboundDetail.total_cost <= total_cost_max)
-            
-            # 成色筛选
             if fineness:
                 details_query = details_query.filter(InboundDetail.fineness.contains(fineness))
-            
-            # 工艺筛选
             if craft:
                 details_query = details_query.filter(InboundDetail.craft.contains(craft))
-            
-            # 款式筛选
             if style:
                 details_query = details_query.filter(InboundDetail.style.contains(style))
             
-            details = details_query.all()
+            all_details = details_query.all()
+            
+            # 按订单 ID 分组
+            details_by_order = {}
+            for detail in all_details:
+                if detail.order_id not in details_by_order:
+                    details_by_order[detail.order_id] = []
+                details_by_order[detail.order_id].append(detail)
+        else:
+            details_by_order = {}
+        
+        # 检查是否有明细级别筛选条件
+        has_detail_filters = any([supplier, product_name, product_code, 
+                                  weight_min, weight_max, labor_cost_min, labor_cost_max,
+                                  total_cost_min, total_cost_max, fineness, craft, style])
+        
+        # 构建结果
+        result = []
+        for order in orders:
+            details = details_by_order.get(order.id, [])
             
             # 如果有明细级别筛选条件但没有匹配的明细，跳过这个入库单
-            has_detail_filters = any([supplier, product_name, product_code, 
-                                      weight_min, weight_max, labor_cost_min, labor_cost_max,
-                                      total_cost_min, total_cost_max, fineness, craft, style])
             if has_detail_filters and len(details) == 0:
                 continue
-            
-            # 如果没有明细级别筛选，获取所有明细
-            if not has_detail_filters:
-                details = db.query(InboundDetail).filter(InboundDetail.order_id == order.id).all()
             
             # 统计
             item_count = len(details)
