@@ -835,6 +835,15 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             user_msg = request.message.strip()
             fast_result = None
             
+            # 从上下文提取已保存的实体信息（用于追问场景）
+            ctx_entities = session_context.get("entities", {})
+            last_customer = ctx_entities.get("last_customer")
+            last_product = ctx_entities.get("last_product")
+            last_supplier = ctx_entities.get("last_supplier")
+            last_order_no = ctx_entities.get("last_order_no")
+            last_sales_order_no = ctx_entities.get("last_sales_order_no")
+            last_transfer_no = ctx_entities.get("last_transfer_no")
+            
             # 1. 客户存料/余额查询：xxx有存料吗、xxx余额、xxx存料余额
             deposit_match = re.search(r'^(.+?)(有|的|在我们这里有)?(存料|余额|金料余额|存料余额)(吗|多少|情况)?[？?]?$', user_msg)
             if deposit_match:
@@ -853,6 +862,8 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     else:
                         msg = f"**{customer.name}** 目前没有存料（余额：0克）"
                     fast_result = {"success": True, "action": "查询客户存料", "message": msg}
+                    # 保存客户到上下文（用于后续追问）
+                    ctx.update_entities(session_id, {"last_customer": customer.name})
                 else:
                     fast_result = {"success": False, "message": f"未找到名为 **{customer_name}** 的客户"}
             
@@ -878,6 +889,8 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     else:
                         msg = f"**{customer.name}** 目前没有欠款 ✓"
                     fast_result = {"success": True, "action": "查询客户欠款", "message": msg}
+                    # 保存客户到上下文（用于后续追问）
+                    ctx.update_entities(session_id, {"last_customer": customer.name})
                 else:
                     fast_result = {"success": False, "message": f"未找到名为 **{customer_name}** 的客户"}
             
@@ -897,8 +910,84 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     if inventory:
                         msg = f"**{inventory.product_name}** 当前库存：**{inventory.total_weight:.2f}克**"
                         fast_result = {"success": True, "action": "查询库存", "message": msg}
+                        # 保存商品到上下文（用于后续追问）
+                        ctx.update_entities(session_id, {"last_product": inventory.product_name})
                     else:
                         fast_result = {"success": False, "message": f"未找到 **{product_name}** 的库存记录"}
+            
+            # ========== 追问型查询：无主语，从上下文获取实体 ==========
+            # 4. 客户相关追问：有欠料吗、欠款呢、存料多少
+            followup_customer_match = re.search(r'^(有|还有)?(欠料|欠款|存料|余额)(吗|呢|多少)?[？?]?$', user_msg)
+            if not fast_result and followup_customer_match:
+                query_type = followup_customer_match.group(2)  # 欠料/欠款/存料/余额
+                if last_customer:
+                    logger.info(f"[快速路径] 检测到追问查询: {query_type}，上下文客户: {last_customer}")
+                    yield f"data: {json.dumps({'type': 'thinking', 'step': '快速查询', 'message': f'正在查询 {last_customer} 的{query_type}信息...', 'progress': 30}, ensure_ascii=False)}\n\n"
+                    
+                    customer = db.query(Customer).filter(Customer.name == last_customer).first()
+                    if customer:
+                        if query_type in ["欠料"]:
+                            # 查询金料欠款（从客户交易记录）
+                            from .models import CustomerGoldDeposit
+                            deposit = db.query(CustomerGoldDeposit).filter(CustomerGoldDeposit.customer_id == customer.id).first()
+                            gold_debt = -(deposit.current_balance) if deposit and deposit.current_balance < 0 else 0
+                            if gold_debt > 0:
+                                msg = f"**{customer.name}** 当前欠料：**{gold_debt:.2f}克**"
+                            else:
+                                msg = f"**{customer.name}** 目前没有欠料 ✓"
+                            fast_result = {"success": True, "action": "查询客户欠料", "message": msg}
+                        elif query_type in ["欠款"]:
+                            # 查询现金欠款
+                            from .models.finance import AccountReceivable
+                            unpaid = db.query(func.sum(AccountReceivable.unpaid_amount)).filter(
+                                AccountReceivable.customer_id == customer.id,
+                                AccountReceivable.unpaid_amount > 0,
+                                AccountReceivable.status.in_(["unpaid", "overdue"])
+                            ).scalar() or 0
+                            if unpaid > 0:
+                                msg = f"**{customer.name}** 当前欠款：**¥{unpaid:.2f}**"
+                            else:
+                                msg = f"**{customer.name}** 目前没有欠款 ✓"
+                            fast_result = {"success": True, "action": "查询客户欠款", "message": msg}
+                        elif query_type in ["存料", "余额"]:
+                            # 查询存料余额
+                            from .models import CustomerGoldDeposit
+                            deposit = db.query(CustomerGoldDeposit).filter(CustomerGoldDeposit.customer_id == customer.id).first()
+                            balance = deposit.current_balance if deposit and deposit.current_balance > 0 else 0
+                            if balance > 0:
+                                msg = f"**{customer.name}** 当前存料余额：**{balance:.2f}克**"
+                            else:
+                                msg = f"**{customer.name}** 目前没有存料（余额：0克）"
+                            fast_result = {"success": True, "action": "查询客户存料", "message": msg}
+                        # 更新上下文（保持客户不变）
+                        ctx.update_entities(session_id, {"last_customer": customer.name})
+                    else:
+                        fast_result = {"success": False, "message": f"未找到名为 **{last_customer}** 的客户"}
+                else:
+                    # 没有上下文，提示用户指定客户
+                    fast_result = {"success": False, "message": f"请告诉我您想查询**哪位客户**的{query_type}信息？例如：\"张三{query_type}多少\""}
+            
+            # 5. 商品相关追问：有多少、库存呢
+            followup_product_match = re.search(r'^(还有|有)?(多少|库存)(呢)?[？?]?$', user_msg)
+            if not fast_result and followup_product_match:
+                if last_product:
+                    # 检查库存查询权限
+                    if user_role in ['settlement', 'sales']:
+                        fast_result = {"success": False, "message": "⚠️ 您的角色无权查看库存信息，请联系商品专员或管理层。"}
+                    else:
+                        logger.info(f"[快速路径] 检测到商品追问查询，上下文商品: {last_product}")
+                        yield f"data: {json.dumps({'type': 'thinking', 'step': '快速查询', 'message': f'正在查询 {last_product} 的库存...', 'progress': 30}, ensure_ascii=False)}\n\n"
+                        
+                        inventory = db.query(Inventory).filter(Inventory.product_name == last_product).first()
+                        if inventory:
+                            msg = f"**{inventory.product_name}** 当前库存：**{inventory.total_weight:.2f}克**"
+                            fast_result = {"success": True, "action": "查询库存", "message": msg}
+                            ctx.update_entities(session_id, {"last_product": inventory.product_name})
+                        else:
+                            fast_result = {"success": False, "message": f"未找到 **{last_product}** 的库存记录"}
+                else:
+                    # 没有上下文，提示用户指定商品
+                    fast_result = {"success": False, "message": "请告诉我您想查询**哪个商品**的库存？例如：\"古法手镯库存\""}
             
             # 如果匹配到快速路径，直接返回结果
             if fast_result:
