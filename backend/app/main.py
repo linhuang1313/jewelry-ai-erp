@@ -1304,6 +1304,20 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     yield f"data: {json.dumps({'type': 'error', 'message': error_msg}, ensure_ascii=False)}\n\n"
                     return
             
+            # ========== 快速路径：无权限查询直接返回 ==========
+            # 意图到数据权限的映射（用于快速拦截无权限的查询请求）
+            INTENT_TO_PERMISSION = {
+                '查询供应商': ('can_view_suppliers', '供应商信息'),
+                '供应商分析': ('can_view_suppliers', '供应商信息'),
+                '查询入库单': ('can_view_inbound', '入库单'),
+                '查询库存': ('can_view_inventory', '库存信息'),
+                '库存分析': ('can_view_inventory', '库存信息'),
+                '查询销售单': ('can_view_sales_orders', '销售单'),
+                '销售分析': ('can_view_sales_orders', '销售单'),
+                '查询客户': ('can_view_customers', '客户信息'),
+                '查询转移单': ('can_view_transfer_orders', '转移单/调拨单'),
+            }
+            
             # ========== 阶段2: 数据收集（基于角色的数据过滤）==========
             # 定义各角色的数据访问权限（数据层过滤，不拦截请求）
             # 权限矩阵与 ai_analyzer.py 中的 ROLE_DATA_ACCESS 保持一致
@@ -1382,6 +1396,36 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             
             # 获取当前角色的数据访问权限
             role_access = ROLE_DATA_ACCESS.get(user_role, ROLE_DATA_ACCESS['manager'])
+            
+            # ========== 快速路径权限检查：无权限直接返回，跳过数据收集 ==========
+            if ai_response.action in INTENT_TO_PERMISSION:
+                perm_key, data_type_name = INTENT_TO_PERMISSION[ai_response.action]
+                if not role_access.get(perm_key, True):
+                    # 无权限，直接返回友好提示
+                    hint = role_access.get('restriction_hint', '请联系相关部门。')
+                    error_msg = f"您的权限无法查看{data_type_name}，{hint}"
+                    logger.info(f"[快速路径] 角色 {user_role} 无权查看 {data_type_name}，直接返回提示")
+                    
+                    yield f"data: {json.dumps({'type': 'thinking', 'step': '权限检查', 'message': '权限验证...', 'progress': 25}, ensure_ascii=False)}\n\n"
+                    await asyncio.sleep(0.05)
+                    yield f"data: {json.dumps({'type': 'content_start'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'content', 'chunk': error_msg}, ensure_ascii=False)}\n\n"
+                    yield f"data: {json.dumps({'type': 'complete', 'data': {'success': True, 'message': error_msg}}, ensure_ascii=False)}\n\n"
+                    
+                    # 记录到日志
+                    end_time = datetime.now()
+                    response_time_ms = int((end_time - start_time).total_seconds() * 1000)
+                    log_chat_message(
+                        db=db,
+                        session_id=session_id,
+                        user_role=request.user_role,
+                        message_type="assistant",
+                        content=error_msg,
+                        intent=ai_response.action,
+                        response_time_ms=response_time_ms,
+                        is_successful=True
+                    )
+                    return
             
             # ========== 开始数据收集 ==========
             yield f"data: {json.dumps({'type': 'thinking', 'step': '数据收集', 'message': '正在从数据库收集相关数据...', 'progress': 30}, ensure_ascii=False)}\n\n"
