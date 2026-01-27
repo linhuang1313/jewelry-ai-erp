@@ -15,6 +15,46 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
+# AI查询角色数据访问权限矩阵
+# 定义每个角色可以通过AI查询的数据类型
+ROLE_DATA_ACCESS = {
+    'manager': ['inventory', 'transfer_orders', 'inbound_orders', 'sales_orders', 
+                'customers', 'customer_debt', 'suppliers', 'supplier_gold'],
+    'product': ['inventory', 'transfer_orders', 'inbound_orders', 
+                'suppliers', 'supplier_gold'],
+    'counter': ['inventory', 'transfer_orders', 'sales_orders', 'customers'],
+    'settlement': ['inventory', 'transfer_orders', 'sales_orders', 
+                   'customers', 'customer_debt'],
+    'finance': ['inventory', 'transfer_orders', 'inbound_orders', 'sales_orders',
+                'customers', 'customer_debt', 'suppliers', 'supplier_gold'],
+    'material': ['customers', 'suppliers', 'supplier_gold'],
+    'sales': ['inventory', 'sales_orders', 'customers', 'customer_debt'],
+}
+
+# 数据类型的中文名称（用于友好提示）
+DATA_TYPE_NAMES = {
+    'inventory': '库存',
+    'transfer_orders': '转移单/调拨单',
+    'inbound_orders': '入库单',
+    'sales_orders': '销售单',
+    'customers': '客户',
+    'customer_debt': '客户账务',
+    'suppliers': '供应商',
+    'supplier_gold': '供应商金料账户',
+}
+
+# 数据类型对应的建议联系部门
+DATA_ACCESS_SUGGESTIONS = {
+    'inventory': '商品部或管理层',
+    'transfer_orders': '商品部或柜台',
+    'inbound_orders': '商品部或财务',
+    'sales_orders': '柜台或结算部',
+    'customers': '柜台或结算部',
+    'customer_debt': '结算部或财务',
+    'suppliers': '商品部或料部',
+    'supplier_gold': '料部或财务',
+}
+
 class AIAnalyzer:
     """通用AI分析引擎 - 使用 DeepSeek API"""
     
@@ -48,6 +88,10 @@ class AIAnalyzer:
             transfer_date_start: 转移单开始日期筛选
             transfer_date_end: 转移单结束日期筛选
         """
+        # ========== 获取角色数据访问权限 ==========
+        allowed_data = ROLE_DATA_ACCESS.get(user_role, [])
+        data_restrictions = []  # 记录被限制的数据类型
+        
         data = {
             "context": {
                 "intent": intent,
@@ -55,16 +99,24 @@ class AIAnalyzer:
                 "timestamp": datetime.now().isoformat(),
                 "order_no": order_no,  # 入库单号
                 "sales_order_no": sales_order_no,  # 销售单号
-                "user_role": user_role  # 用户角色
+                "user_role": user_role,  # 用户角色
+                "data_restrictions": [],  # 将在最后填充
+                "restriction_hint": None  # 权限提示
             }
         }
         
         # ========== 根据角色收集库存数据 ==========
         # 管理层：显示总库存
         # 商品专员：只显示商品部仓库库存
-        # 柜台/结算：只显示展厅库存
+        # 柜台/结算/财务/业务员：只显示展厅库存
+        # 料部：不能查看库存
         
-        if user_role == "manager":
+        if 'inventory' not in allowed_data:
+            # 角色无权查看库存
+            data["inventory"] = []
+            data["inventory_location"] = "无权限"
+            data_restrictions.append('inventory')
+        elif user_role == "manager":
             # 管理层看总库存
             inventories = db.query(Inventory).all()
             data["inventory"] = [
@@ -124,225 +176,271 @@ class AIAnalyzer:
                 ]
                 data["inventory_location"] = "全部仓位（总库存）"
         
-        # 收集供应商数据（从Supplier表）
-        suppliers = db.query(Supplier).filter(Supplier.status == "active").all()
-        data["suppliers"] = [
-            {
-                "name": s.name,
-                "supplier_no": s.supplier_no,
-                "phone": s.phone,
-                "address": s.address,
-                "contact_person": s.contact_person,
-                "total_cost": float(s.total_supply_amount) if s.total_supply_amount else 0,
-                "total_weight": float(s.total_supply_weight) if s.total_supply_weight else 0,
-                "supply_count": s.total_supply_count,
-                "last_supply_time": str(s.last_supply_time) if s.last_supply_time else None
+        # 收集供应商数据（从Supplier表）- 需要权限检查
+        if 'suppliers' in allowed_data:
+            suppliers = db.query(Supplier).filter(Supplier.status == "active").all()
+            data["suppliers"] = [
+                {
+                    "name": s.name,
+                    "supplier_no": s.supplier_no,
+                    "phone": s.phone,
+                    "address": s.address,
+                    "contact_person": s.contact_person,
+                    "total_cost": float(s.total_supply_amount) if s.total_supply_amount else 0,
+                    "total_weight": float(s.total_supply_weight) if s.total_supply_weight else 0,
+                    "supply_count": s.total_supply_count,
+                    "last_supply_time": str(s.last_supply_time) if s.last_supply_time else None
+                }
+                for s in suppliers
+            ]
+            
+            # 同时收集从InboundDetail统计的商品种类（用于兼容）
+            for supplier_data in data["suppliers"]:
+                supplier_name = supplier_data["name"]
+                product_count = db.query(func.count(func.distinct(InboundDetail.product_name))).filter(
+                    InboundDetail.supplier == supplier_name
+                ).scalar() or 0
+                supplier_data["product_count"] = product_count
+        else:
+            data["suppliers"] = []
+            data_restrictions.append('suppliers')
+        
+        # 收集入库单数据（支持筛选）- 需要权限检查
+        if 'inbound_orders' in allowed_data:
+            inbound_query = db.query(InboundOrder).order_by(desc(InboundOrder.create_time))
+            
+            # 按日期筛选
+            if inbound_date_start:
+                try:
+                    start_dt = datetime.strptime(inbound_date_start, "%Y-%m-%d")
+                    inbound_query = inbound_query.filter(InboundOrder.create_time >= start_dt)
+                except:
+                    pass
+            if inbound_date_end:
+                try:
+                    end_dt = datetime.strptime(inbound_date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+                    inbound_query = inbound_query.filter(InboundOrder.create_time <= end_dt)
+                except:
+                    pass
+            
+            inbound_orders = inbound_query.limit(100).all()
+            data["inbound_orders"] = []
+            data["inbound_filters"] = {
+                "supplier": inbound_supplier,
+                "product": inbound_product,
+                "date_start": inbound_date_start,
+                "date_end": inbound_date_end
             }
-            for s in suppliers
-        ]
-        
-        # 同时收集从InboundDetail统计的商品种类（用于兼容）
-        for supplier_data in data["suppliers"]:
-            supplier_name = supplier_data["name"]
-            product_count = db.query(func.count(func.distinct(InboundDetail.product_name))).filter(
-                InboundDetail.supplier == supplier_name
-            ).scalar() or 0
-            supplier_data["product_count"] = product_count
-        
-        # 收集入库单数据（支持筛选）
-        inbound_query = db.query(InboundOrder).order_by(desc(InboundOrder.create_time))
-        
-        # 按日期筛选
-        if inbound_date_start:
-            try:
-                start_dt = datetime.strptime(inbound_date_start, "%Y-%m-%d")
-                inbound_query = inbound_query.filter(InboundOrder.create_time >= start_dt)
-            except:
-                pass
-        if inbound_date_end:
-            try:
-                end_dt = datetime.strptime(inbound_date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
-                inbound_query = inbound_query.filter(InboundOrder.create_time <= end_dt)
-            except:
-                pass
-        
-        inbound_orders = inbound_query.limit(100).all()
-        data["inbound_orders"] = []
-        data["inbound_filters"] = {
-            "supplier": inbound_supplier,
-            "product": inbound_product,
-            "date_start": inbound_date_start,
-            "date_end": inbound_date_end
-        }
-        
-        for order in inbound_orders:
-            details = db.query(InboundDetail).filter(InboundDetail.order_id == order.id).all()
             
-            # 按供应商筛选
-            if inbound_supplier:
-                suppliers_in_order = [d.supplier for d in details if d.supplier]
-                if not any(inbound_supplier.lower() in (s or '').lower() for s in suppliers_in_order):
-                    continue
-            
-            # 按商品名称筛选
-            if inbound_product:
-                products_in_order = [d.product_name for d in details if d.product_name]
-                if not any(inbound_product.lower() in (p or '').lower() for p in products_in_order):
-                    continue
-            
-            data["inbound_orders"].append({
-                "order_id": order.id,
-                "order_no": order.order_no,
-                "create_time": str(order.create_time) if order.create_time else None,
-                "status": order.status,
-                "details": [
-                    {
-                        "product_name": d.product_name,
-                        "weight": d.weight,
-                        "labor_cost": d.labor_cost,
-                        "supplier": d.supplier,
-                        "total_cost": d.total_cost
-                    }
-                    for d in details
-                ]
-            })
+            for order in inbound_orders:
+                details = db.query(InboundDetail).filter(InboundDetail.order_id == order.id).all()
+                
+                # 按供应商筛选
+                if inbound_supplier:
+                    suppliers_in_order = [d.supplier for d in details if d.supplier]
+                    if not any(inbound_supplier.lower() in (s or '').lower() for s in suppliers_in_order):
+                        continue
+                
+                # 按商品名称筛选
+                if inbound_product:
+                    products_in_order = [d.product_name for d in details if d.product_name]
+                    if not any(inbound_product.lower() in (p or '').lower() for p in products_in_order):
+                        continue
+                
+                data["inbound_orders"].append({
+                    "order_id": order.id,
+                    "order_no": order.order_no,
+                    "create_time": str(order.create_time) if order.create_time else None,
+                    "status": order.status,
+                    "details": [
+                        {
+                            "product_name": d.product_name,
+                            "weight": d.weight,
+                            "labor_cost": d.labor_cost,
+                            "supplier": d.supplier,
+                            "total_cost": d.total_cost
+                        }
+                        for d in details
+                    ]
+                })
+        else:
+            data["inbound_orders"] = []
+            data["inbound_filters"] = {}
+            data_restrictions.append('inbound_orders')
         
-        # 收集客户数据
-        customers = db.query(Customer).filter(Customer.status == "active").all()
-        data["customers"] = [
-            {
-                "name": c.name,
-                "phone": c.phone,
-                "total_purchase_amount": c.total_purchase_amount or 0,  # 总工费金额
-                "total_purchase_weight": getattr(c, 'total_purchase_weight', 0) or 0,  # 总销售克重
-                "total_purchase_count": c.total_purchase_count or 0,
-                "last_purchase_time": str(c.last_purchase_time) if c.last_purchase_time else None,
-                "customer_type": c.customer_type
+        # 收集客户数据 - 需要权限检查
+        if 'customers' in allowed_data:
+            customers = db.query(Customer).filter(Customer.status == "active").all()
+            data["customers"] = [
+                {
+                    "name": c.name,
+                    "phone": c.phone,
+                    "total_purchase_amount": c.total_purchase_amount or 0,  # 总工费金额
+                    "total_purchase_weight": getattr(c, 'total_purchase_weight', 0) or 0,  # 总销售克重
+                    "total_purchase_count": c.total_purchase_count or 0,
+                    "last_purchase_time": str(c.last_purchase_time) if c.last_purchase_time else None,
+                    "customer_type": c.customer_type
+                }
+                for c in customers
+            ]
+        else:
+            data["customers"] = []
+            data_restrictions.append('customers')
+        
+        # 收集销售单数据 - 需要权限检查
+        if 'sales_orders' in allowed_data:
+            sales_orders = db.query(SalesOrder).order_by(desc(SalesOrder.order_date)).limit(50).all()
+            data["sales_orders"] = []
+            for so in sales_orders:
+                details = db.query(SalesDetail).filter(SalesDetail.order_id == so.id).all()
+                data["sales_orders"].append({
+                    "order_no": so.order_no,
+                    "customer_name": so.customer_name,
+                    "salesperson": so.salesperson,
+                    "store_code": so.store_code,
+                    "total_labor_cost": so.total_labor_cost,
+                    "total_weight": so.total_weight,
+                    "status": so.status,
+                    "order_date": str(so.order_date) if so.order_date else None,
+                    "details": [
+                        {
+                            "product_name": d.product_name,
+                            "weight": d.weight,
+                            "labor_cost": d.labor_cost,
+                            "total_labor_cost": d.total_labor_cost
+                        }
+                        for d in details
+                    ]
+                })
+        else:
+            data["sales_orders"] = []
+            data_restrictions.append('sales_orders')
+        
+        # 收集转移单/调拨单数据 - 需要权限检查
+        if 'transfer_orders' in allowed_data:
+            transfer_query = db.query(InventoryTransferOrder).order_by(desc(InventoryTransferOrder.created_at))
+            
+            # 按单号筛选
+            if transfer_order_no:
+                transfer_query = transfer_query.filter(InventoryTransferOrder.transfer_no == transfer_order_no)
+            
+            # 按状态筛选
+            if transfer_status:
+                transfer_query = transfer_query.filter(InventoryTransferOrder.status == transfer_status)
+            
+            # 按日期筛选
+            if transfer_date_start:
+                try:
+                    start_dt = datetime.strptime(transfer_date_start, "%Y-%m-%d")
+                    transfer_query = transfer_query.filter(InventoryTransferOrder.created_at >= start_dt)
+                except:
+                    pass
+            if transfer_date_end:
+                try:
+                    end_dt = datetime.strptime(transfer_date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+                    transfer_query = transfer_query.filter(InventoryTransferOrder.created_at <= end_dt)
+                except:
+                    pass
+            
+            transfer_orders = transfer_query.limit(100).all()
+            data["transfer_orders"] = []
+            data["transfer_filters"] = {
+                "transfer_order_no": transfer_order_no,
+                "status": transfer_status,
+                "date_start": transfer_date_start,
+                "date_end": transfer_date_end
             }
-            for c in customers
-        ]
-        
-        # 收集销售单数据
-        sales_orders = db.query(SalesOrder).order_by(desc(SalesOrder.order_date)).limit(50).all()
-        data["sales_orders"] = []
-        for so in sales_orders:
-            details = db.query(SalesDetail).filter(SalesDetail.order_id == so.id).all()
-            data["sales_orders"].append({
-                "order_no": so.order_no,
-                "customer_name": so.customer_name,
-                "salesperson": so.salesperson,
-                "store_code": so.store_code,
-                "total_labor_cost": so.total_labor_cost,
-                "total_weight": so.total_weight,
-                "status": so.status,
-                "order_date": str(so.order_date) if so.order_date else None,
-                "details": [
-                    {
-                        "product_name": d.product_name,
-                        "weight": d.weight,
-                        "labor_cost": d.labor_cost,
-                        "total_labor_cost": d.total_labor_cost
-                    }
-                    for d in details
-                ]
-            })
-        
-        # 收集转移单/调拨单数据
-        transfer_query = db.query(InventoryTransferOrder).order_by(desc(InventoryTransferOrder.created_at))
-        
-        # 按单号筛选
-        if transfer_order_no:
-            transfer_query = transfer_query.filter(InventoryTransferOrder.transfer_no == transfer_order_no)
-        
-        # 按状态筛选
-        if transfer_status:
-            transfer_query = transfer_query.filter(InventoryTransferOrder.status == transfer_status)
-        
-        # 按日期筛选
-        if transfer_date_start:
-            try:
-                start_dt = datetime.strptime(transfer_date_start, "%Y-%m-%d")
-                transfer_query = transfer_query.filter(InventoryTransferOrder.created_at >= start_dt)
-            except:
-                pass
-        if transfer_date_end:
-            try:
-                end_dt = datetime.strptime(transfer_date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
-                transfer_query = transfer_query.filter(InventoryTransferOrder.created_at <= end_dt)
-            except:
-                pass
-        
-        transfer_orders = transfer_query.limit(100).all()
-        data["transfer_orders"] = []
-        data["transfer_filters"] = {
-            "transfer_order_no": transfer_order_no,
-            "status": transfer_status,
-            "date_start": transfer_date_start,
-            "date_end": transfer_date_end
-        }
-        
-        for order in transfer_orders:
-            # 获取来源转移单号（重新发起时的原单）
-            source_transfer_no = None
-            if order.source_order_id:
-                source_order = db.query(InventoryTransferOrder).filter(
-                    InventoryTransferOrder.id == order.source_order_id
+            
+            for order in transfer_orders:
+                # 获取来源转移单号（重新发起时的原单）
+                source_transfer_no = None
+                if order.source_order_id:
+                    source_order = db.query(InventoryTransferOrder).filter(
+                        InventoryTransferOrder.id == order.source_order_id
+                    ).first()
+                    if source_order:
+                        source_transfer_no = source_order.transfer_no
+                
+                # 获取关联的新转移单（被重新发起后产生的）
+                related_order = db.query(InventoryTransferOrder).filter(
+                    InventoryTransferOrder.source_order_id == order.id
                 ).first()
-                if source_order:
-                    source_transfer_no = source_order.transfer_no
-            
-            # 获取关联的新转移单（被重新发起后产生的）
-            related_order = db.query(InventoryTransferOrder).filter(
-                InventoryTransferOrder.source_order_id == order.id
-            ).first()
-            
-            data["transfer_orders"].append({
-                "transfer_no": order.transfer_no,
-                "from_location": order.from_location.name if order.from_location else None,
-                "to_location": order.to_location.name if order.to_location else None,
-                "status": order.status,
-                "status_display": {
-                    "pending": "待接收",
-                    "received": "已接收",
-                    "rejected": "已拒收",
-                    "pending_confirm": "待确认",
-                    "returned": "已退回"
-                }.get(order.status, order.status),
-                "created_by": order.created_by,
-                "created_at": str(order.created_at) if order.created_at else None,
-                "received_by": order.received_by,
-                "received_at": str(order.received_at) if order.received_at else None,
-                "remark": order.remark,
-                "source_transfer_no": source_transfer_no,  # 来源单号（重新发起时的原单）
-                "related_transfer_no": related_order.transfer_no if related_order else None,  # 关联新单号（被重新发起后产生的）
-                "items": [
-                    {
-                        "product_name": item.product_name,
-                        "weight": item.weight,
-                        "actual_weight": item.actual_weight,
-                        "weight_diff": item.weight_diff,
-                        "diff_reason": item.diff_reason
-                    }
-                    for item in order.items
-                ],
-                "total_weight": sum(item.weight for item in order.items),
-                "total_actual_weight": sum(item.actual_weight or 0 for item in order.items) if order.status in ["received", "pending_confirm"] else None
-            })
+                
+                data["transfer_orders"].append({
+                    "transfer_no": order.transfer_no,
+                    "from_location": order.from_location.name if order.from_location else None,
+                    "to_location": order.to_location.name if order.to_location else None,
+                    "status": order.status,
+                    "status_display": {
+                        "pending": "待接收",
+                        "received": "已接收",
+                        "rejected": "已拒收",
+                        "pending_confirm": "待确认",
+                        "returned": "已退回"
+                    }.get(order.status, order.status),
+                    "created_by": order.created_by,
+                    "created_at": str(order.created_at) if order.created_at else None,
+                    "received_by": order.received_by,
+                    "received_at": str(order.received_at) if order.received_at else None,
+                    "remark": order.remark,
+                    "source_transfer_no": source_transfer_no,  # 来源单号（重新发起时的原单）
+                    "related_transfer_no": related_order.transfer_no if related_order else None,  # 关联新单号（被重新发起后产生的）
+                    "items": [
+                        {
+                            "product_name": item.product_name,
+                            "weight": item.weight,
+                            "actual_weight": item.actual_weight,
+                            "weight_diff": item.weight_diff,
+                            "diff_reason": item.diff_reason
+                        }
+                        for item in order.items
+                    ],
+                    "total_weight": sum(item.weight for item in order.items),
+                    "total_actual_weight": sum(item.actual_weight or 0 for item in order.items) if order.status in ["received", "pending_confirm"] else None
+                })
+        else:
+            data["transfer_orders"] = []
+            data["transfer_filters"] = {}
+            data_restrictions.append('transfer_orders')
         
         # 收集总体统计（根据角色计算库存总重量）
         # 库存总重量使用已收集的库存数据计算，这样就是角色对应仓位的库存
         inventory_total = sum(inv.get("total_weight", 0) for inv in data.get("inventory", []))
         
-        data["statistics"] = {
-            "total_inventory_weight": float(inventory_total),
+        # 只显示有权限访问的统计数据
+        statistics = {
             "inventory_location": data.get("inventory_location", "全部仓位"),
-            "total_inbound_cost": float(db.query(func.sum(InboundDetail.total_cost)).scalar() or 0),
-            "total_suppliers": len(data["suppliers"]),
-            "total_customers": len(data["customers"]),
-            "total_inbound_orders": db.query(func.count(InboundOrder.id)).scalar() or 0,
-            "total_sales_orders": db.query(func.count(SalesOrder.id)).scalar() or 0,
-            "total_products": len(data["inventory"])
         }
+        
+        if 'inventory' in allowed_data:
+            statistics["total_inventory_weight"] = float(inventory_total)
+            statistics["total_products"] = len(data.get("inventory", []))
+        
+        if 'inbound_orders' in allowed_data:
+            statistics["total_inbound_cost"] = float(db.query(func.sum(InboundDetail.total_cost)).scalar() or 0)
+            statistics["total_inbound_orders"] = db.query(func.count(InboundOrder.id)).scalar() or 0
+        
+        if 'suppliers' in allowed_data:
+            statistics["total_suppliers"] = len(data.get("suppliers", []))
+        
+        if 'customers' in allowed_data:
+            statistics["total_customers"] = len(data.get("customers", []))
+        
+        if 'sales_orders' in allowed_data:
+            statistics["total_sales_orders"] = db.query(func.count(SalesOrder.id)).scalar() or 0
+        
+        data["statistics"] = statistics
+        
+        # ========== 填充权限限制信息 ==========
+        # 将被限制的数据类型转换为中文名称
+        restricted_names = [DATA_TYPE_NAMES.get(dt, dt) for dt in data_restrictions]
+        data["context"]["data_restrictions"] = restricted_names
+        
+        # 生成权限提示（如果有限制）
+        if data_restrictions:
+            suggestions = list(set([DATA_ACCESS_SUGGESTIONS.get(dt, '') for dt in data_restrictions if DATA_ACCESS_SUGGESTIONS.get(dt)]))
+            if suggestions:
+                data["context"]["restriction_hint"] = f"如需查询这些数据，请联系{suggestions[0]}"
         
         return data
     
@@ -685,6 +783,25 @@ class AIAnalyzer:
         
         # 格式化数据
         data_text = self.format_data_for_ai(data)
+        
+        # 检查数据访问限制（与 analyze_stream 保持一致）
+        context = data.get("context", {})
+        data_restrictions = context.get("data_restrictions", [])
+        restriction_hint = context.get("restriction_hint")
+        user_role = context.get("user_role", "unknown")
+        
+        # 如果有数据限制，在数据文本前添加提示
+        if data_restrictions:
+            restriction_note = f"""
+【数据访问说明】
+当前用户角色：{user_role}
+以下数据因权限限制未提供：{', '.join(data_restrictions)}
+{f'提示：{restriction_hint}' if restriction_hint else ''}
+
+如果用户询问了被限制的数据，请友好地告知用户权限情况，并建议联系相关部门。
+---
+"""
+            data_text = restriction_note + data_text
         
         # 检查是否是查询入库单（RK开头）
         order_no = data.get("context", {}).get("order_no")
