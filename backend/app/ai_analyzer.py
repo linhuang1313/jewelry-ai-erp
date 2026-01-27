@@ -656,26 +656,38 @@ class AIAnalyzer:
                 
                 text += "\n--- 账务汇总 ---\n"
                 
-                # 现金欠款
-                if "cash_debt" in debt_data:
-                    text += f"💰 现金欠款：¥{debt_data['cash_debt']:.2f}\n"
-                    cash_txs = debt_data.get("cash_transactions", [])
-                    if cash_txs:
-                        text += f"   最近应收账款记录：\n"
-                        for tx in cash_txs[:5]:
-                            text += f"   • {tx.get('created_at', 'N/A')[:10]}：应收¥{tx.get('total_amount', 0):.2f}，已收¥{tx.get('received_amount', 0):.2f}，未收¥{tx.get('unpaid_amount', 0):.2f}\n"
+                # 现金账户（正数=欠款，负数=预收款）
+                cash_debt = debt_data.get("cash_debt", 0)
+                if cash_debt > 0:
+                    text += f"💰 现金账户：欠款 ¥{cash_debt:.2f}\n"
+                elif cash_debt < 0:
+                    text += f"💰 现金账户：预收款 ¥{abs(cash_debt):.2f}\n"
+                else:
+                    text += f"💰 现金账户：已结清 ¥0.00\n"
+                
+                cash_txs = debt_data.get("cash_transactions", [])
+                if cash_txs:
+                    text += f"   最近现金交易记录：\n"
+                    for tx in cash_txs[:5]:
+                        created_at = tx.get('created_at', 'N/A')
+                        if created_at and len(created_at) >= 10:
+                            created_at = created_at[:10]
+                        description = tx.get('description', tx.get('type', '交易'))
+                        amount = tx.get('amount', 0)
+                        text += f"   • {created_at}：{description} ¥{amount:.2f}\n"
                 
                 # 净金料（直接使用单一账户模式的 net_gold 字段）
-                # net_gold 正数=存料，负数=欠料
+                # net_gold 正数=欠料，负数=存料（与 chat_debt_query 语义一致）
                 net_gold = debt_data.get("net_gold", 0)
-                # 如果没有 net_gold 字段（兼容旧数据），则从 gold_deposit 和 gold_debt 计算
+                # 如果没有 net_gold 字段（兼容旧数据），则从 gold_debt 和 gold_deposit 计算
                 if net_gold == 0 and (debt_data.get("gold_deposit", 0) > 0 or debt_data.get("gold_debt", 0) > 0):
-                    net_gold = debt_data.get("gold_deposit", 0) - debt_data.get("gold_debt", 0)
+                    # 兼容旧数据：gold_debt 是欠料，gold_deposit 是存料
+                    net_gold = debt_data.get("gold_debt", 0) - debt_data.get("gold_deposit", 0)
                 
                 if net_gold > 0:
-                    text += f"💎 金料账户：净存料 +{net_gold:.2f}克\n"
-                elif net_gold < 0:
                     text += f"💎 金料账户：净欠料 {net_gold:.2f}克\n"
+                elif net_gold < 0:
+                    text += f"💎 金料账户：净存料 {abs(net_gold):.2f}克\n"
                 else:
                     text += f"💎 金料账户：已结清 0.00克\n"
                 

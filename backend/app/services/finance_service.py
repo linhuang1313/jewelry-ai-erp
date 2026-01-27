@@ -440,7 +440,8 @@ class FinanceService:
                     cash_amount = s.total_amount or 0.0
                 elif s.payment_method == 'mixed':
                     gold_amount = s.gold_payment_weight or 0.0
-                    cash_amount = s.cash_payment_weight or 0.0
+                    # 混合支付：现金部分 + 工费（工费总是现金结算）
+                    cash_amount = (s.cash_payment_weight or 0.0) + (s.labor_amount or 0)
                 
                 transactions.append({
                     "date": s.created_at.strftime("%Y-%m-%d") if s.created_at else None,
@@ -560,21 +561,44 @@ class FinanceService:
     def _calculate_opening_balance_v2(self, customer_id: int, period_start: date) -> tuple:
         """
         计算期初余额（欠款金额和欠料克重）
+        使用与 chat_debt_query 相同的历史交易汇总计算方式
         
         Returns:
             (期初欠款金额, 期初欠料克重)
+            正数=欠款/欠料，负数=预收款/存料
         """
         from ..models import SettlementOrder
         from ..models.finance import GoldReceipt
         
-        # 期初欠款：销售金额 - 收款金额
-        total_sales = self.db.query(func.coalesce(func.sum(SalesOrder.total_labor_cost), 0)).filter(
+        period_start_datetime = datetime.combine(period_start, datetime.min.time())
+        
+        # ========== 期初欠款计算（基于结算单，与 chat_debt_query 一致）==========
+        # 查询期初之前所有已确认的结算单
+        settlements = self.db.query(SettlementOrder).join(SalesOrder).filter(
             and_(
                 SalesOrder.customer_id == customer_id,
-                SalesOrder.order_date < period_start
+                SettlementOrder.status.in_(['confirmed', 'printed']),
+                SettlementOrder.created_at < period_start_datetime
             )
-        ).scalar() or 0
+        ).all()
         
+        # 计算结算金额（cash_price + mixed的现金部分 + labor_amount）
+        total_settlement_cash = 0.0
+        total_settlement_gold = 0.0
+        for s in settlements:
+            if s.payment_method == 'cash_price':
+                total_settlement_cash += s.total_amount or 0
+            elif s.payment_method == 'mixed':
+                # 混合支付：现金部分 + 工费
+                if s.cash_payment_weight and s.gold_price:
+                    total_settlement_cash += s.cash_payment_weight * s.gold_price
+                total_settlement_cash += s.labor_amount or 0
+                # 金料部分
+                total_settlement_gold += s.gold_payment_weight or 0
+            elif s.payment_method == 'physical_gold':
+                total_settlement_gold += s.physical_gold_weight or 0
+        
+        # 查询期初之前所有收款记录
         total_payments = self.db.query(func.coalesce(func.sum(PaymentRecord.amount), 0)).filter(
             and_(
                 PaymentRecord.customer_id == customer_id,
@@ -582,32 +606,22 @@ class FinanceService:
             )
         ).scalar() or 0
         
-        opening_cash = float(total_sales) - float(total_payments)
+        # 期初现金余额 = 结算现金 - 收款（正数=欠款，负数=预收款）
+        opening_cash = float(total_settlement_cash) - float(total_payments)
         
-        # 期初欠料：结算欠料 - 来料
-        # 结算欠料（结料方式的结算单）
-        total_settlement_gold = self.db.query(
-            func.coalesce(func.sum(SettlementOrder.physical_gold_weight), 0)
-        ).join(SalesOrder).filter(
-            and_(
-                SalesOrder.customer_id == customer_id,
-                SettlementOrder.payment_method == 'physical_gold',
-                SettlementOrder.status.in_(['confirmed', 'printed']),
-                SettlementOrder.created_at < datetime.combine(period_start, datetime.min.time())
-            )
-        ).scalar() or 0
-        
-        # 来料
+        # ========== 期初金料计算（与 chat_debt_query 一致）==========
+        # 查询期初之前所有来料记录
         total_receipts_gold = self.db.query(
             func.coalesce(func.sum(GoldReceipt.gold_weight), 0)
         ).filter(
             and_(
                 GoldReceipt.customer_id == customer_id,
                 GoldReceipt.status == 'received',
-                GoldReceipt.created_at < datetime.combine(period_start, datetime.min.time())
+                GoldReceipt.created_at < period_start_datetime
             )
         ).scalar() or 0
         
+        # 期初金料余额 = 结算金料 - 来料（正数=欠料，负数=存料）
         opening_gold = float(total_settlement_gold) - float(total_receipts_gold)
         
         return opening_cash, opening_gold
