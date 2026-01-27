@@ -864,13 +864,14 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 yield f"data: {json.dumps({'type': 'thinking', 'step': '快速查询', 'message': f'正在查询 {customer_name} 的欠款信息...', 'progress': 30}, ensure_ascii=False)}\n\n"
                 
                 from .models import CustomerTransaction
+                from .models.finance import AccountReceivable
                 customer = db.query(Customer).filter(Customer.name.contains(customer_name)).first()
                 if customer:
-                    # 计算欠款（未结清的销售单）
-                    unpaid = db.query(func.sum(SalesOrder.unpaid_amount)).filter(
-                        SalesOrder.customer_name == customer.name,
-                        SalesOrder.unpaid_amount > 0,
-                        SalesOrder.status.in_(["completed", "partial_paid"])
+                    # 计算欠款（从应收账款表查询未收金额）
+                    unpaid = db.query(func.sum(AccountReceivable.unpaid_amount)).filter(
+                        AccountReceivable.customer_id == customer.id,
+                        AccountReceivable.unpaid_amount > 0,
+                        AccountReceivable.status.in_(["unpaid", "overdue"])
                     ).scalar() or 0
                     if unpaid > 0:
                         msg = f"**{customer.name}** 当前欠款：**¥{unpaid:.2f}**"
