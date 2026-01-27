@@ -851,16 +851,38 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 logger.info(f"[快速路径] 检测到存料查询: {customer_name}")
                 yield f"data: {json.dumps({'type': 'thinking', 'step': '快速查询', 'message': f'正在查询 {customer_name} 的存料信息...', 'progress': 30}, ensure_ascii=False)}\n\n"
                 
-                # 直接查询客户
-                from .models import CustomerGoldDeposit
+                # 使用历史交易汇总方式计算存料（与财务对账单一致）
+                from .models import SettlementOrder
+                from .models.finance import GoldReceipt
                 customer = db.query(Customer).filter(Customer.name.contains(customer_name)).first()
                 if customer:
-                    deposit = db.query(CustomerGoldDeposit).filter(CustomerGoldDeposit.customer_id == customer.id).first()
-                    balance = deposit.current_balance if deposit else 0
-                    if balance > 0:
-                        msg = f"**{customer.name}** 当前存料余额：**{balance:.2f}克**"
+                    # 1. 结算欠料（结料支付 + 混合支付的金料部分）
+                    total_settlement_gold = 0.0
+                    settlements = db.query(SettlementOrder).join(SalesOrder).filter(
+                        SalesOrder.customer_id == customer.id,
+                        SettlementOrder.status.in_(['confirmed', 'printed'])
+                    ).all()
+                    for s in settlements:
+                        if s.payment_method == 'physical_gold':
+                            total_settlement_gold += s.physical_gold_weight or 0
+                        elif s.payment_method == 'mixed':
+                            total_settlement_gold += s.gold_payment_weight or 0
+                    
+                    # 2. 客户来料
+                    total_receipts_gold = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
+                        GoldReceipt.customer_id == customer.id,
+                        GoldReceipt.status == 'received'
+                    ).scalar() or 0
+                    
+                    # 3. 净金料 = 来料 - 结算欠料（正数=存料，负数=欠料）
+                    net_gold = float(total_receipts_gold) - total_settlement_gold
+                    
+                    if net_gold > 0:
+                        msg = f"**{customer.name}** 当前存料余额：**{net_gold:.2f}克**"
+                    elif net_gold < 0:
+                        msg = f"**{customer.name}** 当前欠料：**{abs(net_gold):.2f}克**（无存料）"
                     else:
-                        msg = f"**{customer.name}** 目前没有存料（余额：0克）"
+                        msg = f"**{customer.name}** 金料已结清（余额：0克）"
                     fast_result = {"success": True, "action": "查询客户存料", "message": msg}
                     # 保存客户到上下文（用于后续追问）
                     ctx.update_entities(session_id, {"last_customer": customer.name})
@@ -949,14 +971,37 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     customer = db.query(Customer).filter(Customer.name == last_customer).first()
                     if customer:
                         if query_type in ["欠料"]:
-                            # 查询金料欠款（从客户交易记录）
-                            from .models import CustomerGoldDeposit
-                            deposit = db.query(CustomerGoldDeposit).filter(CustomerGoldDeposit.customer_id == customer.id).first()
-                            gold_debt = -(deposit.current_balance) if deposit and deposit.current_balance < 0 else 0
-                            if gold_debt > 0:
-                                msg = f"**{customer.name}** 当前欠料：**{gold_debt:.2f}克**"
+                            # 查询金料欠款（使用历史交易汇总方式，与财务对账单一致）
+                            from .models import SettlementOrder
+                            from .models.finance import GoldReceipt
+                            
+                            # 1. 结算欠料（结料支付 + 混合支付的金料部分）
+                            total_settlement_gold = 0.0
+                            settlements = db.query(SettlementOrder).join(SalesOrder).filter(
+                                SalesOrder.customer_id == customer.id,
+                                SettlementOrder.status.in_(['confirmed', 'printed'])
+                            ).all()
+                            for s in settlements:
+                                if s.payment_method == 'physical_gold':
+                                    total_settlement_gold += s.physical_gold_weight or 0
+                                elif s.payment_method == 'mixed':
+                                    total_settlement_gold += s.gold_payment_weight or 0
+                            
+                            # 2. 客户来料
+                            total_receipts_gold = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
+                                GoldReceipt.customer_id == customer.id,
+                                GoldReceipt.status == 'received'
+                            ).scalar() or 0
+                            
+                            # 3. 净欠料 = 结算欠料 - 来料（正数=欠料，负数=存料）
+                            net_gold = total_settlement_gold - float(total_receipts_gold)
+                            
+                            if net_gold > 0:
+                                msg = f"**{customer.name}** 当前欠料：**{net_gold:.2f}克**"
+                            elif net_gold < 0:
+                                msg = f"**{customer.name}** 当前存料（客户金料余额）：**{abs(net_gold):.2f}克**"
                             else:
-                                msg = f"**{customer.name}** 目前没有欠料 ✓"
+                                msg = f"**{customer.name}** 金料已结清 ✓"
                             fast_result = {"success": True, "action": "查询客户欠料", "message": msg}
                         elif query_type in ["欠款"]:
                             # 查询现金欠款（使用历史交易汇总方式，与财务对账单一致）
@@ -993,14 +1038,37 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                                 msg = f"**{customer.name}** 目前没有欠款 ✓"
                             fast_result = {"success": True, "action": "查询客户欠款", "message": msg}
                         elif query_type in ["存料", "余额"]:
-                            # 查询存料余额
-                            from .models import CustomerGoldDeposit
-                            deposit = db.query(CustomerGoldDeposit).filter(CustomerGoldDeposit.customer_id == customer.id).first()
-                            balance = deposit.current_balance if deposit and deposit.current_balance > 0 else 0
-                            if balance > 0:
-                                msg = f"**{customer.name}** 当前存料余额：**{balance:.2f}克**"
+                            # 查询存料余额（使用历史交易汇总方式，与财务对账单一致）
+                            from .models import SettlementOrder
+                            from .models.finance import GoldReceipt
+                            
+                            # 1. 结算欠料（结料支付 + 混合支付的金料部分）
+                            total_settlement_gold = 0.0
+                            settlements = db.query(SettlementOrder).join(SalesOrder).filter(
+                                SalesOrder.customer_id == customer.id,
+                                SettlementOrder.status.in_(['confirmed', 'printed'])
+                            ).all()
+                            for s in settlements:
+                                if s.payment_method == 'physical_gold':
+                                    total_settlement_gold += s.physical_gold_weight or 0
+                                elif s.payment_method == 'mixed':
+                                    total_settlement_gold += s.gold_payment_weight or 0
+                            
+                            # 2. 客户来料
+                            total_receipts_gold = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
+                                GoldReceipt.customer_id == customer.id,
+                                GoldReceipt.status == 'received'
+                            ).scalar() or 0
+                            
+                            # 3. 净金料 = 来料 - 结算欠料（正数=存料，负数=欠料）
+                            net_gold = float(total_receipts_gold) - total_settlement_gold
+                            
+                            if net_gold > 0:
+                                msg = f"**{customer.name}** 当前存料余额：**{net_gold:.2f}克**"
+                            elif net_gold < 0:
+                                msg = f"**{customer.name}** 当前欠料：**{abs(net_gold):.2f}克**（无存料）"
                             else:
-                                msg = f"**{customer.name}** 目前没有存料（余额：0克）"
+                                msg = f"**{customer.name}** 金料已结清（余额：0克）"
                             fast_result = {"success": True, "action": "查询客户存料", "message": msg}
                         # 更新上下文（保持客户不变）
                         ctx.update_entities(session_id, {"last_customer": customer.name})
