@@ -327,6 +327,366 @@ async def get_customer_debt_summary(
         return server_error_response(message=f"查询失败: {str(e)}")
 
 
+@router.get("/chat-debt-query")
+async def chat_debt_query(
+    customer_name: str = Query(..., description="客户名称（支持模糊匹配）"),
+    query_type: str = Query(default="all", description="查询类型：all/cash_debt/gold_debt/gold_deposit"),
+    date_start: Optional[str] = Query(default=None, description="开始日期 YYYY-MM-DD"),
+    date_end: Optional[str] = Query(default=None, description="结束日期 YYYY-MM-DD"),
+    db: Session = Depends(get_db)
+):
+    """
+    聊天查询客户账务（供AI聊天使用）
+    返回客户的欠款、欠料、存料等财务信息
+    """
+    try:
+        # 1. 通过名称模糊查找客户
+        customer = db.query(Customer).filter(
+            Customer.name.contains(customer_name),
+            Customer.status == "active"
+        ).first()
+        
+        if not customer:
+            # 尝试精确匹配
+            customer = db.query(Customer).filter(
+                Customer.name == customer_name,
+                Customer.status == "active"
+            ).first()
+        
+        if not customer:
+            return not_found_response(message=f"未找到客户：{customer_name}")
+        
+        customer_id = customer.id
+        
+        # 2. 解析日期范围
+        start_date = None
+        end_date = None
+        if date_start:
+            try:
+                start_date = datetime.strptime(date_start, "%Y-%m-%d")
+            except:
+                pass
+        if date_end:
+            try:
+                end_date = datetime.strptime(date_end, "%Y-%m-%d")
+                # 设置为当天结束时间
+                end_date = end_date.replace(hour=23, minute=59, second=59)
+            except:
+                pass
+        
+        result = {
+            "success": True,
+            "customer": {
+                "id": customer.id,
+                "name": customer.name,
+                "phone": customer.phone,
+                "customer_no": customer.customer_no
+            },
+            "query_period": {
+                "start": date_start,
+                "end": date_end
+            }
+        }
+        
+        # 3. 查询现金欠款（使用历史交易汇总方式，与财务对账单一致）
+        if query_type in ["all", "cash_debt"]:
+            cash_debt = 0.0
+            cash_transactions = []
+            try:
+                # 计算结算金额（cash_price + mixed的现金部分 + labor_amount）
+                total_settlement_cash = 0.0
+                settlements_query = db.query(SettlementOrder).join(SalesOrder).filter(
+                    SalesOrder.customer_id == customer_id,
+                    SettlementOrder.status.in_(['confirmed', 'printed'])
+                )
+                
+                if start_date:
+                    settlements_query = settlements_query.filter(
+                        SettlementOrder.created_at >= start_date
+                    )
+                if end_date:
+                    settlements_query = settlements_query.filter(
+                        SettlementOrder.created_at <= end_date
+                    )
+                
+                settlements = settlements_query.all()
+                for s in settlements:
+                    if s.payment_method == 'cash_price':
+                        total_settlement_cash += s.total_amount or 0
+                    elif s.payment_method == 'mixed':
+                        # 混合支付：只计算现金部分（cash_payment_weight * gold_price）
+                        if s.cash_payment_weight and s.gold_price:
+                            total_settlement_cash += s.cash_payment_weight * s.gold_price
+                        total_settlement_cash += s.labor_amount or 0  # 工费总是现金
+                
+                # 查询收款记录
+                payments_query = db.query(PaymentRecord).filter(
+                    PaymentRecord.customer_id == customer_id
+                )
+                
+                if start_date:
+                    payments_query = payments_query.filter(
+                        PaymentRecord.payment_date >= start_date.date()
+                    )
+                if end_date:
+                    payments_query = payments_query.filter(
+                        PaymentRecord.payment_date <= end_date.date()
+                    )
+                
+                total_payments = db.query(func.coalesce(func.sum(PaymentRecord.amount), 0)).filter(
+                    PaymentRecord.customer_id == customer_id
+                )
+                if start_date:
+                    total_payments = total_payments.filter(PaymentRecord.payment_date >= start_date.date())
+                if end_date:
+                    total_payments = total_payments.filter(PaymentRecord.payment_date <= end_date.date())
+                
+                total_payments = total_payments.scalar() or 0
+                
+                # 净欠款 = 结算现金 - 收款（正数=欠款，负数=预收款）
+                cash_debt = float(total_settlement_cash) - float(total_payments)
+                
+                # 获取交易明细用于展示
+                payments = payments_query.order_by(desc(PaymentRecord.create_time)).limit(20).all()
+                for p in payments:
+                    payment_method_label = {
+                        'bank_transfer': '银行转账',
+                        'cash': '现金',
+                        'wechat': '微信',
+                        'alipay': '支付宝',
+                        'card': '刷卡'
+                    }.get(p.payment_method, p.payment_method)
+                    
+                    cash_transactions.append({
+                        "id": p.id,
+                        "type": "payment",
+                        "description": f"{payment_method_label} 收款",
+                        "amount": p.amount,
+                        "payment_date": p.payment_date.isoformat() if p.payment_date else None,
+                        "created_at": p.create_time.isoformat() if p.create_time else None
+                    })
+                
+                # 添加结算单明细
+                for s in settlements[:20]:
+                    cash_transactions.append({
+                        "id": s.id,
+                        "type": "settlement",
+                        "description": f"销售结算（结算单号: {s.settlement_no}）",
+                        "amount": s.total_amount if s.payment_method == 'cash_price' else (s.cash_payment_weight * s.gold_price if s.payment_method == 'mixed' and s.cash_payment_weight and s.gold_price else 0) + (s.labor_amount or 0),
+                        "created_at": s.created_at.isoformat() if s.created_at else None
+                    })
+                
+            except Exception as e:
+                logger.warning(f"查询现金欠款出错: {e}", exc_info=True)
+            
+            result["cash_debt"] = cash_debt
+            result["cash_transactions"] = cash_transactions
+        
+        # 4. 查询金料账户（使用历史交易汇总方式，与财务对账单一致）
+        if query_type in ["all", "gold_debt", "gold_deposit"]:
+            net_gold = 0.0  # 净金料值（正数=欠料，负数=存料）
+            gold_transactions = []
+            deposit_transactions = []
+            
+            try:
+                # 计算结算金料（physical_gold + mixed的金料部分）
+                total_settlement_gold = 0.0
+                settlements_query = db.query(SettlementOrder).join(SalesOrder).filter(
+                    SalesOrder.customer_id == customer_id,
+                    SettlementOrder.status.in_(['confirmed', 'printed'])
+                )
+                
+                if start_date:
+                    settlements_query = settlements_query.filter(
+                        SettlementOrder.created_at >= start_date
+                    )
+                if end_date:
+                    settlements_query = settlements_query.filter(
+                        SettlementOrder.created_at <= end_date
+                    )
+                
+                settlements = settlements_query.all()
+                for s in settlements:
+                    if s.payment_method == 'physical_gold':
+                        total_settlement_gold += s.physical_gold_weight or 0
+                    elif s.payment_method == 'mixed':
+                        total_settlement_gold += s.gold_payment_weight or 0
+                
+                # 查询来料记录
+                receipts_query = db.query(GoldReceipt).filter(
+                    GoldReceipt.customer_id == customer_id,
+                    GoldReceipt.status == 'received'
+                )
+                
+                if start_date:
+                    receipts_query = receipts_query.filter(
+                        GoldReceipt.created_at >= start_date
+                    )
+                if end_date:
+                    receipts_query = receipts_query.filter(
+                        GoldReceipt.created_at <= end_date
+                    )
+                
+                total_receipts_gold = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
+                    GoldReceipt.customer_id == customer_id,
+                    GoldReceipt.status == 'received'
+                )
+                if start_date:
+                    total_receipts_gold = total_receipts_gold.filter(GoldReceipt.created_at >= start_date)
+                if end_date:
+                    total_receipts_gold = total_receipts_gold.filter(GoldReceipt.created_at <= end_date)
+                
+                total_receipts_gold = total_receipts_gold.scalar() or 0
+                
+                # 净金料 = 结算欠料 - 来料（正数=欠料，负数=存料）
+                net_gold = float(total_settlement_gold) - float(total_receipts_gold)
+                
+                # 获取结算单明细用于展示
+                for s in settlements[:20]:
+                    gold_amount = 0.0
+                    if s.payment_method == 'physical_gold':
+                        gold_amount = s.physical_gold_weight or 0
+                    elif s.payment_method == 'mixed':
+                        gold_amount = s.gold_payment_weight or 0
+                    
+                    if gold_amount > 0:
+                        gold_transactions.append({
+                            "id": s.id,
+                            "type": "settlement",
+                            "type_label": "销售结算",
+                            "gold_weight": gold_amount,
+                            "order_no": s.settlement_no,
+                            "created_at": s.created_at.isoformat() if s.created_at else None,
+                            "remark": s.remark or ""
+                        })
+                
+                # 获取来料记录明细用于展示
+                receipts = receipts_query.order_by(desc(GoldReceipt.created_at)).limit(20).all()
+                for r in receipts:
+                    deposit_transactions.append({
+                        "id": r.id,
+                        "type": "receipt",
+                        "type_label": "客户来料",
+                        "amount": r.gold_weight,
+                        "gold_weight": r.gold_weight,
+                        "order_no": r.receipt_no,
+                        "gold_fineness": r.gold_fineness,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                        "remark": r.remark or ""
+                    })
+                    
+            except Exception as e:
+                logger.warning(f"查询金料账户出错: {e}")
+            
+            # 单一账户模式：从 net_gold 计算兼容字段
+            # 语义：net_gold = 结算欠料 - 来料（正数=欠料，负数=存料）
+            result["net_gold"] = net_gold  # 净金料值（核心字段）
+            result["gold_debt"] = max(0, net_gold)  # 欠料（正数部分）
+            result["gold_deposit"] = max(0, -net_gold)  # 存料（负数的绝对值）
+            result["gold_transactions"] = gold_transactions
+            result["deposit_transactions"] = deposit_transactions
+        
+        # 6. 查询客户销售历史表现（新增）
+        try:
+            # === 第一部分：查询指定时间段的销售（今日/本周/本月等）===
+            period_sales_query = db.query(SalesOrder).filter(
+                SalesOrder.customer_name == customer.name,
+                SalesOrder.status != "已取消"
+            )
+            
+            if start_date:
+                period_sales_query = period_sales_query.filter(SalesOrder.order_date >= start_date)
+            if end_date:
+                period_sales_query = period_sales_query.filter(SalesOrder.order_date <= end_date)
+            
+            period_orders = period_sales_query.all()
+            
+            # 统计指定时间段的销售
+            period_sales_weight = 0.0
+            period_labor_cost = 0.0
+            period_order_count = len(period_orders)
+            
+            for order in period_orders:
+                details = db.query(SalesDetail).filter(SalesDetail.order_id == order.id).all()
+                for detail in details:
+                    period_sales_weight += detail.weight or 0
+                    period_labor_cost += detail.total_labor_cost or 0
+            
+            # === 第二部分：查询历史总览（不受日期限制）===
+            all_sales_query = db.query(SalesOrder).filter(
+                SalesOrder.customer_name == customer.name,
+                SalesOrder.status != "已取消"
+            )
+            all_orders = all_sales_query.all()
+            
+            # 统计历史总销售克重和工费
+            total_sales_weight = 0.0
+            total_labor_cost = 0.0
+            total_order_count = len(all_orders)
+            
+            # 品类统计（基于全部历史记录）
+            category_stats = {}
+            
+            for order in all_orders:
+                details = db.query(SalesDetail).filter(SalesDetail.order_id == order.id).all()
+                for detail in details:
+                    weight = detail.weight or 0
+                    labor = detail.total_labor_cost or 0
+                    total_sales_weight += weight
+                    total_labor_cost += labor
+                    
+                    # 按品类统计
+                    product_name = detail.product_name or "其他"
+                    if product_name not in category_stats:
+                        category_stats[product_name] = {"weight": 0, "labor": 0, "count": 0}
+                    category_stats[product_name]["weight"] += weight
+                    category_stats[product_name]["labor"] += labor
+                    category_stats[product_name]["count"] += 1
+            
+            # 将品类统计转为列表并按销售克重排序
+            category_breakdown = [
+                {"name": name, "weight": stats["weight"], "labor": stats["labor"], "count": stats["count"]}
+                for name, stats in category_stats.items()
+            ]
+            category_breakdown.sort(key=lambda x: x["weight"], reverse=True)
+            
+            # 计算客户排名（按总购买金额）
+            all_customers = db.query(Customer).filter(Customer.status == "active").order_by(
+                desc(Customer.total_purchase_amount)
+            ).all()
+            customer_rank = 1
+            for idx, c in enumerate(all_customers, 1):
+                if c.id == customer.id:
+                    customer_rank = idx
+                    break
+            total_customer_count = len(all_customers)
+            
+            result["sales_history"] = {
+                # 指定时间段销售（今日/本周/本月等）
+                "period_sales_weight": period_sales_weight,
+                "period_labor_cost": period_labor_cost,
+                "period_order_count": period_order_count,
+                # 历史总览（全部记录）
+                "total_sales_weight": total_sales_weight,
+                "total_labor_cost": total_labor_cost,
+                "order_count": total_order_count,
+                "category_breakdown": category_breakdown[:5],  # 只返回前5个品类
+                "customer_rank": customer_rank,
+                "total_customer_count": total_customer_count,
+                "last_purchase_time": str(customer.last_purchase_time) if customer.last_purchase_time else None
+            }
+        except Exception as e:
+            logger.warning(f"查询客户销售历史出错: {e}")
+            result["sales_history"] = None
+        
+        # 将result转换为统一响应格式
+        return success_response(data=result)
+        
+    except Exception as e:
+        logger.error(f"聊天查询客户账务失败: {e}", exc_info=True)
+        return server_error_response(message=f"查询失败: {str(e)}")
+
+
 @router.get("/{customer_id}")
 async def get_customer(
     customer_id: int,
@@ -1022,366 +1382,6 @@ async def get_customer_debt_history(
         
     except Exception as e:
         logger.error(f"查询客户欠款历史失败: {e}", exc_info=True)
-        return server_error_response(message=f"查询失败: {str(e)}")
-
-
-@router.get("/chat-debt-query")
-async def chat_debt_query(
-    customer_name: str = Query(..., description="客户名称（支持模糊匹配）"),
-    query_type: str = Query(default="all", description="查询类型：all/cash_debt/gold_debt/gold_deposit"),
-    date_start: Optional[str] = Query(default=None, description="开始日期 YYYY-MM-DD"),
-    date_end: Optional[str] = Query(default=None, description="结束日期 YYYY-MM-DD"),
-    db: Session = Depends(get_db)
-):
-    """
-    聊天查询客户账务（供AI聊天使用）
-    返回客户的欠款、欠料、存料等财务信息
-    """
-    try:
-        # 1. 通过名称模糊查找客户
-        customer = db.query(Customer).filter(
-            Customer.name.contains(customer_name),
-            Customer.status == "active"
-        ).first()
-        
-        if not customer:
-            # 尝试精确匹配
-            customer = db.query(Customer).filter(
-                Customer.name == customer_name,
-                Customer.status == "active"
-            ).first()
-        
-        if not customer:
-            return not_found_response(message=f"未找到客户：{customer_name}")
-        
-        customer_id = customer.id
-        
-        # 2. 解析日期范围
-        start_date = None
-        end_date = None
-        if date_start:
-            try:
-                start_date = datetime.strptime(date_start, "%Y-%m-%d")
-            except:
-                pass
-        if date_end:
-            try:
-                end_date = datetime.strptime(date_end, "%Y-%m-%d")
-                # 设置为当天结束时间
-                end_date = end_date.replace(hour=23, minute=59, second=59)
-            except:
-                pass
-        
-        result = {
-            "success": True,
-            "customer": {
-                "id": customer.id,
-                "name": customer.name,
-                "phone": customer.phone,
-                "customer_no": customer.customer_no
-            },
-            "query_period": {
-                "start": date_start,
-                "end": date_end
-            }
-        }
-        
-        # 3. 查询现金欠款（使用历史交易汇总方式，与财务对账单一致）
-        if query_type in ["all", "cash_debt"]:
-            cash_debt = 0.0
-            cash_transactions = []
-            try:
-                # 计算结算金额（cash_price + mixed的现金部分 + labor_amount）
-                total_settlement_cash = 0.0
-                settlements_query = db.query(SettlementOrder).join(SalesOrder).filter(
-                    SalesOrder.customer_id == customer_id,
-                    SettlementOrder.status.in_(['confirmed', 'printed'])
-                )
-                
-                if start_date:
-                    settlements_query = settlements_query.filter(
-                        SettlementOrder.created_at >= start_date
-                    )
-                if end_date:
-                    settlements_query = settlements_query.filter(
-                        SettlementOrder.created_at <= end_date
-                    )
-                
-                settlements = settlements_query.all()
-                for s in settlements:
-                    if s.payment_method == 'cash_price':
-                        total_settlement_cash += s.total_amount or 0
-                    elif s.payment_method == 'mixed':
-                        # 混合支付：只计算现金部分（cash_payment_weight * gold_price）
-                        if s.cash_payment_weight and s.gold_price:
-                            total_settlement_cash += s.cash_payment_weight * s.gold_price
-                        total_settlement_cash += s.labor_amount or 0  # 工费总是现金
-                
-                # 查询收款记录
-                payments_query = db.query(PaymentRecord).filter(
-                    PaymentRecord.customer_id == customer_id
-                )
-                
-                if start_date:
-                    payments_query = payments_query.filter(
-                        PaymentRecord.payment_date >= start_date.date()
-                    )
-                if end_date:
-                    payments_query = payments_query.filter(
-                        PaymentRecord.payment_date <= end_date.date()
-                    )
-                
-                total_payments = db.query(func.coalesce(func.sum(PaymentRecord.amount), 0)).filter(
-                    PaymentRecord.customer_id == customer_id
-                )
-                if start_date:
-                    total_payments = total_payments.filter(PaymentRecord.payment_date >= start_date.date())
-                if end_date:
-                    total_payments = total_payments.filter(PaymentRecord.payment_date <= end_date.date())
-                
-                total_payments = total_payments.scalar() or 0
-                
-                # 净欠款 = 结算现金 - 收款（正数=欠款，负数=预收款）
-                cash_debt = float(total_settlement_cash) - float(total_payments)
-                
-                # 获取交易明细用于展示
-                payments = payments_query.order_by(desc(PaymentRecord.create_time)).limit(20).all()
-                for p in payments:
-                    payment_method_label = {
-                        'bank_transfer': '银行转账',
-                        'cash': '现金',
-                        'wechat': '微信',
-                        'alipay': '支付宝',
-                        'card': '刷卡'
-                    }.get(p.payment_method, p.payment_method)
-                    
-                    cash_transactions.append({
-                        "id": p.id,
-                        "type": "payment",
-                        "description": f"{payment_method_label} 收款",
-                        "amount": p.amount,
-                        "payment_date": p.payment_date.isoformat() if p.payment_date else None,
-                        "created_at": p.create_time.isoformat() if p.create_time else None
-                    })
-                
-                # 添加结算单明细
-                for s in settlements[:20]:
-                    cash_transactions.append({
-                        "id": s.id,
-                        "type": "settlement",
-                        "description": f"销售结算（结算单号: {s.settlement_no}）",
-                        "amount": s.total_amount if s.payment_method == 'cash_price' else (s.cash_payment_weight * s.gold_price if s.payment_method == 'mixed' and s.cash_payment_weight and s.gold_price else 0) + (s.labor_amount or 0),
-                        "created_at": s.created_at.isoformat() if s.created_at else None
-                    })
-                
-            except Exception as e:
-                logger.warning(f"查询现金欠款出错: {e}", exc_info=True)
-            
-            result["cash_debt"] = cash_debt
-            result["cash_transactions"] = cash_transactions
-        
-        # 4. 查询金料账户（使用历史交易汇总方式，与财务对账单一致）
-        if query_type in ["all", "gold_debt", "gold_deposit"]:
-            net_gold = 0.0  # 净金料值（正数=欠料，负数=存料）
-            gold_transactions = []
-            deposit_transactions = []
-            
-            try:
-                # 计算结算金料（physical_gold + mixed的金料部分）
-                total_settlement_gold = 0.0
-                settlements_query = db.query(SettlementOrder).join(SalesOrder).filter(
-                    SalesOrder.customer_id == customer_id,
-                    SettlementOrder.status.in_(['confirmed', 'printed'])
-                )
-                
-                if start_date:
-                    settlements_query = settlements_query.filter(
-                        SettlementOrder.created_at >= start_date
-                    )
-                if end_date:
-                    settlements_query = settlements_query.filter(
-                        SettlementOrder.created_at <= end_date
-                    )
-                
-                settlements = settlements_query.all()
-                for s in settlements:
-                    if s.payment_method == 'physical_gold':
-                        total_settlement_gold += s.physical_gold_weight or 0
-                    elif s.payment_method == 'mixed':
-                        total_settlement_gold += s.gold_payment_weight or 0
-                
-                # 查询来料记录
-                receipts_query = db.query(GoldReceipt).filter(
-                    GoldReceipt.customer_id == customer_id,
-                    GoldReceipt.status == 'received'
-                )
-                
-                if start_date:
-                    receipts_query = receipts_query.filter(
-                        GoldReceipt.created_at >= start_date
-                    )
-                if end_date:
-                    receipts_query = receipts_query.filter(
-                        GoldReceipt.created_at <= end_date
-                    )
-                
-                total_receipts_gold = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
-                    GoldReceipt.customer_id == customer_id,
-                    GoldReceipt.status == 'received'
-                )
-                if start_date:
-                    total_receipts_gold = total_receipts_gold.filter(GoldReceipt.created_at >= start_date)
-                if end_date:
-                    total_receipts_gold = total_receipts_gold.filter(GoldReceipt.created_at <= end_date)
-                
-                total_receipts_gold = total_receipts_gold.scalar() or 0
-                
-                # 净金料 = 结算欠料 - 来料（正数=欠料，负数=存料）
-                net_gold = float(total_settlement_gold) - float(total_receipts_gold)
-                
-                # 获取结算单明细用于展示
-                for s in settlements[:20]:
-                    gold_amount = 0.0
-                    if s.payment_method == 'physical_gold':
-                        gold_amount = s.physical_gold_weight or 0
-                    elif s.payment_method == 'mixed':
-                        gold_amount = s.gold_payment_weight or 0
-                    
-                    if gold_amount > 0:
-                        gold_transactions.append({
-                            "id": s.id,
-                            "type": "settlement",
-                            "type_label": "销售结算",
-                            "gold_weight": gold_amount,
-                            "order_no": s.settlement_no,
-                            "created_at": s.created_at.isoformat() if s.created_at else None,
-                            "remark": s.remark or ""
-                        })
-                
-                # 获取来料记录明细用于展示
-                receipts = receipts_query.order_by(desc(GoldReceipt.created_at)).limit(20).all()
-                for r in receipts:
-                    deposit_transactions.append({
-                        "id": r.id,
-                        "type": "receipt",
-                        "type_label": "客户来料",
-                        "amount": r.gold_weight,
-                        "gold_weight": r.gold_weight,
-                        "order_no": r.receipt_no,
-                        "gold_fineness": r.gold_fineness,
-                        "created_at": r.created_at.isoformat() if r.created_at else None,
-                        "remark": r.remark or ""
-                    })
-                    
-            except Exception as e:
-                logger.warning(f"查询金料账户出错: {e}")
-            
-            # 单一账户模式：从 net_gold 计算兼容字段
-            # 语义：net_gold = 结算欠料 - 来料（正数=欠料，负数=存料）
-            result["net_gold"] = net_gold  # 净金料值（核心字段）
-            result["gold_debt"] = max(0, net_gold)  # 欠料（正数部分）
-            result["gold_deposit"] = max(0, -net_gold)  # 存料（负数的绝对值）
-            result["gold_transactions"] = gold_transactions
-            result["deposit_transactions"] = deposit_transactions
-        
-        # 6. 查询客户销售历史表现（新增）
-        try:
-            # === 第一部分：查询指定时间段的销售（今日/本周/本月等）===
-            period_sales_query = db.query(SalesOrder).filter(
-                SalesOrder.customer_name == customer.name,
-                SalesOrder.status != "已取消"
-            )
-            
-            if start_date:
-                period_sales_query = period_sales_query.filter(SalesOrder.order_date >= start_date)
-            if end_date:
-                period_sales_query = period_sales_query.filter(SalesOrder.order_date <= end_date)
-            
-            period_orders = period_sales_query.all()
-            
-            # 统计指定时间段的销售
-            period_sales_weight = 0.0
-            period_labor_cost = 0.0
-            period_order_count = len(period_orders)
-            
-            for order in period_orders:
-                details = db.query(SalesDetail).filter(SalesDetail.order_id == order.id).all()
-                for detail in details:
-                    period_sales_weight += detail.weight or 0
-                    period_labor_cost += detail.total_labor_cost or 0
-            
-            # === 第二部分：查询历史总览（不受日期限制）===
-            all_sales_query = db.query(SalesOrder).filter(
-                SalesOrder.customer_name == customer.name,
-                SalesOrder.status != "已取消"
-            )
-            all_orders = all_sales_query.all()
-            
-            # 统计历史总销售克重和工费
-            total_sales_weight = 0.0
-            total_labor_cost = 0.0
-            total_order_count = len(all_orders)
-            
-            # 品类统计（基于全部历史记录）
-            category_stats = {}
-            
-            for order in all_orders:
-                details = db.query(SalesDetail).filter(SalesDetail.order_id == order.id).all()
-                for detail in details:
-                    weight = detail.weight or 0
-                    labor = detail.total_labor_cost or 0
-                    total_sales_weight += weight
-                    total_labor_cost += labor
-                    
-                    # 按品类统计
-                    product_name = detail.product_name or "其他"
-                    if product_name not in category_stats:
-                        category_stats[product_name] = {"weight": 0, "labor": 0, "count": 0}
-                    category_stats[product_name]["weight"] += weight
-                    category_stats[product_name]["labor"] += labor
-                    category_stats[product_name]["count"] += 1
-            
-            # 将品类统计转为列表并按销售克重排序
-            category_breakdown = [
-                {"name": name, "weight": stats["weight"], "labor": stats["labor"], "count": stats["count"]}
-                for name, stats in category_stats.items()
-            ]
-            category_breakdown.sort(key=lambda x: x["weight"], reverse=True)
-            
-            # 计算客户排名（按总购买金额）
-            all_customers = db.query(Customer).filter(Customer.status == "active").order_by(
-                desc(Customer.total_purchase_amount)
-            ).all()
-            customer_rank = 1
-            for idx, c in enumerate(all_customers, 1):
-                if c.id == customer.id:
-                    customer_rank = idx
-                    break
-            total_customer_count = len(all_customers)
-            
-            result["sales_history"] = {
-                # 指定时间段销售（今日/本周/本月等）
-                "period_sales_weight": period_sales_weight,
-                "period_labor_cost": period_labor_cost,
-                "period_order_count": period_order_count,
-                # 历史总览（全部记录）
-                "total_sales_weight": total_sales_weight,
-                "total_labor_cost": total_labor_cost,
-                "order_count": total_order_count,
-                "category_breakdown": category_breakdown[:5],  # 只返回前5个品类
-                "customer_rank": customer_rank,
-                "total_customer_count": total_customer_count,
-                "last_purchase_time": str(customer.last_purchase_time) if customer.last_purchase_time else None
-            }
-        except Exception as e:
-            logger.warning(f"查询客户销售历史出错: {e}")
-            result["sales_history"] = None
-        
-        # 将result转换为统一响应格式
-        return success_response(data=result)
-        
-    except Exception as e:
-        logger.error(f"聊天查询客户账务失败: {e}", exc_info=True)
         return server_error_response(message=f"查询失败: {str(e)}")
 
 
