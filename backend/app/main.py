@@ -1802,7 +1802,11 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                             date_end=getattr(ai_response, 'date_end', None),
                             db=db
                         )
-                        data['customer_debt'] = debt_result
+                        # 从 ApiResponse 格式中提取实际数据（Bug #29 fix）
+                        if isinstance(debt_result, dict) and "data" in debt_result:
+                            data['customer_debt'] = debt_result["data"]
+                        else:
+                            data['customer_debt'] = debt_result
                         logger.info(f"[流式] 已收集客户账务数据: {debt_customer_name}")
                 else:
                     # 无权限查看客户账务
