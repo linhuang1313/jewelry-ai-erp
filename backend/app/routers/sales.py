@@ -304,12 +304,36 @@ async def get_sales_orders(
             details_map[d.order_id].append(d)
         
         # 构建结果（使用预加载数据，无额外查询）
+        # 直接构建字典，避免 Pydantic model_validate 的性能开销
         result = []
         for order in orders:
             details = details_map.get(order.id, [])
-            order_response = SalesOrderResponse.model_validate(order)
-            order_response.details = [SalesDetailResponse.model_validate(d).model_dump(mode='json') for d in details]
-            result.append(order_response.model_dump(mode='json'))
+            order_dict = {
+                "id": order.id,
+                "order_no": order.order_no,
+                "order_date": order.order_date.isoformat() if order.order_date else None,
+                "customer_name": order.customer_name,
+                "customer_id": order.customer_id,
+                "salesperson": order.salesperson,
+                "store_code": order.store_code,
+                "total_weight": float(order.total_weight or 0),
+                "total_labor_cost": float(order.total_labor_cost or 0),
+                "remark": order.remark,
+                "status": order.status,
+                "create_time": order.create_time.isoformat() if order.create_time else None,
+                "operator": order.operator,
+                "details": [
+                    {
+                        "id": d.id,
+                        "product_name": d.product_name,
+                        "weight": float(d.weight or 0),
+                        "labor_cost": float(d.labor_cost or 0),
+                        "total_labor_cost": float(d.total_labor_cost or 0)
+                    }
+                    for d in details
+                ]
+            }
+            result.append(order_dict)
         
         return {
             "success": True,
