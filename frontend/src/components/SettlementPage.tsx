@@ -2375,6 +2375,15 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
           }}
           onSuccess={handleReturnFormSuccess}
           userRole="counter"
+          initialItems={refundingSettlement?.sales_order?.details?.map(d => ({
+            product_name: d.product_name,
+            return_weight: String(d.weight),
+            labor_cost: String(d.labor_cost),
+            piece_count: '',
+            piece_labor_cost: '',
+            remark: ''
+          }))}
+          initialReason={refundReason}
         />
       </div>
     </div>

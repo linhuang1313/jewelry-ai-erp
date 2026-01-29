@@ -52,6 +52,8 @@ interface QuickReturnModalProps {
   onClose: () => void;
   onSuccess?: (result: ReturnResult) => void;
   userRole?: string;
+  initialItems?: ReturnItem[];      // 预填充商品列表（用于销退自动填充）
+  initialReason?: string;           // 预填充退货原因
 }
 
 const RETURN_REASONS = ['质量问题', '款式不符', '数量差异', '工艺瑕疵', '其他'];
@@ -69,7 +71,9 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
-  userRole = 'product'
+  userRole = 'product',
+  initialItems,
+  initialReason
 }) => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -150,6 +154,18 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
       }
     }
   }, [isOpen, locations, returnConfig.locationCode]);
+
+  // 初始化预填充数据（销退时自动填充商品明细和退货原因）
+  useEffect(() => {
+    if (isOpen && initialItems && initialItems.length > 0) {
+      // 填充商品列表
+      setItems(initialItems.map(item => ({ ...item })));
+    }
+    if (isOpen && initialReason) {
+      // 填充退货原因
+      setFormData(prev => ({ ...prev, return_reason: initialReason }));
+    }
+  }, [isOpen, initialItems, initialReason]);
 
   // 点击外部关闭下拉框
   useEffect(() => {
