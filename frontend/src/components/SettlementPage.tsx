@@ -130,7 +130,10 @@ interface SettlementPageProps {
 }
 
 export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConfirmed }) => {
-  const [activeTab, setActiveTab] = useState<'pending' | 'confirmed' | 'all'>('pending');
+  // to_settle = 待开结算单（显示销售单）
+  // pending = 待确认（显示待确认结算单）
+  // confirmed = 已完成（显示已确认/已打印结算单）
+  const [activeTab, setActiveTab] = useState<'to_settle' | 'pending' | 'confirmed'>('to_settle');
   const [pendingSales, setPendingSales] = useState<SalesOrder[]>([]);
   const [settlements, setSettlements] = useState<SettlementOrder[]>([]);
   const [loading, setLoading] = useState(false);
@@ -864,11 +867,12 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
   const filteredSettlements = (Array.isArray(settlements) ? settlements : []).filter(s => {
     if (activeTab === 'pending') return s.status === 'pending';
     if (activeTab === 'confirmed') return s.status === 'confirmed' || s.status === 'printed';
-    // 全部Tab显示所有记录（包括已销退）
-    return true;
+    // to_settle tab 不显示结算单列表
+    return false;
   });
 
   const pendingCount = (Array.isArray(settlements) ? settlements : []).filter(s => s.status === 'pending').length;
+  const completedCount = (Array.isArray(settlements) ? settlements : []).filter(s => s.status === 'confirmed' || s.status === 'printed').length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-amber-50/30 to-gray-50 p-6">
@@ -963,26 +967,26 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
           </div>
         </div>
 
-        {/* 统计卡片 - 可点击筛选 */}
+        {/* 统计卡片 - 可点击切换Tab */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          {/* 待开结算单卡片 - 点击滚动到销售单列表 */}
+          {/* 待开结算单卡片 - 点击切换到待开结算单Tab */}
           <div 
-            onClick={() => {
-              // 滚动到待开结算单列表区域
-              const element = document.getElementById('pending-sales-section');
-              if (element) {
-                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }
-            }}
-            className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-4 text-white 
+            onClick={() => setActiveTab('to_settle')}
+            className={`relative bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-4 text-white 
               cursor-pointer hover:from-orange-600 hover:to-orange-700 hover:shadow-lg hover:shadow-orange-300/50
-              transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+              transition-all transform hover:scale-[1.02] active:scale-[0.98]
+              ${activeTab === 'to_settle' ? 'ring-4 ring-white/50 shadow-lg shadow-orange-300/50' : ''}`}
           >
             <div className="flex items-center justify-between">
               <span className="text-sm opacity-80">待开结算单</span>
               <FileText className="w-5 h-5 opacity-60" />
             </div>
             <div className="text-3xl font-bold mt-2">{pendingSales.length}</div>
+            {activeTab === 'to_settle' && (
+              <div className="absolute top-2 right-2">
+                <Check className="w-4 h-4 text-white/80" />
+              </div>
+            )}
           </div>
           
           {/* 待确认卡片 - 点击切换到待确认Tab */}
@@ -1005,7 +1009,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
             )}
           </div>
           
-          {/* 已完成卡片 - 点击切换到已确认Tab */}
+          {/* 已完成卡片 - 点击切换到已完成Tab */}
           <div 
             onClick={() => setActiveTab('confirmed')}
             className={`relative bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 text-white 
@@ -1017,9 +1021,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
               <span className="text-sm opacity-80">已完成</span>
               <Check className="w-5 h-5 opacity-60" />
             </div>
-            <div className="text-3xl font-bold mt-2">
-              {(Array.isArray(settlements) ? settlements : []).filter(s => s.status === 'confirmed' || s.status === 'printed').length}
-            </div>
+            <div className="text-3xl font-bold mt-2">{completedCount}</div>
             {activeTab === 'confirmed' && (
               <div className="absolute top-2 right-2">
                 <Check className="w-4 h-4 text-white/80" />
@@ -1032,6 +1034,13 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
         <div className="flex items-center justify-between mb-4">
           <div className="flex space-x-3">
             <TabButton
+              active={activeTab === 'to_settle'}
+              onClick={() => setActiveTab('to_settle')}
+              icon={<FileText className="w-4 h-4" />}
+              label="待开结算单"
+              count={pendingSales.length}
+            />
+            <TabButton
               active={activeTab === 'pending'}
               onClick={() => setActiveTab('pending')}
               icon={<Clock className="w-4 h-4" />}
@@ -1042,30 +1051,28 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
               active={activeTab === 'confirmed'}
               onClick={() => setActiveTab('confirmed')}
               icon={<Check className="w-4 h-4" />}
-              label="已确认"
-            />
-            <TabButton
-              active={activeTab === 'all'}
-              onClick={() => setActiveTab('all')}
-              icon={<FileText className="w-4 h-4" />}
-              label="全部"
+              label="已完成"
+              count={completedCount}
             />
           </div>
-          <button
-            onClick={() => setShowSearchPanel(!showSearchPanel)}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all ${
-              showSearchPanel 
-                ? 'bg-cyan-100 text-cyan-700' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <Search className="w-4 h-4" />
-            <span>搜索</span>
-          </button>
+          {/* 搜索按钮 - 仅在待确认和已完成Tab中显示 */}
+          {(activeTab === 'pending' || activeTab === 'confirmed') && (
+            <button
+              onClick={() => setShowSearchPanel(!showSearchPanel)}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all ${
+                showSearchPanel 
+                  ? 'bg-cyan-100 text-cyan-700' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <Search className="w-4 h-4" />
+              <span>搜索</span>
+            </button>
+          )}
         </div>
 
-        {/* 搜索面板 */}
-        {showSearchPanel && (
+        {/* 搜索面板 - 仅在待确认和已完成Tab中显示 */}
+        {showSearchPanel && (activeTab === 'pending' || activeTab === 'confirmed') && (
           <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
               <div>
@@ -1135,8 +1142,8 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* 左侧：待结算销售单 */}
+        {/* 内容区域 - 根据Tab显示不同内容 */}
+        {activeTab === 'to_settle' && (
           <div id="pending-sales-section" className="bg-white rounded-xl shadow-sm p-6">
             <h2 className="text-lg font-semibold mb-4 flex items-center">
               <FileText className="w-5 h-5 mr-2 text-orange-500" />
@@ -1144,16 +1151,17 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
             </h2>
             
             {pendingSales.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p>暂无待结算销售单</p>
+              <div className="text-center py-12 text-gray-500">
+                <Package className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <p className="text-lg">暂无待结算销售单</p>
+                <p className="text-sm text-gray-400 mt-2">当销售单完成后会显示在这里等待开具结算单</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {pendingSales.map(order => (
                   <div
                     key={order.id}
-                    className="border border-gray-200 rounded-lg p-4 hover:border-orange-300 transition-colors cursor-pointer"
+                    className="border border-gray-200 rounded-lg p-4 hover:border-orange-300 hover:shadow-md transition-all cursor-pointer"
                     onClick={() => {
                       setSelectedSalesOrder(order);
                       setShowCreateForm(true);
@@ -1177,23 +1185,40 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
               </div>
             )}
           </div>
+        )}
 
-          {/* 右侧：结算单列表 */}
+        {(activeTab === 'pending' || activeTab === 'confirmed') && (
           <div className="bg-white rounded-xl shadow-sm p-6">
             <h2 className="text-lg font-semibold mb-4 flex items-center">
-              <Check className="w-5 h-5 mr-2 text-cyan-500" />
-              结算单列表
+              {activeTab === 'pending' ? (
+                <>
+                  <Clock className="w-5 h-5 mr-2 text-yellow-500" />
+                  待确认结算单
+                </>
+              ) : (
+                <>
+                  <Check className="w-5 h-5 mr-2 text-green-500" />
+                  已完成结算单
+                </>
+              )}
             </h2>
             
             {loading ? (
-              <div className="text-center py-8 text-gray-500">加载中...</div>
+              <div className="text-center py-12 text-gray-500">加载中...</div>
             ) : filteredSettlements.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p>暂无结算单</p>
+              <div className="text-center py-12 text-gray-500">
+                <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <p className="text-lg">
+                  {activeTab === 'pending' ? '暂无待确认结算单' : '暂无已完成结算单'}
+                </p>
+                <p className="text-sm text-gray-400 mt-2">
+                  {activeTab === 'pending' 
+                    ? '创建结算单后会显示在这里等待确认' 
+                    : '确认结算单后会显示在这里'}
+                </p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredSettlements.map(settlement => (
                   <div
                     key={settlement.id}
@@ -1238,7 +1263,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                     </div>
                     
                     {/* 操作按钮 */}
-                    <div className="flex space-x-2 mt-3">
+                    <div className="flex flex-wrap gap-2 mt-3">
                       {settlement.status === 'pending' && (
                         <>
                           <button
@@ -1355,7 +1380,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
               </div>
             )}
           </div>
-        </div>
+        )}
 
         {/* 创建结算单弹窗 */}
         {showCreateForm && selectedSalesOrder && (
@@ -2233,6 +2258,10 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                   <span className="text-sm text-gray-500">总克重</span>
                   <span className="font-medium">{refundingSettlement.total_weight?.toFixed(2)}g</span>
                 </div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-500">工费</span>
+                  <span className="font-medium text-orange-600">¥{refundingSettlement.labor_amount?.toFixed(2)}</span>
+                </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-500">金额</span>
                   <span className="font-bold text-red-600">¥{refundingSettlement.total_amount?.toFixed(2)}</span>
@@ -2247,7 +2276,10 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                     {refundingSettlement.sales_order.details.map((d, i) => (
                       <div key={i} className="flex justify-between text-sm bg-gray-50 px-3 py-2 rounded">
                         <span>{d.product_name}</span>
-                        <span className="text-gray-500">{d.weight}g</span>
+                        <div className="text-right">
+                          <span className="text-gray-500">{d.weight}g</span>
+                          <span className="text-orange-500 ml-2">工费 ¥{d.total_labor_cost?.toFixed(2) || (d.weight * d.labor_cost).toFixed(2)}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
