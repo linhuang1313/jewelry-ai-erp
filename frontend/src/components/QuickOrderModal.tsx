@@ -130,7 +130,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
       const response = await fetch(url);
       const data = await response.json();
       if (data.success) {
-        setCustomers(data.customers || []);
+        setCustomers(data.data?.customers || data.customers || []);
       }
     } catch (error) {
       console.error('获取客户列表失败', error);

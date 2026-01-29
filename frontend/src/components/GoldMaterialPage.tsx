@@ -422,13 +422,13 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
 
   // 加载客户列表
   const loadCustomers = useCallback(async () => {
-    const data = await apiGet<{ customers: Customer[] }>(
+    const data = await apiGet<{ data?: { customers: Customer[] }, customers?: Customer[] }>(
       '/api/customers',
       { showErrorToast: false }
     );
     
     if (data) {
-      setCustomers(data.customers || []);
+      setCustomers(data.data?.customers || data.customers || []);
     }
   }, []);
 
