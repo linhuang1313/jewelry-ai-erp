@@ -6,6 +6,7 @@ import {
   Search, RotateCcw, Filter, ArrowUpRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { QuickReturnModal } from './QuickReturnModal';
 
 // 类型定义
 interface SalesDetail {
@@ -204,6 +205,9 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
   const [refundingSettlement, setRefundingSettlement] = useState<SettlementOrder | null>(null);
   const [refundReason, setRefundReason] = useState('客户退货');
   const [refundDestination, setRefundDestination] = useState<'showroom' | 'warehouse'>('showroom');
+  
+  // 退货表单弹窗（用于销退到商品部的双重确认）
+  const [showReturnFormForRefund, setShowReturnFormForRefund] = useState(false);
 
   // 快捷提料弹窗
   const [showQuickWithdrawalForm, setShowQuickWithdrawalForm] = useState(false);
@@ -471,6 +475,21 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
   const handleRefund = async () => {
     if (!refundingSettlement) return;
     
+    // 如果是退到商品部，先弹出退货表单进行双重确认
+    if (refundDestination === 'warehouse') {
+      setShowRefundConfirm(false);
+      setShowReturnFormForRefund(true);
+      return;
+    }
+    
+    // 退到柜台则直接执行销退
+    await executeRefund();
+  };
+  
+  // 执行销退操作（内部函数，被 handleRefund 和退货表单回调调用）
+  const executeRefund = async () => {
+    if (!refundingSettlement) return;
+    
     try {
       // 第一步：如果结算单已确认/已打印，先撤销结算（回滚账务）
       if (refundingSettlement.status === 'confirmed' || refundingSettlement.status === 'printed') {
@@ -510,6 +529,13 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
       console.error('销退失败:', error);
       toast.error(error.message || '销退失败');
     }
+  };
+  
+  // 退货表单成功回调（用于销退到商品部的双重确认）
+  const handleReturnFormSuccess = async () => {
+    // 退货表单已创建退货单，现在执行销退流程
+    setShowReturnFormForRefund(false);
+    await executeRefund();
   };
 
   // 创建结算单（支持灵活支付）
@@ -2306,6 +2332,18 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
             </div>
           </div>
         )}
+        
+        {/* 退货表单弹窗（销退到商品部的双重确认） */}
+        <QuickReturnModal
+          isOpen={showReturnFormForRefund}
+          onClose={() => {
+            setShowReturnFormForRefund(false);
+            // 取消时恢复销退弹窗状态
+            setShowRefundConfirm(true);
+          }}
+          onSuccess={handleReturnFormSuccess}
+          userRole="counter"
+        />
       </div>
     </div>
   );

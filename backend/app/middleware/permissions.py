@@ -64,7 +64,7 @@ ROLE_PERMISSIONS = {
         'can_export': False,
         'can_delete': False,
         'can_return_to_supplier': False,
-        'can_return_to_warehouse': False,
+        'can_return_to_warehouse': True,   # 可以退货给商品部（销退时需要）
         'can_view_finance': False,
         # 金料管理权限
         'can_create_gold_receipt': True,   # 可以创建收料单（收到客户原料后）
