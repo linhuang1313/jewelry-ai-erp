@@ -517,7 +517,8 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                   placeholder={dataLoading ? '加载中...' : '输入供应商名称或拼音首字母'}
                   disabled={dataLoading}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
-                             focus:ring-2 focus:ring-red-500 focus:border-transparent disabled:bg-gray-100"
+                             focus:ring-2 focus:ring-red-500 focus:border-transparent disabled:bg-gray-100
+                             text-gray-900 placeholder:text-gray-400"
                 />
                 {showSupplierDropdown && (
                   <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-auto">
@@ -582,7 +583,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                     onChange={(e) => updateItem(index, 'product_name', e.target.value)}
                     onFocus={() => setActiveDropdownIndex(index)}
                     placeholder="选择或输入"
-                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
                   />
                   {activeDropdownIndex === index && (
                     <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-auto">
@@ -625,7 +626,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                     value={item.return_weight}
                     onChange={(e) => updateItem(index, 'return_weight', e.target.value)}
                     placeholder="克重"
-                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
                   />
                 </div>
                 
@@ -638,7 +639,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                     value={item.labor_cost}
                     onChange={(e) => updateItem(index, 'labor_cost', e.target.value)}
                     placeholder="0"
-                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
                   />
                 </div>
                 
@@ -650,7 +651,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                     value={item.piece_count}
                     onChange={(e) => updateItem(index, 'piece_count', e.target.value)}
                     placeholder="0"
-                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
                   />
                 </div>
                 
@@ -663,7 +664,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                     value={item.piece_labor_cost}
                     onChange={(e) => updateItem(index, 'piece_labor_cost', e.target.value)}
                     placeholder="0"
-                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
                   />
                 </div>
                 
@@ -707,7 +708,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                 value={formData.return_reason}
                 onChange={(e) => setFormData({ ...formData, return_reason: e.target.value })}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
-                           focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                           focus:ring-2 focus:ring-red-500 focus:border-transparent text-gray-900"
               >
                 {RETURN_REASONS.map(reason => (
                   <option key={reason} value={reason}>{reason}</option>
@@ -722,7 +723,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                 onChange={(e) => setFormData({ ...formData, reason_detail: e.target.value })}
                 placeholder="请详细说明退货原因（可选）"
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
-                           focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                           focus:ring-2 focus:ring-red-500 focus:border-transparent text-gray-900 placeholder:text-gray-400"
               />
             </div>
           </div>
@@ -736,7 +737,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
               placeholder="其他备注信息（可选）"
               rows={2}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
-                         focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                         focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none text-gray-900 placeholder:text-gray-400"
             />
           </div>
         </div>
