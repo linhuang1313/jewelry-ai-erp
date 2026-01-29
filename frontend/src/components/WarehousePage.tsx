@@ -2,9 +2,27 @@ import React, { useState, useEffect, useRef } from 'react';
 import { API_ENDPOINTS } from '../config';
 import {
   Package, MapPin, ArrowRight, ArrowLeft, Check, X, Clock, RefreshCw,
-  Plus, Send, Inbox, AlertTriangle, ChevronDown, Search, Filter, FileText
+  Plus, Send, Inbox, AlertTriangle, ChevronDown, Search, Filter, FileText,
+  AlertCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+// 带超时的 fetch 封装（默认 10 秒超时）
+const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout = 10000): Promise<Response> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('请求超时，请检查网络后重试');
+    }
+    throw error;
+  }
+};
 
 // 类型定义
 interface Location {
@@ -149,6 +167,15 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
   const [pendingTransferOrders, setPendingTransferOrders] = useState<TransferOrder[]>([]);
   const [pendingConfirmTransferOrders, setPendingConfirmTransferOrders] = useState<TransferOrder[]>([]);
   const [loading, setLoading] = useState(false);
+  // 独立的加载状态和错误状态（渐进式加载）
+  const [inventoryLoading, setInventoryLoading] = useState(true);
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
+  const [transfersLoading, setTransfersLoading] = useState(true);
+  const [transfersError, setTransfersError] = useState<string | null>(null);
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const [locationsError, setLocationsError] = useState<string | null>(null);
+  const [inboundLoading, setInboundLoading] = useState(true);
+  const [inboundError, setInboundError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocation, setSelectedLocation] = useState<number | null>(null);
   
@@ -222,8 +249,10 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
   }, []);
 
   const loadLocations = async () => {
+    setLocationsLoading(true);
+    setLocationsError(null);
     try {
-      const response = await fetch(API_ENDPOINTS.LOCATIONS);
+      const response = await fetchWithTimeout(API_ENDPOINTS.LOCATIONS, {}, 10000);
       if (response.ok) {
         const data = await response.json();
         setLocations(data);
@@ -247,23 +276,33 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
             to_location_id: productLoc.id.toString()
           }));
         }
+      } else {
+        setLocationsError('加载仓库位置失败');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('加载位置失败:', error);
+      setLocationsError(error.message || '加载仓库位置失败，请重试');
+    } finally {
+      setLocationsLoading(false);
     }
   };
 
   const loadInventorySummary = async () => {
-    setLoading(true);
+    setInventoryLoading(true);
+    setInventoryError(null);
     try {
-      const response = await fetch(API_ENDPOINTS.INVENTORY_SUMMARY);
+      const response = await fetchWithTimeout(API_ENDPOINTS.INVENTORY_SUMMARY, {}, 15000);
       if (response.ok) {
         const data = await response.json();
         setInventorySummary(data);
+      } else {
+        setInventoryError('加载库存数据失败，请重试');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('加载库存汇总失败:', error);
+      setInventoryError(error.message || '加载库存数据失败，请重试');
     } finally {
+      setInventoryLoading(false);
       setLoading(false);
     }
   };
@@ -310,8 +349,10 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
   };
 
   const loadTransfers = async () => {
+    setTransfersLoading(true);
+    setTransfersError(null);
     try {
-      const response = await fetch(API_ENDPOINTS.TRANSFER_ORDERS);
+      const response = await fetchWithTimeout(API_ENDPOINTS.TRANSFER_ORDERS, {}, 15000);
       if (response.ok) {
         const data = await response.json();
         setTransferOrders(data);
@@ -336,9 +377,14 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
         } else {
           setPendingConfirmTransferOrders([]);
         }
+      } else {
+        setTransfersError('加载转移单失败，请重试');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('加载转移单失败:', error);
+      setTransfersError(error.message || '加载转移单失败，请重试');
+    } finally {
+      setTransfersLoading(false);
     }
   };
 
@@ -360,8 +406,10 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
 
   // 加载最近入库单（供批量转移选择）
   const loadRecentInboundOrders = async () => {
+    setInboundLoading(true);
+    setInboundError(null);
     try {
-      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/inbound-orders?limit=30`);
+      const response = await fetchWithTimeout(`${API_ENDPOINTS.API_BASE_URL}/api/inbound-orders?limit=30`, {}, 15000);
       const data = await response.json();
       if (data.success && data.data) {
         setRecentInboundOrders(data.data.map((order: any) => ({
@@ -379,9 +427,14 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
             craft: d.craft
           }))
         })));
+      } else {
+        setInboundError('加载入库单数据失败');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('加载入库单失败:', error);
+      setInboundError(error.message || '加载入库单失败，请重试');
+    } finally {
+      setInboundLoading(false);
     }
   };
 
@@ -1185,8 +1238,22 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                   )}
 
                   {/* 库存列表 - 按品名 */}
-                  {loading ? (
-                    <div className="text-center py-12 text-gray-500">加载中...</div>
+                  {inventoryLoading ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                      加载中...
+                    </div>
+                  ) : inventoryError ? (
+                    <div className="text-center py-12">
+                      <AlertCircle className="w-12 h-12 mx-auto text-red-400 mb-4" />
+                      <p className="text-red-500 mb-4">{inventoryError}</p>
+                      <button
+                        onClick={loadInventorySummary}
+                        className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                      >
+                        点击重试
+                      </button>
+                    </div>
                   ) : filteredInventory.length === 0 ? (
                     <div className="text-center py-12">
                       <Package className="w-12 h-12 mx-auto text-gray-300 mb-4" />
@@ -1749,7 +1816,31 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
               </div>
 
               {/* 最近入库单快速选择（支持多选） */}
-              {batchItems.length === 0 && recentInboundOrders.length > 0 && (
+              {batchItems.length === 0 && inboundLoading && (
+                <div className="text-center py-12 text-gray-500">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                  加载入库单中...
+                </div>
+              )}
+              {batchItems.length === 0 && !inboundLoading && inboundError && (
+                <div className="text-center py-12">
+                  <AlertCircle className="w-12 h-12 mx-auto text-red-400 mb-4" />
+                  <p className="text-red-500 mb-4">{inboundError}</p>
+                  <button
+                    onClick={loadRecentInboundOrders}
+                    className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                  >
+                    点击重试
+                  </button>
+                </div>
+              )}
+              {batchItems.length === 0 && !inboundLoading && !inboundError && recentInboundOrders.length === 0 && (
+                <div className="text-center py-12">
+                  <FileText className="w-12 h-12 mx-auto text-gray-300 mb-4" />
+                  <p className="text-gray-500">暂无入库单数据</p>
+                </div>
+              )}
+              {batchItems.length === 0 && !inboundLoading && !inboundError && recentInboundOrders.length > 0 && (
                 <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                   {/* 筛选栏 */}
                   <div className="px-6 py-3 bg-gray-100 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
@@ -2011,7 +2102,23 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
           {/* 待接收 */}
           {activeTab === 'receive' && (
             <div>
-              {pendingTransferOrders.length === 0 ? (
+              {transfersLoading ? (
+                <div className="text-center py-12 text-gray-500">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                  加载中...
+                </div>
+              ) : transfersError ? (
+                <div className="text-center py-12">
+                  <AlertCircle className="w-12 h-12 mx-auto text-red-400 mb-4" />
+                  <p className="text-red-500 mb-4">{transfersError}</p>
+                  <button
+                    onClick={loadTransfers}
+                    className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                  >
+                    点击重试
+                  </button>
+                </div>
+              ) : pendingTransferOrders.length === 0 ? (
                 <div className="text-center py-12">
                   <Inbox className="w-12 h-12 mx-auto text-gray-300 mb-4" />
                   <p className="text-gray-500">暂无待接收的货品</p>
@@ -2094,7 +2201,23 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
           {/* 待确认（商品专员审批） */}
           {activeTab === 'confirm' && (
             <div>
-              {pendingConfirmTransferOrders.length === 0 ? (
+              {transfersLoading ? (
+                <div className="text-center py-12 text-gray-500">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                  加载中...
+                </div>
+              ) : transfersError ? (
+                <div className="text-center py-12">
+                  <AlertCircle className="w-12 h-12 mx-auto text-red-400 mb-4" />
+                  <p className="text-red-500 mb-4">{transfersError}</p>
+                  <button
+                    onClick={loadTransfers}
+                    className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                  >
+                    点击重试
+                  </button>
+                </div>
+              ) : pendingConfirmTransferOrders.length === 0 ? (
                 <div className="text-center py-12">
                   <Check className="w-12 h-12 mx-auto text-gray-300 mb-4" />
                   <p className="text-gray-500">暂无待确认的转移单</p>

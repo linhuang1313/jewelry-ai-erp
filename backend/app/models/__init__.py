@@ -427,10 +427,40 @@ class ReturnOrder(Base):
     images = Column(Text, nullable=True)  # 退货图片（JSON数组存储URL）
     remark = Column(Text, nullable=True)  # 备注
     
+    # 汇总字段（多商品支持）
+    total_weight = Column(Float, default=0.0)  # 总退货克重（汇总）
+    total_labor_cost = Column(Float, default=0.0)  # 总工费（汇总）
+    item_count = Column(Integer, default=1)  # 商品数量
+    
     # 关系
     from_location = relationship("Location", foreign_keys=[from_location_id])
     supplier = relationship("Supplier", foreign_keys=[supplier_id])
     inbound_order = relationship("InboundOrder", foreign_keys=[inbound_order_id])
+    details = relationship("ReturnOrderDetail", back_populates="order", cascade="all, delete-orphan")
+
+
+class ReturnOrderDetail(Base):
+    """退货单明细表 - 支持一个退货单包含多个商品"""
+    __tablename__ = "return_order_details"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, ForeignKey("return_orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # 商品信息
+    product_name = Column(String(200), nullable=False)  # 商品名称
+    return_weight = Column(Float, nullable=False)  # 退货克重
+    
+    # 工费信息
+    labor_cost = Column(Float, default=0.0)  # 克工费（元/克）
+    piece_count = Column(Integer, nullable=True)  # 件数
+    piece_labor_cost = Column(Float, nullable=True)  # 件工费（元/件）
+    total_labor_cost = Column(Float, default=0.0)  # 总工费 = 克工费*克重 + 件工费*件数
+    
+    # 备注
+    remark = Column(Text, nullable=True)
+    
+    # 关系
+    order = relationship("ReturnOrder", back_populates="details")
 
 
 # ============= 金料管理模型 =============

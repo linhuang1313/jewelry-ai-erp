@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { API_ENDPOINTS, API_BASE_URL } from '../config';
 import {
-  X, Package, AlertCircle, Loader2, Printer, Download, CheckCircle
+  X, Package, AlertCircle, Loader2, Printer, Download, CheckCircle, Plus, Trash2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -25,11 +25,21 @@ interface InventoryItem {
   location_name?: string;
 }
 
+interface ReturnItem {
+  product_name: string;
+  return_weight: string;
+  labor_cost: string;
+  piece_count: string;
+  piece_labor_cost: string;
+  remark: string;
+}
+
 interface ReturnResult {
   return_id: number;
   return_no: string;
-  product_name: string;
-  return_weight: number;
+  total_weight: number;
+  total_labor_cost: number;
+  item_count: number;
   return_reason: string;
   supplier_name?: string;
   from_location_name?: string;
@@ -44,6 +54,15 @@ interface QuickReturnModalProps {
 
 const RETURN_REASONS = ['质量问题', '款式不符', '数量差异', '工艺瑕疵', '其他'];
 
+const emptyItem: ReturnItem = {
+  product_name: '',
+  return_weight: '',
+  labor_cost: '',
+  piece_count: '',
+  piece_labor_cost: '',
+  remark: ''
+};
+
 export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
   isOpen,
   onClose,
@@ -55,7 +74,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [showProductDropdown, setShowProductDropdown] = useState(false);
+  const [activeDropdownIndex, setActiveDropdownIndex] = useState<number | null>(null);
   
   // 根据角色确定退货配置
   const getReturnConfig = () => {
@@ -83,10 +102,11 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
 
   const returnConfig = getReturnConfig();
 
-  // 表单数据
+  // 商品列表
+  const [items, setItems] = useState<ReturnItem[]>([{ ...emptyItem }]);
+  
+  // 其他表单数据
   const [formData, setFormData] = useState({
-    product_name: '',
-    return_weight: '',
     supplier_id: '',
     from_location_id: '',
     return_reason: '质量问题',
@@ -129,15 +149,15 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (!target.closest('.product-dropdown-container')) {
-        setShowProductDropdown(false);
+        setActiveDropdownIndex(null);
       }
     };
     
-    if (showProductDropdown) {
+    if (activeDropdownIndex !== null) {
       document.addEventListener('click', handleClickOutside);
       return () => document.removeEventListener('click', handleClickOutside);
     }
-  }, [showProductDropdown]);
+  }, [activeDropdownIndex]);
 
   const fetchSuppliers = async () => {
     try {
@@ -155,7 +175,6 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
     try {
       const res = await fetch(`${API_BASE_URL}/api/warehouse/inventory?location_id=${locationId}`);
       const data = await res.json();
-      // 处理返回格式，可能是数组或包含 items 字段的对象
       const items = Array.isArray(data) ? data : (data.items || data.inventory || []);
       setInventoryItems(items);
     } catch (error) {
@@ -174,14 +193,51 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
     }
   };
 
+  // 添加商品行
+  const addItem = () => {
+    setItems([...items, { ...emptyItem }]);
+  };
+
+  // 删除商品行
+  const removeItem = (index: number) => {
+    if (items.length > 1) {
+      setItems(items.filter((_, i) => i !== index));
+    }
+  };
+
+  // 更新商品行
+  const updateItem = (index: number, field: keyof ReturnItem, value: string) => {
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setItems(newItems);
+  };
+
+  // 计算单个商品的总工费
+  const calcItemLaborCost = (item: ReturnItem): number => {
+    const weight = parseFloat(item.return_weight) || 0;
+    const laborCost = parseFloat(item.labor_cost) || 0;
+    const pieceCount = parseInt(item.piece_count) || 0;
+    const pieceLaborCost = parseFloat(item.piece_labor_cost) || 0;
+    return weight * laborCost + pieceCount * pieceLaborCost;
+  };
+
+  // 计算汇总
+  const totalWeight = items.reduce((sum, item) => sum + (parseFloat(item.return_weight) || 0), 0);
+  const totalLaborCost = items.reduce((sum, item) => sum + calcItemLaborCost(item), 0);
+
   // 验证表单
   const validateForm = (): string | null => {
-    if (!formData.product_name.trim()) {
-      return '请输入商品名称';
+    // 验证商品列表
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item.product_name.trim()) {
+        return `第 ${i + 1} 行：请输入商品名称`;
+      }
+      if (!item.return_weight || parseFloat(item.return_weight) <= 0) {
+        return `第 ${i + 1} 行：请输入有效的退货克重`;
+      }
     }
-    if (!formData.return_weight || parseFloat(formData.return_weight) <= 0) {
-      return '请输入有效的退货克重';
-    }
+    
     if (returnConfig.needSupplier && !formData.supplier_id) {
       return '请选择供应商';
     }
@@ -201,15 +257,24 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
 
     setSubmitting(true);
     try {
+      // 构建请求数据
+      const requestItems = items.map(item => ({
+        product_name: item.product_name.trim(),
+        return_weight: parseFloat(item.return_weight),
+        labor_cost: parseFloat(item.labor_cost) || 0,
+        piece_count: item.piece_count ? parseInt(item.piece_count) : null,
+        piece_labor_cost: item.piece_labor_cost ? parseFloat(item.piece_labor_cost) : null,
+        remark: item.remark.trim() || null
+      }));
+
       const response = await fetch(
         `${API_ENDPOINTS.API_BASE_URL}/api/returns?created_by=${userRole}&user_role=${userRole}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            return_type: returnConfig.returnType, // 根据角色确定退货类型
-            product_name: formData.product_name.trim(),
-            return_weight: parseFloat(formData.return_weight),
+            return_type: returnConfig.returnType,
+            items: requestItems,
             supplier_id: returnConfig.needSupplier ? parseInt(formData.supplier_id) : null,
             from_location_id: parseInt(formData.from_location_id),
             return_reason: formData.return_reason,
@@ -224,15 +289,14 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
         toast.success(`退货单创建成功！单号：${data.return_order?.return_no || ''}`);
         setCreatedReturn(data.return_order);
         
-        // 找到供应商名称
         const selectedSupplierObj = suppliers.find(s => s.id === parseInt(formData.supplier_id));
         
-        // 调用成功回调，传递退货详情
         onSuccess?.({
           return_id: data.return_order?.id,
           return_no: data.return_order?.return_no || '',
-          product_name: formData.product_name.trim(),
-          return_weight: parseFloat(formData.return_weight),
+          total_weight: totalWeight,
+          total_labor_cost: totalLaborCost,
+          item_count: items.length,
           return_reason: formData.return_reason,
           supplier_name: selectedSupplierObj?.name,
           from_location_name: returnConfig.locationName
@@ -263,9 +327,8 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
 
   // 重置表单
   const handleReset = () => {
+    setItems([{ ...emptyItem }]);
     setFormData({
-      product_name: '',
-      return_weight: '',
       supplier_id: '',
       from_location_id: '',
       return_reason: '质量问题',
@@ -320,10 +383,10 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                 <span className="font-semibold text-green-900">退货单已创建</span>
               </div>
               <div className="text-sm text-green-800 space-y-1">
-                <p>商品名称：{createdReturn.product_name}</p>
-                <p>退货克重：{createdReturn.return_weight}克</p>
+                <p>商品数量：{createdReturn.item_count} 个</p>
+                <p>总退货克重：{createdReturn.total_weight?.toFixed(2)}克</p>
+                <p>总工费：¥{createdReturn.total_labor_cost?.toFixed(2)}</p>
                 <p>退货原因：{createdReturn.return_reason}</p>
-                <p>状态：待审批</p>
               </div>
             </div>
 
@@ -369,7 +432,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
       />
       
       {/* 弹窗内容 */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
         {/* 标题栏 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-red-50 to-orange-50">
           <div className="flex items-center space-x-3">
@@ -391,150 +454,215 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
 
         {/* 表单内容 */}
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {/* 商品名称 */}
-          <div className="relative product-dropdown-container">
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              <Package className="w-4 h-4 inline mr-1" />
-              商品名称 <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={formData.product_name}
-                onChange={(e) => setFormData({ ...formData, product_name: e.target.value })}
-                onFocus={() => setShowProductDropdown(true)}
-                placeholder="输入或选择商品名称"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
-                           focus:ring-2 focus:ring-red-500 focus:border-transparent pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowProductDropdown(!showProductDropdown)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
-              >
-                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
+          {/* 发起位置（固定显示） */}
+          <div className="flex items-center space-x-4">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">发起位置</label>
+              <div className="px-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 text-gray-700">
+                {returnConfig.locationName}
+              </div>
             </div>
-            {/* 下拉选择框 - 从当前位置库存中选择 */}
-            {showProductDropdown && (
-              <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-60 overflow-auto">
-                {(formData.product_name.trim() 
-                  ? inventoryItems.filter(item => 
-                      item.product_name.includes(formData.product_name)
-                    )
-                  : inventoryItems
-                ).slice(0, 20).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setFormData({ ...formData, product_name: item.product_name });
-                      setShowProductDropdown(false);
-                    }}
-                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-red-50 flex items-center justify-between border-b border-gray-50 last:border-b-0"
-                  >
-                    <span className="text-gray-700">{item.product_name}</span>
-                    <span className="font-mono text-orange-500 text-xs">库存: {item.weight?.toFixed(2) || 0}克</span>
-                  </button>
-                ))}
-                {inventoryItems.length === 0 && (
-                  <div className="px-4 py-4 text-center text-gray-400 text-sm">
-                    当前位置暂无库存商品
-                  </div>
-                )}
+            {/* 供应商（仅商品专员需要） */}
+            {returnConfig.needSupplier && (
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  供应商 <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.supplier_id}
+                  onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
+                             focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                >
+                  <option value="">请选择供应商</option>
+                  {suppliers.map(supplier => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
           </div>
 
-          {/* 退货克重 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              退货克重 <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={formData.return_weight}
-              onChange={(e) => setFormData({ ...formData, return_weight: e.target.value })}
-              placeholder="请输入退货克重"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
-                         focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            />
-          </div>
-
-          {/* 供应商（仅商品专员需要） */}
-          {returnConfig.needSupplier && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                供应商 <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.supplier_id}
-                onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
-                           focus:ring-2 focus:ring-red-500 focus:border-transparent"
+          {/* 商品列表 */}
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+              <span className="font-medium text-gray-700">退货商品明细</span>
+              <button
+                type="button"
+                onClick={addItem}
+                className="flex items-center space-x-1 text-sm text-red-600 hover:text-red-700"
               >
-                <option value="">请选择供应商</option>
-                {suppliers.map(supplier => (
-                  <option key={supplier.id} value={supplier.id}>
-                    {supplier.name}
-                  </option>
-                ))}
-              </select>
+                <Plus className="w-4 h-4" />
+                <span>添加商品</span>
+              </button>
             </div>
-          )}
-
-          {/* 发起位置（固定显示，不可修改） */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              发起位置 <span className="text-red-500">*</span>
-            </label>
-            <div className="w-full px-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 text-gray-700">
-              {returnConfig.locationName}
+            
+            {/* 表头 */}
+            <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gray-100 text-xs font-medium text-gray-600">
+              <div className="col-span-3">商品名称 *</div>
+              <div className="col-span-2">退货克重 *</div>
+              <div className="col-span-2">克工费(元/克)</div>
+              <div className="col-span-1">件数</div>
+              <div className="col-span-2">件工费(元/件)</div>
+              <div className="col-span-1">小计</div>
+              <div className="col-span-1"></div>
             </div>
-            <p className="mt-1 text-xs text-gray-500">此位置已根据您的角色自动设置</p>
+            
+            {/* 商品行 */}
+            {items.map((item, index) => (
+              <div key={index} className="grid grid-cols-12 gap-2 px-4 py-2 border-b border-gray-100 items-center">
+                {/* 商品名称 */}
+                <div className="col-span-3 relative product-dropdown-container">
+                  <input
+                    type="text"
+                    value={item.product_name}
+                    onChange={(e) => updateItem(index, 'product_name', e.target.value)}
+                    onFocus={() => setActiveDropdownIndex(index)}
+                    placeholder="选择或输入"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500"
+                  />
+                  {activeDropdownIndex === index && (
+                    <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-auto">
+                      {(item.product_name.trim() 
+                        ? inventoryItems.filter(inv => inv.product_name.includes(item.product_name))
+                        : inventoryItems
+                      ).slice(0, 15).map((inv) => (
+                        <button
+                          key={inv.id}
+                          type="button"
+                          onClick={() => {
+                            updateItem(index, 'product_name', inv.product_name);
+                            setActiveDropdownIndex(null);
+                          }}
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-red-50 flex items-center justify-between border-b border-gray-50 last:border-b-0"
+                        >
+                          <span className="text-gray-700 truncate">{inv.product_name}</span>
+                          <span className="font-mono text-orange-500 text-xs ml-2">{inv.weight?.toFixed(2)}g</span>
+                        </button>
+                      ))}
+                      {inventoryItems.length === 0 && (
+                        <div className="px-3 py-3 text-center text-gray-400 text-sm">暂无库存</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                
+                {/* 退货克重 */}
+                <div className="col-span-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={item.return_weight}
+                    onChange={(e) => updateItem(index, 'return_weight', e.target.value)}
+                    placeholder="克重"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500"
+                  />
+                </div>
+                
+                {/* 克工费 */}
+                <div className="col-span-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={item.labor_cost}
+                    onChange={(e) => updateItem(index, 'labor_cost', e.target.value)}
+                    placeholder="0"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500"
+                  />
+                </div>
+                
+                {/* 件数 */}
+                <div className="col-span-1">
+                  <input
+                    type="number"
+                    min="0"
+                    value={item.piece_count}
+                    onChange={(e) => updateItem(index, 'piece_count', e.target.value)}
+                    placeholder="0"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500"
+                  />
+                </div>
+                
+                {/* 件工费 */}
+                <div className="col-span-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={item.piece_labor_cost}
+                    onChange={(e) => updateItem(index, 'piece_labor_cost', e.target.value)}
+                    placeholder="0"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500"
+                  />
+                </div>
+                
+                {/* 小计 */}
+                <div className="col-span-1 text-sm font-medium text-orange-600">
+                  ¥{calcItemLaborCost(item).toFixed(2)}
+                </div>
+                
+                {/* 删除按钮 */}
+                <div className="col-span-1">
+                  {items.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            
+            {/* 汇总行 */}
+            <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-red-50 font-medium">
+              <div className="col-span-3 text-gray-700">合计 ({items.length} 个商品)</div>
+              <div className="col-span-2 text-red-600">{totalWeight.toFixed(2)} 克</div>
+              <div className="col-span-5"></div>
+              <div className="col-span-1 text-red-600">¥{totalLaborCost.toFixed(2)}</div>
+              <div className="col-span-1"></div>
+            </div>
           </div>
 
           {/* 退货原因 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              退货原因 <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={formData.return_reason}
-              onChange={(e) => setFormData({ ...formData, return_reason: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
-                         focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            >
-              {RETURN_REASONS.map(reason => (
-                <option key={reason} value={reason}>{reason}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* 详细说明 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              详细说明
-            </label>
-            <textarea
-              value={formData.reason_detail}
-              onChange={(e) => setFormData({ ...formData, reason_detail: e.target.value })}
-              placeholder="请详细说明退货原因（可选）"
-              rows={3}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
-                         focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                退货原因 <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.return_reason}
+                onChange={(e) => setFormData({ ...formData, return_reason: e.target.value })}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
+                           focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                {RETURN_REASONS.map(reason => (
+                  <option key={reason} value={reason}>{reason}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">详细说明</label>
+              <input
+                type="text"
+                value={formData.reason_detail}
+                onChange={(e) => setFormData({ ...formData, reason_detail: e.target.value })}
+                placeholder="请详细说明退货原因（可选）"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
+                           focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+            </div>
           </div>
 
           {/* 备注 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              备注
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">备注</label>
             <textarea
               value={formData.remark}
               onChange={(e) => setFormData({ ...formData, remark: e.target.value })}
@@ -547,32 +675,38 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
         </div>
 
         {/* 底部按钮 */}
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-end space-x-3">
-          <button
-            onClick={handleClose}
-            className="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all font-medium"
-          >
-            取消
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="px-6 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 
-                       transition-all font-medium disabled:bg-gray-300 disabled:cursor-not-allowed
-                       flex items-center space-x-2"
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>提交中...</span>
-              </>
-            ) : (
-              <span>提交退货单</span>
-            )}
-          </button>
+        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+          <div className="text-sm text-gray-600">
+            共 <span className="font-bold text-red-600">{items.length}</span> 个商品，
+            总退货 <span className="font-bold text-red-600">{totalWeight.toFixed(2)}</span> 克，
+            总工费 <span className="font-bold text-red-600">¥{totalLaborCost.toFixed(2)}</span>
+          </div>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={handleClose}
+              className="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all font-medium"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="px-6 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 
+                         transition-all font-medium disabled:bg-gray-300 disabled:cursor-not-allowed
+                         flex items-center space-x-2"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>提交中...</span>
+                </>
+              ) : (
+                <span>提交退货单</span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 };
-

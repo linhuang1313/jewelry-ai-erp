@@ -382,6 +382,44 @@ async def startup_event():
     finally:
         db.close()
     
+    # ========== 迁移 return_orders 表（多商品支持）==========
+    db = SessionLocal()
+    try:
+        return_order_columns = [
+            ("total_weight", "FLOAT DEFAULT 0.0"),
+            ("total_labor_cost", "FLOAT DEFAULT 0.0"),
+            ("item_count", "INTEGER DEFAULT 1"),
+        ]
+        
+        for col_name, col_type in return_order_columns:
+            result = db.execute(text(f"""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'return_orders' AND column_name = '{col_name}'
+            """))
+            if not result.fetchone():
+                db.execute(text(f"""
+                    ALTER TABLE return_orders 
+                    ADD COLUMN {col_name} {col_type}
+                """))
+                db.commit()
+                logger.info(f"已添加 {col_name} 列到 return_orders 表")
+    except Exception as e:
+        logger.warning(f"return_orders 迁移检查: {e}")
+        db.rollback()
+    finally:
+        db.close()
+    
+    # ========== 创建 return_order_details 表 ==========
+    from .models import ReturnOrderDetail
+    inspector = inspect(engine)
+    if 'return_order_details' not in inspector.get_table_names():
+        try:
+            ReturnOrderDetail.__table__.create(bind=engine)
+            logger.info("已创建 return_order_details 表")
+        except Exception as e:
+            logger.warning(f"创建 return_order_details 表失败（可能已存在）: {e}")
+    
     # ========== 创建 behavior_decision_logs 表 ==========
     from sqlalchemy import inspect
     from .models.behavior_log import BehaviorDecisionLog

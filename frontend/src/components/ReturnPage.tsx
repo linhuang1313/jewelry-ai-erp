@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '../config';
 import { hasPermission } from '../config/permissions';
+import { QuickReturnModal } from './QuickReturnModal';
 
 interface ReturnOrder {
   id: number;
@@ -28,19 +29,6 @@ interface ReturnOrder {
   remark: string | null;
 }
 
-interface Location {
-  id: number;
-  code: string;
-  name: string;
-  location_type: string;
-}
-
-interface Supplier {
-  id: number;
-  name: string;
-  supplier_no: string;
-}
-
 interface ReturnStats {
   total_count: number;
   pending_count: number;
@@ -57,8 +45,6 @@ interface ReturnPageProps {
   userRole: string;
 }
 
-const RETURN_REASONS = ['质量问题', '款式不符', '数量差异', '工艺瑕疵', '其他'];
-
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   pending: { label: '待审批', color: '#f59e0b' },
   approved: { label: '已批准', color: '#3b82f6' },
@@ -73,12 +59,9 @@ const TYPE_MAP: Record<string, string> = {
 
 export default function ReturnPage({ userRole }: ReturnPageProps) {
   const [returns, setReturns] = useState<ReturnOrder[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [stats, setStats] = useState<ReturnStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [locationInventory, setLocationInventory] = useState<Array<{ product_name: string; weight: number }>>([]);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState<ReturnOrder | null>(null);
   
@@ -86,63 +69,12 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
   const [filterType, setFilterType] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [keyword, setKeyword] = useState('');
-  
-  // 根据角色确定默认退货类型 - 使用权限系统
-  const getDefaultReturnType = () => {
-    if (hasPermission(userRole, 'canReturnToWarehouse') && !hasPermission(userRole, 'canReturnToSupplier')) {
-      return 'to_warehouse';  // 只能退给商品部
-    }
-    return 'to_supplier';  // 默认退给供应商
-  };
-
-  // 新建表单
-  const [formData, setFormData] = useState({
-    return_type: getDefaultReturnType(),
-    product_name: '',
-    return_weight: '',
-    from_location_id: '',
-    supplier_id: '',
-    return_reason: '质量问题',
-    reason_detail: '',
-    remark: '',
-  });
-
-  // 判断是否显示退货类型选择（需要两种退货权限都有才能选择）
-  const canSelectReturnType = hasPermission(userRole, 'canReturnToSupplier') && hasPermission(userRole, 'canReturnToWarehouse');
-
-  // 根据角色获取默认位置code - 使用权限系统
-  const getDefaultLocationCode = () => {
-    if (hasPermission(userRole, 'canReturnToWarehouse') && !hasPermission(userRole, 'canReturnToSupplier')) {
-      return 'showroom';  // 柜台在展厅
-    }
-    return 'warehouse';  // 商品专员在商品部仓库
-  };
 
   // 加载数据
   useEffect(() => {
     fetchReturns();
-    fetchLocations();
-    fetchSuppliers();
     fetchStats();
   }, [filterType, filterStatus, keyword]);
-
-  // 当位置数据加载完成后，自动设置默认位置
-  useEffect(() => {
-    if (locations.length > 0 && !formData.from_location_id) {
-      const defaultCode = getDefaultLocationCode();
-      const defaultLocation = locations.find(loc => loc.code === defaultCode);
-      if (defaultLocation) {
-        setFormData(prev => ({ ...prev, from_location_id: String(defaultLocation.id) }));
-      }
-    }
-  }, [locations, userRole]);
-
-  // 当位置变化时加载该位置的库存
-  useEffect(() => {
-    if (formData.from_location_id) {
-      fetchLocationInventory(formData.from_location_id);
-    }
-  }, [formData.from_location_id]);
 
   const fetchReturns = async () => {
     setLoading(true);
@@ -164,49 +96,6 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
     }
   };
 
-  const fetchLocations = async () => {
-    try {
-      const res = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/warehouse/locations`);
-      const data = await res.json();
-      setLocations(data || []);
-    } catch (error) {
-      console.error('获取位置失败:', error);
-    }
-  };
-
-  const fetchSuppliers = async () => {
-    try {
-      const res = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/suppliers`);
-      const data = await res.json();
-      if (data.success) {
-        setSuppliers(data.suppliers || []);
-      }
-    } catch (error) {
-      console.error('获取供应商失败:', error);
-    }
-  };
-
-  // 根据位置加载库存商品
-  const fetchLocationInventory = async (locationId: string) => {
-    if (!locationId) {
-      setLocationInventory([]);
-      return;
-    }
-    try {
-      const res = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/warehouse/inventory?location_id=${locationId}`);
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setLocationInventory(data.map((item: any) => ({
-          product_name: item.product_name,
-          weight: item.weight || item.total_weight || 0
-        })));
-      }
-    } catch (error) {
-      console.error('获取库存失败:', error);
-      setLocationInventory([]);
-    }
-  };
-
   const fetchStats = async () => {
     try {
       const res = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/returns/stats/summary`);
@@ -216,45 +105,6 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
       }
     } catch (error) {
       console.error('获取统计失败:', error);
-    }
-  };
-
-  const handleCreate = async () => {
-    if (!formData.product_name || !formData.return_weight) {
-      alert('请填写商品名称和退货克重');
-      return;
-    }
-    
-    if (formData.return_type === 'to_supplier' && !formData.supplier_id) {
-      alert('退给供应商时必须选择供应商');
-      return;
-    }
-
-    try {
-      const res = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/returns?created_by=${userRole}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          return_weight: parseFloat(formData.return_weight),
-          from_location_id: formData.from_location_id ? parseInt(formData.from_location_id) : null,
-          supplier_id: formData.supplier_id ? parseInt(formData.supplier_id) : null,
-        }),
-      });
-      const data = await res.json();
-      
-      if (data.success) {
-        alert(data.message);
-        setShowCreateModal(false);
-        resetForm();
-        fetchReturns();
-        fetchStats();
-      } else {
-        alert(data.message || '创建失败');
-      }
-    } catch (error) {
-      console.error('创建退货单失败:', error);
-      alert('创建失败，请重试');
     }
   };
 
@@ -331,27 +181,17 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
     }
   };
 
-  const resetForm = () => {
-    // 获取默认位置ID
-    const defaultCode = getDefaultLocationCode();
-    const defaultLocation = locations.find(loc => loc.code === defaultCode);
-    
-    setFormData({
-      return_type: getDefaultReturnType(),
-      product_name: '',
-      return_weight: '',
-      from_location_id: defaultLocation ? String(defaultLocation.id) : '',
-      supplier_id: '',
-      return_reason: '质量问题',
-      reason_detail: '',
-      remark: '',
-    });
-  };
-
   // 审批权限：管理层或商品专员（可以退给供应商的角色）
   const canApprove = hasPermission(userRole, 'canDelete') || hasPermission(userRole, 'canReturnToSupplier');
   // 创建权限：任何有退货权限的角色
   const canCreate = hasPermission(userRole, 'canReturnToSupplier') || hasPermission(userRole, 'canReturnToWarehouse');
+  
+  // 退货单创建成功后的回调
+  const handleReturnSuccess = () => {
+    setShowCreateModal(false);
+    fetchReturns();
+    fetchStats();
+  };
 
   return (
     <div style={{ padding: '24px', backgroundColor: '#0f172a', minHeight: '100vh', color: '#e2e8f0' }}>
@@ -523,178 +363,13 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
         </table>
       </div>
 
-      {/* 创建退货单弹窗 */}
-      {showCreateModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-        }}>
-          <div style={{ background: '#1e293b', borderRadius: '16px', padding: '24px', width: '500px', maxHeight: '90vh', overflow: 'auto', border: '1px solid #475569', position: 'relative' }}>
-            {/* 标题栏带关闭按钮 */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '18px' }}>📦 新建退货单</h3>
-              <button
-                onClick={() => { setShowCreateModal(false); resetForm(); }}
-                style={{ 
-                  background: 'none', 
-                  border: 'none', 
-                  color: '#94a3b8', 
-                  fontSize: '24px', 
-                  cursor: 'pointer',
-                  padding: '0 8px',
-                  lineHeight: 1
-                }}
-                onMouseOver={(e) => (e.currentTarget.style.color = '#f8fafc')}
-                onMouseOut={(e) => (e.currentTarget.style.color = '#94a3b8')}
-              >
-                ×
-              </button>
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* 退货类型 - 只有管理层可以选择，其他角色自动确定 */}
-              {canSelectReturnType ? (
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '13px' }}>退货类型 *</label>
-                  <select
-                    value={formData.return_type}
-                    onChange={(e) => setFormData({ ...formData, return_type: e.target.value, supplier_id: '' })}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid #475569', color: '#e2e8f0' }}
-                  >
-                    <option value="to_supplier">退给供应商</option>
-                    <option value="to_warehouse">退给商品部</option>
-                  </select>
-                </div>
-              ) : (
-                <div style={{ padding: '12px', background: '#0f172a', borderRadius: '8px', border: '1px solid #475569' }}>
-                  <span style={{ color: '#94a3b8', fontSize: '13px' }}>退货类型：</span>
-                  <span style={{ color: '#fbbf24', fontWeight: '600', marginLeft: '8px' }}>
-                    {formData.return_type === 'to_supplier' ? '退给供应商' : '退给商品部'}
-                  </span>
-                </div>
-              )}
-              
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '13px' }}>商品名称 *</label>
-                <select
-                  value={formData.product_name}
-                  onChange={(e) => setFormData({ ...formData, product_name: e.target.value })}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid #475569', color: '#e2e8f0', boxSizing: 'border-box' }}
-                >
-                  <option value="">选择商品</option>
-                  {locationInventory.map((item, idx) => (
-                    <option key={idx} value={item.product_name}>
-                      {item.product_name} ({item.weight}g)
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '13px' }}>退货克重 *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.return_weight}
-                  onChange={(e) => setFormData({ ...formData, return_weight: e.target.value })}
-                  placeholder="输入克重"
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid #475569', color: '#e2e8f0', boxSizing: 'border-box' }}
-                />
-              </div>
-              
-              {/* 发起位置 - 非管理层自动固定，管理层可选择 */}
-              {canSelectReturnType ? (
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '13px' }}>发起位置</label>
-                  <select
-                    value={formData.from_location_id}
-                    onChange={(e) => setFormData({ ...formData, from_location_id: e.target.value })}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid #475569', color: '#e2e8f0' }}
-                  >
-                    <option value="">选择位置（可选）</option>
-                    {locations.map((loc) => (
-                      <option key={loc.id} value={loc.id}>{loc.name}</option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <div style={{ padding: '12px', background: '#0f172a', borderRadius: '8px', border: '1px solid #475569' }}>
-                  <span style={{ color: '#94a3b8', fontSize: '13px' }}>发起位置：</span>
-                  <span style={{ color: '#fbbf24', fontWeight: '600', marginLeft: '8px' }}>
-                    {locations.find(loc => String(loc.id) === formData.from_location_id)?.name || '加载中...'}
-                  </span>
-                </div>
-              )}
-              
-              {formData.return_type === 'to_supplier' && (
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '13px' }}>供应商 *</label>
-                  <select
-                    value={formData.supplier_id}
-                    onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid #475569', color: '#e2e8f0' }}
-                  >
-                    <option value="">选择供应商</option>
-                    {suppliers.map((sup) => (
-                      <option key={sup.id} value={sup.id}>{sup.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '13px' }}>退货原因 *</label>
-                <select
-                  value={formData.return_reason}
-                  onChange={(e) => setFormData({ ...formData, return_reason: e.target.value })}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid #475569', color: '#e2e8f0' }}
-                >
-                  {RETURN_REASONS.map((reason) => (
-                    <option key={reason} value={reason}>{reason}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '13px' }}>详细说明</label>
-                <textarea
-                  value={formData.reason_detail}
-                  onChange={(e) => setFormData({ ...formData, reason_detail: e.target.value })}
-                  placeholder="详细描述问题..."
-                  rows={3}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid #475569', color: '#e2e8f0', resize: 'vertical', boxSizing: 'border-box' }}
-                />
-              </div>
-              
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '13px' }}>备注</label>
-                <input
-                  type="text"
-                  value={formData.remark}
-                  onChange={(e) => setFormData({ ...formData, remark: e.target.value })}
-                  placeholder="其他备注信息"
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid #475569', color: '#e2e8f0', boxSizing: 'border-box' }}
-                />
-              </div>
-            </div>
-            
-            <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => { setShowCreateModal(false); resetForm(); }}
-                style={{ padding: '10px 20px', borderRadius: '8px', background: '#475569', border: 'none', color: '#e2e8f0', cursor: 'pointer' }}
-              >
-                取消
-              </button>
-              <button
-                onClick={handleCreate}
-                style={{ padding: '10px 20px', borderRadius: '8px', background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)', border: 'none', color: 'white', cursor: 'pointer', fontWeight: '600' }}
-              >
-                提交退货
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 创建退货单弹窗 - 使用 QuickReturnModal 组件 */}
+      <QuickReturnModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={handleReturnSuccess}
+        userRole={userRole}
+      />
 
       {/* 详情弹窗 */}
       {showDetailModal && selectedReturn && (

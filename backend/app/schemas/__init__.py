@@ -542,11 +542,33 @@ class TransferOrderResponse(BaseModel):
 
 # ============= 退货单相关 Schema =============
 
-class ReturnOrderCreate(BaseModel):
-    """创建退货单"""
-    return_type: str  # to_supplier(退给供应商) / to_warehouse(退给商品部)
+class ReturnItemCreate(BaseModel):
+    """退货商品明细"""
     product_name: str  # 商品名称
     return_weight: float  # 退货克重
+    labor_cost: float = 0.0  # 克工费（元/克）
+    piece_count: Optional[int] = None  # 件数
+    piece_labor_cost: Optional[float] = None  # 件工费（元/件）
+    remark: Optional[str] = None  # 备注
+
+
+class ReturnItemResponse(BaseModel):
+    """退货商品明细响应"""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    product_name: str
+    return_weight: float
+    labor_cost: float
+    piece_count: Optional[int]
+    piece_labor_cost: Optional[float]
+    total_labor_cost: float
+    remark: Optional[str]
+
+
+class ReturnOrderCreate(BaseModel):
+    """创建退货单（支持多商品）"""
+    return_type: str  # to_supplier(退给供应商) / to_warehouse(退给商品部)
+    items: List[ReturnItemCreate]  # 商品明细列表
     from_location_id: Optional[int] = None  # 发起位置ID
     supplier_id: Optional[int] = None  # 供应商ID（退给供应商时必填）
     inbound_order_id: Optional[int] = None  # 关联入库单ID（可选）
@@ -573,13 +595,21 @@ class ReturnOrderComplete(BaseModel):
 
 
 class ReturnOrderResponse(BaseModel):
-    """退货单响应"""
+    """退货单响应（支持多商品）"""
     model_config = ConfigDict(from_attributes=True)
     id: int
     return_no: str
     return_type: str
-    product_name: str
-    return_weight: float
+    # 保留旧字段兼容（单商品时使用）
+    product_name: Optional[str] = None
+    return_weight: Optional[float] = None
+    # 新增汇总字段
+    total_weight: float = 0.0
+    total_labor_cost: float = 0.0
+    item_count: int = 1
+    # 明细列表
+    items: List[ReturnItemResponse] = []
+    # 位置和供应商
     from_location_id: Optional[int]
     from_location_name: Optional[str] = None
     supplier_id: Optional[int]
@@ -961,6 +991,8 @@ __all__ = [
     'InventoryTransferReceive',
     'InventoryTransferResponse',
     # 退货单
+    'ReturnItemCreate',
+    'ReturnItemResponse',
     'ReturnOrderCreate',
     'ReturnOrderApprove',
     'ReturnOrderReject',

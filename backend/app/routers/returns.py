@@ -11,9 +11,11 @@ import logging
 
 from ..database import get_db
 from ..timezone_utils import china_now, to_china_time
-from ..models import ReturnOrder, Location, Supplier, InboundOrder, LocationInventory
+from ..models import ReturnOrder, ReturnOrderDetail, Location, Supplier, InboundOrder, LocationInventory
 from ..schemas import (
-    ReturnOrderCreate, 
+    ReturnOrderCreate,
+    ReturnItemCreate,
+    ReturnItemResponse,
     ReturnOrderApprove, 
     ReturnOrderReject,
     ReturnOrderComplete,
@@ -29,7 +31,7 @@ RETURN_REASONS = ["质量问题", "款式不符", "数量差异", "工艺瑕疵"
 
 
 def build_return_response(return_order: ReturnOrder, db: Session) -> dict:
-    """构建退货单响应对象"""
+    """构建退货单响应对象（支持多商品）"""
     # 获取关联信息
     from_location_name = None
     supplier_name = None
@@ -59,12 +61,56 @@ def build_return_response(return_order: ReturnOrder, db: Session) -> dict:
         china_dt = dt + timedelta(hours=8)
         return china_dt.isoformat()
     
+    # 获取明细列表
+    details = db.query(ReturnOrderDetail).filter(
+        ReturnOrderDetail.order_id == return_order.id
+    ).all()
+    
+    # 构建明细列表（兼容旧数据：如果没有明细记录，使用主表字段构建）
+    items = []
+    if details:
+        for d in details:
+            items.append({
+                "id": d.id,
+                "product_name": d.product_name,
+                "return_weight": d.return_weight,
+                "labor_cost": d.labor_cost or 0.0,
+                "piece_count": d.piece_count,
+                "piece_labor_cost": d.piece_labor_cost,
+                "total_labor_cost": d.total_labor_cost or 0.0,
+                "remark": d.remark
+            })
+    else:
+        # 兼容旧数据：使用主表的单商品字段
+        items.append({
+            "id": 0,
+            "product_name": return_order.product_name,
+            "return_weight": return_order.return_weight,
+            "labor_cost": 0.0,
+            "piece_count": None,
+            "piece_labor_cost": None,
+            "total_labor_cost": 0.0,
+            "remark": None
+        })
+    
+    # 计算汇总（优先使用主表字段，如果没有则从明细计算）
+    total_weight = return_order.total_weight if return_order.total_weight else return_order.return_weight
+    total_labor_cost = return_order.total_labor_cost if return_order.total_labor_cost else 0.0
+    item_count = return_order.item_count if return_order.item_count else 1
+    
     return {
         "id": return_order.id,
         "return_no": return_order.return_no,
         "return_type": return_order.return_type,
         "product_name": return_order.product_name,
         "return_weight": return_order.return_weight,
+        # 新增汇总字段
+        "total_weight": total_weight,
+        "total_labor_cost": total_labor_cost,
+        "item_count": item_count,
+        # 明细列表
+        "items": items,
+        # 位置和供应商
         "from_location_id": return_order.from_location_id,
         "from_location_name": from_location_name,
         "supplier_id": return_order.supplier_id,
@@ -138,7 +184,7 @@ async def create_return_order(
     user_role: str = Query("manager", description="用户角色"),
     db: Session = Depends(get_db)
 ):
-    """创建退货单"""
+    """创建退货单（支持多商品）"""
     # 权限检查
     from ..middleware.permissions import has_permission
     if data.return_type == "to_supplier" and not has_permission(user_role, 'can_return_to_supplier'):
@@ -151,11 +197,16 @@ async def create_return_order(
         if data.return_type not in ["to_supplier", "to_warehouse"]:
             return {"success": False, "message": "无效的退货类型，应为 to_supplier 或 to_warehouse"}
         
+        # 验证商品列表
+        if not data.items or len(data.items) == 0:
+            return {"success": False, "message": "至少需要一个退货商品"}
+        
         # 验证退货原因
         if data.return_reason not in RETURN_REASONS:
             return {"success": False, "message": f"无效的退货原因，可选值: {', '.join(RETURN_REASONS)}"}
         
         # 退给供应商时验证供应商
+        supplier = None
         if data.return_type == "to_supplier":
             if not data.supplier_id:
                 return {"success": False, "message": "退给供应商时必须选择供应商"}
@@ -164,23 +215,28 @@ async def create_return_order(
                 return {"success": False, "message": "供应商不存在"}
         
         # 验证发起位置
+        location = None
         if data.from_location_id:
             location = db.query(Location).filter(Location.id == data.from_location_id).first()
             if not location:
                 return {"success": False, "message": "发起位置不存在"}
-            
-            # 检查库存是否充足
-            inventory = db.query(LocationInventory).filter(
-                LocationInventory.location_id == data.from_location_id,
-                LocationInventory.product_name == data.product_name
-            ).first()
-            
-            if not inventory or inventory.weight < data.return_weight:
-                available = inventory.weight if inventory else 0
-                return {
-                    "success": False, 
-                    "message": f"库存不足：{location.name} 的 {data.product_name} 仅有 {available}g，无法退货 {data.return_weight}g"
-                }
+        
+        # 验证每个商品的库存
+        inventory_map = {}  # 用于存储每个商品的库存记录
+        if data.from_location_id:
+            for item in data.items:
+                inventory = db.query(LocationInventory).filter(
+                    LocationInventory.location_id == data.from_location_id,
+                    LocationInventory.product_name == item.product_name
+                ).first()
+                
+                if not inventory or inventory.weight < item.return_weight:
+                    available = inventory.weight if inventory else 0
+                    return {
+                        "success": False, 
+                        "message": f"库存不足：{location.name} 的 {item.product_name} 仅有 {available:.2f}g，无法退货 {item.return_weight}g"
+                    }
+                inventory_map[item.product_name] = inventory
         
         # 生成退货单号
         now = china_now()
@@ -189,15 +245,22 @@ async def create_return_order(
         ).count()
         return_no = f"TH{now.strftime('%Y%m%d')}{count + 1:03d}"
         
+        # 计算汇总
+        total_weight = sum(item.return_weight for item in data.items)
+        total_labor_cost = 0.0
+        
         # 处理图片
         images_json = json.dumps(data.images) if data.images else None
         
-        # 创建退货单 - 直接完成，无需审批
+        # 创建退货单主表（兼容旧字段：使用第一个商品的名称和克重）
+        first_item = data.items[0]
         return_order = ReturnOrder(
             return_no=return_no,
             return_type=data.return_type,
-            product_name=data.product_name,
-            return_weight=data.return_weight,
+            product_name=first_item.product_name,  # 兼容旧字段
+            return_weight=first_item.return_weight,  # 兼容旧字段
+            total_weight=total_weight,  # 汇总字段
+            item_count=len(data.items),  # 商品数量
             from_location_id=data.from_location_id,
             supplier_id=data.supplier_id,
             inbound_order_id=data.inbound_order_id,
@@ -205,30 +268,54 @@ async def create_return_order(
             reason_detail=data.reason_detail,
             status="completed",  # 直接完成
             created_by=created_by,
-            completed_by=created_by,  # 创建人即完成人
-            completed_at=now,  # 立即完成
+            completed_by=created_by,
+            completed_at=now,
             images=images_json,
             remark=data.remark
         )
         
         db.add(return_order)
+        db.flush()  # 获取 return_order.id
         
-        # 直接扣减库存
-        if data.from_location_id:
-            inventory.weight -= data.return_weight
-            logger.info(f"扣减库存: {data.product_name} 在位置 {location.name} 扣减 {data.return_weight}g，剩余 {inventory.weight}g")
+        # 创建明细记录并扣减库存
+        for item in data.items:
+            # 计算单个商品的总工费
+            gram_cost = item.return_weight * item.labor_cost
+            piece_cost = (item.piece_count or 0) * (item.piece_labor_cost or 0)
+            item_total_labor_cost = gram_cost + piece_cost
+            total_labor_cost += item_total_labor_cost
+            
+            # 创建明细
+            detail = ReturnOrderDetail(
+                order_id=return_order.id,
+                product_name=item.product_name,
+                return_weight=item.return_weight,
+                labor_cost=item.labor_cost,
+                piece_count=item.piece_count,
+                piece_labor_cost=item.piece_labor_cost,
+                total_labor_cost=item_total_labor_cost,
+                remark=item.remark
+            )
+            db.add(detail)
+            
+            # 扣减库存
+            if data.from_location_id and item.product_name in inventory_map:
+                inventory = inventory_map[item.product_name]
+                inventory.weight -= item.return_weight
+                logger.info(f"扣减库存: {item.product_name} 在位置 {location.name} 扣减 {item.return_weight}g，剩余 {inventory.weight:.2f}g")
+        
+        # 更新主表的总工费
+        return_order.total_labor_cost = total_labor_cost
         
         # 如果是退给供应商，更新供应商统计和金料账户
-        if data.return_type == "to_supplier" and data.supplier_id:
-            supplier.total_supply_weight = round(supplier.total_supply_weight - data.return_weight, 3)
+        if data.return_type == "to_supplier" and supplier:
+            supplier.total_supply_weight = round(supplier.total_supply_weight - total_weight, 3)
             if supplier.total_supply_count > 0:
-                supplier.total_supply_count -= 1
-            logger.info(f"更新供应商统计: {supplier.name} 供货重量减少 {data.return_weight}g")
+                supplier.total_supply_count -= len(data.items)
+            logger.info(f"更新供应商统计: {supplier.name} 供货重量减少 {total_weight}g")
             
             # ========== 更新供应商金料账户（单一账户模式）==========
-            # 我们退货给供应商 = 减少我们欠供应商的料
             from ..models import SupplierGoldAccount, SupplierGoldTransaction
-            from ..timezone_utils import china_now
             
             supplier_gold_account = db.query(SupplierGoldAccount).filter(
                 SupplierGoldAccount.supplier_id == data.supplier_id
@@ -246,35 +333,35 @@ async def create_return_order(
                 db.flush()
             
             balance_before = supplier_gold_account.current_balance
-            supplier_gold_account.current_balance = round(supplier_gold_account.current_balance - data.return_weight, 3)  # 我们欠供应商的料减少
-            supplier_gold_account.total_received = round(supplier_gold_account.total_received - data.return_weight, 3)  # 累计收货减少（退回了）
+            supplier_gold_account.current_balance = round(supplier_gold_account.current_balance - total_weight, 3)
+            supplier_gold_account.total_received = round(supplier_gold_account.total_received - total_weight, 3)
             supplier_gold_account.last_transaction_at = china_now()
             
             # 创建供应商金料交易记录
             supplier_gold_tx = SupplierGoldTransaction(
                 supplier_id=data.supplier_id,
                 supplier_name=supplier.name,
-                transaction_type='return',  # 退货
-                gold_weight=data.return_weight,
+                transaction_type='return',
+                gold_weight=total_weight,
                 balance_before=balance_before,
                 balance_after=supplier_gold_account.current_balance,
                 status='active',
-                created_by=data.created_by or "系统",
-                remark=f"退货单：{return_no}，退货给供应商"
+                created_by=created_by or "系统",
+                remark=f"退货单：{return_no}，退货给供应商，共{len(data.items)}个商品"
             )
             db.add(supplier_gold_tx)
             
-            logger.info(f"供应商金料账户更新: 供应商={supplier.name}, 退货={data.return_weight}克, "
+            logger.info(f"供应商金料账户更新: 供应商={supplier.name}, 退货={total_weight}克, "
                        f"变动前={balance_before:.2f}克, 变动后={supplier_gold_account.current_balance:.2f}克")
         
         db.commit()
         db.refresh(return_order)
         
-        logger.info(f"退货单创建并完成: {return_no}, 类型: {data.return_type}, 商品: {data.product_name}, 克重: {data.return_weight}g, 库存已扣减")
+        logger.info(f"退货单创建并完成: {return_no}, 类型: {data.return_type}, 商品数: {len(data.items)}, 总克重: {total_weight}g, 总工费: {total_labor_cost}元")
         
         return {
             "success": True,
-            "message": f"退货单 {return_no} 创建成功，库存已扣减 {data.return_weight}g",
+            "message": f"退货单 {return_no} 创建成功，共 {len(data.items)} 个商品，总退货 {total_weight:.2f}g，总工费 {total_labor_cost:.2f}元",
             "return_order": build_return_response(return_order, db)
         }
     except Exception as e:
