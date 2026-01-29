@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from datetime import datetime
 from typing import Optional, List
+from collections import defaultdict
 import json
 import logging
 
@@ -30,46 +31,32 @@ router = APIRouter(prefix="/api/returns", tags=["退货管理"])
 RETURN_REASONS = ["质量问题", "款式不符", "数量差异", "工艺瑕疵", "其他"]
 
 
-def build_return_response(return_order: ReturnOrder, db: Session) -> dict:
-    """构建退货单响应对象（支持多商品）"""
-    # 获取关联信息
-    from_location_name = None
-    supplier_name = None
-    inbound_order_no = None
-    
-    if return_order.from_location_id:
-        location = db.query(Location).filter(Location.id == return_order.from_location_id).first()
-        if location:
-            from_location_name = location.name
-    
-    if return_order.supplier_id:
-        supplier = db.query(Supplier).filter(Supplier.id == return_order.supplier_id).first()
-        if supplier:
-            supplier_name = supplier.name
-    
-    if return_order.inbound_order_id:
-        inbound = db.query(InboundOrder).filter(InboundOrder.id == return_order.inbound_order_id).first()
-        if inbound:
-            inbound_order_no = inbound.order_no
-    
-    # 转换时间为中国时区（数据库存储的是 UTC 时间，需要加 8 小时）
-    def format_time_china(dt):
-        if dt is None:
-            return None
-        # 数据库存储的是 UTC 时间（无时区），需要加 8 小时转换为中国时间
-        from datetime import timedelta
-        china_dt = dt + timedelta(hours=8)
-        return china_dt.isoformat()
-    
-    # 获取明细列表
-    details = db.query(ReturnOrderDetail).filter(
-        ReturnOrderDetail.order_id == return_order.id
-    ).all()
+def format_time_china(dt):
+    """转换时间为中国时区（数据库存储的是 UTC 时间，需要加 8 小时）"""
+    if dt is None:
+        return None
+    from datetime import timedelta
+    china_dt = dt + timedelta(hours=8)
+    return china_dt.isoformat()
+
+
+def build_return_response_from_maps(
+    return_order: ReturnOrder,
+    location_map: dict,
+    supplier_map: dict,
+    inbound_map: dict,
+    details_list: List
+) -> dict:
+    """使用预加载的映射数据构建退货单响应（避免 N+1 查询）"""
+    # 从映射中获取关联数据
+    from_location_name = location_map.get(return_order.from_location_id)
+    supplier_name = supplier_map.get(return_order.supplier_id)
+    inbound_order_no = inbound_map.get(return_order.inbound_order_id)
     
     # 构建明细列表（兼容旧数据：如果没有明细记录，使用主表字段构建）
     items = []
-    if details:
-        for d in details:
+    if details_list:
+        for d in details_list:
             items.append({
                 "id": d.id,
                 "product_name": d.product_name,
@@ -104,13 +91,10 @@ def build_return_response(return_order: ReturnOrder, db: Session) -> dict:
         "return_type": return_order.return_type,
         "product_name": return_order.product_name,
         "return_weight": return_order.return_weight,
-        # 新增汇总字段
         "total_weight": total_weight,
         "total_labor_cost": total_labor_cost,
         "item_count": item_count,
-        # 明细列表
         "items": items,
-        # 位置和供应商
         "from_location_id": return_order.from_location_id,
         "from_location_name": from_location_name,
         "supplier_id": return_order.supplier_id,
@@ -132,6 +116,43 @@ def build_return_response(return_order: ReturnOrder, db: Session) -> dict:
     }
 
 
+def build_return_response(return_order: ReturnOrder, db: Session) -> dict:
+    """构建退货单响应对象（支持多商品）- 兼容单条查询场景"""
+    # 获取关联信息
+    from_location_name = None
+    supplier_name = None
+    inbound_order_no = None
+    
+    if return_order.from_location_id:
+        location = db.query(Location).filter(Location.id == return_order.from_location_id).first()
+        if location:
+            from_location_name = location.name
+    
+    if return_order.supplier_id:
+        supplier = db.query(Supplier).filter(Supplier.id == return_order.supplier_id).first()
+        if supplier:
+            supplier_name = supplier.name
+    
+    if return_order.inbound_order_id:
+        inbound = db.query(InboundOrder).filter(InboundOrder.id == return_order.inbound_order_id).first()
+        if inbound:
+            inbound_order_no = inbound.order_no
+    
+    # 获取明细列表
+    details = db.query(ReturnOrderDetail).filter(
+        ReturnOrderDetail.order_id == return_order.id
+    ).all()
+    
+    # 使用映射版本构建响应
+    location_map = {return_order.from_location_id: from_location_name} if from_location_name else {}
+    supplier_map = {return_order.supplier_id: supplier_name} if supplier_name else {}
+    inbound_map = {return_order.inbound_order_id: inbound_order_no} if inbound_order_no else {}
+    
+    return build_return_response_from_maps(
+        return_order, location_map, supplier_map, inbound_map, details
+    )
+
+
 @router.get("/reasons")
 async def get_return_reasons():
     """获取退货原因列表"""
@@ -148,9 +169,10 @@ async def get_return_orders(
     keyword: Optional[str] = Query(None, description="搜索关键词（商品名称）"),
     start_date: Optional[str] = Query(None, description="开始日期"),
     end_date: Optional[str] = Query(None, description="结束日期"),
+    limit: int = Query(100, ge=1, le=500, description="返回数量限制"),
     db: Session = Depends(get_db)
 ):
-    """获取退货单列表"""
+    """获取退货单列表（已优化：批量预加载避免 N+1 查询）"""
     try:
         query = db.query(ReturnOrder)
         
@@ -165,12 +187,43 @@ async def get_return_orders(
         if end_date:
             query = query.filter(ReturnOrder.created_at <= end_date + " 23:59:59")
         
-        returns = query.order_by(desc(ReturnOrder.created_at)).all()
+        # 添加分页限制
+        returns = query.order_by(desc(ReturnOrder.created_at)).limit(limit).all()
+        
+        if not returns:
+            return {"success": True, "returns": [], "total": 0}
+        
+        # ========== 批量预加载关联数据（避免 N+1 查询）==========
+        # 收集所有关联 ID
+        location_ids = {r.from_location_id for r in returns if r.from_location_id}
+        supplier_ids = {r.supplier_id for r in returns if r.supplier_id}
+        inbound_ids = {r.inbound_order_id for r in returns if r.inbound_order_id}
+        return_ids = [r.id for r in returns]
+        
+        # 批量查询（仅 4 次查询，而不是 N*4 次）
+        locations = db.query(Location).filter(Location.id.in_(location_ids)).all() if location_ids else []
+        suppliers = db.query(Supplier).filter(Supplier.id.in_(supplier_ids)).all() if supplier_ids else []
+        inbounds = db.query(InboundOrder).filter(InboundOrder.id.in_(inbound_ids)).all() if inbound_ids else []
+        details = db.query(ReturnOrderDetail).filter(ReturnOrderDetail.order_id.in_(return_ids)).all() if return_ids else []
+        
+        # 构建映射字典
+        location_map = {loc.id: loc.name for loc in locations}
+        supplier_map = {sup.id: sup.name for sup in suppliers}
+        inbound_map = {inb.id: inb.order_no for inb in inbounds}
+        details_map = defaultdict(list)
+        for d in details:
+            details_map[d.order_id].append(d)
+        
+        # 使用预加载数据批量构建响应
+        result = [
+            build_return_response_from_maps(r, location_map, supplier_map, inbound_map, details_map.get(r.id, []))
+            for r in returns
+        ]
         
         return {
             "success": True,
-            "returns": [build_return_response(r, db) for r in returns],
-            "total": len(returns)
+            "returns": result,
+            "total": len(result)
         }
     except Exception as e:
         logger.error(f"获取退货单列表失败: {e}", exc_info=True)
