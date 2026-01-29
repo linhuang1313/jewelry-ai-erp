@@ -12,6 +12,7 @@ from ..database import get_db
 from ..models import Supplier, InboundDetail, GoldMaterialTransaction, InboundOrder
 from ..schemas import SupplierCreate, SupplierResponse
 from ..utils.response import success_response
+from ..utils.pinyin_utils import to_pinyin_initials
 from typing import Optional
 from collections import defaultdict
 
@@ -48,6 +49,7 @@ async def get_suppliers(
                     "id": s.id,
                     "supplier_no": s.supplier_no,
                     "name": s.name,
+                    "pinyin_initials": to_pinyin_initials(s.name),
                     "phone": s.phone,
                     "address": s.address,
                     "contact_person": s.contact_person,

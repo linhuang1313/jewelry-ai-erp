@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 interface Supplier {
   id: number;
   name: string;
+  pinyin_initials?: string;
   supplier_no: string;
 }
 
@@ -77,6 +78,8 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
   const [dataLoading, setDataLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [activeDropdownIndex, setActiveDropdownIndex] = useState<number | null>(null);
+  const [supplierKeyword, setSupplierKeyword] = useState('');
+  const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
   
   // 根据角色确定退货配置
   const getReturnConfig = () => {
@@ -155,13 +158,32 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
       if (!target.closest('.product-dropdown-container')) {
         setActiveDropdownIndex(null);
       }
+      if (!target.closest('.supplier-dropdown-container')) {
+        setShowSupplierDropdown(false);
+      }
     };
     
-    if (activeDropdownIndex !== null) {
+    if (activeDropdownIndex !== null || showSupplierDropdown) {
       document.addEventListener('click', handleClickOutside);
       return () => document.removeEventListener('click', handleClickOutside);
     }
-  }, [activeDropdownIndex]);
+  }, [activeDropdownIndex, showSupplierDropdown]);
+
+  // 供应商搜索过滤
+  const filteredSuppliers = supplierKeyword.trim()
+    ? suppliers.filter(s => {
+        const keyword = supplierKeyword.toUpperCase();
+        return s.name.includes(supplierKeyword) ||
+               (s.pinyin_initials && s.pinyin_initials.includes(keyword));
+      })
+    : suppliers;
+
+  // 选择供应商
+  const selectSupplier = (supplier: Supplier) => {
+    setFormData(prev => ({ ...prev, supplier_id: String(supplier.id) }));
+    setSupplierKeyword(supplier.name);
+    setShowSupplierDropdown(false);
+  };
 
   const fetchSuppliers = async (): Promise<void> => {
     try {
@@ -350,6 +372,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
       reason_detail: '',
       remark: ''
     });
+    setSupplierKeyword('');
     setCreatedReturn(null);
   };
 
@@ -479,24 +502,46 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
             </div>
             {/* 供应商（仅商品专员需要） */}
             {returnConfig.needSupplier && (
-              <div className="flex-1">
+              <div className="flex-1 relative supplier-dropdown-container">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   供应商 <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={formData.supplier_id}
-                  onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
+                <input
+                  type="text"
+                  value={supplierKeyword}
+                  onChange={(e) => {
+                    setSupplierKeyword(e.target.value);
+                    setFormData(prev => ({ ...prev, supplier_id: '' }));
+                  }}
+                  onFocus={() => setShowSupplierDropdown(true)}
+                  placeholder={dataLoading ? '加载中...' : '输入供应商名称或拼音首字母'}
                   disabled={dataLoading}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
                              focus:ring-2 focus:ring-red-500 focus:border-transparent disabled:bg-gray-100"
-                >
-                  <option value="">{dataLoading ? '加载中...' : (suppliers.length === 0 ? '暂无供应商' : '请选择供应商')}</option>
-                  {suppliers.map(supplier => (
-                    <option key={supplier.id} value={supplier.id}>
-                      {supplier.name}
-                    </option>
-                  ))}
-                </select>
+                />
+                {showSupplierDropdown && (
+                  <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-auto">
+                    {filteredSuppliers.length > 0 ? (
+                      filteredSuppliers.slice(0, 15).map(supplier => (
+                        <button
+                          key={supplier.id}
+                          type="button"
+                          onClick={() => selectSupplier(supplier)}
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-red-50 flex items-center justify-between border-b border-gray-50 last:border-b-0"
+                        >
+                          <span className="text-gray-700">{supplier.name}</span>
+                          {supplier.pinyin_initials && (
+                            <span className="text-xs text-gray-400 ml-2">{supplier.pinyin_initials}</span>
+                          )}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-3 text-center text-gray-400 text-sm">
+                        {dataLoading ? '加载中...' : '暂无匹配的供应商'}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
