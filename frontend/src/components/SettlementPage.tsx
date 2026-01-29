@@ -472,6 +472,19 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
     if (!refundingSettlement) return;
     
     try {
+      // 第一步：如果结算单已确认/已打印，先撤销结算（回滚账务）
+      if (refundingSettlement.status === 'confirmed' || refundingSettlement.status === 'printed') {
+        const revertResponse = await fetch(
+          `${API_ENDPOINTS.API_BASE_URL}/api/settlement/orders/${refundingSettlement.id}/revert?user_role=settlement`,
+          { method: 'POST' }
+        );
+        if (!revertResponse.ok) {
+          const error = await revertResponse.json();
+          throw new Error(error.detail || '撤销结算失败');
+        }
+      }
+      
+      // 第二步：执行销退（商品退回库存）
       const params = new URLSearchParams({
         return_reason: refundReason,
         user_role: 'settlement',
@@ -493,9 +506,9 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
         const error = await response.json();
         toast.error(error.detail || '销退失败');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('销退失败:', error);
-      toast.error('销退失败');
+      toast.error(error.message || '销退失败');
     }
   };
 
