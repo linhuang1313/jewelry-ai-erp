@@ -370,6 +370,63 @@ async def create_return_order(
         return {"success": False, "message": f"创建退货单失败: {str(e)}"}
 
 
+@router.get("/stats/summary")
+async def get_return_stats(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """获取退货统计"""
+    try:
+        query = db.query(ReturnOrder)
+        
+        if start_date:
+            query = query.filter(ReturnOrder.created_at >= start_date)
+        if end_date:
+            query = query.filter(ReturnOrder.created_at <= end_date + " 23:59:59")
+        
+        returns = query.all()
+        
+        # 统计
+        total_count = len(returns)
+        pending_count = len([r for r in returns if r.status == "pending"])
+        approved_count = len([r for r in returns if r.status == "approved"])
+        completed_count = len([r for r in returns if r.status == "completed"])
+        rejected_count = len([r for r in returns if r.status == "rejected"])
+        
+        to_supplier_count = len([r for r in returns if r.return_type == "to_supplier"])
+        to_warehouse_count = len([r for r in returns if r.return_type == "to_warehouse"])
+        
+        total_weight = sum(r.return_weight for r in returns if r.status == "completed")
+        
+        # 按原因统计
+        reason_stats = {}
+        for r in returns:
+            if r.return_reason not in reason_stats:
+                reason_stats[r.return_reason] = {"count": 0, "weight": 0}
+            reason_stats[r.return_reason]["count"] += 1
+            if r.status == "completed":
+                reason_stats[r.return_reason]["weight"] += r.return_weight
+        
+        return {
+            "success": True,
+            "stats": {
+                "total_count": total_count,
+                "pending_count": pending_count,
+                "approved_count": approved_count,
+                "completed_count": completed_count,
+                "rejected_count": rejected_count,
+                "to_supplier_count": to_supplier_count,
+                "to_warehouse_count": to_warehouse_count,
+                "total_completed_weight": total_weight,
+                "reason_stats": reason_stats
+            }
+        }
+    except Exception as e:
+        logger.error(f"获取退货统计失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
+
+
 @router.get("/{return_id}")
 async def get_return_order(
     return_id: int,
@@ -562,63 +619,6 @@ async def complete_return_order(
     except Exception as e:
         logger.error(f"完成退货单失败: {e}", exc_info=True)
         db.rollback()
-        return {"success": False, "message": str(e)}
-
-
-@router.get("/stats/summary")
-async def get_return_stats(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    db: Session = Depends(get_db)
-):
-    """获取退货统计"""
-    try:
-        query = db.query(ReturnOrder)
-        
-        if start_date:
-            query = query.filter(ReturnOrder.created_at >= start_date)
-        if end_date:
-            query = query.filter(ReturnOrder.created_at <= end_date + " 23:59:59")
-        
-        returns = query.all()
-        
-        # 统计
-        total_count = len(returns)
-        pending_count = len([r for r in returns if r.status == "pending"])
-        approved_count = len([r for r in returns if r.status == "approved"])
-        completed_count = len([r for r in returns if r.status == "completed"])
-        rejected_count = len([r for r in returns if r.status == "rejected"])
-        
-        to_supplier_count = len([r for r in returns if r.return_type == "to_supplier"])
-        to_warehouse_count = len([r for r in returns if r.return_type == "to_warehouse"])
-        
-        total_weight = sum(r.return_weight for r in returns if r.status == "completed")
-        
-        # 按原因统计
-        reason_stats = {}
-        for r in returns:
-            if r.return_reason not in reason_stats:
-                reason_stats[r.return_reason] = {"count": 0, "weight": 0}
-            reason_stats[r.return_reason]["count"] += 1
-            if r.status == "completed":
-                reason_stats[r.return_reason]["weight"] += r.return_weight
-        
-        return {
-            "success": True,
-            "stats": {
-                "total_count": total_count,
-                "pending_count": pending_count,
-                "approved_count": approved_count,
-                "completed_count": completed_count,
-                "rejected_count": rejected_count,
-                "to_supplier_count": to_supplier_count,
-                "to_warehouse_count": to_warehouse_count,
-                "total_completed_weight": total_weight,
-                "reason_stats": reason_stats
-            }
-        }
-    except Exception as e:
-        logger.error(f"获取退货统计失败: {e}", exc_info=True)
         return {"success": False, "message": str(e)}
 
 
