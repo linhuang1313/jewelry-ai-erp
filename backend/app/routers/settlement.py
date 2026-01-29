@@ -1291,11 +1291,13 @@ async def download_settlement_order(
                 buffer.seek(0)
                 
                 filename = f"settlement_{settlement.settlement_no}.pdf"
-                return StreamingResponse(
-                    buffer,
+                pdf_content = buffer.getvalue()
+                return Response(
+                    content=pdf_content,
                     media_type="application/pdf",
                     headers={
                         "Content-Disposition": f'attachment; filename="{filename}"',
+                        "Content-Length": str(len(pdf_content)),
                         "Access-Control-Allow-Origin": "*",
                     }
                 )
