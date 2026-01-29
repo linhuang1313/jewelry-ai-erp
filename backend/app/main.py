@@ -6965,6 +6965,48 @@ async def get_inventory_by_barcode(
         return {"success": False, "error": str(e)}
 
 
+@app.delete("/api/inventory/cleanup-no-barcode")
+async def cleanup_no_barcode_inventory(db: Session = Depends(get_db)):
+    """
+    删除没有条码的入库明细记录
+    
+    警告：此操作不可撤销！
+    删除 product_code 为 NULL、空字符串或 '-' 的记录
+    """
+    try:
+        # 查找没有条码的记录
+        records = db.query(InboundDetail).filter(
+            (InboundDetail.product_code == None) | 
+            (InboundDetail.product_code == '') |
+            (InboundDetail.product_code == '-')
+        ).all()
+        
+        # 记录将要删除的数量
+        count = len(records)
+        
+        if count == 0:
+            return {"success": True, "message": "没有找到需要删除的记录", "deleted_count": 0}
+        
+        # 删除记录
+        for record in records:
+            db.delete(record)
+        
+        db.commit()
+        
+        logger.info(f"成功删除 {count} 条无条码的入库明细记录")
+        
+        return {
+            "success": True, 
+            "message": f"成功删除 {count} 条无条码的入库明细记录",
+            "deleted_count": count
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"删除无条码记录失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e), "deleted_count": 0}
+
+
 @app.post("/api/inventory/merge-product-names")
 async def merge_product_names(
     old_name: str = Query(..., description="原商品名称（要被合并的）"),
