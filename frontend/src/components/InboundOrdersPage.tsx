@@ -656,6 +656,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-left text-gray-500">
+                          <th className="pb-2 font-medium">条码</th>
                           <th className="pb-2 font-medium">商品名称</th>
                           <th className="pb-2 font-medium">重量(克)</th>
                           <th className="pb-2 font-medium">克工费</th>
@@ -668,6 +669,11 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                       <tbody className="divide-y divide-gray-200">
                         {(editingOrderId === order.id ? editingDetails : order.details).map((detail) => (
                           <tr key={detail.id}>
+                            <td className="py-2">
+                              <span className="font-mono text-xs text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
+                                {detail.product_code || '-'}
+                              </span>
+                            </td>
                             <td className="py-2">
                               {editingOrderId === order.id ? (
                                 <input
