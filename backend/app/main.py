@@ -2665,6 +2665,19 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
                 "error": "validation_failed"
             }
         
+        # ========== 验证商品名称必须在预定义列表中 ==========
+        from .models import ProductCode as ProductCodeModel
+        valid_product = db.query(ProductCodeModel).filter(
+            ProductCodeModel.name == product_name,
+            ProductCodeModel.code_type == 'predefined'
+        ).first()
+        if not valid_product:
+            return {
+                "success": False,
+                "message": f"商品名称 '{product_name}' 不在预定义列表中，请选择有效的商品编码",
+                "error": "invalid_product_name"
+            }
+        
         # ========== 珐琅产品自动生成F编码 ==========
         # 如果产品名称或工艺包含"珐琅"，且没有提供product_code，自动生成F编码
         craft = card_data.get("craft", "")
@@ -3271,6 +3284,21 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
                         "product_name": item.product_name,
                         "success": False,
                         "error": "商品信息不完整或无效"
+                    })
+                    continue
+                
+                # 验证商品名称必须在预定义列表中
+                valid_product = db.query(ProductCodeModel).filter(
+                    ProductCodeModel.name == product_name,
+                    ProductCodeModel.code_type == 'predefined'
+                ).first()
+                if not valid_product:
+                    error_count += 1
+                    results.append({
+                        "index": idx + 1,
+                        "product_name": product_name,
+                        "success": False,
+                        "error": f"商品名称 '{product_name}' 不在预定义列表中"
                     })
                     continue
                 
@@ -7005,6 +7033,77 @@ async def cleanup_no_barcode_inventory(db: Session = Depends(get_db)):
         db.rollback()
         logger.error(f"删除无条码记录失败: {e}", exc_info=True)
         return {"success": False, "message": str(e), "deleted_count": 0}
+
+
+@app.delete("/api/inventory/cleanup-invalid-products")
+async def cleanup_invalid_products(
+    preview: bool = Query(True, description="预览模式，不实际删除"),
+    db: Session = Depends(get_db)
+):
+    """
+    删除商品名称不在预定义编码表中的库存记录
+    
+    警告：此操作不可撤销！
+    删除 inventory 和 inbound_details 中商品名称不在 product_codes 预定义列表中的记录
+    """
+    try:
+        from .models import ProductCode as ProductCodeModel
+        
+        # 1. 获取所有预定义商品名称
+        valid_names = db.query(ProductCodeModel.name).filter(
+            ProductCodeModel.code_type == 'predefined'
+        ).all()
+        valid_name_set = {name[0] for name in valid_names}
+        
+        if not valid_name_set:
+            return {"success": False, "message": "预定义商品列表为空，无法执行清理"}
+        
+        # 2. 查找 inventory 中无效记录
+        invalid_inventory = db.query(Inventory).filter(
+            ~Inventory.product_name.in_(valid_name_set)
+        ).all()
+        
+        # 3. 查找 inbound_details 中无效记录
+        invalid_details = db.query(InboundDetail).filter(
+            ~InboundDetail.product_name.in_(valid_name_set)
+        ).all()
+        
+        # 4. 预览模式返回统计
+        if preview:
+            return {
+                "success": True,
+                "preview": True,
+                "valid_product_count": len(valid_name_set),
+                "inventory_to_delete": len(invalid_inventory),
+                "inbound_details_to_delete": len(invalid_details),
+                "sample_inventory": [i.product_name for i in invalid_inventory[:20]],
+                "sample_details": list(set([d.product_name for d in invalid_details[:20]]))
+            }
+        
+        # 5. 执行删除
+        inventory_count = len(invalid_inventory)
+        details_count = len(invalid_details)
+        
+        for record in invalid_inventory:
+            db.delete(record)
+        for record in invalid_details:
+            db.delete(record)
+        
+        db.commit()
+        
+        logger.info(f"清理非预定义商品: 删除 {inventory_count} 条库存记录, {details_count} 条入库明细")
+        
+        return {
+            "success": True,
+            "message": f"成功删除 {inventory_count} 条库存记录和 {details_count} 条入库明细",
+            "inventory_deleted": inventory_count,
+            "details_deleted": details_count
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"清理非预定义商品失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e)}
 
 
 @app.post("/api/inventory/merge-product-names")

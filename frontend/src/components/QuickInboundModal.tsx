@@ -79,6 +79,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
   const [searchResults, setSearchResults] = useState<{rowId: string, results: ProductCode[]}[]>([]);
   const [batchAddCount, setBatchAddCount] = useState<string>('10'); // 批量添加行数
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null); // 当前打开的下拉框
+  const [nameSearchKeyword, setNameSearchKeyword] = useState<string>(''); // 商品名称搜索关键词
   
   // 珐琅产品批量生成状态
   const [showEnamelGenerator, setShowEnamelGenerator] = useState(false);
@@ -229,6 +230,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
         : row
     ));
     setSearchResults(prev => prev.filter(r => r.rowId !== rowId));
+    setNameSearchKeyword(''); // 清除搜索关键词
   };
 
   // 计算单行总工费
@@ -640,15 +642,35 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                     <div className="relative">
                       <input
                         type="text"
-                        value={row.productName}
-                        onChange={(e) => updateRow(row.id, 'productName', e.target.value)}
-                        onFocus={() => setOpenDropdownId(`name-${row.id}`)}
-                        placeholder="点击选择"
+                        value={openDropdownId === `name-${row.id}` ? nameSearchKeyword : row.productName}
+                        onChange={(e) => {
+                          // 只更新搜索关键词，不直接修改 productName
+                          setNameSearchKeyword(e.target.value);
+                          // 如果用户开始输入，清除已选择的商品名称
+                          if (row.productName && e.target.value !== row.productName) {
+                            setRows(prev => prev.map(r => 
+                              r.id === row.id ? { ...r, productName: '', productCode: '' } : r
+                            ));
+                          }
+                        }}
+                        onFocus={() => {
+                          setOpenDropdownId(`name-${row.id}`);
+                          setNameSearchKeyword(row.productName);
+                        }}
+                        placeholder="点击选择商品"
                         className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500 cursor-pointer"
                       />
                       {/* 下拉箭头 */}
                       <button
-                        onClick={() => setOpenDropdownId(openDropdownId === `name-${row.id}` ? null : `name-${row.id}`)}
+                        onClick={() => {
+                          if (openDropdownId === `name-${row.id}`) {
+                            setOpenDropdownId(null);
+                            setNameSearchKeyword('');
+                          } else {
+                            setOpenDropdownId(`name-${row.id}`);
+                            setNameSearchKeyword(row.productName);
+                          }
+                        }}
                         className="absolute right-1 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
                       >
                         <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -659,10 +681,10 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                     {/* 商品名称下拉选择框 */}
                     {openDropdownId === `name-${row.id}` && (
                       <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-auto min-w-[200px]">
-                        {(row.productName.trim() 
+                        {(nameSearchKeyword.trim() 
                           ? productCodes.filter(pc => 
-                              pc.name.includes(row.productName) ||
-                              pc.code.toUpperCase().includes(row.productName.toUpperCase())
+                              pc.name.includes(nameSearchKeyword) ||
+                              pc.code.toUpperCase().includes(nameSearchKeyword.toUpperCase())
                             )
                           : productCodes
                         ).slice(0, 20).map((pc) => (
