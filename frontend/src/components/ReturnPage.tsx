@@ -3,12 +3,30 @@ import { API_ENDPOINTS } from '../config';
 import { hasPermission } from '../config/permissions';
 import { QuickReturnModal } from './QuickReturnModal';
 
+// 退货商品明细
+interface ReturnOrderItem {
+  id: number;
+  product_name: string;
+  return_weight: number;
+  labor_cost: number;
+  piece_count: number | null;
+  piece_labor_cost: number | null;
+  total_labor_cost: number;
+  remark: string | null;
+}
+
 interface ReturnOrder {
   id: number;
   return_no: string;
   return_type: string;
   product_name: string;
   return_weight: number;
+  // 多商品汇总字段
+  total_weight: number;
+  total_labor_cost: number;
+  item_count: number;
+  items: ReturnOrderItem[];
+  // 位置和供应商
   from_location_id: number | null;
   from_location_name: string | null;
   supplier_id: number | null;
@@ -446,14 +464,63 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
                 <span style={{ color: '#94a3b8' }}>退货类型</span>
                 <span style={{ color: '#f8fafc' }}>{TYPE_MAP[selectedReturn.return_type]}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#0f172a', borderRadius: '8px' }}>
-                <span style={{ color: '#94a3b8' }}>商品名称</span>
-                <span style={{ color: '#f8fafc' }}>{selectedReturn.product_name}</span>
+              {/* 商品明细列表 */}
+              <div style={{ padding: '12px', background: '#0f172a', borderRadius: '8px' }}>
+                <div style={{ color: '#94a3b8', marginBottom: '10px', fontWeight: '600' }}>
+                  📦 商品明细 ({selectedReturn.item_count || 1} 件)
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {selectedReturn.items && selectedReturn.items.length > 0 ? (
+                    selectedReturn.items.map((item, index) => (
+                      <div key={item.id || index} style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        padding: '8px 12px', 
+                        background: '#1e293b', 
+                        borderRadius: '6px',
+                        borderLeft: '3px solid #fbbf24'
+                      }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ color: '#f8fafc', fontWeight: '500' }}>{item.product_name}</div>
+                          <div style={{ color: '#94a3b8', fontSize: '12px', marginTop: '2px' }}>
+                            工费: ¥{item.total_labor_cost?.toFixed(2) || '0.00'}
+                            {item.piece_count ? ` | ${item.piece_count}件` : ''}
+                          </div>
+                        </div>
+                        <div style={{ color: '#fbbf24', fontWeight: '600', fontSize: '14px' }}>
+                          {item.return_weight}g
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      padding: '8px 12px', 
+                      background: '#1e293b', 
+                      borderRadius: '6px',
+                      borderLeft: '3px solid #fbbf24'
+                    }}>
+                      <span style={{ color: '#f8fafc' }}>{selectedReturn.product_name}</span>
+                      <span style={{ color: '#fbbf24', fontWeight: '600' }}>{selectedReturn.return_weight}g</span>
+                    </div>
+                  )}
+                </div>
               </div>
+              
+              {/* 汇总信息 */}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#0f172a', borderRadius: '8px' }}>
-                <span style={{ color: '#94a3b8' }}>退货克重</span>
-                <span style={{ color: '#fbbf24', fontWeight: '600' }}>{selectedReturn.return_weight}g</span>
+                <span style={{ color: '#94a3b8' }}>总退货克重</span>
+                <span style={{ color: '#fbbf24', fontWeight: '600' }}>{selectedReturn.total_weight || selectedReturn.return_weight}g</span>
               </div>
+              {(selectedReturn.total_labor_cost ?? 0) > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#0f172a', borderRadius: '8px' }}>
+                  <span style={{ color: '#94a3b8' }}>总工费</span>
+                  <span style={{ color: '#10b981', fontWeight: '600' }}>¥{selectedReturn.total_labor_cost?.toFixed(2)}</span>
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#0f172a', borderRadius: '8px' }}>
                 <span style={{ color: '#94a3b8' }}>退货原因</span>
                 <span style={{ color: '#f8fafc' }}>{selectedReturn.return_reason}</span>
