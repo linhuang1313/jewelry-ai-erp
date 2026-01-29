@@ -423,6 +423,7 @@ class LocationInventoryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     product_name: str
+    pinyin_initials: Optional[str] = None  # 拼音首字母，用于搜索
     location_id: int
     location_name: Optional[str] = None  # 位置名称（额外字段）
     location_code: Optional[str] = None  # 位置代码（额外字段）

@@ -21,6 +21,7 @@ interface Location {
 interface InventoryItem {
   id: number;
   product_name: string;
+  pinyin_initials?: string;
   weight: number;
   location_name?: string;
 }
@@ -541,7 +542,11 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                   {activeDropdownIndex === index && (
                     <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-auto">
                       {(item.product_name.trim() 
-                        ? inventoryItems.filter(inv => inv.product_name.includes(item.product_name))
+                        ? inventoryItems.filter(inv => {
+                            const keyword = item.product_name.toUpperCase();
+                            return inv.product_name.includes(item.product_name) ||
+                                   (inv.pinyin_initials && inv.pinyin_initials.includes(keyword));
+                          })
                         : inventoryItems
                       ).slice(0, 15).map((inv) => (
                         <button

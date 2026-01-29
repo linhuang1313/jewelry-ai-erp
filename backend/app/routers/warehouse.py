@@ -12,6 +12,7 @@ import logging
 from ..database import get_db
 from ..timezone_utils import china_now
 from ..models import Location, LocationInventory, InventoryTransfer, Inventory, InventoryTransferOrder, InventoryTransferItem
+from ..utils.pinyin_utils import to_pinyin_initials
 from ..schemas import (
     LocationCreate,
     LocationResponse,
@@ -144,12 +145,13 @@ async def get_location_inventory(
     
     items = query.order_by(Location.id, LocationInventory.product_name).all()
     
-    # 添加位置信息
+    # 添加位置信息和拼音首字母
     result = []
     for item in items:
         item_dict = {
             "id": item.id,
             "product_name": item.product_name,
+            "pinyin_initials": to_pinyin_initials(item.product_name),
             "location_id": item.location_id,
             "location_name": item.location.name if item.location else None,
             "location_code": item.location.code if item.location else None,
