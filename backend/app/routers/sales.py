@@ -257,9 +257,12 @@ async def get_sales_orders(
     salesperson: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    limit: int = Query(100, ge=1, le=500, description="返回数量限制"),
     db: Session = Depends(get_db)
 ):
-    """获取销售单列表"""
+    """获取销售单列表（已优化：批量查询避免 N+1）"""
+    from collections import defaultdict
+    
     try:
         query = db.query(SalesOrder)
         
@@ -282,12 +285,28 @@ async def get_sales_orders(
             except:
                 pass
         
-        orders = query.order_by(desc(SalesOrder.order_date)).limit(100).all()
+        orders = query.order_by(desc(SalesOrder.order_date)).limit(limit).all()
         
-        # 加载明细
+        if not orders:
+            return {"success": True, "orders": []}
+        
+        # ========== 批量查询优化：避免 N+1 问题 ==========
+        order_ids = [o.id for o in orders]
+        
+        # 批量查询所有销售明细（1 次查询）
+        all_details = db.query(SalesDetail).filter(
+            SalesDetail.order_id.in_(order_ids)
+        ).all()
+        
+        # 构建映射字典
+        details_map = defaultdict(list)
+        for d in all_details:
+            details_map[d.order_id].append(d)
+        
+        # 构建结果（使用预加载数据，无额外查询）
         result = []
         for order in orders:
-            details = db.query(SalesDetail).filter(SalesDetail.order_id == order.id).all()
+            details = details_map.get(order.id, [])
             order_response = SalesOrderResponse.model_validate(order)
             order_response.details = [SalesDetailResponse.model_validate(d).model_dump(mode='json') for d in details]
             result.append(order_response.model_dump(mode='json'))

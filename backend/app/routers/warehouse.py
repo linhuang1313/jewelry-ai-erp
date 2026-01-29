@@ -2,7 +2,7 @@
 仓库/分仓库存管理 API 路由
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_
 from typing import List, Optional
 from datetime import datetime
@@ -130,10 +130,14 @@ async def delete_location(
 async def get_location_inventory(
     location_id: Optional[int] = None,
     product_name: Optional[str] = None,
+    limit: int = Query(500, ge=1, le=2000, description="返回数量限制"),
     db: Session = Depends(get_db)
 ):
-    """获取分仓库存列表"""
-    query = db.query(LocationInventory).join(Location)
+    """获取分仓库存列表（已优化：joinedload 预加载避免 N+1）"""
+    # 使用 joinedload 预加载关联的 Location 对象
+    query = db.query(LocationInventory).options(
+        joinedload(LocationInventory.location)
+    )
     
     if location_id:
         query = query.filter(LocationInventory.location_id == location_id)
@@ -143,9 +147,9 @@ async def get_location_inventory(
     # 只返回有库存的记录
     query = query.filter(LocationInventory.weight > 0)
     
-    items = query.order_by(Location.id, LocationInventory.product_name).all()
+    items = query.order_by(LocationInventory.location_id, LocationInventory.product_name).limit(limit).all()
     
-    # 添加位置信息和拼音首字母
+    # 添加位置信息和拼音首字母（关联数据已预加载，无额外查询）
     result = []
     for item in items:
         item_dict = {
@@ -234,10 +238,15 @@ async def get_transfers(
     status: Optional[str] = None,
     from_location_id: Optional[int] = None,
     to_location_id: Optional[int] = None,
+    limit: int = Query(100, ge=1, le=500, description="返回数量限制"),
     db: Session = Depends(get_db)
 ):
-    """获取货品转移单列表"""
-    query = db.query(InventoryTransfer)
+    """获取货品转移单列表（已优化：joinedload 预加载避免 N+1）"""
+    # 使用 joinedload 预加载关联的 Location 对象
+    query = db.query(InventoryTransfer).options(
+        joinedload(InventoryTransfer.from_location),
+        joinedload(InventoryTransfer.to_location)
+    )
     
     if status:
         query = query.filter(InventoryTransfer.status == status)
@@ -246,9 +255,9 @@ async def get_transfers(
     if to_location_id:
         query = query.filter(InventoryTransfer.to_location_id == to_location_id)
     
-    transfers = query.order_by(InventoryTransfer.created_at.desc()).all()
+    transfers = query.order_by(InventoryTransfer.created_at.desc()).limit(limit).all()
     
-    # 添加位置名称
+    # 添加位置名称（关联数据已预加载，无额外查询）
     result = []
     for t in transfers:
         t_dict = {

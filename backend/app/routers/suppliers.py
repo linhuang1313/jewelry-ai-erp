@@ -25,9 +25,10 @@ router = APIRouter(prefix="/api/suppliers", tags=["供应商管理"])
 async def get_suppliers(
     keyword: str = None,
     status: str = "active",
+    limit: int = Query(100, ge=1, le=500, description="返回数量限制"),
     db: Session = Depends(get_db)
 ):
-    """获取供应商列表"""
+    """获取供应商列表（已优化：添加数量限制）"""
     try:
         query = db.query(Supplier)
         
@@ -40,7 +41,7 @@ async def get_suppliers(
                 (Supplier.phone.contains(keyword))
             )
         
-        suppliers = query.order_by(desc(Supplier.create_time)).all()
+        suppliers = query.order_by(desc(Supplier.create_time)).limit(limit).all()
         
         return {
             "success": True,
@@ -218,7 +219,7 @@ async def get_supplier_debt_summary(
     db: Session = Depends(get_db)
 ):
     """
-    获取供应商欠料统计
+    获取供应商欠料统计（已优化：批量查询避免 N+1）
     
     计算逻辑：
     - 入库重量：从 InboundDetail 按 supplier_id 汇总
@@ -226,7 +227,30 @@ async def get_supplier_debt_summary(
     - 欠料 = 入库重量 - 已付料重量
     """
     try:
-        # 获取所有活跃供应商
+        # ========== 批量查询优化：避免 N+1 问题 ==========
+        # 批量查询所有供应商的入库重量（1 次查询）
+        inbound_weights = db.query(
+            InboundDetail.supplier_id,
+            func.sum(InboundDetail.weight).label('total_weight')
+        ).filter(
+            InboundDetail.supplier_id.isnot(None)
+        ).group_by(InboundDetail.supplier_id).all()
+        
+        # 批量查询所有供应商的已付料重量（1 次查询）
+        paid_weights = db.query(
+            GoldMaterialTransaction.supplier_id,
+            func.sum(GoldMaterialTransaction.gold_weight).label('total_weight')
+        ).filter(
+            GoldMaterialTransaction.supplier_id.isnot(None),
+            GoldMaterialTransaction.transaction_type == 'expense',
+            GoldMaterialTransaction.status == 'confirmed'
+        ).group_by(GoldMaterialTransaction.supplier_id).all()
+        
+        # 构建映射字典
+        inbound_map = {row.supplier_id: float(row.total_weight or 0) for row in inbound_weights}
+        paid_map = {row.supplier_id: float(row.total_weight or 0) for row in paid_weights}
+        
+        # 获取所有活跃供应商（1 次查询）
         suppliers = db.query(Supplier).filter(Supplier.status == "active").all()
         
         result = []
@@ -235,19 +259,9 @@ async def get_supplier_debt_summary(
         total_debt = 0.0
         
         for supplier in suppliers:
-            # 入库重量（按供应商汇总）
-            inbound_weight = db.query(func.sum(InboundDetail.weight)).filter(
-                InboundDetail.supplier_id == supplier.id
-            ).scalar() or 0.0
-            
-            # 已付料重量（expense 类型，已确认状态）
-            paid_weight = db.query(func.sum(GoldMaterialTransaction.gold_weight)).filter(
-                GoldMaterialTransaction.supplier_id == supplier.id,
-                GoldMaterialTransaction.transaction_type == 'expense',
-                GoldMaterialTransaction.status == 'confirmed'
-            ).scalar() or 0.0
-            
-            # 欠料 = 入库 - 已付
+            # 从映射中获取数据（O(1) 查找，无数据库查询）
+            inbound_weight = inbound_map.get(supplier.id, 0.0)
+            paid_weight = paid_map.get(supplier.id, 0.0)
             debt_weight = inbound_weight - paid_weight
             
             # 只显示有入库记录的供应商

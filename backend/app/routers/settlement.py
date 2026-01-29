@@ -39,24 +39,43 @@ router = APIRouter(prefix="/api/settlement", tags=["结算管理"])
 
 @router.get("/pending-sales", response_model=List[SalesOrderResponse])
 async def get_pending_sales_orders(
+    limit: int = Query(100, ge=1, le=500, description="返回数量限制"),
     db: Session = Depends(get_db)
 ):
-    """获取待结算的销售单列表"""
-    # 查找状态为"待结算"且没有结算单的销售单
+    """获取待结算的销售单列表（已优化：批量查询避免 N+1）"""
+    from collections import defaultdict
+    
+    # 查找状态为"待结算"的销售单
     orders = db.query(SalesOrder).filter(
         SalesOrder.status == "待结算"
-    ).order_by(SalesOrder.create_time.desc()).all()
+    ).order_by(SalesOrder.create_time.desc()).limit(limit).all()
     
+    if not orders:
+        return []
+    
+    # ========== 批量查询优化：避免 N+1 问题 ==========
+    order_ids = [o.id for o in orders]
+    
+    # 批量查询所有结算单（1 次查询）
+    existing_settlements = db.query(SettlementOrder).filter(
+        SettlementOrder.sales_order_id.in_(order_ids)
+    ).all()
+    settlement_set = {s.sales_order_id for s in existing_settlements}
+    
+    # 批量查询所有销售明细（1 次查询）
+    all_details = db.query(SalesDetail).filter(
+        SalesDetail.order_id.in_(order_ids)
+    ).all()
+    details_map = defaultdict(list)
+    for d in all_details:
+        details_map[d.order_id].append(d)
+    
+    # 构建结果（使用预加载数据，无额外查询）
     result = []
     for order in orders:
         # 检查是否已有结算单
-        existing_settlement = db.query(SettlementOrder).filter(
-            SettlementOrder.sales_order_id == order.id
-        ).first()
-        
-        if not existing_settlement:
-            # 加载明细
-            details = db.query(SalesDetail).filter(SalesDetail.order_id == order.id).all()
+        if order.id not in settlement_set:
+            details = details_map.get(order.id, [])
             order_dict = {
                 "id": order.id,
                 "order_no": order.order_no,
