@@ -411,6 +411,7 @@ async def startup_event():
         db.close()
     
     # ========== 创建 return_order_details 表 ==========
+    from sqlalchemy import inspect
     from .models import ReturnOrderDetail
     inspector = inspect(engine)
     if 'return_order_details' not in inspector.get_table_names():
