@@ -731,6 +731,33 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
     }
   };
 
+  // 下载结算单 PDF
+  const handleDownload = async (settlement: SettlementOrder) => {
+    try {
+      const url = `${API_ENDPOINTS.API_BASE_URL}/api/settlement/orders/${settlement.id}/download?format=pdf`;
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || '下载失败');
+      }
+      
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `结算单_${settlement.settlement_no}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(downloadUrl);
+      toast.success('下载成功');
+    } catch (error) {
+      console.error('下载失败:', error);
+      toast.error('下载失败，请稍后重试');
+    }
+  };
+
   // 打开开具收料单弹窗
   const openReceiptForm = (settlement: SettlementOrder) => {
     setSelectedSettlementForReceipt(settlement);
@@ -1217,7 +1244,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                       {/* 下载按钮 - 已确认/已打印时显示 */}
                       {(settlement.status === 'confirmed' || settlement.status === 'printed') && (
                         <button
-                          onClick={() => window.open(`${API_ENDPOINTS.API_BASE_URL}/api/settlement/orders/${settlement.id}/download?format=pdf`, '_blank')}
+                          onClick={() => handleDownload(settlement)}
                           className="flex items-center justify-center space-x-1 px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors text-sm"
                         >
                           <Download className="w-4 h-4" />

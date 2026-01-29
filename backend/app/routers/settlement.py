@@ -202,11 +202,27 @@ async def get_settlement_orders(
     
     orders = query.order_by(SettlementOrder.created_at.desc()).limit(limit).all()
     
+    # ========== 批量查询优化：避免 N+1 问题 ==========
+    # 1. 收集所有需要查询的销售单ID
+    sales_order_ids = [o.sales_order_id for o in orders if o.sales_order_id]
+    
+    # 2. 批量查询所有销售单
+    sales_orders = db.query(SalesOrder).filter(SalesOrder.id.in_(sales_order_ids)).all() if sales_order_ids else []
+    sales_order_map = {so.id: so for so in sales_orders}
+    
+    # 3. 批量查询所有销售明细
+    from collections import defaultdict
+    all_details = db.query(SalesDetail).filter(SalesDetail.order_id.in_(sales_order_ids)).all() if sales_order_ids else []
+    details_map = defaultdict(list)
+    for d in all_details:
+        details_map[d.order_id].append(d)
+    
+    # 4. 构建响应（不再触发额外查询）
     result = []
     for order in orders:
-        # 加载关联的销售单
-        sales_order = db.query(SalesOrder).filter(SalesOrder.id == order.sales_order_id).first()
-        details = db.query(SalesDetail).filter(SalesDetail.order_id == order.sales_order_id).all() if sales_order else []
+        # 从缓存中获取关联的销售单
+        sales_order = sales_order_map.get(order.sales_order_id)
+        details = details_map.get(order.sales_order_id, [])
         
         sales_order_response = None
         if sales_order:
