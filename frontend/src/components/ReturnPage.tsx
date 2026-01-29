@@ -181,6 +181,44 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
     }
   };
 
+  // 打印退货单
+  const handlePrintReturn = async (returnOrder: ReturnOrder) => {
+    try {
+      const url = `${API_ENDPOINTS.API_BASE_URL}/api/returns/${returnOrder.id}/download?format=html`;
+      const response = await fetch(url);
+      const html = await response.text();
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(html);
+        printWindow.document.close();
+        printWindow.print();
+      }
+    } catch (error) {
+      console.error('打印失败:', error);
+      alert('打印失败，请重试');
+    }
+  };
+
+  // 下载退货单 PDF
+  const handleDownloadReturn = async (returnOrder: ReturnOrder) => {
+    try {
+      const url = `${API_ENDPOINTS.API_BASE_URL}/api/returns/${returnOrder.id}/download?format=pdf`;
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `退货单_${returnOrder.return_no}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('下载失败:', error);
+      alert('下载失败，请重试');
+    }
+  };
+
   // 审批权限：管理层或商品专员（可以退给供应商的角色）
   const canApprove = hasPermission(userRole, 'canDelete') || hasPermission(userRole, 'canReturnToSupplier');
   // 创建权限：任何有退货权限的角色
@@ -476,7 +514,19 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
               )}
             </div>
             
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
+              <button
+                onClick={() => handlePrintReturn(selectedReturn)}
+                style={{ padding: '10px 20px', borderRadius: '8px', background: '#3b82f6', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                🖨️ 打印
+              </button>
+              <button
+                onClick={() => handleDownloadReturn(selectedReturn)}
+                style={{ padding: '10px 20px', borderRadius: '8px', background: '#10b981', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                📥 下载
+              </button>
               <button
                 onClick={() => { setShowDetailModal(false); setSelectedReturn(null); }}
                 style={{ padding: '10px 20px', borderRadius: '8px', background: '#475569', border: 'none', color: '#e2e8f0', cursor: 'pointer' }}
