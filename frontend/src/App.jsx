@@ -134,7 +134,9 @@ function App() {
     return 'sales'
   })
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false)
+  const [roleLoading, setRoleLoading] = useState(false)  // 角色切换加载状态
   const roleDropdownRef = useRef(null)
+  const roleHistoryCache = useRef({})  // 角色历史记录缓存
   
   // 待处理转移单数量（用于分仓库存按钮badge）
   const [pendingTransferCount, setPendingTransferCount] = useState(0)
@@ -246,56 +248,94 @@ function App() {
     })
   }
 
-  // 加载指定角色的历史记录（从后端API获取并同步到localStorage）
+  // 加载指定角色的历史记录（优化版：优先使用缓存/localStorage，后台静默同步API）
   const loadRoleHistory = async (role) => {
-    try {
-      // 先从后端API获取该角色的会话列表
-      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-sessions?user_role=${role}&limit=50`)
-      const data = await response.json()
-      
-      if (data.success && Array.isArray(data.sessions)) {
-        // 将后端会话数据转换为前端对话记录格式
-        const history = data.sessions.map(session => ({
-          id: session.session_id,
-          title: session.summary || '新对话',
-          messages: [], // 消息内容在加载时再获取
-          createdAt: session.start_time || new Date().toISOString(),
-          updatedAt: session.end_time || new Date().toISOString(),
-          messageCount: session.message_count,
-          lastIntent: session.last_intent
-        }))
-        
-        // 同步到localStorage
-        const historyKey = getHistoryKey(role)
-        localStorage.setItem(historyKey, JSON.stringify(history))
-        setConversationHistory(history)
-        return history
-      } else {
-        // 如果API失败，从localStorage读取
-        const historyKey = getHistoryKey(role)
-        const parsed = JSON.parse(localStorage.getItem(historyKey) || '[]')
-        const history = Array.isArray(parsed) ? parsed : []
-        setConversationHistory(history)
-        return history
-      }
-    } catch (error) {
-      console.error('从后端加载历史记录失败，使用本地缓存:', error)
-      // 如果API失败，从localStorage读取
-      const historyKey = getHistoryKey(role)
-      try {
-        const parsed = JSON.parse(localStorage.getItem(historyKey) || '[]')
-        const history = Array.isArray(parsed) ? parsed : []
-        setConversationHistory(history)
-        return history
-      } catch {
-        setConversationHistory([])
-        return []
-      }
+    const historyKey = getHistoryKey(role)
+    
+    // 1. 首先检查内存缓存（5分钟有效期）
+    const cached = roleHistoryCache.current[role]
+    if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+      setConversationHistory(cached.data)
+      return cached.data
     }
+    
+    // 2. 立即从 localStorage 加载（快速响应）
+    let localHistory = []
+    try {
+      const parsed = JSON.parse(localStorage.getItem(historyKey) || '[]')
+      localHistory = Array.isArray(parsed) ? parsed : []
+      setConversationHistory(localHistory)
+    } catch {
+      localHistory = []
+      setConversationHistory([])
+    }
+    
+    // 3. 后台静默同步 API 数据（不阻塞 UI）
+    // 使用 setTimeout 让 UI 先更新
+    setTimeout(async () => {
+      try {
+        const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-sessions?user_role=${role}&limit=50`)
+        const data = await response.json()
+        
+        if (data.success && Array.isArray(data.sessions)) {
+          const history = data.sessions.map(session => ({
+            id: session.session_id,
+            title: session.summary || '新对话',
+            messages: [],
+            createdAt: session.start_time || new Date().toISOString(),
+            updatedAt: session.end_time || new Date().toISOString(),
+            messageCount: session.message_count,
+            lastIntent: session.last_intent
+          }))
+          
+          // 更新 localStorage
+          localStorage.setItem(historyKey, JSON.stringify(history))
+          
+          // 更新内存缓存
+          roleHistoryCache.current[role] = {
+            data: history,
+            timestamp: Date.now()
+          }
+          
+          // 只有当前角色匹配时才更新 UI
+          // 避免切换角色后旧请求覆盖新数据
+          setConversationHistory(prev => {
+            // 如果本地已有数据，合并保留本地的消息内容
+            if (localHistory.length > 0) {
+              return history.map(h => {
+                const local = localHistory.find(l => l.id === h.id)
+                return local && local.messages?.length > 0 ? { ...h, messages: local.messages } : h
+              })
+            }
+            return history
+          })
+        }
+      } catch (error) {
+        console.log('后台同步历史记录失败（不影响使用）:', error.message)
+      }
+    }, 100)
+    
+    // 缓存本地数据
+    roleHistoryCache.current[role] = {
+      data: localHistory,
+      timestamp: Date.now()
+    }
+    
+    return localHistory
   }
 
   // ========== 切换用户角色（增强版：保存/恢复各角色上次对话） ==========
   const changeUserRole = async (roleId) => {
+    // 如果是同一角色，直接返回
+    if (roleId === userRole) {
+      setRoleDropdownOpen(false)
+      return
+    }
+    
+    // 显示加载状态
+    setRoleLoading(true)
+    setRoleDropdownOpen(false)
+    
     // 如果切换到不同角色，保存当前对话并加载新角色的历史记录
     if (roleId !== userRole) {
       // 1. 保存当前角色的对话和会话ID
@@ -378,7 +418,7 @@ function App() {
     }
     setUserRole(roleId)
     localStorage.setItem('userRole', roleId)
-    setRoleDropdownOpen(false)
+    setRoleLoading(false)  // 关闭加载状态
   }
 
   // 获取当前角色信息
@@ -406,10 +446,15 @@ function App() {
     }
   }, [])
 
-  // 加载当前角色的历史对话记录
+  // 仅在页面初始加载时加载当前角色的历史对话记录
+  // 角色切换时由 changeUserRole 函数负责加载，避免重复调用
+  const initialLoadRef = useRef(false)
   useEffect(() => {
-    loadRoleHistory(userRole)
-  }, [userRole]) // 当角色变化时重新加载
+    if (!initialLoadRef.current) {
+      initialLoadRef.current = true
+      loadRoleHistory(userRole)
+    }
+  }, []) // 只在组件挂载时执行一次
 
   // ========== 页面初始化时恢复当前对话（增强版：支持后端同步兜底） ==========
   const [isRestoring, setIsRestoring] = useState(false) // 防止重复恢复
@@ -2309,15 +2354,25 @@ function App() {
               {/* 角色选择器 */}
               <div className="relative" ref={roleDropdownRef}>
                 <button
-                  onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
+                  onClick={() => !roleLoading && setRoleDropdownOpen(!roleDropdownOpen)}
+                  disabled={roleLoading}
                   className={`flex items-center space-x-2 px-3 py-2 rounded-xl border border-gray-200
                              hover:bg-gray-50 transition-all duration-200 font-medium text-[14px]
-                             ${getCurrentRole().bg}`}
+                             ${getCurrentRole().bg} ${roleLoading ? 'opacity-70 cursor-wait' : ''}`}
                 >
-                  {React.createElement(getCurrentRole().icon, { 
-                    className: `w-4 h-4 ${getCurrentRole().color}` 
-                  })}
-                  <span className={getCurrentRole().color}>{getCurrentRole().name}</span>
+                  {roleLoading ? (
+                    <svg className="animate-spin w-4 h-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  ) : (
+                    React.createElement(getCurrentRole().icon, { 
+                      className: `w-4 h-4 ${getCurrentRole().color}` 
+                    })
+                  )}
+                  <span className={getCurrentRole().color}>
+                    {roleLoading ? '切换中...' : getCurrentRole().name}
+                  </span>
                   <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 
                                           ${roleDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
