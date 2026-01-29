@@ -66,7 +66,7 @@ export const ROLE_PERMISSIONS = {
     canExport: false,
     canDelete: false,
     canReturnToSupplier: false,
-    canReturnToWarehouse: false,
+    canReturnToWarehouse: true,     // 可以查看和操作退货到商品部（销退后查看退货单）
     canViewFinance: false,
     // 金料管理权限
     canCreateGoldReceipt: true,     // 可以创建收料单（收到客户原料后）
@@ -83,7 +83,7 @@ export const ROLE_PERMISSIONS = {
     canCreateLoan: true,            // 可以创建暂借单
     canManageLoan: true,            // 可以管理暂借单（确认借出、归还、撤销）
     
-    pages: ['chat', 'settlement', 'gold-material', 'customer', 'loan'],
+    pages: ['chat', 'settlement', 'gold-material', 'customer', 'loan', 'returns'],
   },
   
   // 业务员 - 只能查询客户相关信息
