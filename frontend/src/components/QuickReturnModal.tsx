@@ -164,7 +164,8 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
 
   const fetchSuppliers = async (): Promise<void> => {
     try {
-      const res = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/suppliers`);
+      // 传递空的 status 参数，不筛选状态，返回所有供应商
+      const res = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/suppliers?status=`);
       const data = await res.json();
       if (data.success) {
         setSuppliers(data.suppliers || []);
