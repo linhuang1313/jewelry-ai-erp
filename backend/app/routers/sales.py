@@ -252,6 +252,7 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
 
 @router.get("/orders")
 async def get_sales_orders(
+    order_no: Optional[str] = Query(None, description="销售单号（模糊匹配）"),
     customer_name: Optional[str] = None,
     salesperson: Optional[str] = None,
     start_date: Optional[str] = None,
@@ -262,6 +263,8 @@ async def get_sales_orders(
     try:
         query = db.query(SalesOrder)
         
+        if order_no:
+            query = query.filter(SalesOrder.order_no.contains(order_no))
         if customer_name:
             query = query.filter(SalesOrder.customer_name.contains(customer_name))
         if salesperson:

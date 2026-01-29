@@ -21,6 +21,7 @@ import { CustomerPage } from './components/CustomerPage'
 import { QuickOrderModal } from './components/QuickOrderModal'
 import { QuickReturnModal } from './components/QuickReturnModal'
 import QuickInboundModal from './components/QuickInboundModal'
+import SalesSearchModal from './components/SalesSearchModal'
 import InventoryOverview from './components/InventoryOverview'
 import ManagerDashboardCard from './components/ManagerDashboardCard'
 import { SupplierPage } from './components/SupplierPage'
@@ -114,6 +115,7 @@ function App() {
   const [showQuickOrderModal, setShowQuickOrderModal] = useState(false) // 快捷开单弹窗
   const [showQuickReturnModal, setShowQuickReturnModal] = useState(false) // 快捷退货弹窗
   const [showQuickInboundModal, setShowQuickInboundModal] = useState(false) // 快捷入库弹窗
+  const [showSalesSearchModal, setShowSalesSearchModal] = useState(false) // 销售管理弹窗
   const [showHistoryPanel, setShowHistoryPanel] = useState(false) // 历史回溯面板
   const [showQuickReceiptModal, setShowQuickReceiptModal] = useState(false) // 快捷收料弹窗
   const [showQuickWithdrawalModal, setShowQuickWithdrawalModal] = useState(false) // 快捷提料弹窗
@@ -2410,6 +2412,19 @@ function App() {
                   </div>
                 )}
               </div>
+
+              {/* 销售管理按钮 - 柜台、结算、业务可见 */}
+              {['counter', 'settlement', 'sales'].includes(userRole) && (
+                <button
+                  onClick={() => setShowSalesSearchModal(true)}
+                  className="flex items-center space-x-1.5 px-3 py-2 rounded-xl border border-amber-200
+                             bg-amber-50 hover:bg-amber-100 transition-all duration-200 font-medium text-[14px] text-amber-700"
+                  title="销售管理"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>销售管理</span>
+                </button>
+              )}
 
               {/* 语言切换按钮 */}
               <button
@@ -4791,6 +4806,14 @@ ${itemsList}
             }
           }}
           userRole={userRole}
+        />
+      )}
+
+      {/* 销售管理弹窗 - 柜台、结算、业务可用 */}
+      {['counter', 'settlement', 'sales'].includes(userRole) && (
+        <SalesSearchModal
+          isOpen={showSalesSearchModal}
+          onClose={() => setShowSalesSearchModal(false)}
         />
       )}
 
