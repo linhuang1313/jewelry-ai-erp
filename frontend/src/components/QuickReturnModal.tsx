@@ -73,6 +73,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
   const [locations, setLocations] = useState<Location[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [activeDropdownIndex, setActiveDropdownIndex] = useState<number | null>(null);
   
@@ -120,12 +121,14 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
   // 加载供应商和位置列表
   useEffect(() => {
     if (isOpen) {
+      setDataLoading(true);
+      const promises: Promise<void>[] = [fetchLocations()];
       if (returnConfig.needSupplier) {
-        fetchSuppliers();
+        promises.push(fetchSuppliers());
       }
-      fetchLocations();
+      Promise.all(promises).finally(() => setDataLoading(false));
     }
-  }, [isOpen]);
+  }, [isOpen, returnConfig.needSupplier]);
   
   // 位置确定后加载该位置的库存
   useEffect(() => {
@@ -159,19 +162,22 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
     }
   }, [activeDropdownIndex]);
 
-  const fetchSuppliers = async () => {
+  const fetchSuppliers = async (): Promise<void> => {
     try {
       const res = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/suppliers`);
       const data = await res.json();
       if (data.success) {
         setSuppliers(data.suppliers || []);
+      } else {
+        toast.error('获取供应商列表失败');
       }
     } catch (error) {
       console.error('获取供应商失败:', error);
+      toast.error('获取供应商列表失败，请刷新重试');
     }
   };
 
-  const fetchLocationInventory = async (locationId: string) => {
+  const fetchLocationInventory = async (locationId: string): Promise<void> => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/warehouse/inventory?location_id=${locationId}`);
       const data = await res.json();
@@ -180,16 +186,23 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
     } catch (error) {
       console.error('获取位置库存失败:', error);
       setInventoryItems([]);
+      toast.error('获取库存数据失败');
     }
   };
 
-  const fetchLocations = async () => {
+  const fetchLocations = async (): Promise<void> => {
     try {
       const res = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/warehouse/locations`);
       const data = await res.json();
-      setLocations(data || []);
+      if (Array.isArray(data) && data.length > 0) {
+        setLocations(data);
+      } else {
+        setLocations([]);
+        toast.error('未找到仓库位置数据');
+      }
     } catch (error) {
       console.error('获取位置失败:', error);
+      toast.error('获取仓库位置失败，请刷新重试');
     }
   };
 
@@ -471,10 +484,11 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                 <select
                   value={formData.supplier_id}
                   onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
+                  disabled={dataLoading}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none 
-                             focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                             focus:ring-2 focus:ring-red-500 focus:border-transparent disabled:bg-gray-100"
                 >
-                  <option value="">请选择供应商</option>
+                  <option value="">{dataLoading ? '加载中...' : (suppliers.length === 0 ? '暂无供应商' : '请选择供应商')}</option>
                   {suppliers.map(supplier => (
                     <option key={supplier.id} value={supplier.id}>
                       {supplier.name}
@@ -543,7 +557,9 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                         </button>
                       ))}
                       {inventoryItems.length === 0 && (
-                        <div className="px-3 py-3 text-center text-gray-400 text-sm">暂无库存</div>
+                        <div className="px-3 py-3 text-center text-gray-400 text-sm">
+                          {dataLoading ? '加载中...' : '暂无库存'}
+                        </div>
                       )}
                     </div>
                   )}
