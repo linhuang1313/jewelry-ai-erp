@@ -748,8 +748,9 @@ async def download_return_order(
                 product_name = return_order.product_name[:15] if len(return_order.product_name) > 15 else return_order.product_name
                 if chinese_font:
                     p.setFont(chinese_font, 8)
+                else:
+                    p.setFont("Helvetica", 8)
                 p.drawString(left_margin, y, f"商品：{product_name}")
-                p.setFont("Helvetica", 8)
                 p.drawString(width/2, y, f"克重：{return_order.return_weight:.2f}g")
                 y -= 10
                 

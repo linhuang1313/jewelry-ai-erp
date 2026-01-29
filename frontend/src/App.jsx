@@ -4725,7 +4725,7 @@ ${itemsList}
           onClose={() => setShowQuickReturnModal(false)}
           onSuccess={async (result) => {
             // 构建退货成功的消息内容（包含隐藏的ID标记，用于历史记录中显示打印按钮）
-            const returnMessage = `✅ **退货单创建成功**\n\n📋 单号：${result.return_no}\n📦 商品名称：${result.product_name}\n⚖️ 退货克重：${result.return_weight}克\n📝 退货原因：${result.return_reason}${result.supplier_name ? `\n🏭 供应商：${result.supplier_name}` : ''}${result.from_location_name ? `\n📍 发起位置：${result.from_location_name}` : ''}\n\n<!-- RETURN_ORDER:${result.return_id}:${result.return_no} -->`
+            const returnMessage = `✅ **退货单创建成功**\n\n📋 单号：${result.return_no}\n📦 商品数量：${result.item_count}个\n⚖️ 总退货克重：${result.total_weight?.toFixed(2) || 0}克\n💰 总工费：¥${result.total_labor_cost?.toFixed(2) || 0}\n📝 退货原因：${result.return_reason}${result.supplier_name ? `\n🏭 供应商：${result.supplier_name}` : ''}${result.from_location_name ? `\n📍 发起位置：${result.from_location_name}` : ''}\n\n<!-- RETURN_ORDER:${result.return_id}:${result.return_no} -->`
             
             // 添加到聊天记录显示（包含退货单信息，用于下载/打印）
             setMessages(prev => [...prev, {
