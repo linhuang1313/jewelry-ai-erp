@@ -350,8 +350,8 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
       if (response.ok) {
         const result = await response.json();
         setSelectedCustomerDeposit({
-          current_balance: result.deposit.current_balance,
-          customer_name: result.customer_name
+          current_balance: result.data.deposit.current_balance,
+          customer_name: result.data.customer_name
         });
       } else {
         setSelectedCustomerDeposit({ current_balance: 0, customer_name: '' });
