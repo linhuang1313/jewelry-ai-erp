@@ -349,9 +349,15 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
       );
       if (response.ok) {
         const result = await response.json();
+        console.log('客户存料API返回:', result);  // 调试日志
+        
+        // 防御性读取，兼容多种数据格式
+        const deposit = result?.data?.deposit || result?.deposit || {};
+        const customerName = result?.data?.customer_name || result?.customer_name || '';
+        
         setSelectedCustomerDeposit({
-          current_balance: result.data.deposit.current_balance,
-          customer_name: result.data.customer_name
+          current_balance: deposit.current_balance ?? deposit.net_gold ?? 0,
+          customer_name: customerName
         });
       } else {
         setSelectedCustomerDeposit({ current_balance: 0, customer_name: '' });
