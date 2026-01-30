@@ -203,15 +203,34 @@ async def get_customer_debt_summary(
             for row in cash_results:
                 cash_debt_map[row.customer_id] = float(row.total_debt or 0)
         
-        # 2. 批量查询金料账户净值（单一账户模式：current_balance 正=存料，负=欠料）
+        # 2. 批量查询金料账户净值（使用历史交易计算，与快捷提料一致）
         net_gold_map = {}
         if customer_ids:
-            deposits = db.query(CustomerGoldDeposit).filter(
-                CustomerGoldDeposit.customer_id.in_(customer_ids)
-            ).all()
-            
-            for deposit in deposits:
-                net_gold_map[deposit.customer_id] = float(deposit.current_balance or 0)
+            # 为每个客户计算净金料
+            for cid in customer_ids:
+                try:
+                    # 结算欠料
+                    total_settlement_gold = 0.0
+                    settlements = db.query(SettlementOrder).join(SalesOrder).filter(
+                        SalesOrder.customer_id == cid,
+                        SettlementOrder.status.in_(['confirmed', 'printed'])
+                    ).all()
+                    for s in settlements:
+                        if s.payment_method == 'physical_gold':
+                            total_settlement_gold += s.physical_gold_weight or 0
+                        elif s.payment_method == 'mixed':
+                            total_settlement_gold += s.gold_payment_weight or 0
+                    
+                    # 来料
+                    total_receipts = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
+                        GoldReceipt.customer_id == cid,
+                        GoldReceipt.status == 'received'
+                    ).scalar() or 0
+                    
+                    # 净金料 = 来料 - 结算欠料
+                    net_gold_map[cid] = float(total_receipts) - total_settlement_gold
+                except:
+                    net_gold_map[cid] = 0.0
         
         # 4. 批量查询最后交易时间（按客户名称）
         last_tx_map = {}
