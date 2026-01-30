@@ -1,0 +1,201 @@
+﻿                    "success": False,
+                    "message": "鈿狅笍 鎮ㄦ槸涓氬姟鍛樿鑹诧紝鍙兘鏌ヨ瀹㈡埛鐩稿叧淇℃伅锛堥攢鍞€侀€€璐с€佹瑺娆俱€佸線鏉ヨ处鐩級銆俓n\n濡傞渶鎵ц鍏ュ簱銆佸紑鍗曘€侀€€璐х瓑鎿嶄綔锛岃鑱旂郴鐩稿簲宀椾綅浜哄憳銆?
+                }
+        
+        # ========== 鍐欐搷浣滐細鍏堟鏌ユ潈闄愶紝鍐嶆墽琛?==========
+        from .middleware.permissions import check_action_permission
+        
+        if ai_response.action == "鍏ュ簱":
+            has_perm, perm_error = check_action_permission(request.user_role or 'sales', ai_response.action)
+            if not has_perm:
+                return {"success": False, "message": perm_error}
+            return await handle_inbound(ai_response, db)
+        elif ai_response.action == "鍒涘缓瀹㈡埛":
+            has_perm, perm_error = check_action_permission(request.user_role or 'sales', ai_response.action)
+            if not has_perm:
+                return {"success": False, "message": perm_error}
+            return await handle_create_customer(ai_response, db)
+        elif ai_response.action == "鍒涘缓渚涘簲鍟?:
+            has_perm, perm_error = check_action_permission(request.user_role or 'sales', ai_response.action)
+            if not has_perm:
+                return {"success": False, "message": perm_error}
+            return await handle_create_supplier(ai_response, db)
+        elif ai_response.action == "鍒涘缓閿€鍞崟":
+            has_perm, perm_error = check_action_permission(request.user_role or 'sales', ai_response.action)
+            if not has_perm:
+                return {"success": False, "message": perm_error}
+            return await handle_create_sales_order(ai_response, db)
+        elif ai_response.action == "鍒涘缓杞Щ鍗?:
+            has_perm, perm_error = check_action_permission(request.user_role or 'sales', ai_response.action)
+            if not has_perm:
+                return {"success": False, "message": perm_error}
+            return await handle_create_transfer(ai_response, db)
+        elif ai_response.action == "閫€璐?:
+            # 閫€璐ф搷浣滐細鍟嗗搧涓撳憳閫€缁欎緵搴斿晢锛屾垨鏌滃彴閫€缁欏晢鍝侀儴
+            return await handle_return(ai_response, db, request.user_role or 'product')
+        elif ai_response.action in ["闂茶亰", "鍏朵粬"]:
+            # 闂茶亰/闂€欙細杩斿洖鍙嬪ソ鐨凙I鍥炲
+            hour = datetime.now().hour
+            if hour < 9:
+                time_greeting = "鏃╀笂濂斤紒"
+            elif hour < 12:
+                time_greeting = "涓婂崍濂斤紒"
+            elif hour < 14:
+                time_greeting = "涓崍濂斤紒"
+            elif hour < 18:
+                time_greeting = "涓嬪崍濂斤紒"
+            else:
+                time_greeting = "鏅氫笂濂斤紒"
+            
+            user_msg_lower = request.message.lower().strip()
+            
+            if any(word in user_msg_lower for word in ["浣犲ソ", "hi", "hello", "鍡?, "hey"]):
+                chat_response = f"{time_greeting}鎴戞槸鐝犲疂ERP鏅鸿兘鍔╂墜锛屾湁浠€涔堝彲浠ュ府鎮ㄧ殑鍚楋紵\n\n鎮ㄥ彲浠ュ憡璇夋垜锛歕n鈥?鍏ュ簱鍟嗗搧锛堝锛氬彜娉曟垝鎸?00鍏?宸ヨ垂8鍏?渚涘簲鍟嗛噾婧愮彔瀹濓級\n鈥?鏌ヨ搴撳瓨\n鈥?寮€閿€鍞崟\n鈥?鏌ヨ瀹㈡埛娆犳"
+            elif any(word in user_msg_lower for word in ["璋㈣阿", "鎰熻阿", "thanks", "thank"]):
+                chat_response = "涓嶅姘旓紒鏈夊叾浠栭渶瑕侀殢鏃跺憡璇夋垜 馃槉"
+            elif any(word in user_msg_lower for word in ["鏃╀笂濂?, "涓婂崍濂?, "涓崍濂?, "涓嬪崍濂?, "鏅氫笂濂?, "鏃╁畨", "鏅氬畨"]):
+                chat_response = f"{time_greeting}浠婂ぉ鏈変粈涔堝彲浠ュ府鎮ㄥ鐞嗙殑鍚楋紵"
+            elif any(word in user_msg_lower for word in ["濂界殑", "鏀跺埌", "鏄庣櫧", "鐭ラ亾浜?, "ok", "濂?]):
+                chat_response = "濂界殑锛屾湁闇€瑕佸啀鍙垜 馃憤"
+            else:
+                chat_response = f"鎶辨瓑锛屾垜娌℃湁瀹屽叏鐞嗚В鎮ㄧ殑鎰忔€濄€傛垜鏄彔瀹滶RP鍔╂墜锛屽彲浠ュ府鎮細\n\n馃摝 鍏ュ簱绠＄悊锛堝晢鍝佸叆搴撱€佹煡璇㈠叆搴撳崟锛塡n馃搳 搴撳瓨鏌ヨ锛堟煡鐪嬪簱瀛樸€佸簱瀛樺垎鏋愶級\n馃Ь 閿€鍞紑鍗曪紙鍒涘缓閿€鍞崟銆佹煡璇㈤攢鍞級\n馃挵 璐㈠姟绠＄悊锛堝鎴锋瑺娆俱€佹敹娆剧櫥璁帮級\n\n璇峰憡璇夋垜鍏蜂綋闇€瑕佷粈涔堝府鍔╋紵"
+            
+            return {
+                "success": True,
+                "action": "闂茶亰",
+                "message": chat_response
+            }
+        
+        # ========== 鏌ヨ鍜屽垎鏋愭搷浣滐細浣跨敤AI鍒嗘瀽寮曟搸 ==========
+        else:
+            from .ai_analyzer import ai_analyzer
+            
+            # 鏀堕泦鎵€鏈夌浉鍏虫暟鎹紙浼犲叆鍏ュ簱鍗曞彿銆侀攢鍞崟鍙峰拰鐢ㄦ埛瑙掕壊锛?            # 鐢ㄦ埛瑙掕壊鍐冲畾鏄剧ず鍝釜浠撲綅鐨勫簱瀛?            data = ai_analyzer.collect_all_data(
+                ai_response.action,
+                request.message,
+                db,
+                order_no=ai_response.order_no,  # RK寮€澶寸殑鍏ュ簱鍗曞彿
+                sales_order_no=ai_response.sales_order_no,  # XS寮€澶寸殑閿€鍞崟鍙?                user_role=user_role,  # 浼犲叆鐢ㄦ埛瑙掕壊浠ョ‘瀹氭樉绀哄摢涓粨浣嶇殑搴撳瓨
+                inbound_supplier=ai_response.inbound_supplier,  # 鍏ュ簱鍗曚緵搴斿晢绛涢€?                inbound_product=ai_response.inbound_product,  # 鍏ュ簱鍗曞晢鍝佺瓫閫?                inbound_date_start=ai_response.inbound_date_start,  # 鍏ュ簱鍗曞紑濮嬫棩鏈?                inbound_date_end=ai_response.inbound_date_end,  # 鍏ュ簱鍗曠粨鏉熸棩鏈?                transfer_order_no=ai_response.transfer_order_no,  # TR寮€澶寸殑杞Щ鍗曞彿
+                transfer_status=ai_response.transfer_status,  # 杞Щ鍗曠姸鎬佺瓫閫?                transfer_date_start=ai_response.transfer_date_start,  # 杞Щ鍗曞紑濮嬫棩鏈?                transfer_date_end=ai_response.transfer_date_end  # 杞Щ鍗曠粨鏉熸棩鏈?            )
+            
+            # 浣跨敤AI杩涜鍒嗘瀽
+            analysis_result = ai_analyzer.analyze(
+                request.message,
+                ai_response.action,
+                data
+            )
+            
+            # 妫€娴嬪浘琛ㄩ渶姹傚苟鐢熸垚鍥捐〃鏁版嵁
+            chart_keywords = ["鍥捐〃", "chart", "鍙鍖?, "鐢ㄥ浘琛?, "鐢诲浘", "鐢讳釜鍥?, "鐢熸垚鍥捐〃", "缁欐垜鐪嬪浘琛?, "鐢ㄥ浘鏍?, "楗煎浘", "鏌辩姸鍥?, "鎶樼嚎鍥?, "瓒嬪娍鍥?, "鍒嗗竷鍥?, "鍗犳瘮"]
+            # 鏁版嵁鍒嗘瀽绫?action 鑷姩鐢熸垚鍥捐〃锛堟棤闇€鐢ㄦ埛鏄庣‘璇?鐢诲浘琛?锛?            auto_chart_actions = ["渚涘簲鍟嗗垎鏋?, "鏌ヨ搴撳瓨", "搴撳瓨鍒嗘瀽", "閿€鍞垎鏋?, "鏌ヨ鍏ュ簱鍗?, "缁熻鍒嗘瀽"]
+            # 娑堟伅涓寘鍚?鍒嗘瀽"+"鍏ュ簱"鏃朵篃瑙﹀彂鍥捐〃
+            message_needs_chart = ("鍒嗘瀽" in request.message and "鍏ュ簱" in request.message)
+            needs_chart = (
+                ai_response.action == "鐢熸垚鍥捐〃" or 
+                ai_response.action in auto_chart_actions or
+                any(keyword in request.message for keyword in chart_keywords) or
+                message_needs_chart
+            )
+            
+            chart_data_result = {}
+            if needs_chart:
+                logger.info("[鏅€歖 妫€娴嬪埌鍥捐〃闇€姹傦紝鐢熸垚鍥捐〃鏁版嵁")
+                chart_data_result = ai_analyzer.generate_chart_data(ai_response.action, data)
+                if chart_data_result:
+                    logger.info(f"[鏅€歖 宸茬敓鎴愬浘琛ㄦ暟鎹細鏌辩姸鍥?{bool(chart_data_result.get('chart_data'))}, 楗煎浘={bool(chart_data_result.get('pie_data'))}")
+            
+            # 杩斿洖缁撴灉锛堝悓鏃惰繑鍥炲師濮嬫暟鎹紝渚涘墠绔渶瑕佹椂浣跨敤锛?            return {
+                "success": True,
+                "message": analysis_result,
+                "raw_data": data,  # 鍙€夛細鍓嶇鍙互鐢ㄤ簬鍥捐〃绛?                "action": ai_response.action,
+                "chart_data": chart_data_result.get('chart_data'),
+                "pie_data": chart_data_result.get('pie_data')
+            }
+    
+    except Exception as e:
+        logger.error(f"澶勭悊娑堟伅鏃跺嚭閿? {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"澶勭悊娑堟伅鏃跺嚭閿? {str(e)}"
+        }
+
+@app.options("/api/chat-stream")
+async def chat_stream_options():
+    """澶勭悊CORS棰勬璇锋眰"""
+    from fastapi.responses import Response
+    logger.info("[娴佸紡] 鏀跺埌OPTIONS棰勬璇锋眰")
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+            "Access-Control-Max-Age": "3600",
+        }
+    )
+
+@app.post("/api/chat-stream")
+async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
+    """娴佸紡鍝嶅簲鑱婂ぉ鎺ュ彛 - 鏄剧ず鎬濊€冭繃绋嬪拰鍐呭閫愬瓧鐢熸垚"""
+    
+    logger.info(f"[娴佸紡] 鏀跺埌璇锋眰: {request.message}, 瑙掕壊: {request.user_role}")
+    
+    # 璁板綍鐢ㄦ埛娑堟伅鍒版棩蹇?    start_time = datetime.now()
+    session_id = request.session_id or f"session_{start_time.strftime('%Y%m%d%H%M%S%f')}"
+    
+    log_chat_message(
+        db=db,
+        session_id=session_id,
+        user_role=request.user_role,
+        message_type="user",
+        content=request.message
+    )
+    
+    # ========== 涓婁笅鏂囧伐绋嬶細Read-Before-Decide ==========
+    # 鍔犺浇浼氳瘽涓婁笅鏂囷紙鏂囦欢绯荤粺浣滀负澶栭儴璁板繂锛?    session_context = ctx.load_session_context(session_id)
+    context_summary = ctx.generate_context_summary(session_id)
+    knowledge_base = ctx.load_knowledge_base()
+    
+    if context_summary:
+        logger.info(f"[Context] 宸插姞杞戒細璇濅笂涓嬫枃锛屽綋鍓嶇洰鏍? {session_context.get('goal', '鏃?)}")
+    
+    # ========== 鏌ヨ鏈€杩戠殑瀵硅瘽鍘嗗彶锛堢敤浜庝笂涓嬫枃鐞嗚В锛?=========
+    conversation_history = []
+    try:
+        # 鏌ヨ鏈€杩戠殑5鏉″璇濊褰曪紙鎸夋椂闂村€掑簭锛岀劧鍚庡弽杞級
+        recent_logs = db.query(ChatLog).filter(
+            ChatLog.user_role == request.user_role
+        ).order_by(desc(ChatLog.created_at)).limit(10).all()
+        
+        # 鍙嶈浆椤哄簭锛堜粠鏃у埌鏂帮級骞舵牸寮忓寲
+        for log in reversed(recent_logs):
+            if log.content:
+                conversation_history.append({
+                    "role": "user" if log.message_type == "user" else "assistant",
+                    "content": log.content
+                })
+        logger.info(f"[娴佸紡] 鍔犺浇浜?{len(conversation_history)} 鏉″巻鍙插璇濅綔涓轰笂涓嬫枃")
+    except Exception as e:
+        logger.warning(f"[娴佸紡] 鍔犺浇瀵硅瘽鍘嗗彶澶辫触: {e}")
+    
+    async def generate():
+        try:
+            logger.info("[娴佸紡] 寮€濮嬬敓鎴愬搷搴?)
+            
+            # ========== 鍒濆濉厖鏁版嵁锛堝己鍒朵唬鐞嗗紑濮嬭浆鍙戯級==========
+            # 鍙戦€佺害2KB鐨勫垵濮嬪～鍏咃紝鏌愪簺浠ｇ悊闇€瑕佹帴鏀跺埌涓€瀹氶噺鏁版嵁鎵嶄細寮€濮嬭浆鍙?            initial_padding = ": " + "." * 2048 + "\n\n"
+            yield initial_padding
+            logger.info("[娴佸紡] 宸插彂閫佸垵濮嬪～鍏呮暟鎹?)
+            
+            # ========== 蹇€熻矾寰勶細甯歌闂鐩存帴鍝嶅簲锛堣烦杩嘇I鎰忓浘瑙ｆ瀽锛?=========
+            import re
+            user_msg = request.message.strip()
+            fast_result = None
+            
+            # 浠庝笂涓嬫枃鎻愬彇宸蹭繚瀛樼殑瀹炰綋淇℃伅锛堢敤浜庤拷闂満鏅級
+            ctx_entities = session_context.get("entities", {})
+            last_customer = ctx_entities.get("last_customer")
+            last_product = ctx_entities.get("last_product")
+            last_supplier = ctx_entities.get("last_supplier")
+            last_order_no = ctx_entities.get("last_order_no")

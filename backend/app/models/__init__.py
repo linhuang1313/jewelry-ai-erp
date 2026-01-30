@@ -216,6 +216,7 @@ from .finance import (
     AccountPayable, SupplierPayment, BankAccount, CashFlow, ExpenseCategory, Expense,
     DEFAULT_EXPENSE_CATEGORIES
 )
+from .audit import AuditLog, BalanceChangeLog
 
 
 # ============= 对话日志模型 =============
@@ -924,4 +925,7 @@ __all__ = [
     # 暂借单
     'LoanOrder',
     'LoanOrderLog',
+    # 审计日志
+    'AuditLog',
+    'BalanceChangeLog',
 ]
