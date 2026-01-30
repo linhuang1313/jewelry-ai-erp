@@ -225,11 +225,13 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
   } | null>(null);
   const [depositLoading, setDepositLoading] = useState(false);
   const [withdrawalCustomerSearch, setWithdrawalCustomerSearch] = useState('');
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(true);
 
   // 加载数据
   useEffect(() => {
     loadPendingSales();
     loadSettlements();
+    loadCustomers();
   }, []);
 
   // 加载客户列表
@@ -330,6 +332,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
     });
     setWithdrawalCustomerSearch('');
     setSelectedCustomerDeposit(null);
+    setShowCustomerDropdown(true);  // 重置下拉框显示状态
     setShowQuickWithdrawalForm(true);
   };
 
@@ -2123,30 +2126,38 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                     type="text"
                     placeholder="搜索客户姓名或电话..."
                     value={withdrawalCustomerSearch}
-                    onChange={(e) => setWithdrawalCustomerSearch(e.target.value)}
+                    onChange={(e) => {
+                      setWithdrawalCustomerSearch(e.target.value);
+                      setShowCustomerDropdown(true);  // 输入时显示下拉框
+                    }}
+                    onFocus={() => setShowCustomerDropdown(true)}  // 聚焦时显示下拉框
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
                   />
-                  <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
-                    {filteredWithdrawalCustomers.length === 0 ? (
-                      <div className="p-3 text-center text-gray-500 text-sm">暂无匹配客户</div>
-                    ) : (
-                      filteredWithdrawalCustomers.slice(0, 10).map(customer => (
-                        <div
-                          key={customer.id}
-                          onClick={() => {
-                            setQuickWithdrawalForm({ ...quickWithdrawalForm, customer_id: customer.id.toString() });
-                            fetchCustomerDeposit(customer.id.toString());
-                          }}
-                          className={`p-3 cursor-pointer hover:bg-blue-50 border-b last:border-b-0 flex justify-between items-center ${
-                            quickWithdrawalForm.customer_id === customer.id.toString() ? 'bg-blue-100' : ''
-                          }`}
-                        >
-                          <span className="font-medium">{customer.name}</span>
-                          <span className="text-sm text-gray-500">{customer.phone || '-'}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                  {/* 下拉框：选择客户后隐藏 */}
+                  {showCustomerDropdown && (
+                    <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
+                      {filteredWithdrawalCustomers.length === 0 ? (
+                        <div className="p-3 text-center text-gray-500 text-sm">暂无匹配客户</div>
+                      ) : (
+                        filteredWithdrawalCustomers.slice(0, 10).map(customer => (
+                          <div
+                            key={customer.id}
+                            onClick={() => {
+                              setQuickWithdrawalForm({ ...quickWithdrawalForm, customer_id: customer.id.toString() });
+                              fetchCustomerDeposit(customer.id.toString());
+                              setShowCustomerDropdown(false);  // 选择后隐藏下拉框
+                            }}
+                            className={`p-3 cursor-pointer hover:bg-blue-50 border-b last:border-b-0 flex justify-between items-center ${
+                              quickWithdrawalForm.customer_id === customer.id.toString() ? 'bg-blue-100' : ''
+                            }`}
+                          >
+                            <span className="font-medium">{customer.name}</span>
+                            <span className="text-sm text-gray-500">{customer.phone || '-'}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                   {quickWithdrawalForm.customer_id && (
                     <div className="mt-2 text-sm text-green-600">
                       已选择：{customers.find(c => c.id.toString() === quickWithdrawalForm.customer_id)?.name}
