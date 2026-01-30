@@ -185,6 +185,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
   // 快捷收料弹窗
   const [showQuickReceiptForm, setShowQuickReceiptForm] = useState(false);
   const [customers, setCustomers] = useState<Array<{id: number; name: string; phone?: string}>>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
   const [quickReceiptForm, setQuickReceiptForm] = useState({
     customer_id: '',
     gold_weight: '',
@@ -234,8 +235,13 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
     loadCustomers();
   }, []);
 
-  // 加载客户列表
-  const loadCustomers = async () => {
+  // 加载客户列表（带缓存检查，避免重复加载）
+  const loadCustomers = async (force = false) => {
+    // 如果已有客户数据且非强制刷新，跳过加载
+    if (customers.length > 0 && !force) {
+      return;
+    }
+    setCustomersLoading(true);
     try {
       const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/customers`);
       if (response.ok) {
@@ -249,12 +255,14 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
       }
     } catch (error) {
       console.error('加载客户列表失败:', error);
+    } finally {
+      setCustomersLoading(false);
     }
   };
 
   // 打开快捷收料弹窗
   const openQuickReceiptForm = () => {
-    loadCustomers();
+    // 客户列表已在页面加载时预加载，无需重复加载
     setQuickReceiptForm({
       customer_id: '',
       gold_weight: '',
@@ -324,7 +332,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
 
   // 打开快捷提料弹窗
   const openQuickWithdrawalForm = () => {
-    loadCustomers();
+    // 客户列表已在页面加载时预加载，无需重复加载
     setQuickWithdrawalForm({
       customer_id: '',
       gold_weight: '',
@@ -2024,7 +2032,9 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 mb-2"
                   />
                   <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
-                    {filteredCustomers.length === 0 ? (
+                    {customersLoading ? (
+                      <div className="p-3 text-center text-gray-500 text-sm">加载中...</div>
+                    ) : filteredCustomers.length === 0 ? (
                       <div className="p-3 text-center text-gray-500 text-sm">暂无匹配客户</div>
                     ) : (
                       filteredCustomers.slice(0, 10).map(customer => (
@@ -2142,7 +2152,9 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                   {/* 下拉框：选择客户后隐藏 */}
                   {showCustomerDropdown && (
                     <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
-                      {filteredWithdrawalCustomers.length === 0 ? (
+                      {customersLoading ? (
+                        <div className="p-3 text-center text-gray-500 text-sm">加载中...</div>
+                      ) : filteredWithdrawalCustomers.length === 0 ? (
                         <div className="p-3 text-center text-gray-500 text-sm">暂无匹配客户</div>
                       ) : (
                         filteredWithdrawalCustomers.slice(0, 10).map(customer => (
