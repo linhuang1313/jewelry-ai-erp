@@ -1,4 +1,4 @@
-"""
+﻿"""
 珠宝ERP系统 - FastAPI主入口
 精简版：核心配置、异常处理、启动事件、路由注册
 
@@ -119,6 +119,7 @@ from .routers.sales import router as sales_router
 from .routers.export import router as export_router
 from .routers.loan import router as loan_router
 from .routers.reconciliation import router as reconciliation_router
+from .routers.audit import router as audit_router
 
 # 导入新拆分的路由
 from .routers.chat import router as chat_router
@@ -141,6 +142,7 @@ app.include_router(sales_router)
 app.include_router(export_router)
 app.include_router(loan_router)
 app.include_router(reconciliation_router)
+app.include_router(audit_router)
 
 # 注册新拆分的路由
 app.include_router(chat_router)
