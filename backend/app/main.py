@@ -981,23 +981,52 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             # 3. 库存查询：xxx库存、xxx有多少（需要权限检查）
             inventory_match = re.search(r'^(.+?)(的)?(库存|有多少|还有多少)(量)?[？?]?$', user_msg)
             if not fast_result and inventory_match:
-                # 检查库存查询权限
-                if user_role in ['settlement', 'sales']:
+                # 检查库存查询权限（sales 角色无权查看库存）
+                if user_role in ['sales']:
                     logger.warning(f"[快速路径] 权限不足: 角色={user_role} 尝试查询库存")
                     fast_result = {"success": False, "message": "⚠️ 您的角色无权查看库存信息，请联系商品专员或管理层。"}
                 else:
                     product_name = inventory_match.group(1).strip()
-                    logger.info(f"[快速路径] 检测到库存查询: {product_name}")
+                    logger.info(f"[快速路径] 检测到库存查询: {product_name}, 角色: {user_role}")
                     yield f"data: {json.dumps({'type': 'thinking', 'step': '快速查询', 'message': f'正在查询 {product_name} 的库存...', 'progress': 30}, ensure_ascii=False)}\n\n"
                     
-                    inventory = db.query(Inventory).filter(Inventory.product_name.contains(product_name)).first()
-                    if inventory:
-                        msg = f"**{inventory.product_name}** 当前库存：**{inventory.total_weight:.2f}克**"
-                        fast_result = {"success": True, "action": "查询库存", "message": msg}
-                        # 保存商品到上下文（用于后续追问）
-                        ctx.update_entities(session_id, {"last_product": inventory.product_name})
+                    # 根据角色确定查询的库存位置
+                    if user_role == 'product':
+                        location_code = 'warehouse'
+                        location_display = '商品部仓库'
+                    elif user_role in ['counter', 'settlement']:
+                        location_code = 'showroom'
+                        location_display = '展厅'
                     else:
-                        fast_result = {"success": False, "message": f"未找到 **{product_name}** 的库存记录"}
+                        location_code = None  # 管理层看总库存
+                        location_display = '总'
+                    
+                    if location_code:
+                        # 查询指定仓位的库存
+                        location = db.query(Location).filter(Location.code == location_code).first()
+                        if location:
+                            location_inv = db.query(LocationInventory).filter(
+                                LocationInventory.location_id == location.id,
+                                LocationInventory.product_name.contains(product_name),
+                                LocationInventory.weight > 0
+                            ).first()
+                            if location_inv:
+                                msg = f"**{location_inv.product_name}** {location_display}库存：**{location_inv.weight:.2f}克**"
+                                fast_result = {"success": True, "action": "查询库存", "message": msg}
+                                ctx.update_entities(session_id, {"last_product": location_inv.product_name})
+                            else:
+                                fast_result = {"success": False, "message": f"在{location_display}未找到 **{product_name}** 的库存记录"}
+                        else:
+                            fast_result = {"success": False, "message": f"未找到{location_display}位置信息"}
+                    else:
+                        # 管理层查询总库存
+                        inventory = db.query(Inventory).filter(Inventory.product_name.contains(product_name)).first()
+                        if inventory:
+                            msg = f"**{inventory.product_name}** 当前{location_display}库存：**{inventory.total_weight:.2f}克**"
+                            fast_result = {"success": True, "action": "查询库存", "message": msg}
+                            ctx.update_entities(session_id, {"last_product": inventory.product_name})
+                        else:
+                            fast_result = {"success": False, "message": f"未找到 **{product_name}** 的库存记录"}
             
             # ========== 追问型查询：无主语，从上下文获取实体 ==========
             # 4. 客户相关追问：有欠料吗、欠款呢、存料多少
@@ -1122,20 +1151,50 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             followup_product_match = re.search(r'^(还有|有)?(多少|库存)(呢)?[？?]?$', user_msg)
             if not fast_result and followup_product_match:
                 if last_product:
-                    # 检查库存查询权限
-                    if user_role in ['settlement', 'sales']:
+                    # 检查库存查询权限（sales 角色无权查看库存）
+                    if user_role in ['sales']:
                         fast_result = {"success": False, "message": "⚠️ 您的角色无权查看库存信息，请联系商品专员或管理层。"}
                     else:
-                        logger.info(f"[快速路径] 检测到商品追问查询，上下文商品: {last_product}")
+                        logger.info(f"[快速路径] 检测到商品追问查询，上下文商品: {last_product}, 角色: {user_role}")
                         yield f"data: {json.dumps({'type': 'thinking', 'step': '快速查询', 'message': f'正在查询 {last_product} 的库存...', 'progress': 30}, ensure_ascii=False)}\n\n"
                         
-                        inventory = db.query(Inventory).filter(Inventory.product_name == last_product).first()
-                        if inventory:
-                            msg = f"**{inventory.product_name}** 当前库存：**{inventory.total_weight:.2f}克**"
-                            fast_result = {"success": True, "action": "查询库存", "message": msg}
-                            ctx.update_entities(session_id, {"last_product": inventory.product_name})
+                        # 根据角色确定查询的库存位置
+                        if user_role == 'product':
+                            location_code = 'warehouse'
+                            location_display = '商品部仓库'
+                        elif user_role in ['counter', 'settlement']:
+                            location_code = 'showroom'
+                            location_display = '展厅'
                         else:
-                            fast_result = {"success": False, "message": f"未找到 **{last_product}** 的库存记录"}
+                            location_code = None  # 管理层看总库存
+                            location_display = '总'
+                        
+                        if location_code:
+                            # 查询指定仓位的库存
+                            location = db.query(Location).filter(Location.code == location_code).first()
+                            if location:
+                                location_inv = db.query(LocationInventory).filter(
+                                    LocationInventory.location_id == location.id,
+                                    LocationInventory.product_name == last_product,
+                                    LocationInventory.weight > 0
+                                ).first()
+                                if location_inv:
+                                    msg = f"**{location_inv.product_name}** {location_display}库存：**{location_inv.weight:.2f}克**"
+                                    fast_result = {"success": True, "action": "查询库存", "message": msg}
+                                    ctx.update_entities(session_id, {"last_product": location_inv.product_name})
+                                else:
+                                    fast_result = {"success": False, "message": f"在{location_display}未找到 **{last_product}** 的库存记录"}
+                            else:
+                                fast_result = {"success": False, "message": f"未找到{location_display}位置信息"}
+                        else:
+                            # 管理层查询总库存
+                            inventory = db.query(Inventory).filter(Inventory.product_name == last_product).first()
+                            if inventory:
+                                msg = f"**{inventory.product_name}** 当前{location_display}库存：**{inventory.total_weight:.2f}克**"
+                                fast_result = {"success": True, "action": "查询库存", "message": msg}
+                                ctx.update_entities(session_id, {"last_product": inventory.product_name})
+                            else:
+                                fast_result = {"success": False, "message": f"未找到 **{last_product}** 的库存记录"}
                 else:
                     # 没有上下文，提示用户指定商品
                     fast_result = {"success": False, "message": "请告诉我您想查询**哪个商品**的库存？例如：\"古法手镯库存\""}
@@ -1729,7 +1788,7 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     if user_role == "product":
                         location_code = "warehouse"
                         location_display = "商品部仓库"
-                    elif user_role in ["counter"]:
+                    elif user_role in ["counter", "settlement"]:
                         location_code = "showroom"
                         location_display = "展厅"
                     else:
