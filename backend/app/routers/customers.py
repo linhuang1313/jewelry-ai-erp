@@ -1354,22 +1354,37 @@ async def get_customer_debt_history(
         except:
             pass
         
-        # 单一账户模式：从 CustomerGoldDeposit.current_balance 获取净金料值
+        # 计算净金料（与快捷提料一致，使用历史交易计算）
         try:
-            deposit = db.query(CustomerGoldDeposit).filter(
-                CustomerGoldDeposit.customer_id == customer_id
-            ).first()
-            if deposit:
-                net_gold = deposit.current_balance or 0
-                current_balance["net_gold"] = net_gold  # 净金料值（正=存料，负=欠料）
-                current_balance["gold_debt"] = max(0, -net_gold)  # 兼容字段：欠料
-                current_balance["gold_deposit"] = max(0, net_gold)  # 兼容字段：存料
-            else:
-                current_balance["net_gold"] = 0
-                current_balance["gold_debt"] = 0
-                current_balance["gold_deposit"] = 0
-        except:
-            pass
+            # 1. 结算欠料（结料支付 + 混合支付的金料部分）
+            total_settlement_gold = 0.0
+            settlements = db.query(SettlementOrder).join(SalesOrder).filter(
+                SalesOrder.customer_id == customer_id,
+                SettlementOrder.status.in_(['confirmed', 'printed'])
+            ).all()
+            for s in settlements:
+                if s.payment_method == 'physical_gold':
+                    total_settlement_gold += s.physical_gold_weight or 0
+                elif s.payment_method == 'mixed':
+                    total_settlement_gold += s.gold_payment_weight or 0
+            
+            # 2. 来料（GoldReceipt）
+            total_receipts_gold = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
+                GoldReceipt.customer_id == customer_id,
+                GoldReceipt.status == 'received'
+            ).scalar() or 0
+            
+            # 3. 净金料 = 来料 - 结算欠料（正数=存料，负数=欠料）
+            net_gold = float(total_receipts_gold) - total_settlement_gold
+            
+            current_balance["net_gold"] = net_gold  # 净金料值（正=存料，负=欠料）
+            current_balance["gold_debt"] = max(0, -net_gold)  # 兼容字段：欠料
+            current_balance["gold_deposit"] = max(0, net_gold)  # 兼容字段：存料
+        except Exception as e:
+            logger.warning(f"计算客户金料余额失败: {e}")
+            current_balance["net_gold"] = 0
+            current_balance["gold_debt"] = 0
+            current_balance["gold_deposit"] = 0
         
         return success_response(
             data={
