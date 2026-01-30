@@ -1302,6 +1302,31 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                             <FileText className="w-4 h-4" />
                             <span>编辑</span>
                           </button>
+                          {/* 撤单按钮 - 将结算单取消，销售单回到待结算 */}
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`确定要撤销结算单 ${settlement.settlement_no} 吗？\n销售单将回到"待开结算单"状态。`)) return;
+                              try {
+                                const response = await fetch(
+                                  `${API_ENDPOINTS.API_BASE_URL}/api/settlement/orders/${settlement.id}/cancel?user_role=settlement`,
+                                  { method: 'POST' }
+                                );
+                                if (response.ok) {
+                                  toast.success('结算单已撤销');
+                                  loadSettlements();
+                                } else {
+                                  const error = await response.json();
+                                  toast.error(error.detail || '撤单失败');
+                                }
+                              } catch (error) {
+                                toast.error('撤单失败');
+                              }
+                            }}
+                            className="flex items-center justify-center space-x-1 px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors text-sm"
+                          >
+                            <X className="w-4 h-4" />
+                            <span>撤单</span>
+                          </button>
                           <button
                             onClick={() => setConfirmingSettlement(settlement)}
                             className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors text-sm"
@@ -1354,8 +1379,8 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                           <span>收料单</span>
                         </button>
                       )}
-                      {/* 销退按钮 - 已确认/已打印时显示 */}
-                      {(settlement.status === 'confirmed' || settlement.status === 'printed') && (
+                      {/* 销退按钮 - 暂时隐藏 */}
+                      {/* {(settlement.status === 'confirmed' || settlement.status === 'printed') && (
                         <button
                           onClick={() => {
                             setRefundingSettlement(settlement);
@@ -1367,7 +1392,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                           <RotateCcw className="w-4 h-4" />
                           <span>销退</span>
                         </button>
-                      )}
+                      )} */}
                       {/* 重新结算按钮 - 已确认/已打印时显示 */}
                       {(settlement.status === 'confirmed' || settlement.status === 'printed') && (
                         <button
