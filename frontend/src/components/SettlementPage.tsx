@@ -1314,6 +1314,7 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                                 if (response.ok) {
                                   toast.success('结算单已撤销');
                                   loadSettlements();
+                                  loadPendingSales(); // 刷新待开结算单列表
                                 } else {
                                   const error = await response.json();
                                   toast.error(error.detail || '撤单失败');
