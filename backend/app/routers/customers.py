@@ -873,19 +873,35 @@ async def get_customer_detail(
         except Exception as e:
             logger.warning(f"查询现金欠款时出错: {e}")
         
-        # 金料账户（单一账户模式：current_balance 正=存料，负=欠料）
+        # 金料账户（使用历史交易计算，与快捷提料一致）
         gold_deposit = 0.0
         gold_debt = 0.0
         net_gold = 0.0
         try:
-            deposit_record = db.query(CustomerGoldDeposit).filter(
-                CustomerGoldDeposit.customer_id == customer_id
-            ).first()
-            if deposit_record:
-                net_gold = deposit_record.current_balance or 0.0
-                # 从净值计算兼容字段
-                gold_deposit = max(0, net_gold)  # 正值 = 存料
-                gold_debt = max(0, -net_gold)    # 负值的绝对值 = 欠料
+            # 1. 结算欠料（结料支付 + 混合支付的金料部分）
+            total_settlement_gold = 0.0
+            settlements = db.query(SettlementOrder).join(SalesOrder).filter(
+                SalesOrder.customer_id == customer_id,
+                SettlementOrder.status.in_(['confirmed', 'printed'])
+            ).all()
+            for s in settlements:
+                if s.payment_method == 'physical_gold':
+                    total_settlement_gold += s.physical_gold_weight or 0
+                elif s.payment_method == 'mixed':
+                    total_settlement_gold += s.gold_payment_weight or 0
+            
+            # 2. 来料（GoldReceipt）
+            total_receipts_gold = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
+                GoldReceipt.customer_id == customer_id,
+                GoldReceipt.status == 'received'
+            ).scalar() or 0
+            
+            # 3. 净金料 = 来料 - 结算欠料（正数=存料，负数=欠料）
+            net_gold = float(total_receipts_gold) - total_settlement_gold
+            
+            # 从净值计算兼容字段
+            gold_deposit = max(0, net_gold)  # 正值 = 存料
+            gold_debt = max(0, -net_gold)    # 负值的绝对值 = 欠料
         except Exception as e:
             logger.warning(f"查询金料账户时出错: {e}")
         
