@@ -2413,7 +2413,7 @@ function App() {
                 )}
               </div>
 
-              {/* 閿€鍞鐞嗘寜閽?- 鏌滃彴銆佺粨绠椼€佷笟鍔″彲瑙?*/}
+              {/* 销售管理按钮 - 柜台、结算、业务可见 */}
               {['counter', 'settlement', 'sales'].includes(userRole) && (
                 <button
                   onClick={() => setShowSalesSearchModal(true)}
@@ -2426,7 +2426,7 @@ function App() {
                 </button>
               )}
 
-              {/* 璇█鍒囨崲鎸夐挳 */}
+              {/* 语言切换按钮 */}
               <button
                 onClick={() => {
                   const newLang = currentLanguage === 'zh' ? 'en' : 'zh'
@@ -2437,14 +2437,14 @@ function App() {
                            hover:bg-gray-50 transition-all duration-200 font-medium text-[14px] text-gray-600"
                 title={t('language.switchLanguage')}
               >
-                <span className="text-base">{currentLanguage === 'zh' ? '馃嚚馃嚦' : '馃嚭馃嚫'}</span>
-                <span>{currentLanguage === 'zh' ? '涓枃' : 'EN'}</span>
+                <span className="text-base">{currentLanguage === 'zh' ? '🇨🇳' : '🇺🇸'}</span>
+                <span>{currentLanguage === 'zh' ? '中文' : 'EN'}</span>
               </button>
 
-              {/* 瀵艰埅鎸夐挳 */}
+              {/* 导航按钮 */}
               {currentPage === 'chat' ? (
                 <>
-                  {/* 浠〃鐩樻寜閽?- 绠＄悊灞傚揩閫熸煡鐪?*/}
+                  {/* 仪表盘按钮 - 管理层快速查看 */}
                   {hasPermission(userRole, 'canViewAnalytics') && (
                     <button
                       onClick={() => setCurrentPage('dashboard')}
@@ -2456,7 +2456,7 @@ function App() {
                       <span>仪表盘</span>
                     </button>
                   )}
-                  {/* 鏁版嵁鍒嗘瀽鎸夐挳 - 浣跨敤鏉冮檺妫€鏌?*/}
+                  {/* 数据分析按钮 - 使用权限检查 */}
                   {hasPermission(userRole, 'canViewAnalytics') && (
                     <>
                       <button
@@ -2479,7 +2479,7 @@ function App() {
                       </button>
                     </>
                   )}
-                  {/* 涓氬姟鍛樼鐞嗘寜閽?- 浣跨敤鏉冮檺妫€鏌?*/}
+                  {/* 业务员管理按钮 - 使用权限检查 */}
                   {hasPermission(userRole, 'canManageSalespersons') && (
                     <button
                       onClick={() => setCurrentPage('salesperson')}
@@ -2491,7 +2491,7 @@ function App() {
                       <span>业务员管理</span>
                     </button>
                   )}
-                  {/* 鍒嗕粨搴撳瓨鎸夐挳 - 鏌滃彴(鎺ユ敹) + 鍟嗗搧涓撳憳(杞Щ) + 绠＄悊灞?*/}
+                  {/* 分仓库存按钮 - 柜台(接收) + 商品专员(转移) + 管理层 */}
                   {(hasPermission(userRole, 'canReceiveTransfer') || hasPermission(userRole, 'canTransfer')) && (
                     <button
                       onClick={() => setCurrentPage('warehouse')}
@@ -2500,7 +2500,7 @@ function App() {
                     >
                       <Warehouse className="w-4 h-4" />
                       <span>{t('nav.warehouse')}</span>
-                      {/* 寰呭鐞嗚浆绉诲崟鏁伴噺badge */}
+                      {/* 待处理转移单数量badge */}
                       {pendingTransferCount > 0 && (
                         <span className="absolute -top-2 -right-2 min-w-[20px] h-5 flex items-center justify-center 
                                          bg-red-500 text-white text-xs font-bold rounded-full px-1.5 
@@ -2510,7 +2510,7 @@ function App() {
                       )}
                     </button>
                   )}
-                  {/* 缁撶畻绠＄悊鎸夐挳 - 浣跨敤鏉冮檺妫€鏌?*/}
+                  {/* 结算管理按钮 - 使用权限检查 */}
                   {hasPermission(userRole, 'canCreateSettlement') && (
                     <button
                       onClick={() => setCurrentPage('settlement')}
@@ -2519,7 +2519,7 @@ function App() {
                     >
                       <Calculator className="w-4 h-4" />
                       <span>{t('nav.settlement')}</span>
-                      {/* 寰呯粨绠楅攢鍞崟鏁伴噺badge */}
+                      {/* 待结算销售单数量badge */}
                       {pendingSalesCount > 0 && (
                         <span className="absolute -top-2 -right-2 min-w-[20px] h-5 flex items-center justify-center 
                                          bg-red-500 text-white text-xs font-bold rounded-full px-1.5 
@@ -2529,7 +2529,7 @@ function App() {
                       )}
                     </button>
                   )}
-                  {/* 蹇嵎寮€鍗曟寜閽?- 浣跨敤鏉冮檺妫€鏌?*/}
+                  {/* 快捷开单按钮 - 使用权限检查 */}
                   {hasPermission(userRole, 'canCreateSales') && (
                     <button
                       onClick={() => setShowQuickOrderModal(true)}
@@ -2541,7 +2541,7 @@ function App() {
                       <span>{t('nav.quickOrder')}</span>
                     </button>
                   )}
-                  {/* 瀹㈡埛绠＄悊鎸夐挳 - 浣跨敤鏉冮檺妫€鏌ワ紙鏌ョ湅鎴栫鐞嗘潈闄愶級 */}
+                  {/* 客户管理按钮 - 使用权限检查(查看或管理权限) */}
                   {(hasPermission(userRole, 'canViewCustomers') || hasPermission(userRole, 'canManageCustomers')) && (
                     <button
                       onClick={() => setCurrentPage('customer')}
@@ -2552,7 +2552,7 @@ function App() {
                       <span>{t('nav.customers')}</span>
                     </button>
                   )}
-                  {/* 渚涘簲鍟嗙鐞嗘寜閽?- 浣跨敤鏉冮檺妫€鏌?*/}
+                  {/* 供应商管理按钮 - 使用权限检查 */}
                   {hasPermission(userRole, 'canManageSuppliers') && (
                     <button
                       onClick={() => setCurrentPage('supplier')}
@@ -2563,7 +2563,7 @@ function App() {
                       <span>{t('nav.suppliers')}</span>
                     </button>
                   )}
-                  {/* 閫€璐х鐞嗘寜閽?- 浣跨敤鏉冮檺妫€鏌?*/}
+                  {/* 退货管理按钮 - 使用权限检查 */}
                   {(hasPermission(userRole, 'canReturnToSupplier') || hasPermission(userRole, 'canReturnToWarehouse')) && (
                     <button
                       onClick={() => setCurrentPage('returns')}
@@ -2574,7 +2574,7 @@ function App() {
                       <span>{t('nav.returns')}</span>
                     </button>
                   )}
-                  {/* 閲戞枡绠＄悊鎸夐挳 - 鏂欓儴鍜岀鐞嗗眰鍙 */}
+                  {/* 金料管理按钮 - 料部和管理层可见 */}
                   {(hasPermission(userRole, 'canViewGoldMaterial') || hasPermission(userRole, 'canManageGoldMaterial')) && (
                     <button
                       onClick={() => setCurrentPage('gold-material')}
@@ -2585,7 +2585,7 @@ function App() {
                       <span>{t('nav.goldMaterial')}</span>
                     </button>
                   )}
-                  {/* 鏆傚€熺鐞嗘寜閽?- 缁撶畻涓撳憳鍜岀鐞嗗眰鍙 */}
+                  {/* 暂借管理按钮 - 结算专员和管理层可见 */}
                   {hasPermission(userRole, 'canManageLoan') && (
                     <button
                       onClick={() => setCurrentPage('loan')}
@@ -2596,7 +2596,7 @@ function App() {
                       <span>{t('nav.loan')}</span>
                     </button>
                   )}
-                  {/* 鍟嗗搧缂栫爜鎸夐挳 - 鍟嗗搧涓撳憳鍜岀鐞嗗眰鍙 */}
+                  {/* 商品编码按钮 - 商品专员和管理层可见 */}
                   {hasPermission(userRole, 'canManageProductCodes') && (
                     <button
                       onClick={() => setCurrentPage('product-codes')}
@@ -2607,7 +2607,7 @@ function App() {
                       <span>{t('nav.productCodes')}</span>
                     </button>
                   )}
-                  {/* 鍏ュ簱鍗曟嵁鎸夐挳 - 鍟嗗搧涓撳憳鍜岀鐞嗗眰鍙 */}
+                  {/* 入库单据按钮 - 商品专员和管理层可见 */}
                   {(userRole === 'product' || userRole === 'manager') && (
                     <button
                       onClick={() => setCurrentPage('inbound-orders')}
@@ -2618,7 +2618,7 @@ function App() {
                       <span>{t('nav.inboundOrders')}</span>
                     </button>
                   )}
-                  {/* 璐㈠姟瀵硅处鎸夐挳 - 浣跨敤鏉冮檺妫€鏌?*/}
+                  {/* 财务对账按钮 - 使用权限检查 */}
                   {hasPermission(userRole, 'canViewFinance') && (
                     <button
                       onClick={() => setCurrentPage('finance')}
@@ -2629,7 +2629,7 @@ function App() {
                       <span>{t('nav.finance')}</span>
                     </button>
                   )}
-                  {/* 鍘嗗彶鍥炴函鎸夐挳 - 鎵€鏈夎鑹查兘鍙敤 */}
+                  {/* 历史回溯按钮 - 所有角色都可用 */}
                   <button
                     onClick={() => setShowHistoryPanel(true)}
                     className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
@@ -2654,15 +2654,15 @@ function App() {
           </div>
       </header>
 
-        {/* 涓诲唴瀹瑰尯鍩?- 鏍规嵁 currentPage 鍒囨崲 */}
+        {/* 主内容区域 - 根据 currentPage 切换 */}
         {currentPage === 'chat' && (
           <>
-            {/* 瀵硅瘽鍖哄煙 - 鑻规灉椋庢牸 */}
+            {/* 对话区域 - 苹果风格 */}
             <div className="flex-1 overflow-y-auto px-6 py-8">
           <div className="max-w-4xl mx-auto space-y-6">
         {messages.length === 0 && (
               <div className="text-center pt-8">
-                {/* 鏅鸿兘鏃堕棿闂€?+ AI鏍囪瘑 */}
+                {/* 智能时间问候 + AI标识 */}
                 <div className="mb-6">
                   <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-full border border-amber-200">
                     <img src="/ai-avatar.png" alt="AI" className="w-6 h-6 rounded-full object-cover" />
@@ -2679,7 +2679,7 @@ function App() {
                   </div>
                 </div>
                 
-                {/* 鏅鸿兘蹇嵎寤鸿鎸夐挳 - 鍙偣鍑荤洿鎺ュ彂閫?*/}
+                {/* 智能快捷建议按钮 - 可点击直接发送 */}
                 <div className="flex flex-wrap justify-center gap-2 mb-6">
                   <span className="text-gray-400 text-sm">💡 试试：</span>
                   {userRole === 'counter' && (
