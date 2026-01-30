@@ -4810,8 +4810,8 @@ ${itemsList}
       )}
 
       {/* 閿€鍞鐞嗗脊绐?- 鏌滃彴銆佺粨绠椼€佷笟鍔″彲鐢?*/}
-      {['counter', 'settlement', 'sales'].includes(userRole) && (
-        {showSalesSearchModal && (<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><SalesOrdersPage userRole={userRole} onClose={() => setShowSalesSearchModal(false)} /></div>)}
+      {showSalesSearchModal && ['counter', 'settlement', 'sales'].includes(userRole) && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><SalesOrdersPage userRole={userRole} onClose={() => setShowSalesSearchModal(false)} /></div>
       )}
 
       {/* 鍘嗗彶鍥炴函闈㈡澘 - 鎵€鏈夎鑹插彲鐢?*/}
