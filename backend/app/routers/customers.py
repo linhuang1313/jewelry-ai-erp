@@ -378,18 +378,21 @@ async def chat_debt_query(
     返回客户的欠款、欠料、存料等财务信息
     """
     try:
-        # 1. 通过名称模糊查找客户
+        # 1. 优先精确匹配客户名
         customer = db.query(Customer).filter(
-            Customer.name.contains(customer_name),
+            Customer.name == customer_name,
             Customer.status == "active"
         ).first()
         
         if not customer:
-            # 尝试精确匹配
-            customer = db.query(Customer).filter(
-                Customer.name == customer_name,
+            # 2. 精确匹配失败，尝试模糊匹配（优先匹配最短名称，避免错误匹配）
+            candidates = db.query(Customer).filter(
+                Customer.name.contains(customer_name),
                 Customer.status == "active"
-            ).first()
+            ).all()
+            if candidates:
+                # 优先选择名称长度最接近搜索词的客户
+                customer = min(candidates, key=lambda c: abs(len(c.name) - len(customer_name)))
         
         if not customer:
             return not_found_response(message=f"未找到客户：{customer_name}")

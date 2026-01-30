@@ -894,7 +894,12 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 # 使用历史交易汇总方式计算存料（与财务对账单一致）
                 from .models import SettlementOrder
                 from .models.finance import GoldReceipt
-                customer = db.query(Customer).filter(Customer.name.contains(customer_name)).first()
+                # 优先精确匹配，再模糊匹配（选择名称最接近的）
+                customer = db.query(Customer).filter(Customer.name == customer_name).first()
+                if not customer:
+                    candidates = db.query(Customer).filter(Customer.name.contains(customer_name)).all()
+                    if candidates:
+                        customer = min(candidates, key=lambda c: abs(len(c.name) - len(customer_name)))
                 if customer:
                     # 1. 结算欠料（结料支付 + 混合支付的金料部分）
                     total_settlement_gold = 0.0
@@ -938,7 +943,12 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 
                 from .models import SettlementOrder
                 from .models.finance import PaymentRecord
-                customer = db.query(Customer).filter(Customer.name.contains(customer_name)).first()
+                # 优先精确匹配，再模糊匹配（选择名称最接近的）
+                customer = db.query(Customer).filter(Customer.name == customer_name).first()
+                if not customer:
+                    candidates = db.query(Customer).filter(Customer.name.contains(customer_name)).all()
+                    if candidates:
+                        customer = min(candidates, key=lambda c: abs(len(c.name) - len(customer_name)))
                 if customer:
                     # 计算欠款（使用历史交易汇总方式，与财务对账单一致）
                     # 方法：结算金额 - 收款金额 = 净欠款
@@ -1313,8 +1323,12 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     name_match = re.search(r'^([^\s,，。？?!！]{2,8})', user_msg)
                     if name_match:
                         potential_name = name_match.group(1)
-                        # 预加载可能的客户
-                        customer = db.query(Customer).filter(Customer.name.contains(potential_name)).first()
+                        # 预加载可能的客户（优先精确匹配）
+                        customer = db.query(Customer).filter(Customer.name == potential_name).first()
+                        if not customer:
+                            candidates = db.query(Customer).filter(Customer.name.contains(potential_name)).all()
+                            if candidates:
+                                customer = min(candidates, key=lambda c: abs(len(c.name) - len(potential_name)))
                         if customer:
                             preloaded_data['customer'] = customer
                             # 预加载客户存料信息

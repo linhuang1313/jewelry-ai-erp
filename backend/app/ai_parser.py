@@ -915,6 +915,30 @@ def parse_user_message(message: str, conversation_history: Optional[List[dict]] 
   "products": null
 }}
 
+示例33a（查询客户账务 - 带数字后缀的客户名）：
+用户输入："测试客户1欠料情况"
+说明：用户要查询"测试客户1"的欠料情况。注意：必须完整提取客户名包括数字后缀"1"
+{{
+  "action": "查询客户账务",
+  "debt_customer_name": "测试客户1",
+  "debt_query_type": "gold_debt",
+  "date_start": null,
+  "date_end": null,
+  "products": null
+}}
+
+示例33b（查询客户账务 - 另一个带数字的客户名）：
+用户输入："测试客户2的账务"
+说明：用户要查询"测试客户2"的账务。客户名中的数字"2"是客户名的一部分，必须完整提取
+{{
+  "action": "查询客户账务",
+  "debt_customer_name": "测试客户2",
+  "debt_query_type": "all",
+  "date_start": null,
+  "date_end": null,
+  "products": null
+}}
+
 示例34（销售数据查询 - 今日销售）：
 用户输入："今天卖了多少钱"
 说明：用户要查询今日销售额
