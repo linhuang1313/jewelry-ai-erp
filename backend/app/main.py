@@ -978,17 +978,16 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 else:
                     fast_result = {"success": False, "message": f"未找到名为 **{customer_name}** 的客户"}
             
-            # 3. 库存查询：xxx库存、xxx有多少（需要权限检查）
-            inventory_match = re.search(r'^(.+?)(的)?(库存|有多少|还有多少)(量)?[？?]?$', user_msg)
-            if not fast_result and inventory_match:
+            # 3. 整体库存查询：当前库存是多少、库存多少、目前库存（快速路径，不调用AI）
+            overall_inventory_match = re.search(r'^(当前|目前|现在)?(的)?库存(是|有)?(多少|几何|啥|什么)[？?]?$', user_msg)
+            if not fast_result and overall_inventory_match:
                 # 检查库存查询权限（sales 角色无权查看库存）
                 if user_role in ['sales']:
-                    logger.warning(f"[快速路径] 权限不足: 角色={user_role} 尝试查询库存")
+                    logger.warning(f"[快速路径] 权限不足: 角色={user_role} 尝试查询整体库存")
                     fast_result = {"success": False, "message": "⚠️ 您的角色无权查看库存信息，请联系商品专员或管理层。"}
                 else:
-                    product_name = inventory_match.group(1).strip()
-                    logger.info(f"[快速路径] 检测到库存查询: {product_name}, 角色: {user_role}")
-                    yield f"data: {json.dumps({'type': 'thinking', 'step': '快速查询', 'message': f'正在查询 {product_name} 的库存...', 'progress': 30}, ensure_ascii=False)}\n\n"
+                    logger.info(f"[快速路径] 检测到整体库存查询, 角色: {user_role}")
+                    yield f"data: {json.dumps({'type': 'thinking', 'step': '快速查询', 'message': '正在查询库存汇总...', 'progress': 30}, ensure_ascii=False)}\n\n"
                     
                     # 根据角色确定查询的库存位置
                     if user_role == 'product':
@@ -1002,31 +1001,98 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         location_display = '总'
                     
                     if location_code:
-                        # 查询指定仓位的库存
+                        # 查询指定仓位的全部库存
                         location = db.query(Location).filter(Location.code == location_code).first()
                         if location:
-                            location_inv = db.query(LocationInventory).filter(
+                            location_inventories = db.query(LocationInventory).filter(
                                 LocationInventory.location_id == location.id,
-                                LocationInventory.product_name.contains(product_name),
                                 LocationInventory.weight > 0
-                            ).first()
-                            if location_inv:
-                                msg = f"**{location_inv.product_name}** {location_display}库存：**{location_inv.weight:.2f}克**"
-                                fast_result = {"success": True, "action": "查询库存", "message": msg}
-                                ctx.update_entities(session_id, {"last_product": location_inv.product_name})
-                            else:
-                                fast_result = {"success": False, "message": f"在{location_display}未找到 **{product_name}** 的库存记录"}
+                            ).order_by(LocationInventory.weight.desc()).all()
+                            
+                            total_weight = sum(li.weight for li in location_inventories)
+                            product_count = len(location_inventories)
+                            
+                            # 构建返回消息
+                            msg = f"{location_display}当前库存：**{total_weight:.2f}克**，共 **{product_count}** 种商品\n\n"
+                            if location_inventories:
+                                msg += "主要商品：\n"
+                                for li in location_inventories[:5]:  # 最多显示5个
+                                    msg += f"• {li.product_name}：{li.weight:.2f}克\n"
+                                if product_count > 5:
+                                    msg += f"• ...（还有{product_count - 5}种商品）"
+                            
+                            fast_result = {"success": True, "action": "查询库存", "message": msg.strip()}
                         else:
                             fast_result = {"success": False, "message": f"未找到{location_display}位置信息"}
                     else:
                         # 管理层查询总库存
-                        inventory = db.query(Inventory).filter(Inventory.product_name.contains(product_name)).first()
-                        if inventory:
-                            msg = f"**{inventory.product_name}** 当前{location_display}库存：**{inventory.total_weight:.2f}克**"
-                            fast_result = {"success": True, "action": "查询库存", "message": msg}
-                            ctx.update_entities(session_id, {"last_product": inventory.product_name})
+                        inventories = db.query(Inventory).filter(Inventory.total_weight > 0).order_by(Inventory.total_weight.desc()).all()
+                        total_weight = sum(inv.total_weight for inv in inventories)
+                        product_count = len(inventories)
+                        
+                        msg = f"当前{location_display}库存：**{total_weight:.2f}克**，共 **{product_count}** 种商品\n\n"
+                        if inventories:
+                            msg += "主要商品：\n"
+                            for inv in inventories[:5]:
+                                msg += f"• {inv.product_name}：{inv.total_weight:.2f}克\n"
+                            if product_count > 5:
+                                msg += f"• ...（还有{product_count - 5}种商品）"
+                        
+                        fast_result = {"success": True, "action": "查询库存", "message": msg.strip()}
+            
+            # 4. 单品库存查询：xxx库存、xxx有多少（需要权限检查）
+            inventory_match = re.search(r'^(.+?)(的)?(库存|有多少|还有多少)(量)?[？?]?$', user_msg)
+            if not fast_result and inventory_match:
+                # 检查库存查询权限（sales 角色无权查看库存）
+                if user_role in ['sales']:
+                    logger.warning(f"[快速路径] 权限不足: 角色={user_role} 尝试查询库存")
+                    fast_result = {"success": False, "message": "⚠️ 您的角色无权查看库存信息，请联系商品专员或管理层。"}
+                else:
+                    product_name = inventory_match.group(1).strip()
+                    # 过滤掉整体库存查询的关键词，避免重复匹配
+                    if product_name in ['当前', '目前', '现在', '']:
+                        pass  # 跳过，已被整体库存查询处理
+                    else:
+                        logger.info(f"[快速路径] 检测到库存查询: {product_name}, 角色: {user_role}")
+                        yield f"data: {json.dumps({'type': 'thinking', 'step': '快速查询', 'message': f'正在查询 {product_name} 的库存...', 'progress': 30}, ensure_ascii=False)}\n\n"
+                        
+                        # 根据角色确定查询的库存位置
+                        if user_role == 'product':
+                            location_code = 'warehouse'
+                            location_display = '商品部仓库'
+                        elif user_role in ['counter', 'settlement']:
+                            location_code = 'showroom'
+                            location_display = '展厅'
                         else:
-                            fast_result = {"success": False, "message": f"未找到 **{product_name}** 的库存记录"}
+                            location_code = None  # 管理层看总库存
+                            location_display = '总'
+                        
+                        if location_code:
+                            # 查询指定仓位的库存
+                            location = db.query(Location).filter(Location.code == location_code).first()
+                            if location:
+                                location_inv = db.query(LocationInventory).filter(
+                                    LocationInventory.location_id == location.id,
+                                    LocationInventory.product_name.contains(product_name),
+                                    LocationInventory.weight > 0
+                                ).first()
+                                if location_inv:
+                                    msg = f"**{location_inv.product_name}** {location_display}库存：**{location_inv.weight:.2f}克**"
+                                    fast_result = {"success": True, "action": "查询库存", "message": msg}
+                                    ctx.update_entities(session_id, {"last_product": location_inv.product_name})
+                                else:
+                                    fast_result = {"success": False, "message": f"在{location_display}未找到 **{product_name}** 的库存记录"}
+                            else:
+                                fast_result = {"success": False, "message": f"未找到{location_display}位置信息"}
+                        else:
+                            # 管理层查询总库存
+                            inventory = db.query(Inventory).filter(Inventory.product_name.contains(product_name)).first()
+                            if inventory:
+                                msg = f"**{inventory.product_name}** 当前{location_display}库存：**{inventory.total_weight:.2f}克**"
+                                fast_result = {"success": True, "action": "查询库存", "message": msg}
+                                ctx.update_entities(session_id, {"last_product": inventory.product_name})
+                            else:
+                                fast_result = {"success": False, "message": f"未找到 **{product_name}** 的库存记录"}
             
             # ========== 追问型查询：无主语，从上下文获取实体 ==========
             # 4. 客户相关追问：有欠料吗、欠款呢、存料多少
