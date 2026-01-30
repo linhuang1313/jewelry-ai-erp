@@ -282,7 +282,7 @@ function App() {
         if (data.success && Array.isArray(data.sessions)) {
           const history = data.sessions.map(session => ({
             id: session.session_id,
-            title: session.summary || '鏂板璇?,
+            title: session.summary || '新对话',
             messages: [],
             createdAt: session.start_time || new Date().toISOString(),
             updatedAt: session.end_time || new Date().toISOString(),
@@ -349,10 +349,10 @@ function App() {
         
         // 鑷姩鐢熸垚瀵硅瘽鏍囬
         let title = conversationTitle
-        if (title === '鏂板璇? || !currentConversationId) {
+        if (title === '新对话' || !currentConversationId) {
           const firstUserMessage = messages.find(m => m.type === 'user')
           if (firstUserMessage) {
-            title = firstUserMessage.content.substring(0, 20) || '鏂板璇?
+            title = firstUserMessage.content.substring(0, 20) || '新对话'
             if (firstUserMessage.content.length > 20) title += '...'
           }
         }
@@ -404,7 +404,7 @@ function App() {
             setMessages(restoredMessages)
             setCurrentConversationId(lastSessionId)
             setCurrentSessionId(lastSessionId)
-            setConversationTitle(lastConversation.title || '鏂板璇?)
+            setConversationTitle(lastConversation.title || '新对话')
             console.log('[瑙掕壊鍒囨崲] 鎭㈠涓婃瀵硅瘽:', lastSessionId)
           } else {
             // 娌℃湁鎵惧埌涓婃瀵硅瘽锛屽紑濮嬫柊瀵硅瘽
@@ -490,7 +490,7 @@ function App() {
           setMessages(restoredMessages)
           setCurrentConversationId(savedSessionId)
           setCurrentSessionId(savedSessionId)
-          setConversationTitle(conversation.title || '鏂板璇?)
+          setConversationTitle(conversation.title || '新对话')
           console.log('[鎭㈠] 浠庢湰鍦版仮澶嶅璇?', savedSessionId, '娑堟伅鏁?', restoredMessages.length)
         } else {
           // 鏈湴娌℃湁锛屽皾璇曚粠鍚庣鍚屾
@@ -545,8 +545,8 @@ function App() {
         
         // 鏍规嵁瑙掕壊杩囨护锛屼笌 WarehousePage 閫昏緫淇濇寔涓€鑷?
         const roleLocationMap = {
-          'counter': '灞曞巺',
-          'product': '鍟嗗搧閮ㄤ粨搴?
+          'counter': '展厅',
+          'product': '商品部仓库'
         }
         const myLocation = roleLocationMap[userRole]
         
@@ -600,7 +600,7 @@ function App() {
       }
     } catch (error) {
       console.error('鍔犺浇瀹㈡埛鍒楄〃澶辫触:', error)
-      showToast('鍔犺浇瀹㈡埛鍒楄〃澶辫触锛岃妫€鏌ョ綉缁滆繛鎺?)
+      showToast('加载客户列表失败，请检查网络连接')
     }
   }
 
@@ -702,8 +702,8 @@ function App() {
         alert('鍒涘缓鏀舵枡鍗曞け璐ワ細' + (error.detail || '鏈煡閿欒'))
       }
     } catch (error) {
-      console.error('鍒涘缓鏀舵枡鍗曞け璐?', error)
-      alert('鍒涘缓鏀舵枡鍗曞け璐?)
+      console.error('创建收料单失败', error)
+      alert('创建收料单失败')
     }
   }
 
@@ -749,7 +749,7 @@ function App() {
         
         // 娣诲姞鎻愭枡鍗曡褰曞埌鑱婂ぉ妗嗭紙浣跨敤鏂囨湰鏍煎紡+闅愯棌鏍囪锛岀‘淇濆巻鍙茶褰曟寔涔呭寲锛?
         const downloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${result.id}/download?format=html`
-        const withdrawalMessage = `鉁?鎻愭枡鍗曞凡鐢熸垚\n\n馃搵 鍗曞彿锛?{result.withdrawal_no}\n馃懁 瀹㈡埛锛?{customerName}\n鈿栵笍 鍏嬮噸锛?{withdrawalWeight.toFixed(2)} 鍏?{remarkText ? `\n馃摑 澶囨敞锛?{remarkText}` : ''}\n鈴?鏃堕棿锛?{new Date().toLocaleString('zh-CN')}\n\n<!-- WITHDRAWAL_ORDER:${result.id}:${result.withdrawal_no} -->`
+          const withdrawalMessage = `✅ 提料单已生成\n\n📋 单号：${result.withdrawal_no}\n👤 客户：${customerName}\n⚖️ 克重：${withdrawalWeight.toFixed(2)} 克${remarkText ? `\n📝 备注：${remarkText}` : ''}\n⏰ 时间：${new Date().toLocaleString('zh-CN')}\n\n<!-- WITHDRAWAL_ORDER:${result.id}:${result.withdrawal_no} -->`
         setMessages(prev => [...prev, {
           id: Date.now(),
           type: 'system',
@@ -765,11 +765,11 @@ function App() {
         }
       } else {
         const error = await response.json()
-        alert('鍒涘缓鎻愭枡鍗曞け璐ワ細' + (error.detail || '鏈煡閿欒'))
+        alert('创建提料单失败：' + (error.detail || '未知错误'))
       }
     } catch (error) {
-      console.error('鍒涘缓鎻愭枡鍗曞け璐?', error)
-      alert('鍒涘缓鎻愭枡鍗曞け璐?)
+      console.error('创建提料单失败', error)
+      alert('创建提料单失败')
     }
   }
 
@@ -815,10 +815,10 @@ function App() {
     
     // 鑷姩鐢熸垚瀵硅瘽鏍囬锛堜娇鐢ㄧ涓€鏉＄敤鎴锋秷鎭殑鍓?0涓瓧绗︼級
     let title = conversationTitle
-    if (title === '鏂板璇? || !currentConversationId) {
+    if (title === '新对话' || !currentConversationId) {
       const firstUserMessage = messages.find(m => m.type === 'user')
       if (firstUserMessage) {
-        title = firstUserMessage.content.substring(0, 20) || '鏂板璇?
+        title = firstUserMessage.content.substring(0, 20) || '新对话'
         if (firstUserMessage.content.length > 20) title += '...'
         setConversationTitle(title)
       }
@@ -928,7 +928,7 @@ function App() {
         // 浠庡巻鍙茶褰曚腑鑾峰彇瀵硅瘽鏍囬
         const history = conversationHistory
         const conversation = history.find(c => c.id === conversationId)
-        const title = conversation?.title || messages.find(m => m.type === 'user')?.content?.substring(0, 20) || '鏂板璇?
+        const title = conversation?.title || messages.find(m => m.type === 'user')?.content?.substring(0, 20) || '新对话'
         
         setMessages(messages)
         setCurrentConversationId(conversationId)
@@ -990,7 +990,7 @@ function App() {
   const newConversation = () => {
     setMessages([])
     setCurrentConversationId(null)
-    setConversationTitle('鏂板璇?)
+    setConversationTitle('新对话')
     
     // 鐢熸垚鏂扮殑鍚庣 session_id
     const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -1091,10 +1091,10 @@ function App() {
       
       if (!response.body) {
         console.error('鍝嶅簲浣撲负绌?')
-        throw new Error('鍝嶅簲浣撲负绌?)
+          throw new Error('响应体为空')
       }
       
-      console.log('寮€濮嬭鍙朣SE娴?..')
+        console.log('开始读取SSE流...')
 
       // 鍒涘缓鎬濊€冭繃绋嬫秷鎭?
       setMessages(prev => [...prev, { 
@@ -1257,7 +1257,7 @@ function App() {
                 
                 // 濡傛灉娌℃湁鍐呭娑堟伅锛堟瘮濡傚叆搴撴搷浣滅洿鎺ヨ繑鍥炵粨鏋滐級锛屽垱寤轰竴涓柊娑堟伅
                 if (!contentMessageId || !isContentStarted) {
-                  console.log('鍒涘缓鏂扮殑绯荤粺娑堟伅鏉ユ樉绀虹粨鏋?)
+                    console.log('创建新的系统消息来显示结果')
                   contentMessageId = Date.now()
                   // 澶勭悊鍏ュ簱绛夋搷浣滅殑鍝嶅簲
                   if (data.data) {
@@ -1266,11 +1266,11 @@ function App() {
                       console.log('妫€娴嬪埌need_form鏍囧織锛屽脊鍑哄搴旇〃鍗?', data.data.action)
                       
                       // 鏍规嵁鎿嶄綔绫诲瀷寮瑰嚭瀵瑰簲鐨勮〃鍗?
-                      if (data.data.action === '閫€璐?) {
+                        if (data.data.action === '退货') {
                         setShowQuickReturnModal(true)
-                      } else if (data.data.action === '鍏ュ簱') {
+                        } else if (data.data.action === '入库') {
                         setShowQuickInboundModal(true)
-                      } else if (data.data.action === '鍒涘缓閿€鍞崟') {
+                        } else if (data.data.action === '创建销售单') {
                         setShowQuickOrderModal(true)
                       }
                       
@@ -1313,7 +1313,7 @@ function App() {
                         const allProducts = data.data.all_products && data.data.all_products.length > 0 
                           ? data.data.all_products 
                           : [data.data.card_data]
-                        console.log('鏀跺埌寰呯‘璁ゅ晢鍝佹暟鎹紝鍏?, allProducts.length, '涓晢鍝?', allProducts)
+                        console.log('收到待确认商品数据，共', allProducts.length, '个商品', allProducts)
                         
                         // 缁熶竴鍒涘缓鍗＄墖鏁扮粍锛堟棤璁哄崟鍟嗗搧杩樻槸澶氬晢鍝侊級
                         inboundCards = allProducts.map((cardData, index) => {
@@ -1327,7 +1327,7 @@ function App() {
                             totalCost: cardData.total_cost,
                             supplier: {
                               id: 0,
-                              name: cardData.supplier || '鏈煡渚涘簲鍟?,
+                              name: cardData.supplier || '未知供应商',
                             },
                             status: 'pending',
                             source: 'api',
@@ -1470,7 +1470,7 @@ function App() {
     } catch (error) {
       // 濡傛灉鏄姹傝鍙栨秷锛堢敤鎴峰垏鎹㈤〉闈㈡垨鍙戦€佹柊娑堟伅锛夛紝闈欓粯澶勭悊
       if (error.name === 'AbortError') {
-        console.log('SSE 璇锋眰宸插彇娑?)
+          console.log('SSE 请求已取消')
         setLoading(false)
         setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
         return
@@ -1483,7 +1483,7 @@ function App() {
       let errorMessage = `鉂?缃戠粶閿欒锛?{error.message}`
       
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        errorMessage = '鉂?鏃犳硶杩炴帴鍒版湇鍔″櫒锛岃妫€鏌ュ悗绔湇鍔℃槸鍚﹁繍琛岋紙http://localhost:8000锛?
+        errorMessage = '❌ 无法连接到服务器，请检查后端服务是否运行（http://localhost:8000）'
       }
       
       setMessages(prev => [...prev, { 
@@ -1602,11 +1602,11 @@ function App() {
           systemMessage += `\n\n馃搵 鍏ュ簱鍗曚俊鎭細\n` +
             `鍏ュ簱鍗曞彿锛?{data.order.order_no}\n` +
             `鍟嗗搧鍚嶇О锛?{data.detail.product_name}\n` +
-            `閲嶉噺锛?{data.detail.weight}鍏媆n` +
-            `宸ヨ垂锛?{data.detail.labor_cost}鍏?鍏媆n` +
-            `渚涘簲鍟嗭細${data.detail.supplier}\n` +
-            `鎬绘垚鏈細${data.detail.total_cost.toFixed(2)}鍏僜n\n` +
-            `馃摝 褰撳墠搴撳瓨锛?{data.inventory.total_weight}鍏媊
+            `重量：${data.detail.weight}克\n` +
+            `工费：${data.detail.labor_cost}元/克\n` +
+            `供应商：${data.detail.supplier}\n` +
+            `总成本：${data.detail.total_cost.toFixed(2)}元\n\n` +
+            `📦 当前库存：${data.inventory.total_weight}克`
 
           setMessages(prev => [...prev, { 
             type: 'system', 
@@ -1615,15 +1615,15 @@ function App() {
         }
         // 濡傛灉鏄煡璇㈠崟涓簱瀛橈紙淇濈暀鍚戝悗鍏煎锛?
         else if (data.inventory && !data.order) {
-          systemMessage += `\n\n馃摝 搴撳瓨淇℃伅锛歕n` +
-            `鍟嗗搧鍚嶇О锛?{data.inventory.product_name}\n` +
-            `鎬婚噸閲忥細${data.inventory.total_weight}鍏媆n`
+          systemMessage += `\n\n📦 库存信息：\n` +
+            `商品名称：${data.inventory.product_name}\n` +
+            `总重量：${data.inventory.total_weight}克\n`
           
           // 鏄剧ず鎵€鏈夊伐璐规槑缁?
           if (data.inventory.labor_cost_details && data.inventory.labor_cost_details.length > 0) {
-            systemMessage += `\n馃挵 宸ヨ垂鏄庣粏锛歕n`
+          systemMessage += `\n💵 工费明细：\n`
             data.inventory.labor_cost_details.forEach((detail, idx) => {
-              systemMessage += `  璁板綍${idx + 1}锛氬伐璐?{detail.labor_cost.toFixed(2)}鍏?鍏嬶紝閲嶉噺${detail.weight}鍏嬶紝鎬诲伐璐?{detail.total_cost.toFixed(2)}鍏冿紙鍏ュ簱鍗曪細${detail.order_no}锛塡n`
+            systemMessage += `  记录${idx + 1}：工费${detail.labor_cost.toFixed(2)}元/克，重量${detail.weight}克，总工费${detail.total_cost.toFixed(2)}元（入库单：${detail.order_no}）\n`
             })
           }
           
@@ -1642,18 +1642,18 @@ function App() {
         else if (data.inventories && Array.isArray(data.inventories) && data.inventories.length > 0 && !data.action) {
           systemMessage += `\n\n馃摝 鍟嗗搧鍒楄〃锛歕n`
           data.inventories.forEach((inv, idx) => {
-            systemMessage += `${idx + 1}. ${inv.product_name}锛?{inv.total_weight}鍏媊
+            systemMessage += `${idx + 1}. ${inv.product_name}：${inv.total_weight}克`
             if (inv.latest_labor_cost) {
-              systemMessage += `锛屾渶鏂板伐璐癸細${inv.latest_labor_cost}鍏?鍏媊
+              systemMessage += `，最新工费：${inv.latest_labor_cost}元/克`
             }
             if (inv.avg_labor_cost) {
-              systemMessage += `锛屽钩鍧囧伐璐癸細${inv.avg_labor_cost.toFixed(2)}鍏?鍏媊
+              systemMessage += `，平均工费：${inv.avg_labor_cost}元/克`
             }
             systemMessage += `\n`
           })
           
           if (data.total_weight) {
-            systemMessage += `\n馃挵 鎬诲簱瀛橈細${data.total_weight.toFixed(2)}鍏媊
+            systemMessage += `\n💵 总库存：${data.total_weight.toFixed(2)}克`
           }
           
           setMessages(prev => [...prev, { 
@@ -1664,13 +1664,13 @@ function App() {
         }
         // 濡傛灉鏄煡璇㈠叆搴撳崟璇︽儏锛堜繚鐣欏悜鍚庡吋瀹癸級
         else if (data.order && data.details && !data.order.order_no.startsWith('XS')) {
-          systemMessage += `\n\n馃搵 鍏ュ簱鍗曡鎯咃細\n` +
-            `鍏ュ簱鍗曞彿锛?{data.order.order_no}\n` +
-            `鍏ュ簱鏃堕棿锛?{new Date(data.order.create_time).toLocaleString('zh-CN')}\n` +
-            `鐘舵€侊細${data.order.status}\n\n` +
-            `鍟嗗搧鏄庣粏锛歕n`
+          systemMessage += `\n\n📋 入库单详情：\n` +
+            `入库单号：${data.order.order_no}\n` +
+            `入库时间：${new Date(data.order.create_time).toLocaleString('zh-CN')}\n` +
+            `状态：${data.order.status}\n\n` +
+            `商品明细：\n`
           data.details.forEach((detail, idx) => {
-            systemMessage += `${idx + 1}. ${detail.product_category || detail.product_name}锛?{detail.weight}鍏嬶紝宸ヨ垂${detail.labor_cost}鍏?鍏嬶紝鎬诲伐璐?{detail.total_cost.toFixed(2)}鍏僜n`
+            systemMessage += `${idx + 1}. ${detail.product_category || detail.product_name}：${detail.weight}克，工费${detail.labor_cost}元/克，总工费${detail.total_cost.toFixed(2)}元\n`
           })
           
           setMessages(prev => [...prev, { 
@@ -1681,7 +1681,7 @@ function App() {
         }
         // 濡傛灉鏄煡璇㈡渶杩戠殑鍏ュ簱鍗曞垪琛紙淇濈暀鍚戝悗鍏煎锛?
         else if (data.orders && Array.isArray(data.orders) && data.orders.length > 0 && !data.orders[0].order_no.startsWith('XS')) {
-          systemMessage += `\n\n馃搵 鏈€杩戠殑鍏ュ簱鍗曪細\n`
+          systemMessage += `\n\n📋 最近的入库单：\n`
           data.orders.forEach((order, idx) => {
             systemMessage += `${idx + 1}. ${order.order_no} - ${new Date(order.create_time).toLocaleString('zh-CN')} (${order.status})\n`
           })
@@ -1695,24 +1695,24 @@ function App() {
         // 澶勭悊閿€鍞崟鍒涘缓鎴愬姛
         else if (data.order && data.order.order_no && data.order.order_no.startsWith('XS')) {
           // 杩欐槸閿€鍞崟锛堥攢鍞崟鍙蜂互XS寮€澶达級
-          systemMessage += `\n\n馃搵 閿€鍞崟淇℃伅锛歕n` +
-            `閿€鍞崟鍙凤細${data.order.order_no}\n` +
-            `瀹㈡埛锛?{data.order.customer_name}\n` +
-            `涓氬姟鍛橈細${data.order.salesperson}\n` +
-            `闂ㄥ簵浠ｇ爜锛?{data.order.store_code || '鏈～鍐?}\n` +
-            `鏃ユ湡锛?{new Date(data.order.order_date).toLocaleString('zh-CN')}\n` +
-            `鐘舵€侊細${data.order.status}\n\n` +
-            `鍟嗗搧鏄庣粏锛歕n`
+          systemMessage += `\n\n📋 销售单信息：\n` +
+            `销售单号：${data.order.order_no}\n` +
+            `客户：${data.order.customer_name}\n` +
+            `业务员：${data.order.salesperson}\n` +
+            `门店代码：${data.order.store_code || '未填写'}\n` +
+            `日期：${new Date(data.order.order_date).toLocaleString('zh-CN')}\n` +
+            `状态：${data.order.status}\n\n` +
+            `商品明细：\n`
           
           if (data.order.details && data.order.details.length > 0) {
             data.order.details.forEach((detail, idx) => {
-              systemMessage += `${idx + 1}. ${detail.product_name}锛?{detail.weight}鍏嬶紝宸ヨ垂${detail.labor_cost}鍏?鍏嬶紝鎬诲伐璐?{detail.total_labor_cost.toFixed(2)}鍏僜n`
+              systemMessage += `${idx + 1}. ${detail.product_name}：${detail.weight}克，工费${detail.labor_cost}元/克，总工费${detail.total_labor_cost.toFixed(2)}元\n`
             })
           }
           
-          systemMessage += `\n馃挵 鍚堣锛歕n` +
-            `鎬诲厠閲嶏細${data.order.total_weight}鍏媆n` +
-            `鎬诲伐璐癸細${data.order.total_labor_cost.toFixed(2)}鍏僠
+          systemMessage += `\n💵 合计：\n` +
+            `总克重：${data.order.total_weight}克\n` +
+            `总工费：${data.order.total_labor_cost.toFixed(2)}元`
           
           setMessages(prev => [...prev, { 
             type: 'system', 
@@ -1722,7 +1722,7 @@ function App() {
         }
         // 澶勭悊閿€鍞崟鍒楄〃鏌ヨ
         else if (data.orders && Array.isArray(data.orders) && data.orders.length > 0 && data.orders[0].order_no && data.orders[0].order_no.startsWith('XS')) {
-          systemMessage += `\n\n馃搵 閿€鍞崟鍒楄〃锛歕n`
+          systemMessage += `\n\n📋 销售单列表：\n`
           data.orders.forEach((order, idx) => {
             systemMessage += `${idx + 1}. ${order.order_no} - ${order.customer_name} - ${new Date(order.order_date).toLocaleString('zh-CN')} - ${order.status}\n`
           })
@@ -1735,13 +1735,13 @@ function App() {
         }
         // 澶勭悊瀹㈡埛鍒涘缓/鏌ヨ
         else if (data.customer) {
-          systemMessage += `\n\n馃懁 瀹㈡埛淇℃伅锛歕n` +
-            `瀹㈡埛缂栧彿锛?{data.customer.customer_no}\n` +
-            `瀹㈡埛濮撳悕锛?{data.customer.name}\n` +
-            `鐢佃瘽锛?{data.customer.phone || '鏈～鍐?}\n` +
-            `绫诲瀷锛?{data.customer.customer_type}\n` +
-            `绱璐拱锛?{data.customer.total_purchase_amount.toFixed(2)}鍏僜n` +
-            `璐拱娆℃暟锛?{data.customer.total_purchase_count}娆
+          systemMessage += `\n\n👤 客户信息：\n` +
+            `客户编号：${data.customer.customer_no}\n` +
+            `客户名称：${data.customer.name}\n` +
+            `电话：${data.customer.phone || '未填写'}\n` +
+            `类型：${data.customer.customer_type}\n` +
+            `累计购买：${data.customer.total_purchase_amount.toFixed(2)}元\n` +
+            `购买次数：${data.customer.total_purchase_count}次`
           
           setMessages(prev => [...prev, { 
             type: 'system', 
@@ -1750,11 +1750,11 @@ function App() {
         }
         // 澶勭悊瀹㈡埛鍒楄〃鏌ヨ
         else if (data.customers && Array.isArray(data.customers)) {
-          systemMessage += `\n\n馃懁 瀹㈡埛鍒楄〃锛歕n` +
-            `鍏?${data.customers.length} 浣嶅鎴穃n\n`
+          systemMessage += `\n\n👤 客户列表：\n` +
+            `共 ${data.customers.length} 位客户\n\n`
           
           data.customers.forEach((customer, idx) => {
-            systemMessage += `${idx + 1}. ${customer.name} (${customer.customer_no}) - ${customer.phone || '鏃犵數璇?} - 绱璐拱${customer.total_purchase_amount.toFixed(2)}鍏僜n`
+            systemMessage += `${idx + 1}. ${customer.name} (${customer.customer_no}) - ${customer.phone || '无电话'} - 累计购买${customer.total_purchase_amount.toFixed(2)}元\n`
           })
           
           setMessages(prev => [...prev, { 
@@ -1764,7 +1764,7 @@ function App() {
         }
         // 澶勭悊搴撳瓨妫€鏌ラ敊璇?
         else if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
-          systemMessage += `\n\n鉂?搴撳瓨妫€鏌ュけ璐ワ細\n`
+          systemMessage += `\n\n❌ 库存检查失败：\n`
           data.inventory_errors.forEach((error, idx) => {
             systemMessage += `${idx + 1}. ${error.product_name}锛?{error.error}\n` +
               `   闇€瑕侊細${error.required_weight}鍏媆n` +
@@ -1822,18 +1822,18 @@ function App() {
         
         // 濡傛灉鏈夌己澶卞瓧娈靛垪琛紝鏍煎紡鍖栨樉绀?
         if (data.missing_fields && data.missing_fields.length > 0) {
-          errorMessage += `\n\n鉂?缂哄け鐨勫繀濉」锛歕n`
+          errorMessage += `\n\n❌ 缺失的必填项：\n`
           data.missing_fields.forEach(field => {
-            errorMessage += `  鈥?${field}\n`
+            errorMessage += `  • ${field}\n`
           })
-          errorMessage += `\n璇疯ˉ鍏呭畬鏁翠俊鎭悗閲嶆柊鎻愪氦銆俙
+          errorMessage += `\n请补充完整信息后重新提交。`
         }
         
         // 濡傛灉鏄渚涘簲鍟嗛敊璇紝娣诲姞瑙勫垯璇存槑
         if (data.suppliers && Array.isArray(data.suppliers) && data.suppliers.length > 1) {
-          errorMessage += `\n\n馃搵 绯荤粺瑙勫垯鎻愰啋锛歕n`
-          errorMessage += `姣忓紶鍏ュ簱鍗曞彧鑳藉搴斾竴涓緵搴斿晢銆傚鏋滀竴娆″叆搴撳寘鍚涓緵搴斿晢鐨勫晢鍝侊紝璇锋寜渚涘簲鍟嗘媶鍒嗕负澶氬紶鍏ュ簱鍗曞垎鍒彁浜ゃ€俓n`
-          errorMessage += `渚嬪锛氬厛鎻愪氦"渚涘簲鍟咥鐨勫晢鍝?銆佸晢鍝?"锛屽啀鎻愪氦"渚涘簲鍟咮鐨勫晢鍝?銆佸晢鍝?"銆俙
+            errorMessage += `\n\n📋 系统规则提醒：\n`
+            errorMessage += `每张入库单只能对应一个供应商。如果一次入库包含多个供应商的商品，请按供应商拆分为多张入库单分别提交。\n`
+            errorMessage += `例如：先提交"供应商A的商品1、商品2"，再提交"供应商B的商品3、商品4"。`
         }
         
         setMessages(prev => [...prev, { 
@@ -1847,7 +1847,7 @@ function App() {
       
       // 鎻愪緵鏇磋缁嗙殑閿欒淇℃伅
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        errorMessage = '鉂?鏃犳硶杩炴帴鍒版湇鍔″櫒锛岃妫€鏌ュ悗绔湇鍔℃槸鍚﹁繍琛岋紙http://localhost:8000锛?
+        errorMessage = '❌ 无法连接到服务器，请检查后端服务是否运行（http://localhost:8000）'
       } else if (error.name === 'AbortError') {
         errorMessage = '鉂?璇锋眰瓒呮椂锛岃绋嶅悗閲嶈瘯'
       }
@@ -1877,7 +1877,7 @@ function App() {
     if (file.size > 10 * 1024 * 1024) {
       setMessages(prev => [...prev, {
         type: 'system',
-        content: '鉂?鍥剧墖鏂囦欢杩囧ぇ锛岃涓婁紶灏忎簬10MB鐨勫浘鐗?
+        content: '❌ 图片文件过大，请上传小于10MB的图片'
       }])
       return
     }
@@ -1923,14 +1923,14 @@ function App() {
         // OCR瀹屾垚鍚庢墦寮€瀵硅瘽妗?
         handleOCRComplete(data.recognized_text, imageDataUrl)
         
-        let systemMessage = "鉁?鍥剧墖璇嗗埆瀹屾垚锛乗n\n"
+        let systemMessage = "✅ 图片识别完成！\n\n"
         
         // 鏄剧ず鎬濊€冭繃绋?
         if (data.thinking_steps && data.thinking_steps.length > 0) {
-          systemMessage += "馃挱 澶勭悊杩囩▼锛歕n" + data.thinking_steps.join('\n') + "\n\n"
+          systemMessage += "💡 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n"
         }
 
-        systemMessage += "馃摑 璇嗗埆鍑虹殑鏂囧瓧鍐呭宸叉樉绀哄湪缂栬緫瀵硅瘽妗嗕腑锛岃浠旂粏瀹℃牳骞剁紪杈戙€?
+        systemMessage += "📝 识别出的文字内容已显示在编辑对话框中，请仔细审核并编辑。"
 
         setMessages(prev => [...prev, {
           type: 'system',
@@ -1941,14 +1941,14 @@ function App() {
         
         // 鏄剧ず鎬濊€冭繃绋?
         if (data.thinking_steps && data.thinking_steps.length > 0) {
-          errorMessage = "馃挱 澶勭悊杩囩▼锛歕n" + data.thinking_steps.join('\n') + "\n\n" + errorMessage
+          errorMessage = "💡 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + errorMessage
         }
         
         // 濡傛灉璇嗗埆澶辫触浣嗘湁閮ㄥ垎鏂囧瓧锛屼篃鎵撳紑瀵硅瘽妗?
         if (data.recognized_text && data.recognized_text.trim().length > 0) {
           const imageDataUrl = await imageDataUrlPromise
           handleOCRComplete(data.recognized_text, imageDataUrl)
-          errorMessage += `\n\n馃摑 宸茶瘑鍒嚭閮ㄥ垎鏂囧瓧锛堝凡鏄剧ず鍦ㄧ紪杈戝璇濇涓級锛屾偍鍙互鎵嬪姩淇鍚庣‘璁ゅ叆搴撱€俙
+          errorMessage += `\n\n📝 已识别出部分文字（已显示在编辑对话框中），您可以手动修正后确认入库。`
         }
 
         setMessages(prev => [...prev, {
@@ -1958,13 +1958,13 @@ function App() {
       }
     } catch (error) {
       setUploading(false)
-      let errorMessage = `鉂?涓婁紶澶辫触锛?{error.message}`
+      let errorMessage = `❌ 上传失败：${error.message}`
       
       // 鎻愪緵鏇磋缁嗙殑閿欒淇℃伅
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        errorMessage = '鉂?鏃犳硶杩炴帴鍒版湇鍔″櫒锛岃妫€鏌ュ悗绔湇鍔℃槸鍚﹁繍琛岋紙http://localhost:8000锛?
+        errorMessage = '❌ 无法连接到服务器，请检查后端服务是否运行（http://localhost:8000）'
       } else if (error.name === 'AbortError') {
-        errorMessage = '鉂?涓婁紶瓒呮椂锛岃妫€鏌ョ綉缁滆繛鎺ユ垨绋嶅悗閲嶈瘯'
+        errorMessage = '❌ 上传超时，请检查网络连接或稍后重试'
       }
       
       setMessages(prev => [...prev, {
@@ -1990,7 +1990,7 @@ function App() {
   const handleConfirmInbound = async () => {
     const textToSend = ocrResult.trim()
     if (!textToSend) {
-      alert('璇疯緭鍏ュ唴瀹?)
+        alert('请输入内容')
       return
     }
 
@@ -2052,17 +2052,17 @@ function App() {
             systemMessage += `鍟嗗搧${index + 1}锛歕n` +
               `  鍟嗗搧鍚嶇О锛?{detail.product_category || detail.product_name}\n` +
               `  閲嶉噺锛?{detail.weight}鍏媆n` +
-              `  宸ヨ垂锛?{detail.labor_cost}鍏?鍏媆n` +
-              `  渚涘簲鍟嗭細${detail.supplier}\n` +
-              `  璇ュ晢鍝佸伐璐癸細${detail.total_cost.toFixed(2)}鍏僜n\n`
+              `  工费：${detail.labor_cost}元/克\n` +
+              `  供应商：${detail.supplier}\n` +
+              `  该商品工费：${detail.total_cost.toFixed(2)}元\n\n`
           })
           
-          systemMessage += `馃挵 鍚堣宸ヨ垂锛?{data.total_labor_cost.toFixed(2)}鍏僜n\n`
+          systemMessage += `💵 合计工费：${data.total_labor_cost.toFixed(2)}元\n\n`
           
           if (data.inventories && data.inventories.length > 0) {
-            systemMessage += `馃摝 搴撳瓨鏇存柊锛歕n`
+            systemMessage += `📦 库存更新：\n`
             data.inventories.forEach(inv => {
-              systemMessage += `  ${inv.product_name}锛?{inv.total_weight}鍏媆n`
+              systemMessage += `  ${inv.product_name}：${inv.total_weight}克\n`
             })
           }
 
@@ -2073,24 +2073,24 @@ function App() {
         }
         // 澶勭悊閿€鍞崟鍒涘缓鎴愬姛锛圤CR纭鍚庝篃鍙兘鍒涘缓閿€鍞崟锛?
         else if (data.order && data.order.order_no && data.order.order_no.startsWith('XS')) {
-          systemMessage += `\n\n馃搵 閿€鍞崟淇℃伅锛歕n` +
-            `閿€鍞崟鍙凤細${data.order.order_no}\n` +
-            `瀹㈡埛锛?{data.order.customer_name}\n` +
-            `涓氬姟鍛橈細${data.order.salesperson}\n` +
-            `闂ㄥ簵浠ｇ爜锛?{data.order.store_code || '鏈～鍐?}\n` +
-            `鏃ユ湡锛?{new Date(data.order.order_date).toLocaleString('zh-CN')}\n` +
-            `鐘舵€侊細${data.order.status}\n\n` +
-            `鍟嗗搧鏄庣粏锛歕n`
+          systemMessage += `\n\n📋 销售单信息：\n` +
+            `销售单号：${data.order.order_no}\n` +
+            `客户：${data.order.customer_name}\n` +
+            `业务员：${data.order.salesperson}\n` +
+            `门店代码：${data.order.store_code || '未填写'}\n` +
+            `日期：${new Date(data.order.order_date).toLocaleString('zh-CN')}\n` +
+            `状态：${data.order.status}\n\n` +
+            `商品明细：\n`
           
           if (data.order.details && data.order.details.length > 0) {
             data.order.details.forEach((detail, idx) => {
-              systemMessage += `${idx + 1}. ${detail.product_name}锛?{detail.weight}鍏嬶紝宸ヨ垂${detail.labor_cost}鍏?鍏嬶紝鎬诲伐璐?{detail.total_labor_cost.toFixed(2)}鍏僜n`
+              systemMessage += `${idx + 1}. ${detail.product_name}：${detail.weight}克，工费${detail.labor_cost}元/克，总工费${detail.total_labor_cost.toFixed(2)}元\n`
             })
           }
           
-          systemMessage += `\n馃挵 鍚堣锛歕n` +
-            `鎬诲厠閲嶏細${data.order.total_weight}鍏媆n` +
-            `鎬诲伐璐癸細${data.order.total_labor_cost.toFixed(2)}鍏僠
+          systemMessage += `\n💵 合计：\n` +
+            `总克重：${data.order.total_weight}克\n` +
+            `总工费：${data.order.total_labor_cost.toFixed(2)}元`
           
           setMessages(prev => [...prev, { 
             type: 'system', 
@@ -2100,20 +2100,20 @@ function App() {
         }
         // 濡傛灉鏄煡璇㈡墍鏈夊簱瀛橈紙杩斿洖inventories鏁扮粍锛?
         else if (data.inventories && Array.isArray(data.inventories) && data.inventories.length > 0) {
-          systemMessage += `\n\n馃摝 鍟嗗搧鍒楄〃锛歕n`
+          systemMessage += `\n\n📦 商品列表：\n`
           data.inventories.forEach((inv, idx) => {
-            systemMessage += `${idx + 1}. ${inv.product_name}锛?{inv.total_weight}鍏媊
+            systemMessage += `${idx + 1}. ${inv.product_name}：${inv.total_weight}克`
             if (inv.latest_labor_cost) {
-              systemMessage += `锛屾渶鏂板伐璐癸細${inv.latest_labor_cost}鍏?鍏媊
+              systemMessage += `，最新工费：${inv.latest_labor_cost}元/克`
             }
             if (inv.avg_labor_cost) {
-              systemMessage += `锛屽钩鍧囧伐璐癸細${inv.avg_labor_cost.toFixed(2)}鍏?鍏媊
+              systemMessage += `，平均工费：${inv.avg_labor_cost.toFixed(2)}元/克`
             }
             systemMessage += `\n`
           })
           
           if (data.total_weight) {
-            systemMessage += `\n馃挵 鎬诲簱瀛橈細${data.total_weight.toFixed(2)}鍏媊
+            systemMessage += `\n💵 总库存：${data.total_weight.toFixed(2)}克`
           }
           
           setMessages(prev => [...prev, { 
@@ -2419,10 +2419,10 @@ function App() {
                   onClick={() => setShowSalesSearchModal(true)}
                   className="flex items-center space-x-1.5 px-3 py-2 rounded-xl border border-amber-200
                              bg-amber-50 hover:bg-amber-100 transition-all duration-200 font-medium text-[14px] text-amber-700"
-                  title="閿€鍞鐞?
+                  title="销售管理"
                 >
                   <FileText className="w-4 h-4" />
-                  <span>閿€鍞鐞?/span>
+                  <span>销售管理</span>
                 </button>
               )}
 
@@ -2453,7 +2453,7 @@ function App() {
                                  shadow-sm hover:shadow-md"
                     >
                       <TrendingUp className="w-4 h-4" />
-                      <span>浠〃鐩?/span>
+                      <span>仪表盘</span>
                     </button>
                   )}
                   {/* 鏁版嵁鍒嗘瀽鎸夐挳 - 浣跨敤鏉冮檺妫€鏌?*/}
@@ -2466,7 +2466,7 @@ function App() {
                                    shadow-sm hover:shadow-md"
                       >
                         <BarChart3 className="w-4 h-4" />
-                        <span>鏁版嵁鍒嗘瀽</span>
+                        <span>数据分析</span>
                       </button>
                       <button
                         onClick={() => setCurrentPage('export')}
@@ -2475,7 +2475,7 @@ function App() {
                                    shadow-sm hover:shadow-md"
                       >
                         <Download className="w-4 h-4" />
-                        <span>鏁版嵁瀵煎嚭</span>
+                        <span>数据导出</span>
                       </button>
                     </>
                   )}
@@ -2488,7 +2488,7 @@ function App() {
                                  shadow-sm hover:shadow-md"
                     >
                       <Users className="w-4 h-4" />
-                      <span>涓氬姟鍛樼鐞?/span>
+                      <span>业务员管理</span>
                     </button>
                   )}
                   {/* 鍒嗕粨搴撳瓨鎸夐挳 - 鏌滃彴(鎺ユ敹) + 鍟嗗搧涓撳憳(杞Щ) + 绠＄悊灞?*/}
@@ -2669,11 +2669,11 @@ function App() {
                     <span className="text-sm text-gray-700">
                       {(() => {
                         const hour = new Date().getHours()
-                        if (hour < 9) return '鏃╀笂濂斤紒浠婂ぉ涔熻鍔犳补鍝?鈽€锔?
-                        if (hour < 12) return '涓婂崍濂斤紒鏈変粈涔堝彲浠ュ府鎮ㄧ殑锛?
-                        if (hour < 14) return '涓崍濂斤紒璁板緱浼戞伅涓€涓?馃嵉'
-                        if (hour < 18) return '涓嬪崍濂斤紒鎴戦殢鏃跺噯澶囦负鎮ㄦ湇鍔?
-                        return '鏅氫笂濂斤紒杈涜嫤浜?馃寵'
+                        if (hour < 9) return '早上好！今天也要加油哦 ☀️'
+                        if (hour < 12) return '上午好！有什么可以帮您的？'
+                        if (hour < 14) return '中午好！记得休息一下 🍵'
+                        if (hour < 18) return '下午好！我随时准备为您服务'
+                        return '晚上好！辛苦了 🌙'
                       })()}
                     </span>
                   </div>
@@ -2681,52 +2681,52 @@ function App() {
                 
                 {/* 鏅鸿兘蹇嵎寤鸿鎸夐挳 - 鍙偣鍑荤洿鎺ュ彂閫?*/}
                 <div className="flex flex-wrap justify-center gap-2 mb-6">
-                  <span className="text-gray-400 text-sm">馃挕 璇曡瘯锛?/span>
+                  <span className="text-gray-400 text-sm">💡 试试：</span>
                   {userRole === 'counter' && (
                     <>
-                      <button onClick={() => setInput('甯垜寮€涓€寮犻攢鍞崟')} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">寮€閿€鍞崟</button>
-                      <button onClick={() => setInput('鏌ヨ浠婂ぉ鐨勯攢鍞儏鍐?)} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">浠婃棩閿€鍞?/button>
-                      <button onClick={() => setInput('搴撳瓨杩樻湁澶氬皯')} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">鏌ュ簱瀛?/button>
+                      <button onClick={() => setInput('帮我开一张销售单')} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">开销售单</button>
+                      <button onClick={() => setInput('查询今天的销售情况')} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">今日销售</button>
+                      <button onClick={() => setInput('库存还有多少')} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">查库存</button>
                     </>
                   )}
                   {userRole === 'product' && (
                     <>
-                      <button onClick={() => setInput('鍙ゆ硶榛勯噾鎴掓寚 100鍏?宸ヨ垂6鍏?渚涘簲鍟嗛噾婧愮彔瀹?甯垜鍏ュ簱')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">鍏ュ簱鍟嗗搧</button>
-                      <button onClick={() => setInput('鏌ヨ浠婂ぉ鐨勫叆搴撳崟')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">浠婃棩鍏ュ簱</button>
-                      <button onClick={() => setInput('搴撳瓨鍒嗘瀽')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">搴撳瓨鍒嗘瀽</button>
+                      <button onClick={() => setInput('古法黄金戒指 100克 工费6元 供应商金源珠宝 帮我入库')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">入库商品</button>
+                      <button onClick={() => setInput('查询今天的入库单')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">今日入库</button>
+                      <button onClick={() => setInput('库存分析')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">库存分析</button>
                     </>
                   )}
                   {userRole === 'settlement' && (
                     <>
-                      <button onClick={() => setInput('鏌ョ湅浠婂ぉ寰呯粨绠楃殑璁㈠崟')} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">寰呯粨绠?/button>
-                      <button onClick={() => setInput('寮犺€佹澘鎻?鍏?)} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">瀹㈡埛鎻愭枡</button>
-                      <button onClick={() => setInput('鏀舵枡鐧昏')} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">鏀舵枡鐧昏</button>
+                      <button onClick={() => setInput('查看今天待结算的订单')} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">待结算</button>
+                      <button onClick={() => setInput('张老板提5克')} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">客户提料</button>
+                      <button onClick={() => setInput('收料登记')} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">收料登记</button>
                     </>
                   )}
                   {userRole === 'finance' && (
                     <>
-                      <button onClick={() => setInput('鏌ョ湅鏈湀璐㈠姟瀵硅处鎯呭喌')} className="px-3 py-1.5 text-sm bg-purple-50 text-purple-600 rounded-full hover:bg-purple-100 transition-colors">鏈堝害瀵硅处</button>
-                      <button onClick={() => setInput('浠婃棩鏀舵姹囨€?)} className="px-3 py-1.5 text-sm bg-purple-50 text-purple-600 rounded-full hover:bg-purple-100 transition-colors">鏀舵姹囨€?/button>
+                      <button onClick={() => setInput('查看本月财务对账情况')} className="px-3 py-1.5 text-sm bg-purple-50 text-purple-600 rounded-full hover:bg-purple-100 transition-colors">月度对账</button>
+                      <button onClick={() => setInput('今日收款汇总')} className="px-3 py-1.5 text-sm bg-purple-50 text-purple-600 rounded-full hover:bg-purple-100 transition-colors">收款汇总</button>
                     </>
                   )}
                   {userRole === 'sales' && (
                     <>
-                      <button onClick={() => setInput('甯垜鏌ヨ寮犱笁浠婂ぉ鐨勯攢鍞儏鍐?)} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">瀹㈡埛閿€鍞?/button>
-                      <button onClick={() => setInput('鐜嬩簲鏈夊灏戞瑺娆?)} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">娆犳鏌ヨ</button>
-                      <button onClick={() => setInput('鏌ヨ閫€璐ц褰?)} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">閫€璐ц褰?/button>
+                      <button onClick={() => setInput('帮我查询张三今天的销售情况')} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">客户销售</button>
+                      <button onClick={() => setInput('王五有多少欠款')} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">欠款查询</button>
+                      <button onClick={() => setInput('查询退货记录')} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">退货记录</button>
                     </>
                   )}
                   {userRole === 'material' && (
                     <>
-                      <button onClick={() => setInput('鏌ョ湅浠婃棩閲戞枡鏀朵粯鎯呭喌')} className="px-3 py-1.5 text-sm bg-yellow-50 text-yellow-600 rounded-full hover:bg-yellow-100 transition-colors">浠婃棩鏀朵粯</button>
-                      <button onClick={() => setInput('閲戞枡搴撳瓨缁熻')} className="px-3 py-1.5 text-sm bg-yellow-50 text-yellow-600 rounded-full hover:bg-yellow-100 transition-colors">搴撳瓨缁熻</button>
+                      <button onClick={() => setInput('查看今日金料收付情况')} className="px-3 py-1.5 text-sm bg-yellow-50 text-yellow-600 rounded-full hover:bg-yellow-100 transition-colors">今日收付</button>
+                      <button onClick={() => setInput('金料库存统计')} className="px-3 py-1.5 text-sm bg-yellow-50 text-yellow-600 rounded-full hover:bg-yellow-100 transition-colors">库存统计</button>
                     </>
                   )}
                   {userRole === 'manager' && (
                     <>
-                      <button onClick={() => setInput('鏌ョ湅浠婃棩閿€鍞暟鎹眹鎬?)} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">浠婃棩姹囨€?/button>
-                      <button onClick={() => setInput('鏈湀涓氱哗鍒嗘瀽')} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">涓氱哗鍒嗘瀽</button>
-                      <button onClick={() => setInput('搴撳瓨棰勮')} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">搴撳瓨棰勮</button>
+                      <button onClick={() => setInput('查看今日销售数据汇总')} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">今日汇总</button>
+                      <button onClick={() => setInput('本月业绩分析')} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">业绩分析</button>
+                      <button onClick={() => setInput('库存预警')} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">库存预警</button>
                     </>
                   )}
                 </div>
@@ -2747,9 +2747,9 @@ function App() {
                       onClick={() => setShowQuickOrderModal(true)}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">馃Ь</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">蹇€熷紑鍗?/h3>
-                      <p className="text-sm text-gray-600">鍒涘缓閿€鍞崟</p>
+                      <div className="text-2xl mb-3">📝</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">快速开单</h3>
+                      <p className="text-sm text-gray-600">创建销售单</p>
                     </div>
                   )}
                   
@@ -2759,9 +2759,9 @@ function App() {
                       onClick={() => setCurrentPage('warehouse')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">馃摜</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">鎺ユ敹搴撳瓨</h3>
-                      <p className="text-sm text-gray-600">鎺ユ敹浠庝粨搴撹浆绉荤殑鍟嗗搧</p>
+                      <div className="text-2xl mb-3">📦</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">接收库存</h3>
+                      <p className="text-sm text-gray-600">接收从仓库转移的商品</p>
                     </div>
                   )}
                   
@@ -2771,9 +2771,9 @@ function App() {
                       onClick={() => setShowQuickInboundModal(true)}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">馃摝</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">蹇嵎鍏ュ簱</h3>
-                      <p className="text-sm text-gray-600">琛ㄦ牸褰㈠紡鎵归噺鍏ュ簱</p>
+                      <div className="text-2xl mb-3">📦</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">快捷入库</h3>
+                      <p className="text-sm text-gray-600">表格形式批量入库</p>
                     </div>
                   )}
                   
@@ -2783,9 +2783,9 @@ function App() {
                       onClick={() => setCurrentPage('warehouse')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">馃搳</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">鍒嗕粨搴撳瓨</h3>
-                      <p className="text-sm text-gray-600">绠＄悊浠撳簱搴撳瓨鍜岃浆绉?/p>
+                      <div className="text-2xl mb-3">📊</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">分仓库存</h3>
+                      <p className="text-sm text-gray-600">管理仓库库存和转移</p>
                     </div>
                   )}
                   
@@ -2795,9 +2795,9 @@ function App() {
                       onClick={() => setShowQuickReturnModal(true)}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">馃攧</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">蹇嵎閫€璐?/h3>
-                      <p className="text-sm text-gray-600">蹇€熷垱寤洪€€璐у崟锛堥€€缁欎緵搴斿晢锛?/p>
+                      <div className="text-2xl mb-3">🔄</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">快捷退货</h3>
+                      <p className="text-sm text-gray-600">快速创建退货单（退给供应商）</p>
                     </div>
                   )}
                   
@@ -2807,9 +2807,9 @@ function App() {
                       onClick={() => setShowQuickReturnModal(true)}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">馃攧</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">蹇嵎閫€璐?/h3>
-                      <p className="text-sm text-gray-600">蹇€熷垱寤洪€€璐у崟锛堥€€缁欏晢鍝侀儴锛?/p>
+                      <div className="text-2xl mb-3">🔄</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">快捷退货</h3>
+                      <p className="text-sm text-gray-600">快速创建退货单（退给商品部）</p>
                     </div>
                   )}
                   
@@ -2819,9 +2819,9 @@ function App() {
                       onClick={() => setCurrentPage('settlement')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">馃搵</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">寰呯粨绠楄鍗?/h3>
-                      <p className="text-sm text-gray-600">鏌ョ湅寰呯粨绠楃殑閿€鍞崟</p>
+                      <div className="text-2xl mb-3">📋</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">待结算订单</h3>
+                      <p className="text-sm text-gray-600">查看待结算的销售单</p>
                     </div>
                   )}
                   
@@ -2831,14 +2831,14 @@ function App() {
                       onClick={() => setCurrentPage('customer')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">馃懃</div>
+                      <div className="text-2xl mb-3">👥</div>
                       <h3 className="font-semibold text-gray-900 mb-2">
-                        {userRole === 'sales' ? '瀹㈡埛鏌ヨ' : '瀹㈡埛绠＄悊'}
+                        {userRole === 'sales' ? '客户查询' : '客户管理'}
                       </h3>
                       <p className="text-sm text-gray-600">
                         {userRole === 'sales' 
-                          ? '鏌ヨ瀹㈡埛閿€鍞€侀€€璐с€佹瑺娆俱€佸線鏉ヨ处鐩? 
-                          : '绠＄悊瀹㈡埛淇℃伅'}
+                          ? '查询客户销售、退货、欠款、往来账目' 
+                          : '管理客户信息'}
                       </p>
                     </div>
                   )}
@@ -2849,9 +2849,9 @@ function App() {
                       onClick={() => setCurrentPage('finance')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">馃挵</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">璐㈠姟瀵硅处</h3>
-                      <p className="text-sm text-gray-600">鏌ョ湅璐㈠姟瀵硅处鎯呭喌</p>
+                      <div className="text-2xl mb-3">💵</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">财务对账</h3>
+                      <p className="text-sm text-gray-600">查看财务对账情况</p>
                     </div>
                   )}
                   
@@ -2861,9 +2861,9 @@ function App() {
                       onClick={() => setCurrentPage('supplier')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">馃彮</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">渚涘簲鍟嗙鐞?/h3>
-                      <p className="text-sm text-gray-600">绠＄悊渚涘簲鍟嗕俊鎭?/p>
+                      <div className="text-2xl mb-3">🏢</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">供应商管理</h3>
+                      <p className="text-sm text-gray-600">管理供应商信息</p>
                     </div>
                   )}
                   
@@ -2873,9 +2873,9 @@ function App() {
                       onClick={() => setCurrentPage('dashboard')}
                       className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">馃搱</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">鏁版嵁浠〃鐩?/h3>
-                      <p className="text-sm text-gray-600">浠婃棩閿€鍞€佷笟缁╂帓琛?/p>
+                      <div className="text-2xl mb-3">📈</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">数据仪表盘</h3>
+                      <p className="text-sm text-gray-600">今日销售、业绩排行</p>
                     </div>
                   )}
                   
@@ -2885,9 +2885,9 @@ function App() {
                       onClick={() => setCurrentPage('analytics')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">馃搳</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">鏁版嵁鍒嗘瀽</h3>
-                      <p className="text-sm text-gray-600">鏌ョ湅涓氬姟鏁版嵁鍒嗘瀽</p>
+                      <div className="text-2xl mb-3">📊</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">数据分析</h3>
+                      <p className="text-sm text-gray-600">查看业务数据分析</p>
                     </div>
                   )}
                   
@@ -2897,9 +2897,9 @@ function App() {
                       onClick={() => setCurrentPage('export')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">馃摜</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">鏁版嵁瀵煎嚭</h3>
-                      <p className="text-sm text-gray-600">瀵煎嚭鍚勭被鏁版嵁鎶ヨ〃</p>
+                      <div className="text-2xl mb-3">📥</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">数据导出</h3>
+                      <p className="text-sm text-gray-600">导出各类数据报表</p>
                     </div>
                   )}
                   
@@ -2909,9 +2909,9 @@ function App() {
                       onClick={() => setCurrentPage('gold-material')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">鈿栵笍</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">閲戞枡绠＄悊</h3>
-                      <p className="text-sm text-gray-600">閲戞枡鍙拌处銆佹敹鏂欍€佷粯鏂?/p>
+                      <div className="text-2xl mb-3">⚖️</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">金料管理</h3>
+                      <p className="text-sm text-gray-600">金料台账、收料、付料</p>
                     </div>
                   )}
                   
@@ -2921,9 +2921,9 @@ function App() {
                       onClick={() => setCurrentPage('product-codes')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">馃彿锔?/div>
-                      <h3 className="font-semibold text-gray-900 mb-2">鍟嗗搧缂栫爜</h3>
-                      <p className="text-sm text-gray-600">绠＄悊F缂栫爜銆丗L缂栫爜</p>
+                      <div className="text-2xl mb-3">🏷️</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">商品编码</h3>
+                      <p className="text-sm text-gray-600">管理F编码、FL编码</p>
                     </div>
                   )}
                   
@@ -2936,9 +2936,9 @@ function App() {
                       }}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">馃摑</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">鍒涘缓浠樻枡鍗?/h3>
-                      <p className="text-sm text-gray-600">鏀粯渚涘簲鍟嗛噾鏂?/p>
+                      <div className="text-2xl mb-3">📝</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">创建付料单</h3>
+                      <p className="text-sm text-gray-600">支付供应商金料</p>
                     </div>
                   )}
                 </div>
@@ -3009,7 +3009,7 @@ function App() {
                         {/* 瀹㈡埛淇℃伅 */}
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                            <span className="text-orange-600 font-bold text-lg">{pd.customer?.name?.charAt(0) || '瀹?}</span>
+                            <span className="text-orange-600 font-bold text-lg">{pd.customer?.name?.charAt(0) || '客'}</span>
                           </div>
                           <div>
                             <div className="font-semibold text-gray-900">{pd.customer?.name}</div>
@@ -3028,11 +3028,11 @@ function App() {
                             <span className="font-bold text-orange-600 text-lg">楼{pd.payment_amount?.toFixed(2)}</span>
                           </div>
                           <div className="border-t border-gray-200 pt-2 flex justify-between text-sm">
-                            <span className="text-gray-600">鏀舵鍚庢瑺娆?/span>
+                            <span className="text-gray-600">收款后欠款</span>
                             <span className={`font-medium ${(pd.balance_after || 0) >= 0 ? 'text-orange-600' : 'text-green-600'}`}>
                               {(pd.balance_after || 0) >= 0 
                                 ? `楼${pd.balance_after?.toFixed(2)}` 
-                                : `-楼${Math.abs(pd.balance_after || 0).toFixed(2)} (棰勬敹娆?`
+                                : `-¥${Math.abs(pd.balance_after || 0).toFixed(2)} (预收款)`
                               }
                             </span>
                           </div>
@@ -3040,7 +3040,7 @@ function App() {
                         
                         {/* 鏀舵鏂瑰紡 */}
                         <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <span>鏀舵鏂瑰紡锛?/span>
+                          <span>收款方式：</span>
                           <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded">{pd.payment_method}</span>
                         </div>
                         
@@ -3067,11 +3067,11 @@ function App() {
                                       : m
                                   ))
                                 } else {
-                                  alert('鏀舵鐧昏澶辫触锛? + (result.error || '鏈煡閿欒'))
+                                  alert('收款登记失败：' + (result.error || '未知错误'))
                                 }
                               } catch (error) {
                                 console.error('鏀舵鐧昏澶辫触:', error)
-                                alert('鏀舵鐧昏澶辫触锛? + error.message)
+                                alert('收款登记失败：' + error.message)
                               }
                             }}
                             className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-medium py-2.5 px-4 rounded-xl transition-colors"
@@ -3115,7 +3115,7 @@ function App() {
                         {/* 瀹㈡埛淇℃伅 */}
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
-                            <span className="text-yellow-600 font-bold text-lg">{rd.customer?.name?.charAt(0) || '瀹?}</span>
+                              <span className="text-yellow-600 font-bold text-lg">{rd.customer?.name?.charAt(0) || '客'}</span>
                           </div>
                           <div>
                             <div className="font-semibold text-gray-900">{rd.customer?.name}</div>
@@ -3126,16 +3126,16 @@ function App() {
                         {/* 閲戞枡淇℃伅 */}
                         <div className="bg-yellow-50 rounded-xl p-4 space-y-3">
                           <div className="flex justify-between items-center">
-                            <span className="text-gray-600">鏀舵枡鍏嬮噸</span>
-                            <span className="font-bold text-yellow-700 text-2xl">{rd.gold_weight?.toFixed(2)} 鍏?/span>
+                            <span className="text-gray-600">收料克重</span>
+                            <span className="font-bold text-yellow-700 text-2xl">{rd.gold_weight?.toFixed(2)} 克</span>
                           </div>
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-600">鎴愯壊</span>
+                            <span className="text-gray-600">成色</span>
                             <span className="font-medium text-gray-900 px-2 py-0.5 bg-yellow-100 rounded">{rd.gold_fineness}</span>
                           </div>
                           {rd.remark && (
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-600">澶囨敞</span>
+                              <span className="text-gray-600">备注</span>
                               <span className="text-gray-700">{rd.remark}</span>
                             </div>
                           )}
@@ -3210,7 +3210,7 @@ function App() {
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11l5-5m0 0l5 5m-5-5v12" />
                           </svg>
-                          <span className="font-semibold">纭鍒涘缓鎻愭枡鍗?/span>
+                            <span className="font-semibold">确认创建收料单</span>
                         </div>
                       </div>
                       
@@ -3219,7 +3219,7 @@ function App() {
                         {/* 瀹㈡埛淇℃伅 */}
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                            <span className="text-blue-600 font-bold text-lg">{wd.customer?.name?.charAt(0) || '瀹?}</span>
+                              <span className="text-blue-600 font-bold text-lg">{wd.customer?.name?.charAt(0) || '客'}</span>
                           </div>
                           <div>
                             <div className="font-semibold text-gray-900">{wd.customer?.name}</div>
@@ -3230,20 +3230,20 @@ function App() {
                         {/* 鎻愭枡淇℃伅 */}
                         <div className="bg-blue-50 rounded-xl p-4 space-y-3">
                           <div className="flex justify-between items-center">
-                            <span className="text-gray-600">鎻愭枡鍏嬮噸</span>
-                            <span className="font-bold text-blue-700 text-2xl">{wd.gold_weight?.toFixed(2)} 鍏?/span>
+                            <span className="text-gray-600">提料克重</span>
+                            <span className="font-bold text-blue-700 text-2xl">{wd.gold_weight?.toFixed(2)} 克</span>
                           </div>
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-600">褰撳墠瀛樻枡</span>
-                            <span className="font-medium text-gray-900">{wd.current_balance?.toFixed(2)} 鍏?/span>
+                            <span className="text-gray-600">当前存料</span>
+                            <span className="font-medium text-gray-900">{wd.current_balance?.toFixed(2)} 克</span>
                           </div>
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-600">鎻愭枡鍚庝綑棰?/span>
-                            <span className="font-medium text-green-600">{wd.balance_after?.toFixed(2)} 鍏?/span>
+                            <span className="text-gray-600">提料后余额</span>
+                            <span className="font-medium text-green-600">{wd.balance_after?.toFixed(2)} 克</span>
                           </div>
                           {wd.remark && (
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-600">澶囨敞</span>
+                              <span className="text-gray-600">备注</span>
                               <span className="text-gray-700">{wd.remark}</span>
                             </div>
                           )}
@@ -3265,7 +3265,7 @@ function App() {
                                     customer_id: wd.customer.id,
                                     gold_weight: wd.gold_weight,
                                     withdrawal_type: 'self',
-                                    remark: wd.remark || '鑱婂ぉ鎻愭枡'
+                                    remark: wd.remark || '聊天提料'
                                   })
                                 })
                                 if (response.ok) {
@@ -3273,7 +3273,7 @@ function App() {
                                   // 鏇存柊娑堟伅涓烘垚鍔熺姸鎬?
                                   setMessages(prev => prev.map(m => 
                                     m.id === msg.id 
-                                      ? { ...m, type: 'system', content: `鉁?鎻愭枡鍗曞垱寤烘垚鍔燂紒\n\n鍗曞彿锛?{result.withdrawal_no}\n瀹㈡埛锛?{wd.customer.name}\n鍏嬮噸锛?{wd.gold_weight.toFixed(2)}鍏媆n锛堝緟鏂欓儴纭鍙戝嚭锛塦 }
+                                      ? { ...m, type: 'system', content: `✅ 提料单创建成功！\n\n单号：${result.withdrawal_no}\n客户：${wd.customer.name}\n克重：${wd.gold_weight.toFixed(2)}克\n（待料部确认发出）` }
                                       : m
                                   ))
                                   // 鎵撳紑鎵撳嵃椤甸潰
@@ -3282,11 +3282,11 @@ function App() {
                                   }
                                 } else {
                                   const error = await response.json()
-                                  alert('鎻愭枡鍗曞垱寤哄け璐ワ細' + (error.detail || '鏈煡閿欒'))
+                                  alert('提料单创建失败：' + (error.detail || '未知错误'))
                                 }
                               } catch (error) {
-                                console.error('鎻愭枡鍗曞垱寤哄け璐?', error)
-                                alert('鎻愭枡鍗曞垱寤哄け璐ワ細' + error.message)
+                              console.error('提料单创建失败', error)
+                              alert('提料单创建失败：' + error.message)
                               }
                             }}
                             className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2.5 px-4 rounded-xl transition-colors"
@@ -3336,7 +3336,7 @@ function App() {
                         {/* 瀹㈡埛淇℃伅 */}
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                            <span className="text-green-600 font-bold text-lg">{wd.customer_name?.charAt(0) || '瀹?}</span>
+                              <span className="text-green-600 font-bold text-lg">{wd.customer_name?.charAt(0) || '客'}</span>
                           </div>
                           <div>
                             <div className="font-semibold text-gray-900">{wd.customer_name}</div>
@@ -3347,12 +3347,12 @@ function App() {
                         {/* 鎻愭枡淇℃伅 */}
                         <div className="bg-green-50 rounded-xl p-4 space-y-2">
                           <div className="flex justify-between items-center">
-                            <span className="text-gray-600">鎻愭枡鍏嬮噸</span>
-                            <span className="font-bold text-green-700 text-2xl">{wd.gold_weight?.toFixed(2)} 鍏?/span>
+                            <span className="text-gray-600">提料克重</span>
+                            <span className="font-bold text-green-700 text-2xl">{wd.gold_weight?.toFixed(2)} 克</span>
                           </div>
                           {wd.remark && (
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-600">澶囨敞</span>
+                              <span className="text-gray-600">备注</span>
                               <span className="text-gray-700">{wd.remark}</span>
                             </div>
                           )}
@@ -3609,7 +3609,7 @@ function App() {
                               {(userRole === 'settlement' || userRole === 'manager') && (
                                 <button
                                   onClick={async () => {
-                                    if (!confirm('纭畾瑕佹挙閿€姝ょ粨绠楀崟鍚楋紵鎾ら攢鍚庡彲浠ラ噸鏂伴€夋嫨鏀粯鏂瑰紡杩涜缁撶畻銆?)) return
+                                    if (!confirm('确定要撤销此结算单吗？撤销后可以重新选择支付方式进行结算。')) return
                                     try {
                                       const response = await fetch(`${API_BASE_URL}/api/settlement/orders/${settlementId}/revert?user_role=${userRole}`, {
                                         method: 'POST'
@@ -3621,11 +3621,11 @@ function App() {
                                         setCurrentPage('settlement')
                                       } else {
                                         const error = await response.json()
-                                        alert('鎾ら攢澶辫触锛? + (error.detail || '鏈煡閿欒'))
+                                        alert('撤销失败：' + (error.detail || '未知错误'))
                                       }
                                     } catch (error) {
-                                      console.error('鎾ら攢缁撶畻鍗曞け璐?', error)
-                                      alert('鎾ら攢澶辫触锛? + error.message)
+                                        console.error('撤销结算单失败', error)
+                                        alert('撤销失败：' + error.message)
                                     }
                                   }}
                                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 transition-colors"
@@ -3696,17 +3696,17 @@ function App() {
             {Array.isArray(msg.laborCostDetails) && msg.laborCostDetails.length > 0 && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-4xl w-full bg-white rounded-2xl shadow-sm border border-gray-200/60 p-6">
-                  <h3 className="text-lg font-semibold mb-2">宸ヨ垂鏄庣粏琛?/h3>
+                  <h3 className="text-lg font-semibold mb-2">工费明细表</h3>
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">搴忓彿</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">宸ヨ垂锛堝厓/鍏嬶級</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">閲嶉噺锛堝厠锛?/th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">鎬诲伐璐癸紙鍏冿級</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">鍏ュ簱鍗曞彿</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">鍏ュ簱鏃堕棿</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">序号</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">工费（元/克）</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">重量（克）</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">总工费（元）</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">入库单号</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">入库时间</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
@@ -3795,12 +3795,12 @@ function App() {
                                   await reportError(card, errorReason, useMock)
                                   setMessages(prev => prev.map(m => {
                                     if (m.id === msg.id) {
-                                      return { ...m, inboundCard: updateCard(card, { status: 'error', errorMessage: errorReason || '鏁版嵁鎶ラ敊宸叉彁浜? }) }
+                                      return { ...m, inboundCard: updateCard(card, { status: 'error', errorMessage: errorReason || '数据报错已提交' }) }
                                     }
                                     return m
                                   }))
                                 } catch (error) {
-                                  console.error('鎶ラ敊鎻愪氦澶辫触:', error)
+                                  console.error('报错提交失败:', error)
                                 }
                               },
                             }}
@@ -3880,7 +3880,7 @@ function App() {
                                           const updatedCards = m.inboundCards.map((c, i) => 
                                             i === cardIndex ? updateCard(c, { 
                                               status: 'error', 
-                                              errorMessage: errorReason || '鏁版嵁鎶ラ敊宸叉彁浜? 
+                                              errorMessage: errorReason || '数据报错已提交' 
                                             }) : c
                                           )
                                           return { ...m, inboundCards: updatedCards }
@@ -3888,7 +3888,7 @@ function App() {
                                         return m
                                       }))
                                     } catch (error) {
-                                      console.error('鎶ラ敊鎻愪氦澶辫触:', error)
+                                      console.error('报错提交失败:', error)
                                     }
                                   },
                                 }}
@@ -3968,30 +3968,30 @@ function App() {
                           <h3 className="text-xl font-bold text-gray-800 mb-4">馃搵 閿€鍞崟璇︽儏</h3>
                           <div className="grid grid-cols-2 gap-4 mb-4">
                             <div>
-                              <span className="text-gray-600">閿€鍞崟鍙凤細</span>
+                              <span className="text-gray-600">销售单号：</span>
                               <span className="font-semibold">{msg.salesOrder.order_no}</span>
                             </div>
                             <div>
-                              <span className="text-gray-600">瀹㈡埛锛?/span>
+                              <span className="text-gray-600">客户：</span>
                               <span className="font-semibold">{msg.salesOrder.customer_name}</span>
                             </div>
                             <div>
-                              <span className="text-gray-600">涓氬姟鍛橈細</span>
+                              <span className="text-gray-600">业务员：</span>
                               <span className="font-semibold">{msg.salesOrder.salesperson}</span>
                             </div>
                             <div>
-                              <span className="text-gray-600">闂ㄥ簵浠ｇ爜锛?/span>
-                              <span className="font-semibold">{msg.salesOrder.store_code || '鏈～鍐?}</span>
+                              <span className="text-gray-600">门店代码：</span>
+                              <span className="font-semibold">{msg.salesOrder.store_code || '未填写'}</span>
                             </div>
                             <div>
-                              <span className="text-gray-600">鏃ユ湡锛?/span>
+                              <span className="text-gray-600">日期：</span>
                               <span className="font-semibold">{new Date(msg.salesOrder.order_date).toLocaleString('zh-CN')}</span>
                             </div>
                             <div>
-                              <span className="text-gray-600">鐘舵€侊細</span>
+                              <span className="text-gray-600">状态：</span>
                               <span className={`font-semibold ${
-                                msg.salesOrder.status === '宸茬粨绠? ? 'text-green-600' : 
-                                msg.salesOrder.status === '寰呯粨绠? ? 'text-yellow-600' : 
+                                msg.salesOrder.status === '已结算' ? 'text-green-600' : 
+                                msg.salesOrder.status === '待结算' ? 'text-yellow-600' : 
                                 'text-gray-600'
                               }`}>
                                 {msg.salesOrder.status}
@@ -4006,27 +4006,27 @@ function App() {
                                 <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg">
                                   <thead className="bg-gray-100">
                                     <tr>
-                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">鍟嗗搧鍚嶇О</th>
-                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">鍏嬮噸</th>
-                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">宸ヨ垂</th>
-                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">鎬诲伐璐?/th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">商品名称</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">克重</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">工费</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">总工费</th>
                                     </tr>
                                   </thead>
                                   <tbody className="bg-white divide-y divide-gray-200">
                                     {msg.salesOrder.details.map((detail, idx) => (
                                       <tr key={idx} className="hover:bg-gray-50">
                                         <td className="px-4 py-2 text-sm text-gray-900">{detail.product_name}</td>
-                                        <td className="px-4 py-2 text-sm text-gray-900">{detail.weight}鍏?/td>
-                                        <td className="px-4 py-2 text-sm text-gray-900">{detail.labor_cost}鍏?鍏?/td>
-                                        <td className="px-4 py-2 text-sm font-semibold text-gray-900">{detail.total_labor_cost.toFixed(2)}鍏?/td>
+                                        <td className="px-4 py-2 text-sm text-gray-900">{detail.weight}克</td>
+                                        <td className="px-4 py-2 text-sm text-gray-900">{detail.labor_cost}元/克</td>
+                                        <td className="px-4 py-2 text-sm font-semibold text-gray-900">{detail.total_labor_cost.toFixed(2)}元</td>
                                       </tr>
                                     ))}
                                   </tbody>
                                 </table>
                               </div>
                               <div className="mt-4 flex justify-end space-x-6 text-lg font-bold text-gray-800">
-                                <span>鎬诲厠閲嶏細<span className="text-blue-600">{msg.salesOrder.total_weight}鍏?/span></span>
-                                <span>鎬诲伐璐癸細<span className="text-green-600">{msg.salesOrder.total_labor_cost.toFixed(2)}鍏?/span></span>
+                                <span>总克重：<span className="text-blue-600">{msg.salesOrder.total_weight}克</span></span>
+                                <span>总工费：<span className="text-green-600">{msg.salesOrder.total_labor_cost.toFixed(2)}元</span></span>
                               </div>
                             </div>
                           )}
@@ -4037,7 +4037,7 @@ function App() {
                     {Array.isArray(msg.inventoryErrors) && msg.inventoryErrors.length > 0 && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-4xl w-full bg-red-50 rounded-2xl shadow-sm p-6 border border-red-200/60">
-                          <h3 className="text-xl font-bold text-red-800 mb-4">鉂?搴撳瓨妫€鏌ュけ璐?/h3>
+                          <h3 className="text-xl font-bold text-red-800 mb-4">❌ 库存检查失败</h3>
                           <div className="space-y-4">
                             {msg.inventoryErrors.map((error, idx) => (
                               <div key={idx} className="bg-white rounded-lg p-4 border border-red-200">
@@ -4046,27 +4046,27 @@ function App() {
                                 </div>
                                 <div className="text-sm text-gray-700 space-y-1">
                                   <div className="flex items-center">
-                                    <span className="text-red-600 font-medium">閿欒锛?/span>
+                                    <span className="text-red-600 font-medium">错误：</span>
                                     <span className="ml-2">{error.error}</span>
                                   </div>
                                   <div className="flex items-center">
-                                    <span className="text-gray-600">闇€瑕侊細</span>
-                                    <span className="ml-2 font-semibold">{error.required_weight}鍏?/span>
+                                    <span className="text-gray-600">需要：</span>
+                                    <span className="ml-2 font-semibold">{error.required_weight}克</span>
                                   </div>
                                   <div className="flex items-center">
-                                    <span className="text-gray-600">鍙敤锛?/span>
-                                    <span className="ml-2 font-semibold text-red-600">{error.available_weight}鍏?/span>
+                                    <span className="text-gray-600">可用：</span>
+                                    <span className="ml-2 font-semibold text-red-600">{error.available_weight}克</span>
                                   </div>
                                   {error.reserved_weight !== undefined && (
                                     <div className="flex items-center">
-                                      <span className="text-gray-600">宸查鐣欙細</span>
-                                      <span className="ml-2 font-semibold">{error.reserved_weight}鍏?/span>
+                                      <span className="text-gray-600">已预留：</span>
+                                      <span className="ml-2 font-semibold">{error.reserved_weight}克</span>
                                     </div>
                                   )}
                                   {error.total_weight !== undefined && (
                                     <div className="flex items-center">
-                                      <span className="text-gray-600">鎬诲簱瀛橈細</span>
-                                      <span className="ml-2 font-semibold">{error.total_weight}鍏?/span>
+                                      <span className="text-gray-600">总库存：</span>
+                                      <span className="ml-2 font-semibold">{error.total_weight}克</span>
                                     </div>
                                   )}
                                 </div>
@@ -4093,7 +4093,7 @@ function App() {
                                       legend: { position: 'top' },
                                       title: {
                                         display: true,
-                                        text: msg.chartTitle || '瓒嬪娍鍒嗘瀽锛堟姌绾垮浘锛?,
+                                        text: msg.chartTitle || '趋势分析（折线图）',
                                         font: { size: 14, weight: 'bold' }
                                       },
                                     },
@@ -4112,12 +4112,12 @@ function App() {
                         title: {
                           display: true,
                                         text: (() => {
-                                          if (msg.chartType === '渚涘簲鍟嗗垎鏋? || msg.chartType === '鐢熸垚鍥捐〃') {
-                                            return '渚涘簲鍟嗗姣斿垎鏋愶紙鏌辩姸鍥撅級'
-                                          } else if (msg.chartType === '鏌ヨ搴撳瓨') {
-                                            return '馃搳 搴撳瓨缁熻鍥捐〃'
+                                          if (msg.chartType === '供应商分析' || msg.chartType === '生成图表') {
+                                            return '供应商占比分析（柱状图）'
+                                          } else if (msg.chartType === '查询库存') {
+                                            return '📊 库存统计图表'
                                           }
-                                          return '鏁版嵁缁熻鍥捐〃'
+                                          return '数据统计图表'
                                         })(),
                                         font: { size: 14, weight: 'bold' }
                         },
@@ -4126,7 +4126,7 @@ function App() {
                             label: function(context) {
                               const label = context.dataset.label || '';
                               const value = context.parsed.y;
-                              const unit = label.includes('宸ヨ垂') ? ' 鍏? : ' 鍏?;
+                              const unit = label.includes('工费') ? ' 元' : ' 克';
                               return `${label}: ${value.toLocaleString()}${unit}`;
                             }
                           }
@@ -4135,10 +4135,10 @@ function App() {
                       scales: {
                         y: {
                           beginAtZero: true,
-                                        title: { display: true, text: '閲嶉噺锛堝厠锛? }
+                                          title: { display: true, text: '重量（克）' }
                         },
                         x: {
-                                        title: { display: true, text: '鍟嗗搧鍚嶇О' }
+                                          title: { display: true, text: '商品名称' }
                         }
                       }
                     }} 
@@ -4158,10 +4158,10 @@ function App() {
                             title: {
                               display: true,
                                         text: (() => {
-                                          if (msg.chartType === '渚涘簲鍟嗗垎鏋? || msg.chartType === '鐢熸垚鍥捐〃') {
-                                            return '馃崺 渚涘簲鍟嗗崰姣斿垎甯?
+                                            if (msg.chartType === '供应商分析' || msg.chartType === '生成图表') {
+                                              return '🍪 供应商占比分布'
                                           }
-                                          return '馃崺 搴撳瓨鍗犳瘮鍒嗗竷'
+                                            return '🍪 库存占比分布'
                                         })(),
                                         font: { size: 14, weight: 'bold' }
                                       },
@@ -4187,7 +4187,7 @@ function App() {
                           {msg.rawData && (msg.rawData.suppliers || msg.rawData.inventory) && (
                             <details className="mt-4 border-t border-gray-100 pt-4">
                               <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
-                                <span>馃搳 鏌ョ湅璇︾粏鏁版嵁</span>
+                                <span>📊 查看详细数据</span>
                               </summary>
                               <div className="mt-3 overflow-x-auto">
                                 {/* 渚涘簲鍟嗘暟鎹〃鏍?*/}
@@ -4195,10 +4195,10 @@ function App() {
                                   <table className="min-w-full text-sm">
                                     <thead className="bg-gray-50">
                                       <tr>
-                                        <th className="px-3 py-2 text-left font-medium text-gray-600">渚涘簲鍟?/th>
-                                        <th className="px-3 py-2 text-right font-medium text-gray-600">渚涜揣閲嶉噺(鍏?</th>
-                                        <th className="px-3 py-2 text-right font-medium text-gray-600">鎬诲伐璐?鍏?</th>
-                                        <th className="px-3 py-2 text-right font-medium text-gray-600">渚涜揣娆℃暟</th>
+                                        <th className="px-3 py-2 text-left font-medium text-gray-600">供应商</th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-600">供货重量(克)</th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-600">总工费(元)</th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-600">供货次数</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -4218,9 +4218,9 @@ function App() {
                                   <table className="min-w-full text-sm">
                                     <thead className="bg-gray-50">
                                       <tr>
-                                        <th className="px-3 py-2 text-left font-medium text-gray-600">鍟嗗搧鍚嶇О</th>
-                                        <th className="px-3 py-2 text-right font-medium text-gray-600">搴撳瓨閲嶉噺(鍏?</th>
-                                        <th className="px-3 py-2 text-right font-medium text-gray-600">鍏ュ簱娆℃暟</th>
+                                        <th className="px-3 py-2 text-left font-medium text-gray-600">商品名称</th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-600">库存重量(克)</th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-600">入库次数</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -4334,12 +4334,12 @@ function App() {
                 {/* 鎻愮ず淇℃伅 */}
                 <div className="px-4 sm:px-6 py-3 sm:py-4 border-b bg-blue-50">
                   <p className="text-xs sm:text-sm text-blue-800 font-medium mb-1">
-                    鈿狅笍 璇锋鏌ュ苟缂栬緫璇嗗埆鍐呭锛岀‘璁ゆ棤璇悗鐐瑰嚮"纭鍏ュ簱"
+                    ⚠️ 请检查并编辑识别内容，确认无误后点击"确认入库"
                   </p>
                   <ul className="text-xs text-blue-700 list-disc list-inside space-y-0.5 mt-2">
-                    <li>妫€鏌ュ晢鍝佸悕绉版槸鍚︽纭?/li>
-                    <li>妫€鏌ラ噸閲忋€佸伐璐广€佷緵搴斿晢绛変俊鎭?/li>
-                    <li>鍙互鎵嬪姩缂栬緫淇敼鍐呭</li>
+                    <li>检查商品名称是否正确</li>
+                    <li>检查重量、工费、供应商等信息</li>
+                    <li>可以手动编辑修改内容</li>
                   </ul>
                 </div>
                 
@@ -4349,7 +4349,7 @@ function App() {
                     ref={ocrTextareaRef}
                     value={ocrResult}
                     onChange={(e) => setOcrResult(e.target.value)}
-                    placeholder="璇嗗埆鍑虹殑鏂囧瓧鍐呭灏嗘樉绀哄湪杩欓噷..."
+                    placeholder="识别出的文字内容将显示在这里..."
                     className="min-h-[300px]"
                   />
                 </div>
@@ -4409,13 +4409,13 @@ function App() {
                       : 'bg-orange-500 text-white hover:bg-orange-600 shadow-sm hover:shadow-md'
                     }
                   `}
-                  title="蹇嵎鍏ュ簱"
+                  title="快捷入库"
                 >
-                  馃摝 鍏ュ簱
+                  📦 入库
                 </button>
               )}
 
-              {/* 蹇€熷紑鍗曟寜閽?- 浠呮煖鍙板彲瑙侊紙缁撶畻涓撳憳涓嶉渶瑕侊級 */}
+              {/* 快速开单按钮 - 仅柜台可见（结算专员不需要） */}
               {userRole === 'counter' && (
                 <button
                   onClick={() => setShowQuickOrderModal(true)}
@@ -4428,13 +4428,13 @@ function App() {
                       : 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm hover:shadow-md'
                     }
                   `}
-                  title="蹇€熷紑鍗?
+                  title="快速开单"
                 >
-                  馃摑 寮€鍗?
+                  📝 开单
                 </button>
               )}
 
-              {/* 蹇嵎閫€璐ф寜閽?- 鍟嗗搧涓撳憳鍜屾煖鍙板彲瑙?*/}
+              {/* 快捷退货按钮 - 商品专员和柜台可见 */}
               {(userRole === 'product' || userRole === 'counter') && (
                 <button
                   onClick={() => setShowQuickReturnModal(true)}
@@ -4447,13 +4447,13 @@ function App() {
                       : 'bg-red-500 text-white hover:bg-red-600 shadow-sm hover:shadow-md'
                     }
                   `}
-                  title="蹇嵎閫€璐?
+                  title="快捷退货"
                 >
-                  鈫╋笍 閫€璐?
+                  ↩️ 退货
                 </button>
               )}
 
-          {/* 鍥剧墖涓婁紶鎸夐挳 */}
+          {/* 图片上传按钮 */}
           <input
             ref={fileInputRef}
             type="file"
@@ -4465,7 +4465,7 @@ function App() {
           />
           <label
             htmlFor="image-upload"
-            title="OCR璇嗗埆鍏ュ簱鍗曟嵁 - 鏀寔鎷嶇収鎴栦笂浼犲崟鎹浘鐗囪嚜鍔ㄨ瘑鍒?
+            title="OCR识别入库单据 - 支持拍照或上传单据图片自动识别"
                 className={`
                   px-4 py-3 rounded-2xl cursor-pointer transition-all duration-200
                   h-[52px] flex items-center font-medium text-[15px]
@@ -4475,25 +4475,25 @@ function App() {
                   }
                 `}
               >
-                {uploading ? `馃摲 ${t('chat.scanning')}` : `馃摲 ${t('chat.scan')}`}
+                {uploading ? `📲 ${t('chat.scanning')}` : `📲 ${t('chat.scan')}`}
           </label>
 
-          {/* 蹇嵎鏀舵枡/鎻愭枡鎸夐挳 - 缁撶畻涓撳憳鍜岀鐞嗗眰鍙 */}
+          {/* 快捷收料/提料按钮 - 结算专员和管理层可见 */}
           {(userRole === 'settlement' || userRole === 'manager') && (
             <>
               <button
                 onClick={openQuickReceiptModal}
                 className="px-4 py-3 rounded-2xl h-[52px] flex items-center font-medium text-[15px] bg-gradient-to-r from-jewelry-gold to-jewelry-gold-light text-white hover:from-jewelry-gold-dark hover:to-jewelry-gold shadow-sm hover:shadow-md transition-all duration-200"
-                title={currentLanguage === 'en' ? 'Quick Receipt' : '蹇嵎鏀舵枡'}
+                title={currentLanguage === 'en' ? 'Quick Receipt' : '快捷收料'}
               >
-                馃摝 {t('chat.receipt')}
+                📦 {t('chat.receipt')}
               </button>
               <button
                 onClick={openQuickWithdrawalModal}
                 className="px-4 py-3 rounded-2xl h-[52px] flex items-center font-medium text-[15px] border-2 border-jewelry-navy text-jewelry-navy hover:bg-jewelry-navy hover:text-white transition-all duration-200"
-                title={currentLanguage === 'en' ? 'Quick Withdrawal' : '蹇嵎鎻愭枡'}
+                title={currentLanguage === 'en' ? 'Quick Withdrawal' : '快捷提料'}
               >
-                猬嗭笍 {t('chat.withdrawal')}
+                ⬆️ {t('chat.withdrawal')}
               </button>
             </>
           )}
@@ -4559,30 +4559,30 @@ function App() {
           <div className="flex-1 overflow-y-auto">
             <SettlementPage 
               onSettlementConfirmed={(data) => {
-                // 缁撶畻鍗曠‘璁ゅ悗锛屽湪鑱婂ぉ妗嗘樉绀烘槑缁?
+              // 结算单确认后，在聊天框显示明细
                 const itemsList = (Array.isArray(data?.details) ? data.details : []).map((item, idx) => 
-                  `${idx + 1}. ${item.product_name}锛?{item.weight}鍏?脳 楼${item.labor_cost}/鍏?= 楼${item.total_labor_cost.toFixed(2)}`
+                  `${idx + 1}. ${item.product_name}：${item.weight}克 × ¥${item.labor_cost}/克 = ¥${item.total_labor_cost.toFixed(2)}`
                 ).join('\n')
                 
-                const paymentMethodStr = data.payment_method === 'cash_price' ? '缁撲环' : 
-                          data.payment_method === 'mixed' ? '娣峰悎鏀粯' : '缁撴枡'
+                const paymentMethodStr = data.payment_method === 'cash_price' ? '结价' : 
+                          data.payment_method === 'mixed' ? '混合支付' : '结料'
                 
-                const settlementMessage = `鉁?**缁撶畻鍗曠‘璁ゆ垚鍔?*
+                const settlementMessage = `✅ **结算单确认成功**
 
-馃搵 **缁撶畻鍗曞彿**锛?{data.settlement_no}
-馃懁 **瀹㈡埛**锛?{data.customer_name}
-馃鈥嶐煉?**涓氬姟鍛?*锛?{data.salesperson}
-馃挸 **鏀粯鏂瑰紡**锛?{paymentMethodStr}
+📋 **结算单号**：${data.settlement_no}
+👤 **客户**：${data.customer_name}
+🧑‍💼 **业务员**：${data.salesperson}
+💸 **支付方式**：${paymentMethodStr}
 
-馃摝 **鍟嗗搧鏄庣粏**锛?
+📦 **商品明细**：
 ${itemsList}
 
-馃搳 **姹囨€?*锛?
-- 鎬诲厠閲嶏細${data.total_weight.toFixed(2)}鍏?
-- 宸ヨ垂鍚堣锛毬?{data.labor_amount.toFixed(2)}
-${data.gold_price ? `- 閲戜环锛?{data.gold_price.toFixed(2)} 鍏?鍏媊 : ''}
-${data.material_amount > 0 ? `- 閲戞枡閲戦锛毬?{data.material_amount.toFixed(2)}` : ''}
-- **搴旀敹鎬昏锛毬?{data.total_amount.toFixed(2)}**
+📊 **汇总**：
+- 总克重：${data.total_weight.toFixed(2)}克
+- 工费合计：¥${data.labor_amount.toFixed(2)}
+${data.gold_price ? `- 金价：${data.gold_price.toFixed(2)} 元/克` : ''}
+${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(2)}` : ''}
+- **应收总计：¥${data.total_amount.toFixed(2)}**
 
 <!-- SETTLEMENT_ORDER:${data.settlement_id}:${data.settlement_no} -->`
 
@@ -4727,22 +4727,22 @@ ${itemsList}
               })
               fetch(`${API_BASE_URL}/api/chat-logs/message?${params}`, {
                 method: 'POST'
-              }).catch(err => console.error('淇濆瓨閿€鍞崟娑堟伅澶辫触:', err))
+              }).catch(err => console.error('Save sales message failed:', err))
             }
           }}
         />
       )}
 
-      {/* 蹇嵎閫€璐у脊绐?- 鍟嗗搧涓撳憳鍜屾煖鍙板彲鐢?*/}
+      {/* 快捷退货弹窗 - 商品专员和柜台可用 */}
       {(hasPermission(userRole, 'canReturnToSupplier') || hasPermission(userRole, 'canReturnToWarehouse')) && (
         <QuickReturnModal
           isOpen={showQuickReturnModal}
           onClose={() => setShowQuickReturnModal(false)}
           onSuccess={async (result) => {
-            // 鏋勫缓閫€璐ф垚鍔熺殑娑堟伅鍐呭锛堝寘鍚殣钘忕殑ID鏍囪锛岀敤浜庡巻鍙茶褰曚腑鏄剧ず鎵撳嵃鎸夐挳锛?
-            const returnMessage = `鉁?**閫€璐у崟鍒涘缓鎴愬姛**\n\n馃搵 鍗曞彿锛?{result.return_no}\n馃摝 鍟嗗搧鏁伴噺锛?{result.item_count}涓猏n鈿栵笍 鎬婚€€璐у厠閲嶏細${result.total_weight?.toFixed(2) || 0}鍏媆n馃挵 鎬诲伐璐癸細楼${result.total_labor_cost?.toFixed(2) || 0}\n馃摑 閫€璐у師鍥狅細${result.return_reason}${result.supplier_name ? `\n馃彮 渚涘簲鍟嗭細${result.supplier_name}` : ''}${result.from_location_name ? `\n馃搷 鍙戣捣浣嶇疆锛?{result.from_location_name}` : ''}\n\n<!-- RETURN_ORDER:${result.return_id}:${result.return_no} -->`
+            // Build return success message content (with hidden ID marker for history print button)
+            const returnMessage = `\u2705 **退货单创建成功**\n\n\uD83D\uDCCB 单号：${result.return_no}\n\uD83D\uDCE6 商品数量：${result.item_count}个\n\u2696\uFE0F 总退货克重：${result.total_weight?.toFixed(2) || 0}克\n\uD83D\uDCB5 总工费：\u00A5${result.total_labor_cost?.toFixed(2) || 0}\n\uD83D\uDCDD 退货原因：${result.return_reason}${result.supplier_name ? `\n\uD83C\uDFED 供应商：${result.supplier_name}` : ''}${result.from_location_name ? `\n\uD83D\uDCCD 发起位置：${result.from_location_name}` : ''}\n\n<!-- RETURN_ORDER:${result.return_id}:${result.return_no} -->`
             
-            // 娣诲姞鍒拌亰澶╄褰曟樉绀猴紙鍖呭惈閫€璐у崟淇℃伅锛岀敤浜庝笅杞?鎵撳嵃锛?
+            // Add to chat history display (includes return order info for download/print)
             setMessages(prev => [...prev, {
               type: 'system',
               content: returnMessage,
@@ -4752,41 +4752,41 @@ ${itemsList}
               }
             }])
             
-            // 淇濆瓨鍒板悗绔亰澶╁巻鍙诧紙鍖呭惈ID鏍囪锛?
+            // Save to backend chat history (with ID marker)
             try {
-              await fetch(`${API_BASE_URL}/api/chat-logs/message?session_id=${encodeURIComponent(currentSessionId)}&message_type=assistant&content=${encodeURIComponent(returnMessage)}&user_role=${userRole}&intent=閫€璐, {
+              await fetch(`${API_BASE_URL}/api/chat-logs/message?session_id=${encodeURIComponent(currentSessionId)}&message_type=assistant&content=${encodeURIComponent(returnMessage)}&user_role=${userRole}&intent=return`, {
                 method: 'POST'
               })
             } catch (error) {
-              console.error('淇濆瓨閫€璐ц褰曞埌鑱婂ぉ鍘嗗彶澶辫触:', error)
+              console.error('Save return record to chat history failed:', error)
             }
           }}
           userRole={userRole}
         />
       )}
 
-      {/* 蹇嵎鍏ュ簱寮圭獥 - 闇€瑕佸叆搴撴潈闄?*/}
+      {/* 快捷入库弹窗 - 需要入库权限 */}
       {hasPermission(userRole, 'canInbound') && (
         <QuickInboundModal
           isOpen={showQuickInboundModal}
           onClose={() => setShowQuickInboundModal(false)}
           onSuccess={async (result) => {
-            // 鏋勫缓鍏ュ簱鎴愬姛鐨勬秷鎭唴瀹癸紙鍖呭惈闅愯棌鐨処D鏍囪锛岀敤浜庡巻鍙茶褰曚腑鏄剧ず鎵撳嵃鎸夐挳锛?
+            // Build inbound message content (with hidden ID marker for history print button)
             const productList = (Array.isArray(result?.products) ? result.products : []).slice(0, 5).map(p => {
-              let info = `  鈥?${p.name}锛?{p.weight}鍏?(宸ヨ垂楼${p.labor_cost}/g)`
+              let info = `  - ${p.name}: ${p.weight}g (labor \u00A5${p.labor_cost}/g)`
               const pieceCount = parseInt(p.piece_count) || 0
               const pieceLaborCost = parseFloat(p.piece_labor_cost) || 0
               if (pieceCount > 0) {
-                info += ` [${pieceCount}浠? 浠跺伐璐孤?{pieceLaborCost}]`
+                info += ` [${pieceCount}件 件工费¥${pieceLaborCost}]`
               }
               return info
             }).join('\n')
-            const moreProducts = result.products.length > 5 ? `\n  ... 绛夊叡 ${result.products.length} 浠跺晢鍝乣 : ''
-            // 鍙湪鏈夊浠跺晢鍝佹椂鏄剧ず浠舵暟锛屽崟浠跺彧鏄剧ず鍏嬮噸
-            const countInfo = result.total_count > 1 ? `\n馃摝 鍏ュ簱鏁伴噺锛?{result.total_count} 浠禶 : ''
-            const inboundMessage = `鉁?**鍏ュ簱鎴愬姛**${result.order_no ? `\n\n馃搵 鍗曞彿锛?{result.order_no}` : ''}\n馃彮 渚涘簲鍟嗭細${result.supplier_name || '鏈寚瀹?}${countInfo}\n鈿栵笍 鎬诲厠閲嶏細${result.total_weight.toFixed(2)}鍏媆n馃挵 鎬诲伐璐癸細楼${result.total_labor_cost.toFixed(2)}\n\n馃搵 鍟嗗搧鏄庣粏锛歕n${productList}${moreProducts}${result.order_id ? `\n\n<!-- INBOUND_ORDER:${result.order_id}:${result.order_no} -->` : ''}`
+            const moreProducts = result.products.length > 5 ? `\n  ... 等共 ${result.products.length} 件商品` : ''
+            // 只在有多件商品时显示件数，单件只显示克重
+            const countInfo = result.total_count > 1 ? `\n📦 入库数量：${result.total_count} 件` : ''
+            const inboundMessage = `✅ **入库成功**${result.order_no ? `\n\n📋 单号：${result.order_no}` : ''}\n🏪 供应商：${result.supplier_name || '未指定'}${countInfo}\n⚖️ 总克重：${result.total_weight.toFixed(2)}克\n💵 总工费：¥${result.total_labor_cost.toFixed(2)}\n\n📋 商品明细：\n${productList}${moreProducts}${result.order_id ? `\n\n<!-- INBOUND_ORDER:${result.order_id}:${result.order_no} -->` : ''}`
             
-            // 娣诲姞鍒拌亰澶╄褰曟樉绀猴紙鍖呭惈鍏ュ簱鍗曚俊鎭紝鐢ㄤ簬涓嬭浇/鎵撳嵃锛?
+            // 添加到聊天记录显示（包含入库单信息，用于下载/打印）
             setMessages(prev => [...prev, {
               type: 'system',
               content: inboundMessage,
@@ -4885,7 +4885,7 @@ ${itemsList}
                 </div>
                 {quickReceiptForm.customer_id && (
                   <div className="mt-2 text-sm text-green-600">
-                    宸查€夋嫨锛歿quickFormCustomers.find(c => c.id.toString() === quickReceiptForm.customer_id)?.name}
+                      已选择：{quickFormCustomers.find(c => c.id.toString() === quickReceiptForm.customer_id)?.name}
                   </div>
                 )}
               </div>
@@ -4925,8 +4925,8 @@ ${itemsList}
                 />
               </div>
               <div className="flex space-x-3 pt-4">
-                <button type="button" onClick={() => setShowQuickReceiptModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">鍙栨秷</button>
-                <button type="submit" className="flex-1 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600">纭骞舵墦鍗?/button>
+                  <button type="button" onClick={() => setShowQuickReceiptModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">取消</button>
+                  <button type="submit" className="flex-1 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600">确认并打印</button>
               </div>
             </form>
           </div>
@@ -4978,7 +4978,7 @@ ${itemsList}
                 </div>
                 {quickWithdrawalForm.customer_id && (
                   <div className="mt-2 text-sm text-green-600">
-                    宸查€夋嫨锛歿quickFormCustomers.find(c => c.id.toString() === quickWithdrawalForm.customer_id)?.name}
+                      已选择：{quickFormCustomers.find(c => c.id.toString() === quickWithdrawalForm.customer_id)?.name}
                   </div>
                 )}
               </div>
