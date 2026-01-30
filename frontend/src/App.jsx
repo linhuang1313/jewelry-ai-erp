@@ -313,11 +313,11 @@ function App() {
           })
         }
       } catch (error) {
-        console.log('鍚庡彴鍚屾鍘嗗彶璁板綍澶辫触锛堜笉褰卞搷浣跨敤锛?', error.message)
+        console.log('Backend sync history failed (does not affect usage):', error.message)
       }
     }, 100)
     
-    // 缂撳瓨鏈湴鏁版嵁
+    // Cache local data
     roleHistoryCache.current[role] = {
       data: localHistory,
       timestamp: Date.now()
@@ -405,7 +405,7 @@ function App() {
             setCurrentConversationId(lastSessionId)
             setCurrentSessionId(lastSessionId)
             setConversationTitle(lastConversation.title || '新对话')
-            console.log('[瑙掕壊鍒囨崲] 鎭㈠涓婃瀵硅瘽:', lastSessionId)
+            console.log('[Role Switch] Restore last conversation:', lastSessionId)
           } else {
             // 娌℃湁鎵惧埌涓婃瀵硅瘽锛屽紑濮嬫柊瀵硅瘽
             newConversation()
@@ -491,10 +491,10 @@ function App() {
           setCurrentConversationId(savedSessionId)
           setCurrentSessionId(savedSessionId)
           setConversationTitle(conversation.title || '新对话')
-          console.log('[鎭㈠] 浠庢湰鍦版仮澶嶅璇?', savedSessionId, '娑堟伅鏁?', restoredMessages.length)
+          console.log('[Restore] Restored from local:', savedSessionId, 'message count:', restoredMessages.length)
         } else {
           // 鏈湴娌℃湁锛屽皾璇曚粠鍚庣鍚屾
-          console.log('[鎭㈠] 鏈湴鏃犳暟鎹紝灏濊瘯浠庡悗绔悓姝?', savedSessionId)
+          console.log('[Restore] No local data, try to sync from backend:', savedSessionId)
           try {
             const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-history/${savedSessionId}`)
             if (response.ok) {
@@ -509,19 +509,19 @@ function App() {
                 setMessages(parsedMessages)
                 setCurrentConversationId(savedSessionId)
                 setCurrentSessionId(savedSessionId)
-                console.log('[鎭㈠] 浠庡悗绔仮澶嶅璇?', savedSessionId, '娑堟伅鏁?', parsedMessages.length)
+                console.log('[Restore] Restored from backend:', savedSessionId, 'message count:', parsedMessages.length)
               }
             }
           } catch (backendError) {
-            console.error('[鎭㈠] 鍚庣鍚屾澶辫触:', backendError)
+            console.error('[Restore] Backend sync failed:', backendError)
           }
         }
       } catch (error) {
-        console.error('[鎭㈠] 鎭㈠瀵硅瘽澶辫触:', error)
+        console.error('[Restore] Restore conversation failed:', error)
         // 鏁版嵁鎹熷潖鏃讹紝娓呯┖璇ヨ鑹茬殑鍘嗗彶璁板綍
         try {
           localStorage.setItem(historyKey, '[]')
-          console.warn('[鎭㈠] 宸叉竻绌烘崯鍧忕殑鍘嗗彶璁板綍')
+          console.warn('[Restore] Cleared corrupted history records')
         } catch {}
       } finally {
         setIsRestoring(false)
@@ -560,7 +560,7 @@ function App() {
         }
       }
     } catch (error) {
-      console.error('鍔犺浇寰呭鐞嗚浆绉诲崟鏁伴噺澶辫触:', error)
+      console.error('Load pending transfer count failed:', error)
       // 闈炲叧閿姛鑳斤紝闈欓粯澶辫触
     }
   }
@@ -579,7 +579,7 @@ function App() {
         setPendingSalesCount(sales.length)
       }
     } catch (error) {
-      console.error('鍔犺浇寰呯粨绠楅攢鍞崟鏁伴噺澶辫触:', error)
+      console.error('Load pending sales count failed:', error)
       // 闈炲叧閿姛鑳斤紝闈欓粯澶辫触
     }
   }
@@ -590,16 +590,16 @@ function App() {
       const response = await fetch(`${API_BASE_URL}/api/customers`)
       if (response.ok) {
         const data = await response.json()
-        console.log('鍔犺浇瀹㈡埛鍒楄〃:', data)  // 璋冭瘯鏃ュ織
+        console.log('Load customer list:', data)  // Debug log
         // API杩斿洖鏍煎紡: { success: true, data: { customers: [...] } }
         const customers = data.data?.customers || data.customers || []
         setQuickFormCustomers(Array.isArray(customers) ? customers : [])
       } else {
-        console.error('鍔犺浇瀹㈡埛鍒楄〃API澶辫触:', response.status)
+        console.error('Load customer list API failed:', response.status)
         showToast('鍔犺浇瀹㈡埛鍒楄〃澶辫触锛岃鍒锋柊閲嶈瘯')
       }
     } catch (error) {
-      console.error('鍔犺浇瀹㈡埛鍒楄〃澶辫触:', error)
+      console.error('Load customer list failed:', error)
       showToast('加载客户列表失败，请检查网络连接')
     }
   }
@@ -640,7 +640,7 @@ function App() {
         setSelectedCustomerDeposit({ current_balance: 0, customer_name: '' })
       }
     } catch (error) {
-      console.error('鏌ヨ瀹㈡埛瀛樻枡浣欓澶辫触:', error)
+      console.error('Query customer balance failed:', error)
       setSelectedCustomerDeposit({ current_balance: 0, customer_name: '' })
       showToast('鏌ヨ瀹㈡埛浣欓澶辫触锛屾樉绀轰负0')
     } finally {
@@ -965,7 +965,7 @@ function App() {
         }
       }
     } catch (error) {
-      console.error('鍔犺浇瀵硅瘽澶辫触锛屽皾璇曚粠鏈湴鍔犺浇:', error)
+      console.error('Load conversation failed, try to load from local:', error)
       // 濡傛灉API澶辫触锛屽皾璇曚粠localStorage鍔犺浇
       const historyKey = getHistoryKey(userRole)
       const parsedData2 = JSON.parse(localStorage.getItem(historyKey) || '[]')
@@ -1052,8 +1052,8 @@ function App() {
     let thinkingSteps = []
 
     try {
-      console.log('鍙戦€佹祦寮忚姹傚埌:', API_ENDPOINTS.CHAT_STREAM)
-      console.log('璇锋眰娑堟伅:', userMessage)
+      console.log('Send stream request to:', API_ENDPOINTS.CHAT_STREAM)
+      console.log('Request message:', userMessage)
       
       // 鍙栨秷涔嬪墠鐨勮姹傦紙濡傛灉鏈夛級
       if (abortControllerRef.current) {
@@ -1075,8 +1075,8 @@ function App() {
         signal: abortControllerRef.current.signal  // 娣诲姞鍙栨秷淇″彿
       })
 
-      console.log('鏀跺埌鍝嶅簲锛岀姸鎬佺爜:', response.status)
-      console.log('鍝嶅簲澶?', {
+      console.log('Received response, status code:', response.status)
+      console.log('Response headers:', {
         'Content-Type': response.headers.get('Content-Type'),
         'Cache-Control': response.headers.get('Cache-Control'),
         'Connection': response.headers.get('Connection'),
@@ -1084,17 +1084,17 @@ function App() {
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error('鍝嶅簲閿欒锛岀姸鎬佺爜:', response.status)
-        console.error('閿欒鍐呭:', errorText)
+        console.error('Response error, status code:', response.status)
+        console.error('Error content:', errorText)
         throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
       }
       
       if (!response.body) {
-        console.error('鍝嶅簲浣撲负绌?')
+        console.error('Response body is empty')
           throw new Error('响应体为空')
       }
       
-        console.log('开始读取SSE流...')
+        console.log('Start reading SSE stream...')
 
       // 鍒涘缓鎬濊€冭繃绋嬫秷鎭?
       setMessages(prev => [...prev, { 
@@ -1115,19 +1115,19 @@ function App() {
           const { done, value } = await reader.read()
           
           if (done) {
-            console.log(`SSE娴佺粨鏉燂紝鍏辨敹鍒?${chunkCount} 涓暟鎹潡`)
+            console.log(`SSE stream ended, total ${chunkCount} data chunks received`)
             setLoading(false)
             break
           }
           
           if (!value) {
-            console.warn('鏀跺埌绌哄€硷紝缁х画绛夊緟...')
+            console.warn('Received empty value, continue waiting...')
             continue
           }
 
           chunkCount++
           if (chunkCount <= 3) {
-            console.log(`鏀跺埌绗?${chunkCount} 涓暟鎹潡锛岄暱搴? ${value.length} 瀛楄妭`)
+            console.log(`Received chunk #${chunkCount}, length: ${value.length} bytes`)
           }
 
           buffer += decoder.decode(value, { stream: true })
@@ -1139,12 +1139,12 @@ function App() {
                   if (line.startsWith('data: ')) {
                     try {
                       const jsonStr = line.slice(6)
-                      console.log('瑙ｆ瀽SSE JSON:', jsonStr) // 鏄剧ず瀹屾暣JSON
+                      console.log('Parse SSE JSON:', jsonStr)
                       const data = JSON.parse(jsonStr)
-                      console.log('鏀跺埌SSE鏁版嵁:', data) // 璋冭瘯鏃ュ織
+                      console.log('Received SSE data:', data)
                       // 鐗瑰埆妫€鏌?all_products
                       if (data.data?.all_products) {
-                        console.log('銆愰噸瑕併€戞娴嬪埌 all_products:', data.data.all_products)
+                        console.log('[IMPORTANT] Detected all_products:', data.data.all_products)
                       }
                 
                 // 澶勭悊鎬濊€冩楠?
@@ -1209,7 +1209,7 @@ function App() {
                 }
               // 鏀舵纭
               else if (data.type === 'payment_confirm') {
-                console.log('鏀跺埌payment_confirm浜嬩欢:', data)
+                console.log('Received payment_confirm event:', data)
                 setLoading(false)
                 // 绉婚櫎鎬濊€冭繃绋嬫秷鎭?
                 setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
@@ -1250,20 +1250,20 @@ function App() {
               }
               // 瀹屾垚
               else if (data.type === 'complete') {
-                console.log('鏀跺埌complete浜嬩欢:', data)
+                console.log('Received complete event:', data)
                 setLoading(false)
                 // 绉婚櫎鎬濊€冭繃绋嬫秷鎭紙濡傛灉瀛樺湪锛?
                 setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
                 
                 // 濡傛灉娌℃湁鍐呭娑堟伅锛堟瘮濡傚叆搴撴搷浣滅洿鎺ヨ繑鍥炵粨鏋滐級锛屽垱寤轰竴涓柊娑堟伅
                 if (!contentMessageId || !isContentStarted) {
-                    console.log('创建新的系统消息来显示结果')
+                    console.log('Create new system message to display result')
                   contentMessageId = Date.now()
                   // 澶勭悊鍏ュ簱绛夋搷浣滅殑鍝嶅簲
                   if (data.data) {
                     // ========== 鏅鸿兘琛ㄥ崟寮瑰嚭锛氬綋淇℃伅涓嶅畬鏁存椂鑷姩寮瑰嚭琛ㄥ崟 ==========
                     if (data.data.need_form) {
-                      console.log('妫€娴嬪埌need_form鏍囧織锛屽脊鍑哄搴旇〃鍗?', data.data.action)
+                      console.log('Detected need_form flag, popup corresponding form:', data.data.action)
                       
                       // 鏍规嵁鎿嶄綔绫诲瀷寮瑰嚭瀵瑰簲鐨勮〃鍗?
                         if (data.data.action === '退货') {
@@ -1292,23 +1292,23 @@ function App() {
                         : (data.data.error || '鎿嶄綔澶辫触')
                     }
                     
-                    console.log('鍒涘缓娑堟伅锛屽唴瀹?', messageContent)
+                    console.log('Create message, content:', messageContent)
                     
                     // 妫€鏌ユ槸鍚︽槸鍏ュ簱鎿嶄綔锛屽鏋滄槸鍒欏垱寤哄緟纭鐨勫崱鐗囨暟鎹?
                     let inboundCard = null
                     let inboundCards = null  // 澶氬晢鍝佸叆搴撴椂浣跨敤
                     // 鎵撳嵃瀹屾暣鐨?data.data 瀵硅薄
-                    console.log('銆愬叆搴撹皟璇曘€戝畬鏁磀ata.data:', JSON.stringify(data.data, null, 2))
-                    console.log('銆愬叆搴撹皟璇曘€慳ll_products 鏄惁瀛樺湪:', 'all_products' in (data.data || {}))
-                    console.log('銆愬叆搴撹皟璇曘€慳ll_products 鍊?', data.data?.all_products)
-                    console.log('銆愬叆搴撹皟璇曘€慳ll_products 闀垮害:', data.data?.all_products?.length)
+                    console.log('[Inbound Debug] Complete data.data:', JSON.stringify(data.data, null, 2))
+                    console.log('[Inbound Debug] all_products exists:', 'all_products' in (data.data || {}))
+                    console.log('[Inbound Debug] all_products value:', data.data?.all_products)
+                    console.log('[Inbound Debug] all_products length:', data.data?.all_products?.length)
                     
                     if (data.data?.success && data.data?.pending && data.data?.card_data) {
                       // 鏂规B锛氬垱寤哄緟纭鐨勫崱鐗囷紙status: 'pending'锛?
                       try {
                         // 缁熶竴浣跨敤 all_products锛堝鏋滄病鏈夊垯浣跨敤 card_data 浣滀负鍗曞厓绱犳暟缁勶級
-                        console.log('銆愯皟璇曘€慸ata.data.all_products 鍘熷鍊?', data.data.all_products)
-                        console.log('銆愯皟璇曘€慸ata.data.card_data 鍘熷鍊?', data.data.card_data)
+                        console.log('[Debug] data.data.all_products original:', data.data.all_products)
+                        console.log('[Debug] data.data.card_data original:', data.data.card_data)
                         
                         const allProducts = data.data.all_products && data.data.all_products.length > 0 
                           ? data.data.all_products 
@@ -1317,7 +1317,7 @@ function App() {
                         
                         // 缁熶竴鍒涘缓鍗＄墖鏁扮粍锛堟棤璁哄崟鍟嗗搧杩樻槸澶氬晢鍝侊級
                         inboundCards = allProducts.map((cardData, index) => {
-                          console.log(`銆愯皟璇曘€戝垱寤哄崱鐗?{index+1}:`, cardData)
+                          console.log(`[Debug] Create card ${index+1}:`, cardData)
                           const card = createNewCard({
                             productName: cardData.product_name,
                             goldWeight: cardData.weight,
@@ -1336,7 +1336,7 @@ function App() {
                           card.barcode = ''
                           return card
                         })
-                        console.log('鍒涘缓鍏ュ簱鍗＄墖锛屽叡', inboundCards.length, '寮?', inboundCards)
+                        console.log('Create inbound cards, total:', inboundCards.length, inboundCards)
                         
                         // 濡傛灉鍙湁涓€涓晢鍝侊紝鍚屾椂璁剧疆 inboundCard锛堝悜鍚庡吋瀹癸級
                         if (inboundCards.length === 1) {
@@ -1344,11 +1344,11 @@ function App() {
                           inboundCards = null  // 鍗曞晢鍝佹椂娓呯┖鏁扮粍锛屼娇鐢ㄥ崟鍗＄墖鏄剧ず
                         }
                       } catch (error) {
-                        console.error('鍒涘缓鍏ュ簱鍗＄墖澶辫触:', error)
+                        console.error('Create inbound cards failed:', error)
                       }
                     } else if (data.data?.success && data.data?.order && data.data?.detail && !data.data?.pending) {
                       // 濡傛灉宸茬粡鏈夎鍗曞拰鏄庣粏锛屼笖娌℃湁pending鏍囧織锛岃鏄庢槸宸茬‘璁ょ殑锛堝悜鍚庡吋瀹规垨鐩存帴鍏ュ簱鐨勬儏鍐碉級
-                      console.log('妫€娴嬪埌宸茬‘璁ょ殑鍏ュ簱鏁版嵁锛堝悜鍚庡吋瀹癸級')
+                      console.log('Detected confirmed inbound data (backward compatible)')
                       const orderNo = data.data.order.order_no || ''
                       if (orderNo.startsWith('RK')) {
                         try {
@@ -1362,13 +1362,13 @@ function App() {
                             inboundCard.barcode = orderNo
                           }
                           inboundCard.status = 'confirmed'
-                          console.log('鍒涘缓宸茬‘璁ゅ叆搴撳崱鐗囷紙鍚戝悗鍏煎锛?', inboundCard)
+                          console.log('Create confirmed inbound card (backward compatible):', inboundCard)
                         } catch (error) {
-                          console.error('鍒涘缓鍏ュ簱鍗＄墖澶辫触:', error)
+                          console.error('Create inbound card failed:', error)
                         }
                       }
                     } else {
-                      console.log('鏈尮閰嶅埌鍏ュ簱鍗＄墖鍒涘缓鏉′欢锛屾暟鎹?', data.data)
+                      console.log('No match for inbound card condition, data:', data.data)
                     }
                     
                     setMessages(prev => [...prev, {
@@ -1391,10 +1391,10 @@ function App() {
                       inboundCards: inboundCards,  // 澶氬晢鍝佸叆搴撴椂鐨勫崱鐗囨暟缁?
                     }])
                   } else {
-                    console.warn('complete浜嬩欢娌℃湁data瀛楁')
+                    console.warn('complete event has no data field')
                   }
                 } else {
-                  console.log('鏇存柊鐜版湁鍐呭娑堟伅')
+                  console.log('Update existing content message')
                   // 濡傛灉鏈夊唴瀹规秷鎭紝鏇存柊瀹?
                   setMessages(prev => prev.map(msg => {
                     if (msg.id === contentMessageId) {
@@ -1430,7 +1430,7 @@ function App() {
                             inboundCard.status = 'confirmed'
                             updatedMsg.inboundCard = inboundCard
                           } catch (error) {
-                            console.error('鍒涘缓鍏ュ簱鍗＄墖澶辫触:', error)
+                            console.error('Create inbound card failed:', error)
                           }
                         }
                       }
@@ -1452,12 +1452,12 @@ function App() {
                   }))
                 }
               } catch (e) {
-                console.error('瑙ｆ瀽SSE鏁版嵁澶辫触:', e)
+                console.error('Parse SSE data failed:', e)
               }
             }
           }
         } catch (readError) {
-          console.error('璇诲彇SSE娴佸け璐?', readError)
+          console.error('Read SSE stream failed:', readError)
           setLoading(false)
           setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
           setMessages(prev => [...prev, { 
@@ -1470,7 +1470,7 @@ function App() {
     } catch (error) {
       // 濡傛灉鏄姹傝鍙栨秷锛堢敤鎴峰垏鎹㈤〉闈㈡垨鍙戦€佹柊娑堟伅锛夛紝闈欓粯澶勭悊
       if (error.name === 'AbortError') {
-          console.log('SSE 请求已取消')
+          console.log('SSE request cancelled')
         setLoading(false)
         setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
         return
@@ -3070,7 +3070,7 @@ function App() {
                                   alert('收款登记失败：' + (result.error || '未知错误'))
                                 }
                               } catch (error) {
-                                console.error('鏀舵鐧昏澶辫触:', error)
+                                console.error('Receipt registration failed:', error)
                                 alert('收款登记失败：' + error.message)
                               }
                             }}
@@ -3174,7 +3174,7 @@ function App() {
                                   alert('鏀舵枡鍗曞垱寤哄け璐ワ細' + (error.detail || '鏈煡閿欒'))
                                 }
                               } catch (error) {
-                                console.error('鏀舵枡鍗曞垱寤哄け璐?', error)
+                                console.error('Receipt order creation failed:', error)
                                 alert('鏀舵枡鍗曞垱寤哄け璐ワ細' + error.message)
                               }
                             }}
@@ -3735,7 +3735,7 @@ function App() {
                             actions={{
                               onConfirm: async (card) => {
                                 // 鏂规B锛氳皟鐢ㄧ湡瀹炵殑鍏ュ簱API
-                                console.log('纭鍏ュ簱:', card)
+                                console.log('Confirm inbound:', card)
                                 try {
                                   // 鏇存柊鍗＄墖鐘舵€佷负澶勭悊涓?
                                   setMessages(prev => prev.map(m => {
@@ -3751,9 +3751,9 @@ function App() {
                                   const useMock = false
                                   const result = await confirmInbound(card, useMock)
                                   
-                                  console.log('纭鍏ュ簱缁撴灉:', result)
-                                  console.log('璁㈠崟ID:', result.order?.id)
-                                  console.log('璁㈠崟鍙?', result.order?.order_no)
+                                  console.log('Confirm inbound result:', result)
+                                  console.log('Order ID:', result.order?.id)
+                                  console.log('Order No:', result.order?.order_no)
                                   
                                   // 鏇存柊鍗＄墖鐘舵€佸拰璁㈠崟淇℃伅
                                   setMessages(prev => prev.map(m => {
@@ -3764,14 +3764,14 @@ function App() {
                                         orderId: result.order?.id || card.orderId,
                                         barcode: result.order?.order_no || card.barcode || '',
                                       })
-                                      console.log('鏇存柊鍚庣殑鍗＄墖:', updatedCard)
-                                      console.log('鏇存柊鍚庣殑orderId:', updatedCard.orderId)
+                                      console.log('Updated card:', updatedCard)
+                                      console.log('Updated orderId:', updatedCard.orderId)
                                       return { ...m, inboundCard: updatedCard }
                                     }
                                     return m
                                   }))
                                 } catch (error) {
-                                  console.error('纭鍏ュ簱澶辫触:', error)
+                                  console.error('Confirm inbound failed:', error)
                                   // 鏇存柊鐘舵€佷负閿欒
                                   setMessages(prev => prev.map(m => {
                                     if (m.id === msg.id) {
@@ -3789,7 +3789,7 @@ function App() {
                               },
                               onReportError: async (card, errorReason) => {
                                 // 鎶ュ憡鏁版嵁閿欒
-                                console.log('鎶ュ憡鍏ュ簱鏁版嵁閿欒:', card, errorReason)
+                                console.log('Report inbound data error:', card, errorReason)
                                 try {
                                   const useMock = import.meta.env.DEV && import.meta.env.VITE_USE_MOCK !== 'false'
                                   await reportError(card, errorReason, useMock)
@@ -3821,7 +3821,7 @@ function App() {
                                 data={card}
                                 actions={{
                                   onConfirm: async (cardToConfirm) => {
-                                    console.log('纭鍏ュ簱鍗曚釜鍟嗗搧:', cardToConfirm)
+                                    console.log('Confirm single product inbound:', cardToConfirm)
                                     try {
                                       // 鏇存柊褰撳墠鍗＄墖鐘舵€佷负澶勭悊涓?
                                       setMessages(prev => prev.map(m => {
@@ -3838,7 +3838,7 @@ function App() {
                                       const { confirmInbound } = await import('./services/inboundService')
                                       const result = await confirmInbound(cardToConfirm, false)
                                       
-                                      console.log('纭鍏ュ簱缁撴灉:', result)
+                                      console.log('Confirm inbound result:', result)
                                       
                                       // 鏇存柊鍗＄墖鐘舵€?
                                       setMessages(prev => prev.map(m => {
@@ -3856,7 +3856,7 @@ function App() {
                                         return m
                                       }))
                                     } catch (error) {
-                                      console.error('纭鍏ュ簱澶辫触:', error)
+                                      console.error('Confirm inbound failed:', error)
                                       setMessages(prev => prev.map(m => {
                                         if (m.id === msg.id && m.inboundCards) {
                                           const updatedCards = m.inboundCards.map((c, i) => 
@@ -3872,7 +3872,7 @@ function App() {
                                     }
                                   },
                                   onReportError: async (cardToReport, errorReason) => {
-                                    console.log('鎶ュ憡鍏ュ簱鏁版嵁閿欒:', cardToReport, errorReason)
+                                    console.log('Report inbound data error:', cardToReport, errorReason)
                                     try {
                                       await reportError(cardToReport, errorReason, false)
                                       setMessages(prev => prev.map(m => {
@@ -3900,7 +3900,7 @@ function App() {
                             <div className="flex gap-3 mt-4 pt-4 border-t border-gray-200">
                               <button
                                 onClick={async () => {
-                                  console.log('鎵归噺纭鍏ュ簱')
+                                  console.log('Batch confirm inbound')
                                   const { confirmInbound } = await import('./services/inboundService')
                                   
                                   for (let i = 0; i < msg.inboundCards.length; i++) {
@@ -3936,7 +3936,7 @@ function App() {
                                         return m
                                       }))
                                     } catch (error) {
-                                      console.error('鎵归噺鍏ュ簱澶辫触:', error)
+                                      console.error('Batch inbound failed:', error)
                                       setMessages(prev => prev.map(m => {
                                         if (m.id === msg.id && m.inboundCards) {
                                           const updatedCards = m.inboundCards.map((c, idx) => 
@@ -4603,7 +4603,7 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
                   })
                   fetch(`${API_BASE_URL}/api/chat-logs/message?${params}`, {
                     method: 'POST'
-                  }).catch(err => console.error('淇濆瓨缁撶畻鍗曟秷鎭け璐?', err))
+                  }).catch(err => console.error('Save settlement message failed:', err))
                 }
                 
                 // 鍒囨崲鍥炶亰澶╅〉闈?
@@ -4802,7 +4802,7 @@ ${itemsList}
                 method: 'POST'
               })
             } catch (error) {
-              console.error('淇濆瓨鍏ュ簱璁板綍鍒拌亰澶╁巻鍙插け璐?', error)
+              console.error('Save inbound record to chat history failed:', error)
             }
           }}
           userRole={userRole}
