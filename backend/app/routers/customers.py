@@ -203,34 +203,53 @@ async def get_customer_debt_summary(
             for row in cash_results:
                 cash_debt_map[row.customer_id] = float(row.total_debt or 0)
         
-        # 2. 批量查询金料账户净值（使用历史交易计算，与快捷提料一致）
+        # 2. 批量查询金料账户净值（使用历史交易计算，优化为批量查询）
         net_gold_map = {}
+        settlement_gold_map = {}  # 结算欠料
+        receipts_gold_map = {}    # 来料
+        
         if customer_ids:
-            # 为每个客户计算净金料
-            for cid in customer_ids:
-                try:
-                    # 结算欠料
-                    total_settlement_gold = 0.0
-                    settlements = db.query(SettlementOrder).join(SalesOrder).filter(
-                        SalesOrder.customer_id == cid,
-                        SettlementOrder.status.in_(['confirmed', 'printed'])
-                    ).all()
-                    for s in settlements:
-                        if s.payment_method == 'physical_gold':
-                            total_settlement_gold += s.physical_gold_weight or 0
-                        elif s.payment_method == 'mixed':
-                            total_settlement_gold += s.gold_payment_weight or 0
-                    
-                    # 来料
-                    total_receipts = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
-                        GoldReceipt.customer_id == cid,
-                        GoldReceipt.status == 'received'
-                    ).scalar() or 0
-                    
-                    # 净金料 = 来料 - 结算欠料
-                    net_gold_map[cid] = float(total_receipts) - total_settlement_gold
-                except:
-                    net_gold_map[cid] = 0.0
+            try:
+                # 批量查询结算欠料（一次查询所有客户）
+                # 注意：需要在 Python 中过滤 payment_method，因为需要区分 physical_gold 和 mixed
+                settlements = db.query(
+                    SalesOrder.customer_id,
+                    SettlementOrder.payment_method,
+                    SettlementOrder.physical_gold_weight,
+                    SettlementOrder.gold_payment_weight
+                ).join(SettlementOrder, SettlementOrder.sales_order_id == SalesOrder.id).filter(
+                    SalesOrder.customer_id.in_(customer_ids),
+                    SettlementOrder.status.in_(['confirmed', 'printed'])
+                ).all()
+                
+                for row in settlements:
+                    cid = row.customer_id
+                    if cid not in settlement_gold_map:
+                        settlement_gold_map[cid] = 0.0
+                    if row.payment_method == 'physical_gold':
+                        settlement_gold_map[cid] += row.physical_gold_weight or 0
+                    elif row.payment_method == 'mixed':
+                        settlement_gold_map[cid] += row.gold_payment_weight or 0
+                
+                # 批量查询来料（一次查询所有客户）
+                receipts = db.query(
+                    GoldReceipt.customer_id,
+                    func.sum(GoldReceipt.gold_weight).label('total_weight')
+                ).filter(
+                    GoldReceipt.customer_id.in_(customer_ids),
+                    GoldReceipt.status == 'received'
+                ).group_by(GoldReceipt.customer_id).all()
+                
+                for row in receipts:
+                    receipts_gold_map[row.customer_id] = float(row.total_weight or 0)
+                
+                # 计算每个客户的净金料
+                for cid in customer_ids:
+                    settlement = settlement_gold_map.get(cid, 0.0)
+                    receipt = receipts_gold_map.get(cid, 0.0)
+                    net_gold_map[cid] = receipt - settlement
+            except Exception as e:
+                logger.warning(f"批量查询金料账户时出错: {e}")
         
         # 4. 批量查询最后交易时间（按客户名称）
         last_tx_map = {}
