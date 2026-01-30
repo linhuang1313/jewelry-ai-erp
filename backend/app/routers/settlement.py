@@ -56,9 +56,11 @@ async def get_pending_sales_orders(
     # ========== 批量查询优化：避免 N+1 问题 ==========
     order_ids = [o.id for o in orders]
     
-    # 批量查询所有结算单（1 次查询）
+    # 批量查询所有未取消的结算单（1 次查询）
+    # 排除已取消的结算单，使撤单后的销售单能重新出现在待开结算单列表
     existing_settlements = db.query(SettlementOrder).filter(
-        SettlementOrder.sales_order_id.in_(order_ids)
+        SettlementOrder.sales_order_id.in_(order_ids),
+        SettlementOrder.status != "cancelled"
     ).all()
     settlement_set = {s.sales_order_id for s in existing_settlements}
     
