@@ -1,8 +1,18 @@
 /**
  * 快捷提料弹窗组件
  */
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { API_BASE_URL } from '../../config'
+
+// 防抖hook
+const useDebounce = (value, delay) => {
+  const [debouncedValue, setDebouncedValue] = useState(value)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay)
+    return () => clearTimeout(timer)
+  }, [value, delay])
+  return debouncedValue
+}
 
 export const QuickWithdrawalModal = ({
   isOpen,
@@ -15,11 +25,18 @@ export const QuickWithdrawalModal = ({
   const [customerSearch, setCustomerSearch] = useState('')
   const [selectedCustomerDeposit, setSelectedCustomerDeposit] = useState(null)
   const [depositLoading, setDepositLoading] = useState(false)
+  const [showDropdown, setShowDropdown] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const dropdownRef = useRef(null)
+  const inputRef = useRef(null)
   const [form, setForm] = useState({
     customer_id: '',
     gold_weight: '',
     remark: ''
   })
+
+  // 防抖搜索词
+  const debouncedSearch = useDebounce(customerSearch, 300)
 
   // 加载客户列表
   useEffect(() => {
@@ -28,10 +45,24 @@ export const QuickWithdrawalModal = ({
       setForm({ customer_id: '', gold_weight: '', remark: '' })
       setCustomerSearch('')
       setSelectedCustomerDeposit(null)
+      setShowDropdown(false)
     }
   }, [isOpen])
 
+  // 点击外部关闭下拉框
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target) &&
+          inputRef.current && !inputRef.current.contains(event.target)) {
+        setShowDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   const loadCustomers = async () => {
+    setIsLoading(true)
     try {
       const response = await fetch(`${API_BASE_URL}/api/customers`)
       if (response.ok) {
@@ -42,6 +73,8 @@ export const QuickWithdrawalModal = ({
     } catch (error) {
       console.error('加载客户列表失败:', error)
       showToast?.('加载客户列表失败')
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -72,12 +105,45 @@ export const QuickWithdrawalModal = ({
     }
   }
 
-  const filteredCustomers = customers.filter(c => {
-    if (!customerSearch.trim()) return true
-    const search = customerSearch.toLowerCase()
-    return (c.name && c.name.toLowerCase().includes(search)) ||
-           (c.phone && c.phone.includes(customerSearch))
-  })
+  // 使用防抖后的搜索词过滤
+  const filteredCustomers = React.useMemo(() => {
+    if (!debouncedSearch.trim()) return customers
+    const search = debouncedSearch.toLowerCase()
+    return customers.filter(c => 
+      (c.name && c.name.toLowerCase().includes(search)) ||
+      (c.phone && c.phone.includes(debouncedSearch))
+    )
+  }, [customers, debouncedSearch])
+
+  // 选择客户
+  const handleSelectCustomer = useCallback((customer) => {
+    setForm(prev => ({ ...prev, customer_id: customer.id.toString() }))
+    setCustomerSearch(customer.name)
+    setShowDropdown(false) // 关闭下拉框
+    fetchCustomerDeposit(customer.id.toString())
+  }, [])
+
+  // 输入框获得焦点时显示下拉框
+  const handleInputFocus = () => {
+    if (!form.customer_id) {
+      setShowDropdown(true)
+    }
+  }
+
+  // 输入时显示下拉框并清除已选择
+  const handleInputChange = (e) => {
+    const value = e.target.value
+    setCustomerSearch(value)
+    setShowDropdown(true)
+    // 如果修改了搜索内容，清除已选择的客户
+    if (form.customer_id) {
+      const selectedCustomer = customers.find(c => c.id.toString() === form.customer_id)
+      if (selectedCustomer && value !== selectedCustomer.name) {
+        setForm(prev => ({ ...prev, customer_id: '' }))
+        setSelectedCustomerDeposit(null)
+      }
+    }
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -148,40 +214,72 @@ export const QuickWithdrawalModal = ({
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
+          <div className="relative">
             <label className="block text-sm font-medium text-gray-700 mb-1">选择客户</label>
             <input
+              ref={inputRef}
               type="text"
               placeholder="搜索客户姓名或电话..."
               value={customerSearch}
-              onChange={(e) => setCustomerSearch(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+              onChange={handleInputChange}
+              onFocus={handleInputFocus}
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                form.customer_id ? 'border-green-500 bg-green-50' : 'border-gray-200'
+              }`}
             />
-            <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
-              {filteredCustomers.length === 0 ? (
-                <div className="p-3 text-center text-gray-500 text-sm">暂无匹配客户</div>
-              ) : (
-                filteredCustomers.slice(0, 10).map(customer => (
-                  <div
-                    key={customer.id}
-                    onClick={() => {
-                      setForm({ ...form, customer_id: customer.id.toString() })
-                      setCustomerSearch(customer.name)
-                      fetchCustomerDeposit(customer.id.toString())
-                    }}
-                    className={`p-3 cursor-pointer hover:bg-blue-50 border-b last:border-b-0 flex justify-between items-center ${
-                      form.customer_id === customer.id.toString() ? 'bg-blue-100' : ''
-                    }`}
-                  >
-                    <span className="font-medium">{customer.name}</span>
-                    <span className="text-sm text-gray-500">{customer.phone || '-'}</span>
+            {isLoading && (
+              <div className="absolute right-3 top-9 text-gray-400">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                </svg>
+              </div>
+            )}
+            
+            {/* 下拉列表 - 仅在showDropdown为true且未选择客户时显示 */}
+            {showDropdown && !form.customer_id && (
+              <div 
+                ref={dropdownRef}
+                className="absolute z-10 w-full mt-1 max-h-48 overflow-y-auto border border-gray-200 rounded-lg bg-white shadow-lg"
+              >
+                {filteredCustomers.length === 0 ? (
+                  <div className="p-3 text-center text-gray-500 text-sm">
+                    {isLoading ? '加载中...' : '暂无匹配客户'}
                   </div>
-                ))
-              )}
-            </div>
+                ) : (
+                  filteredCustomers.slice(0, 10).map(customer => (
+                    <div
+                      key={customer.id}
+                      onClick={() => handleSelectCustomer(customer)}
+                      className="p-3 cursor-pointer hover:bg-blue-50 border-b last:border-b-0 flex justify-between items-center"
+                    >
+                      <span className="font-medium">{customer.name}</span>
+                      <span className="text-sm text-gray-500">{customer.phone || '-'}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+            
+            {/* 已选择提示 */}
             {form.customer_id && (
-              <div className="mt-2 text-sm text-green-600">
-                已选择：{customers.find(c => c.id.toString() === form.customer_id)?.name}
+              <div className="mt-2 flex items-center justify-between">
+                <span className="text-sm text-green-600">
+                  ✓ 已选择：{customers.find(c => c.id.toString() === form.customer_id)?.name}
+                </span>
+                <button
+type="button"
+                  onClick={() => {
+                    setForm(prev => ({ ...prev, customer_id: '' }))
+                    setCustomerSearch('')
+                    setSelectedCustomerDeposit(null)
+                    setShowDropdown(true)
+                    inputRef.current?.focus()
+                  }}
+                  className="text-xs text-blue-500 hover:text-blue-700"
+                >
+                  重新选择
+                </button>
               </div>
             )}
           </div>
@@ -218,6 +316,7 @@ export const QuickWithdrawalModal = ({
               className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="输入提料克重"
               max={selectedCustomerDeposit?.current_balance || 0}
+              disabled={(selectedCustomerDeposit?.current_balance || 0) === 0}
               required
             />
             {form.gold_weight && parseFloat(form.gold_weight) > (selectedCustomerDeposit?.current_balance || 0) && (
@@ -233,6 +332,7 @@ export const QuickWithdrawalModal = ({
               className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               rows={2}
               placeholder="客户提料 / 其他说明"
+              disabled={(selectedCustomerDeposit?.current_balance || 0) === 0}
             />
           </div>
           
