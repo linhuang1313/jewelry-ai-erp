@@ -89,9 +89,11 @@ export const QuickWithdrawalModal = ({
       const response = await fetch(`${API_BASE_URL}/api/gold-material/customers/${customerId}/deposit`)
       if (response.ok) {
         const result = await response.json()
+        // 支持新格式 {success, data} 和旧格式直接返回数据
+        const data = result.data || result
         setSelectedCustomerDeposit({
-          current_balance: result.deposit.current_balance,
-          customer_name: result.customer_name
+          current_balance: data.deposit?.current_balance || 0,
+          customer_name: data.customer_name || ''
         })
       } else {
         setSelectedCustomerDeposit({ current_balance: 0, customer_name: '' })
