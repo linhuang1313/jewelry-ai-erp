@@ -110,7 +110,7 @@ function App() {
     }
     return true
   })
-  const [conversationTitle, setConversationTitle] = useState('新对话') // 当前对话标题
+  const [conversationTitle, setConversationTitle] = useState('New Chat') // 当前对话标题
   const [currentPage, setCurrentPage] = useState('chat') // 'chat', 'finance', 'warehouse', 'settlement', 'analytics', 'export'
   const [showQuickOrderModal, setShowQuickOrderModal] = useState(false) // 蹇嵎寮€鍗曞脊绐?
   const [showQuickReturnModal, setShowQuickReturnModal] = useState(false) // 蹇嵎閫€璐у脊绐?
