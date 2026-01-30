@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Search, Calendar, Filter, Edit2, Eye, X, 
-  ChevronDown, ChevronUp, Download, Printer, RefreshCw
+  ChevronDown, ChevronUp, Download, Printer, RefreshCw, RotateCcw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -137,6 +137,33 @@ export const SalesOrdersPage: React.FC<SalesOrdersPageProps> = ({ userRole = 'se
     setEditingOrder(order);
   };
 
+  // 销退销售单（取消并回滚库存）
+  const handleSalesReturn = async (order: SalesOrder) => {
+    if (order.status !== '待结算') {
+      toast.error('只有待结算状态的销售单可以销退');
+      return;
+    }
+    
+    if (!confirm(`确认销退销售单 ${order.order_no}？\n商品将退回库存，此操作不可撤销！`)) {
+      return;
+    }
+    
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/sales/orders/${order.id}/cancel`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.message || '销退成功');
+        loadOrders(); // 刷新列表
+      } else {
+        toast.error(data.message || '销退失败');
+      }
+    } catch (error) {
+      toast.error('销退操作失败');
+    }
+  };
+
   // 重置筛选
   const resetFilters = () => {
     setFilters({
@@ -242,6 +269,7 @@ export const SalesOrdersPage: React.FC<SalesOrdersPageProps> = ({ userRole = 'se
                 <option value="">全部状态</option>
                 <option value="待结算">待结算</option>
                 <option value="已结算">已结算</option>
+                <option value="已取消">已取消</option>
               </select>
             </div>
             
@@ -350,9 +378,11 @@ export const SalesOrdersPage: React.FC<SalesOrdersPageProps> = ({ userRole = 'se
                   {/* 状态 */}
                   <div className="min-w-[80px]">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      order.status === '已结算' 
-                        ? 'bg-green-100 text-green-700' 
-                        : 'bg-yellow-100 text-yellow-700'
+                      order.status === '已取消' 
+                        ? 'bg-gray-100 text-gray-700'
+                        : order.status === '已结算' 
+                          ? 'bg-green-100 text-green-700' 
+                          : 'bg-yellow-100 text-yellow-700'
                     }`}>
                       {order.status}
                     </span>
@@ -374,6 +404,16 @@ export const SalesOrdersPage: React.FC<SalesOrdersPageProps> = ({ userRole = 'se
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
+                    {/* 销退按钮 - 仅柜台角色可见，且仅待结算状态可用 */}
+                    {userRole === 'counter' && order.status === '待结算' && (
+                      <button
+                        onClick={() => handleSalesReturn(order)}
+                        className="p-2 hover:bg-red-100 rounded-lg text-red-600"
+                        title="销退（取消并退回库存）"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </button>
+                    )}
                     <button
                       onClick={() => printOrder(order)}
                       className="p-2 hover:bg-gray-100 rounded-lg text-gray-600"
