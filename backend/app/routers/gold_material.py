@@ -491,7 +491,7 @@ async def get_customer_deposit(
     user_role: str = Query(default="material", description="用户角色"),
     db: Session = Depends(get_db)
 ):
-    """获取客户存料信息"""
+    """获取客户存料信息（使用历史交易计算净金料，与AI分析一致）"""
     # 权限检查
     if not has_permission(user_role, 'can_view_gold_material') and not has_permission(user_role, 'can_view_customers'):
         raise HTTPException(status_code=403, detail="权限不足")
@@ -500,9 +500,27 @@ async def get_customer_deposit(
     if not customer:
         raise HTTPException(status_code=404, detail="客户不存在")
     
-    # 获取或创建存料记录
-    deposit = get_or_create_customer_deposit(customer_id, customer.name, db)
-    db.commit()
+    # ========== 计算净金料（与AI分析一致）==========
+    # 1. 结算欠料（结料支付 + 混合支付的金料部分）
+    total_settlement_gold = 0.0
+    settlements = db.query(SettlementOrder).join(SalesOrder).filter(
+        SalesOrder.customer_id == customer_id,
+        SettlementOrder.status.in_(['confirmed', 'printed'])
+    ).all()
+    for s in settlements:
+        if s.payment_method == 'physical_gold':
+            total_settlement_gold += s.physical_gold_weight or 0
+        elif s.payment_method == 'mixed':
+            total_settlement_gold += s.gold_payment_weight or 0
+    
+    # 2. 来料（GoldReceipt）
+    total_receipts_gold = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
+        GoldReceipt.customer_id == customer_id,
+        GoldReceipt.status == 'received'
+    ).scalar() or 0
+    
+    # 3. 净金料 = 来料 - 结算欠料（正数=存料，负数=欠料）
+    net_gold = float(total_receipts_gold) - total_settlement_gold
     
     # 获取最近的存料交易记录
     recent_transactions = db.query(CustomerGoldDepositTransaction).filter(
@@ -516,11 +534,13 @@ async def get_customer_deposit(
                 "id": customer.id,
                 "name": customer.name,
             },
+            "customer_name": customer.name,
             "deposit": {
-                "current_balance": deposit.current_balance,
-                "total_deposited": deposit.total_deposited,
-                "total_used": deposit.total_used,
-                "last_transaction_at": deposit.last_transaction_at,
+                "current_balance": net_gold,  # 使用计算的净金料值
+                "net_gold": net_gold,         # 净金料字段（正=存料，负=欠料）
+                "has_deposit": net_gold > 0,  # 是否有存料可提
+                "settlement_gold": total_settlement_gold,  # 结算欠料总额
+                "receipts_gold": float(total_receipts_gold),  # 来料总额
             },
             "recent_transactions": [
                 {

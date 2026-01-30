@@ -376,8 +376,20 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
       return;
     }
     
-    if (weight > (selectedCustomerDeposit?.current_balance || 0)) {
-      toast.error(`提料克重不能超过客户存料余额（${selectedCustomerDeposit?.current_balance?.toFixed(2) || 0}克）`);
+    // 检查客户是否有存料可提
+    const availableBalance = Math.max(0, selectedCustomerDeposit?.current_balance || 0);
+    if (availableBalance <= 0) {
+      const owedAmount = Math.abs(selectedCustomerDeposit?.current_balance || 0);
+      if ((selectedCustomerDeposit?.current_balance || 0) < 0) {
+        toast.error(`该客户欠料 ${owedAmount.toFixed(2)} 克，无法提料`);
+      } else {
+        toast.error('该客户无存料余额，无法提料');
+      }
+      return;
+    }
+    
+    if (weight > availableBalance) {
+      toast.error(`提料克重不能超过客户存料余额（${availableBalance.toFixed(2)}克）`);
       return;
     }
 
@@ -2142,11 +2154,13 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                   )}
                 </div>
 
-                {/* 存料余额显示 */}
+                {/* 金料账户状态显示（统一使用与AI分析一致的计算方式） */}
                 {quickWithdrawalForm.customer_id && (
                   <div className={`p-4 rounded-lg ${
                     depositLoading ? 'bg-gray-100' : 
-                    (selectedCustomerDeposit?.current_balance || 0) > 0 ? 'bg-blue-50 border border-blue-200' : 'bg-red-50 border border-red-200'
+                    (selectedCustomerDeposit?.current_balance || 0) > 0 ? 'bg-green-50 border border-green-200' : 
+                    (selectedCustomerDeposit?.current_balance || 0) < 0 ? 'bg-red-50 border border-red-200' : 
+                    'bg-gray-50 border border-gray-200'
                   }`}>
                     {depositLoading ? (
                       <div className="flex items-center justify-center">
@@ -2155,17 +2169,40 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                       </div>
                     ) : (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700">当前存料余额</span>
+                        <span className="text-sm font-medium text-gray-700">
+                          {(selectedCustomerDeposit?.current_balance || 0) > 0 ? '当前存料余额' : 
+                           (selectedCustomerDeposit?.current_balance || 0) < 0 ? '当前欠料' : 
+                           '金料账户'}
+                        </span>
                         <span className={`text-xl font-bold ${
-                          (selectedCustomerDeposit?.current_balance || 0) > 0 ? 'text-blue-600' : 'text-red-600'
+                          (selectedCustomerDeposit?.current_balance || 0) > 0 ? 'text-green-600' : 
+                          (selectedCustomerDeposit?.current_balance || 0) < 0 ? 'text-red-600' : 
+                          'text-gray-600'
                         }`}>
-                          {selectedCustomerDeposit?.current_balance?.toFixed(2) || '0.00'} 克
+                          {(selectedCustomerDeposit?.current_balance || 0) > 0 
+                            ? `${selectedCustomerDeposit?.current_balance?.toFixed(2)} 克`
+                            : (selectedCustomerDeposit?.current_balance || 0) < 0 
+                            ? `${Math.abs(selectedCustomerDeposit?.current_balance || 0).toFixed(2)} 克`
+                            : '已结清'}
                         </span>
                       </div>
                     )}
-                    {!depositLoading && (selectedCustomerDeposit?.current_balance || 0) === 0 && (
+                    {/* 存料时显示可提料 */}
+                    {!depositLoading && (selectedCustomerDeposit?.current_balance || 0) > 0 && (
+                      <div className="mt-2 text-xs text-green-600">
+                        ✓ 客户有存料，可以提料
+                      </div>
+                    )}
+                    {/* 欠料时显示警告 */}
+                    {!depositLoading && (selectedCustomerDeposit?.current_balance || 0) < 0 && (
                       <div className="mt-2 text-xs text-red-600">
-                        ⚠️ 该客户暂无存料，无法提料
+                        ⚠️ 该客户欠料 {Math.abs(selectedCustomerDeposit?.current_balance || 0).toFixed(2)} 克，无法提料
+                      </div>
+                    )}
+                    {/* 已结清时显示提示 */}
+                    {!depositLoading && (selectedCustomerDeposit?.current_balance || 0) === 0 && (
+                      <div className="mt-2 text-xs text-gray-600">
+                        该客户金料账户已结清，暂无存料可提
                       </div>
                     )}
                   </div>
@@ -2178,12 +2215,15 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                     step="0.01"
                     value={quickWithdrawalForm.gold_weight}
                     onChange={(e) => setQuickWithdrawalForm({ ...quickWithdrawalForm, gold_weight: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      (selectedCustomerDeposit?.current_balance || 0) <= 0 ? 'bg-gray-100 cursor-not-allowed' : ''
+                    }`}
                     placeholder="输入提料克重"
-                    max={selectedCustomerDeposit?.current_balance || 0}
+                    max={Math.max(0, selectedCustomerDeposit?.current_balance || 0)}
+                    disabled={(selectedCustomerDeposit?.current_balance || 0) <= 0}
                     required
                   />
-                  {quickWithdrawalForm.gold_weight && parseFloat(quickWithdrawalForm.gold_weight) > (selectedCustomerDeposit?.current_balance || 0) && (
+                  {quickWithdrawalForm.gold_weight && parseFloat(quickWithdrawalForm.gold_weight) > Math.max(0, selectedCustomerDeposit?.current_balance || 0) && (
                     <div className="mt-1 text-xs text-red-600">
                       ⚠️ 提料克重不能超过存料余额
                     </div>
