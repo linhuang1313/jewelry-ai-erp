@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+﻿import { useState, useRef, useEffect } from 'react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Toaster } from 'react-hot-toast'
@@ -21,7 +21,7 @@ import { CustomerPage } from './components/CustomerPage'
 import { QuickOrderModal } from './components/QuickOrderModal'
 import { QuickReturnModal } from './components/QuickReturnModal'
 import QuickInboundModal from './components/QuickInboundModal'
-import SalesSearchModal from './components/SalesSearchModal'
+import SalesOrdersPage from './components/SalesOrdersPage'
 import InventoryOverview from './components/InventoryOverview'
 import ManagerDashboardCard from './components/ManagerDashboardCard'
 import { SupplierPage } from './components/SupplierPage'
@@ -62,10 +62,10 @@ ChartJS.register(
 )
 
 function App() {
-  // 国际化
+  // 鍥介檯鍖?
   const { t, i18n } = useTranslation()
   const [showLanguageSelector, setShowLanguageSelector] = useState(() => {
-    // 首次访问显示语言选择页
+    // 棣栨璁块棶鏄剧ず璇█閫夋嫨椤?
     if (typeof window !== 'undefined') {
       return localStorage.getItem('languageSelected') !== 'true'
     }
@@ -76,24 +76,24 @@ function App() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [uploading, setUploading] = useState(false)  // 图片上传状态
+  const [uploading, setUploading] = useState(false)  // 鍥剧墖涓婁紶鐘舵€?
   const messagesEndRef = useRef(null)
-  const fileInputRef = useRef(null)  // 文件输入引用
-  const abortControllerRef = useRef(null)  // SSE 请求取消控制器
+  const fileInputRef = useRef(null)  // 鏂囦欢杈撳叆寮曠敤
+  const abortControllerRef = useRef(null)  // SSE 璇锋眰鍙栨秷鎺у埗鍣?
   
-  // OCR编辑对话框相关状态
+  // OCR缂栬緫瀵硅瘽妗嗙浉鍏崇姸鎬?
   const [showOCRModal, setShowOCRModal] = useState(false)
   const [ocrResult, setOcrResult] = useState('')
   const [uploadedImage, setUploadedImage] = useState(null)
-  const ocrTextareaRef = useRef(null)  // 用于自动聚焦
+  const ocrTextareaRef = useRef(null)  // 鐢ㄤ簬鑷姩鑱氱劍
   
-  // 历史对话记录相关状态
-  const [conversationHistory, setConversationHistory] = useState([]) // 历史对话列表
-  const [currentConversationId, setCurrentConversationId] = useState(null) // 当前对话ID
+  // 鍘嗗彶瀵硅瘽璁板綍鐩稿叧鐘舵€?
+  const [conversationHistory, setConversationHistory] = useState([]) // 鍘嗗彶瀵硅瘽鍒楄〃
+  const [currentConversationId, setCurrentConversationId] = useState(null) // 褰撳墠瀵硅瘽ID
   
-  // 后端会话ID（用于聊天记录持久化）
+  // 鍚庣浼氳瘽ID锛堢敤浜庤亰澶╄褰曟寔涔呭寲锛?
   const [currentSessionId, setCurrentSessionId] = useState(() => {
-    // 生成或恢复 session_id
+    // 鐢熸垚鎴栨仮澶?session_id
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('current_session_id')
       if (saved) return saved
@@ -103,49 +103,49 @@ function App() {
     }
     return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   })
-  // 侧边栏开关（桌面端默认打开，移动端默认关闭）
+  // 渚ц竟鏍忓紑鍏筹紙妗岄潰绔粯璁ゆ墦寮€锛岀Щ鍔ㄧ榛樿鍏抽棴锛?
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth >= 1024
     }
     return true
   })
-  const [conversationTitle, setConversationTitle] = useState('新对话') // 当前对话标题
+  const [conversationTitle, setConversationTitle] = useState('鏂板璇?) // 褰撳墠瀵硅瘽鏍囬
   const [currentPage, setCurrentPage] = useState('chat') // 'chat', 'finance', 'warehouse', 'settlement', 'analytics', 'export'
-  const [showQuickOrderModal, setShowQuickOrderModal] = useState(false) // 快捷开单弹窗
-  const [showQuickReturnModal, setShowQuickReturnModal] = useState(false) // 快捷退货弹窗
-  const [showQuickInboundModal, setShowQuickInboundModal] = useState(false) // 快捷入库弹窗
-  const [showSalesSearchModal, setShowSalesSearchModal] = useState(false) // 销售管理弹窗
-  const [showHistoryPanel, setShowHistoryPanel] = useState(false) // 历史回溯面板
-  const [showQuickReceiptModal, setShowQuickReceiptModal] = useState(false) // 快捷收料弹窗
-  const [showQuickWithdrawalModal, setShowQuickWithdrawalModal] = useState(false) // 快捷提料弹窗
-  const [toastMessage, setToastMessage] = useState('') // Toast 提示消息
-  const [quickFormCustomers, setQuickFormCustomers] = useState([]) // 客户列表
-  const [quickFormCustomerSearch, setQuickFormCustomerSearch] = useState('') // 客户搜索
-  const [quickReceiptForm, setQuickReceiptForm] = useState({ customer_id: '', gold_weight: '', gold_fineness: '足金999', remark: '' })
+  const [showQuickOrderModal, setShowQuickOrderModal] = useState(false) // 蹇嵎寮€鍗曞脊绐?
+  const [showQuickReturnModal, setShowQuickReturnModal] = useState(false) // 蹇嵎閫€璐у脊绐?
+  const [showQuickInboundModal, setShowQuickInboundModal] = useState(false) // 蹇嵎鍏ュ簱寮圭獥
+  const [showSalesSearchModal, setShowSalesSearchModal] = useState(false) // 閿€鍞鐞嗗脊绐?
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false) // 鍘嗗彶鍥炴函闈㈡澘
+  const [showQuickReceiptModal, setShowQuickReceiptModal] = useState(false) // 蹇嵎鏀舵枡寮圭獥
+  const [showQuickWithdrawalModal, setShowQuickWithdrawalModal] = useState(false) // 蹇嵎鎻愭枡寮圭獥
+  const [toastMessage, setToastMessage] = useState('') // Toast 鎻愮ず娑堟伅
+  const [quickFormCustomers, setQuickFormCustomers] = useState([]) // 瀹㈡埛鍒楄〃
+  const [quickFormCustomerSearch, setQuickFormCustomerSearch] = useState('') // 瀹㈡埛鎼滅储
+  const [quickReceiptForm, setQuickReceiptForm] = useState({ customer_id: '', gold_weight: '', gold_fineness: '瓒抽噾999', remark: '' })
   const [quickWithdrawalForm, setQuickWithdrawalForm] = useState({ customer_id: '', gold_weight: '', remark: '' })
-  const [selectedCustomerDeposit, setSelectedCustomerDeposit] = useState(null) // 选中客户的存料余额
+  const [selectedCustomerDeposit, setSelectedCustomerDeposit] = useState(null) // 閫変腑瀹㈡埛鐨勫瓨鏂欎綑棰?
   const [depositLoading, setDepositLoading] = useState(false)
   
-  // 用户角色相关状态
+  // 鐢ㄦ埛瑙掕壊鐩稿叧鐘舵€?
   const [userRole, setUserRole] = useState(() => {
-    // 从 localStorage 读取保存的角色，默认为业务员
+    // 浠?localStorage 璇诲彇淇濆瓨鐨勮鑹诧紝榛樿涓轰笟鍔″憳
     if (typeof window !== 'undefined') {
       return localStorage.getItem('userRole') || 'sales'
     }
     return 'sales'
   })
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false)
-  const [roleLoading, setRoleLoading] = useState(false)  // 角色切换加载状态
+  const [roleLoading, setRoleLoading] = useState(false)  // 瑙掕壊鍒囨崲鍔犺浇鐘舵€?
   const roleDropdownRef = useRef(null)
-  const roleHistoryCache = useRef({})  // 角色历史记录缓存
+  const roleHistoryCache = useRef({})  // 瑙掕壊鍘嗗彶璁板綍缂撳瓨
   
-  // 待处理转移单数量（用于分仓库存按钮badge）
+  // 寰呭鐞嗚浆绉诲崟鏁伴噺锛堢敤浜庡垎浠撳簱瀛樻寜閽産adge锛?
   const [pendingTransferCount, setPendingTransferCount] = useState(0)
-  // 待结算销售单数量（用于结算管理按钮badge）
+  // 寰呯粨绠楅攢鍞崟鏁伴噺锛堢敤浜庣粨绠楃鐞嗘寜閽産adge锛?
   const [pendingSalesCount, setPendingSalesCount] = useState(0)
 
-  // Toast 提示函数（3秒后自动消失）
+  // Toast 鎻愮ず鍑芥暟锛?绉掑悗鑷姩娑堝け锛?
   const showToast = (message, duration = 3000) => {
     setToastMessage(message)
     setTimeout(() => setToastMessage(''), duration)
@@ -159,16 +159,16 @@ function App() {
     scrollToBottom()
   }, [messages])
 
-  // ========== 用户标识抽象层（为未来登录系统预留） ==========
-  // 获取当前用户标识符
-  // 阶段1（当前）：使用设备ID作为临时用户标识
-  // 阶段2（未来）：接入登录系统后，返回真实用户ID
+  // ========== 鐢ㄦ埛鏍囪瘑鎶借薄灞傦紙涓烘湭鏉ョ櫥褰曠郴缁熼鐣欙級 ==========
+  // 鑾峰彇褰撳墠鐢ㄦ埛鏍囪瘑绗?
+  // 闃舵1锛堝綋鍓嶏級锛氫娇鐢ㄨ澶嘔D浣滀负涓存椂鐢ㄦ埛鏍囪瘑
+  // 闃舵2锛堟湭鏉ワ級锛氭帴鍏ョ櫥褰曠郴缁熷悗锛岃繑鍥炵湡瀹炵敤鎴稩D
   const getUserIdentifier = () => {
-    // 未来登录系统接入点 - 取消注释以下代码
+    // 鏈潵鐧诲綍绯荤粺鎺ュ叆鐐?- 鍙栨秷娉ㄩ噴浠ヤ笅浠ｇ爜
     // const authUser = getAuthUser()
     // if (authUser) return authUser.id
     
-    // 当前：使用设备指纹作为临时用户标识
+    // 褰撳墠锛氫娇鐢ㄨ澶囨寚绾逛綔涓轰复鏃剁敤鎴锋爣璇?
     if (typeof window === 'undefined') return 'anonymous'
     
     let deviceId = localStorage.getItem('jewelry_erp_device_id')
@@ -179,30 +179,30 @@ function App() {
     return deviceId
   }
 
-  // 获取当前角色的历史记录key（包含用户标识，支持多用户隔离）
+  // 鑾峰彇褰撳墠瑙掕壊鐨勫巻鍙茶褰昸ey锛堝寘鍚敤鎴锋爣璇嗭紝鏀寔澶氱敤鎴烽殧绂伙級
   const getHistoryKey = (role) => {
     const userId = getUserIdentifier()
     return `conversationHistory_${userId}_${role}`
   }
 
-  // 获取上次使用的session key（用于恢复上次对话）
+  // 鑾峰彇涓婃浣跨敤鐨剆ession key锛堢敤浜庢仮澶嶄笂娆″璇濓級
   const getLastSessionKey = (role) => {
     const userId = getUserIdentifier()
     return `lastSessionId_${userId}_${role}`
   }
 
-  // ========== 消息解析优化（性能优化：合并正则匹配） ==========
-  // 解析消息中的隐藏标记，恢复所有特殊消息的额外字段
+  // ========== 娑堟伅瑙ｆ瀽浼樺寲锛堟€ц兘浼樺寲锛氬悎骞舵鍒欏尮閰嶏級 ==========
+  // 瑙ｆ瀽娑堟伅涓殑闅愯棌鏍囪锛屾仮澶嶆墍鏈夌壒娈婃秷鎭殑棰濆瀛楁
   const parseMessageHiddenMarkers = (messages) => {
-    // 添加数组安全检查
+    // 娣诲姞鏁扮粍瀹夊叏妫€鏌?
     if (!Array.isArray(messages)) return messages || [];
-    // 合并所有标记的正则表达式，一次匹配多种类型
+    // 鍚堝苟鎵€鏈夋爣璁扮殑姝ｅ垯琛ㄨ揪寮忥紝涓€娆″尮閰嶅绉嶇被鍨?
     const combinedRegex = /<!-- (WITHDRAWAL_ORDER|GOLD_RECEIPT|INBOUND_ORDER|RETURN_ORDER|SALES_ORDER|SETTLEMENT_ORDER):(\d+):?([^>]*) -->/g
     
     return messages.map(msg => {
       if (!msg.content) return msg
       
-      // 使用合并正则一次性匹配所有标记
+      // 浣跨敤鍚堝苟姝ｅ垯涓€娆℃€у尮閰嶆墍鏈夋爣璁?
       const matches = [...msg.content.matchAll(combinedRegex)]
       if (matches.length === 0) return msg
       
@@ -250,18 +250,18 @@ function App() {
     })
   }
 
-  // 加载指定角色的历史记录（优化版：优先使用缓存/localStorage，后台静默同步API）
+  // 鍔犺浇鎸囧畾瑙掕壊鐨勫巻鍙茶褰曪紙浼樺寲鐗堬細浼樺厛浣跨敤缂撳瓨/localStorage锛屽悗鍙伴潤榛樺悓姝PI锛?
   const loadRoleHistory = async (role) => {
     const historyKey = getHistoryKey(role)
     
-    // 1. 首先检查内存缓存（5分钟有效期）
+    // 1. 棣栧厛妫€鏌ュ唴瀛樼紦瀛橈紙5鍒嗛挓鏈夋晥鏈燂級
     const cached = roleHistoryCache.current[role]
     if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
       setConversationHistory(cached.data)
       return cached.data
     }
     
-    // 2. 立即从 localStorage 加载（快速响应）
+    // 2. 绔嬪嵆浠?localStorage 鍔犺浇锛堝揩閫熷搷搴旓級
     let localHistory = []
     try {
       const parsed = JSON.parse(localStorage.getItem(historyKey) || '[]')
@@ -272,8 +272,8 @@ function App() {
       setConversationHistory([])
     }
     
-    // 3. 后台静默同步 API 数据（不阻塞 UI）
-    // 使用 setTimeout 让 UI 先更新
+    // 3. 鍚庡彴闈欓粯鍚屾 API 鏁版嵁锛堜笉闃诲 UI锛?
+    // 浣跨敤 setTimeout 璁?UI 鍏堟洿鏂?
     setTimeout(async () => {
       try {
         const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-sessions?user_role=${role}&limit=50`)
@@ -282,7 +282,7 @@ function App() {
         if (data.success && Array.isArray(data.sessions)) {
           const history = data.sessions.map(session => ({
             id: session.session_id,
-            title: session.summary || '新对话',
+            title: session.summary || '鏂板璇?,
             messages: [],
             createdAt: session.start_time || new Date().toISOString(),
             updatedAt: session.end_time || new Date().toISOString(),
@@ -290,19 +290,19 @@ function App() {
             lastIntent: session.last_intent
           }))
           
-          // 更新 localStorage
+          // 鏇存柊 localStorage
           localStorage.setItem(historyKey, JSON.stringify(history))
           
-          // 更新内存缓存
+          // 鏇存柊鍐呭瓨缂撳瓨
           roleHistoryCache.current[role] = {
             data: history,
             timestamp: Date.now()
           }
           
-          // 只有当前角色匹配时才更新 UI
-          // 避免切换角色后旧请求覆盖新数据
+          // 鍙湁褰撳墠瑙掕壊鍖归厤鏃舵墠鏇存柊 UI
+          // 閬垮厤鍒囨崲瑙掕壊鍚庢棫璇锋眰瑕嗙洊鏂版暟鎹?
           setConversationHistory(prev => {
-            // 如果本地已有数据，合并保留本地的消息内容
+            // 濡傛灉鏈湴宸叉湁鏁版嵁锛屽悎骞朵繚鐣欐湰鍦扮殑娑堟伅鍐呭
             if (localHistory.length > 0) {
               return history.map(h => {
                 const local = localHistory.find(l => l.id === h.id)
@@ -313,11 +313,11 @@ function App() {
           })
         }
       } catch (error) {
-        console.log('后台同步历史记录失败（不影响使用）:', error.message)
+        console.log('鍚庡彴鍚屾鍘嗗彶璁板綍澶辫触锛堜笉褰卞搷浣跨敤锛?', error.message)
       }
     }, 100)
     
-    // 缓存本地数据
+    // 缂撳瓨鏈湴鏁版嵁
     roleHistoryCache.current[role] = {
       data: localHistory,
       timestamp: Date.now()
@@ -326,33 +326,33 @@ function App() {
     return localHistory
   }
 
-  // ========== 切换用户角色（增强版：保存/恢复各角色上次对话） ==========
+  // ========== 鍒囨崲鐢ㄦ埛瑙掕壊锛堝寮虹増锛氫繚瀛?鎭㈠鍚勮鑹蹭笂娆″璇濓級 ==========
   const changeUserRole = async (roleId) => {
-    // 如果是同一角色，直接返回
+    // 濡傛灉鏄悓涓€瑙掕壊锛岀洿鎺ヨ繑鍥?
     if (roleId === userRole) {
       setRoleDropdownOpen(false)
       return
     }
     
-    // 显示加载状态
+    // 鏄剧ず鍔犺浇鐘舵€?
     setRoleLoading(true)
     setRoleDropdownOpen(false)
     
-    // 如果切换到不同角色，保存当前对话并加载新角色的历史记录
+    // 濡傛灉鍒囨崲鍒颁笉鍚岃鑹诧紝淇濆瓨褰撳墠瀵硅瘽骞跺姞杞芥柊瑙掕壊鐨勫巻鍙茶褰?
     if (roleId !== userRole) {
-      // 1. 保存当前角色的对话和会话ID
+      // 1. 淇濆瓨褰撳墠瑙掕壊鐨勫璇濆拰浼氳瘽ID
       if (messages.length > 0) {
-        // 直接保存到当前角色的历史记录（不使用延迟保存）
+        // 鐩存帴淇濆瓨鍒板綋鍓嶈鑹茬殑鍘嗗彶璁板綍锛堜笉浣跨敤寤惰繜淇濆瓨锛?
         const currentHistoryKey = getHistoryKey(userRole)
         const parsedHistory = JSON.parse(localStorage.getItem(currentHistoryKey) || '[]')
         const currentHistory = Array.isArray(parsedHistory) ? parsedHistory : []
         
-        // 自动生成对话标题
+        // 鑷姩鐢熸垚瀵硅瘽鏍囬
         let title = conversationTitle
-        if (title === '新对话' || !currentConversationId) {
+        if (title === '鏂板璇? || !currentConversationId) {
           const firstUserMessage = messages.find(m => m.type === 'user')
           if (firstUserMessage) {
-            title = firstUserMessage.content.substring(0, 20) || '新对话'
+            title = firstUserMessage.content.substring(0, 20) || '鏂板璇?
             if (firstUserMessage.content.length > 20) title += '...'
           }
         }
@@ -375,24 +375,24 @@ function App() {
           currentHistory.unshift(conversation)
         }
         
-        // 只保留最近50个对话
+        // 鍙繚鐣欐渶杩?0涓璇?
         const limitedHistory = currentHistory.slice(0, 50)
         localStorage.setItem(currentHistoryKey, JSON.stringify(limitedHistory))
         
-        // 保存当前角色的上次会话ID
+        // 淇濆瓨褰撳墠瑙掕壊鐨勪笂娆′細璇滻D
         const currentLastSessionKey = getLastSessionKey(userRole)
         localStorage.setItem(currentLastSessionKey, conversationId)
       }
       
-      // 2. 切换到新角色，加载新角色的历史记录
+      // 2. 鍒囨崲鍒版柊瑙掕壊锛屽姞杞芥柊瑙掕壊鐨勫巻鍙茶褰?
       await loadRoleHistory(roleId)
       
-      // 3. 尝试恢复新角色上次的对话
+      // 3. 灏濊瘯鎭㈠鏂拌鑹蹭笂娆＄殑瀵硅瘽
       const newLastSessionKey = getLastSessionKey(roleId)
       const lastSessionId = localStorage.getItem(newLastSessionKey)
       
       if (lastSessionId) {
-        // 尝试恢复新角色上次的对话
+        // 灏濊瘯鎭㈠鏂拌鑹蹭笂娆＄殑瀵硅瘽
         const newHistoryKey = getHistoryKey(roleId)
         try {
           const parsedData = JSON.parse(localStorage.getItem(newHistoryKey) || '[]')
@@ -404,31 +404,31 @@ function App() {
             setMessages(restoredMessages)
             setCurrentConversationId(lastSessionId)
             setCurrentSessionId(lastSessionId)
-            setConversationTitle(lastConversation.title || '新对话')
-            console.log('[角色切换] 恢复上次对话:', lastSessionId)
+            setConversationTitle(lastConversation.title || '鏂板璇?)
+            console.log('[瑙掕壊鍒囨崲] 鎭㈠涓婃瀵硅瘽:', lastSessionId)
           } else {
-            // 没有找到上次对话，开始新对话
+            // 娌℃湁鎵惧埌涓婃瀵硅瘽锛屽紑濮嬫柊瀵硅瘽
             newConversation()
           }
         } catch {
           newConversation()
         }
       } else {
-        // 该角色没有上次对话记录，开始新对话
+        // 璇ヨ鑹叉病鏈変笂娆″璇濊褰曪紝寮€濮嬫柊瀵硅瘽
         newConversation()
       }
     }
     setUserRole(roleId)
     localStorage.setItem('userRole', roleId)
-    setRoleLoading(false)  // 关闭加载状态
+    setRoleLoading(false)  // 鍏抽棴鍔犺浇鐘舵€?
   }
 
-  // 获取当前角色信息
+  // 鑾峰彇褰撳墠瑙掕壊淇℃伅
   const getCurrentRole = () => {
     return USER_ROLES.find(r => r.id === userRole) || USER_ROLES[0]
   }
 
-  // 点击外部关闭角色下拉菜单
+  // 鐐瑰嚮澶栭儴鍏抽棴瑙掕壊涓嬫媺鑿滃崟
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (roleDropdownRef.current && !roleDropdownRef.current.contains(event.target)) {
@@ -439,7 +439,7 @@ function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // 组件卸载时取消正在进行的 SSE 请求
+  // 缁勪欢鍗歌浇鏃跺彇娑堟鍦ㄨ繘琛岀殑 SSE 璇锋眰
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
@@ -448,27 +448,27 @@ function App() {
     }
   }, [])
 
-  // 仅在页面初始加载时加载当前角色的历史对话记录
-  // 角色切换时由 changeUserRole 函数负责加载，避免重复调用
+  // 浠呭湪椤甸潰鍒濆鍔犺浇鏃跺姞杞藉綋鍓嶈鑹茬殑鍘嗗彶瀵硅瘽璁板綍
+  // 瑙掕壊鍒囨崲鏃剁敱 changeUserRole 鍑芥暟璐熻矗鍔犺浇锛岄伩鍏嶉噸澶嶈皟鐢?
   const initialLoadRef = useRef(false)
   useEffect(() => {
     if (!initialLoadRef.current) {
       initialLoadRef.current = true
       loadRoleHistory(userRole)
     }
-  }, []) // 只在组件挂载时执行一次
+  }, []) // 鍙湪缁勪欢鎸傝浇鏃舵墽琛屼竴娆?
 
-  // ========== 页面初始化时恢复当前对话（增强版：支持后端同步兜底） ==========
-  const [isRestoring, setIsRestoring] = useState(false) // 防止重复恢复
+  // ========== 椤甸潰鍒濆鍖栨椂鎭㈠褰撳墠瀵硅瘽锛堝寮虹増锛氭敮鎸佸悗绔悓姝ュ厹搴曪級 ==========
+  const [isRestoring, setIsRestoring] = useState(false) // 闃叉閲嶅鎭㈠
   
   useEffect(() => {
-    // 确保 userRole 已初始化
+    // 纭繚 userRole 宸插垵濮嬪寲
     if (!userRole || isRestoring) return
     
     const restoreCurrentConversation = async () => {
       setIsRestoring(true)
       
-      // 获取该角色上次使用的session
+      // 鑾峰彇璇ヨ鑹蹭笂娆′娇鐢ㄧ殑session
       const lastSessionKey = getLastSessionKey(userRole)
       const savedSessionId = localStorage.getItem(lastSessionKey) || localStorage.getItem('current_session_id')
       
@@ -477,7 +477,7 @@ function App() {
         return
       }
       
-      // 检查localStorage中是否有这个对话的消息
+      // 妫€鏌ocalStorage涓槸鍚︽湁杩欎釜瀵硅瘽鐨勬秷鎭?
       const historyKey = getHistoryKey(userRole)
       try {
         const parsedData = JSON.parse(localStorage.getItem(historyKey) || '[]')
@@ -485,16 +485,16 @@ function App() {
         const conversation = history.find(c => c.id === savedSessionId)
         
         if (conversation && conversation.messages && conversation.messages.length > 0) {
-          // 从本地恢复
+          // 浠庢湰鍦版仮澶?
           const restoredMessages = parseMessageHiddenMarkers(conversation.messages)
           setMessages(restoredMessages)
           setCurrentConversationId(savedSessionId)
           setCurrentSessionId(savedSessionId)
-          setConversationTitle(conversation.title || '新对话')
-          console.log('[恢复] 从本地恢复对话:', savedSessionId, '消息数:', restoredMessages.length)
+          setConversationTitle(conversation.title || '鏂板璇?)
+          console.log('[鎭㈠] 浠庢湰鍦版仮澶嶅璇?', savedSessionId, '娑堟伅鏁?', restoredMessages.length)
         } else {
-          // 本地没有，尝试从后端同步
-          console.log('[恢复] 本地无数据，尝试从后端同步:', savedSessionId)
+          // 鏈湴娌℃湁锛屽皾璇曚粠鍚庣鍚屾
+          console.log('[鎭㈠] 鏈湴鏃犳暟鎹紝灏濊瘯浠庡悗绔悓姝?', savedSessionId)
           try {
             const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-history/${savedSessionId}`)
             if (response.ok) {
@@ -509,19 +509,19 @@ function App() {
                 setMessages(parsedMessages)
                 setCurrentConversationId(savedSessionId)
                 setCurrentSessionId(savedSessionId)
-                console.log('[恢复] 从后端恢复对话:', savedSessionId, '消息数:', parsedMessages.length)
+                console.log('[鎭㈠] 浠庡悗绔仮澶嶅璇?', savedSessionId, '娑堟伅鏁?', parsedMessages.length)
               }
             }
           } catch (backendError) {
-            console.error('[恢复] 后端同步失败:', backendError)
+            console.error('[鎭㈠] 鍚庣鍚屾澶辫触:', backendError)
           }
         }
       } catch (error) {
-        console.error('[恢复] 恢复对话失败:', error)
-        // 数据损坏时，清空该角色的历史记录
+        console.error('[鎭㈠] 鎭㈠瀵硅瘽澶辫触:', error)
+        // 鏁版嵁鎹熷潖鏃讹紝娓呯┖璇ヨ鑹茬殑鍘嗗彶璁板綍
         try {
           localStorage.setItem(historyKey, '[]')
-          console.warn('[恢复] 已清空损坏的历史记录')
+          console.warn('[鎭㈠] 宸叉竻绌烘崯鍧忕殑鍘嗗彶璁板綍')
         } catch {}
       } finally {
         setIsRestoring(false)
@@ -529,11 +529,11 @@ function App() {
     }
     
     restoreCurrentConversation()
-  }, [userRole]) // 依赖 userRole，确保角色变化时也能正确恢复
+  }, [userRole]) // 渚濊禆 userRole锛岀‘淇濊鑹插彉鍖栨椂涔熻兘姝ｇ‘鎭㈠
 
-  // 加载待处理转移单数量（柜台角色需要看到商品部发来的转移单）
+  // 鍔犺浇寰呭鐞嗚浆绉诲崟鏁伴噺锛堟煖鍙拌鑹查渶瑕佺湅鍒板晢鍝侀儴鍙戞潵鐨勮浆绉诲崟锛?
   const loadPendingTransferCount = async () => {
-    // 只有柜台、结算、管理层需要看到待接收转移单数量
+    // 鍙湁鏌滃彴銆佺粨绠椼€佺鐞嗗眰闇€瑕佺湅鍒板緟鎺ユ敹杞Щ鍗曟暟閲?
     if (!['counter', 'settlement', 'manager'].includes(userRole)) {
       setPendingTransferCount(0)
       return
@@ -543,31 +543,31 @@ function App() {
       if (response.ok) {
         const transfers = await response.json()
         
-        // 根据角色过滤，与 WarehousePage 逻辑保持一致
+        // 鏍规嵁瑙掕壊杩囨护锛屼笌 WarehousePage 閫昏緫淇濇寔涓€鑷?
         const roleLocationMap = {
-          'counter': '展厅',
-          'product': '商品部仓库'
+          'counter': '灞曞巺',
+          'product': '鍟嗗搧閮ㄤ粨搴?
         }
         const myLocation = roleLocationMap[userRole]
         
         if (myLocation) {
-          // 只计算目标是当前角色管辖仓库的转移单
+          // 鍙绠楃洰鏍囨槸褰撳墠瑙掕壊绠¤緰浠撳簱鐨勮浆绉诲崟
           const filtered = transfers.filter(t => t.to_location_name === myLocation)
           setPendingTransferCount(filtered.length)
         } else {
-          // 管理员看所有
+          // 绠＄悊鍛樼湅鎵€鏈?
           setPendingTransferCount(transfers.length)
         }
       }
     } catch (error) {
-      console.error('加载待处理转移单数量失败:', error)
-      // 非关键功能，静默失败
+      console.error('鍔犺浇寰呭鐞嗚浆绉诲崟鏁伴噺澶辫触:', error)
+      // 闈炲叧閿姛鑳斤紝闈欓粯澶辫触
     }
   }
 
-  // 加载待结算销售单数量（结算专员需要看到柜台开的销售单）
+  // 鍔犺浇寰呯粨绠楅攢鍞崟鏁伴噺锛堢粨绠椾笓鍛橀渶瑕佺湅鍒版煖鍙板紑鐨勯攢鍞崟锛?
   const loadPendingSalesCount = async () => {
-    // 只有结算专员和管理层需要看到待结算销售单数量
+    // 鍙湁缁撶畻涓撳憳鍜岀鐞嗗眰闇€瑕佺湅鍒板緟缁撶畻閿€鍞崟鏁伴噺
     if (!['settlement', 'manager'].includes(userRole)) {
       setPendingSalesCount(0)
       return
@@ -579,40 +579,40 @@ function App() {
         setPendingSalesCount(sales.length)
       }
     } catch (error) {
-      console.error('加载待结算销售单数量失败:', error)
-      // 非关键功能，静默失败
+      console.error('鍔犺浇寰呯粨绠楅攢鍞崟鏁伴噺澶辫触:', error)
+      // 闈炲叧閿姛鑳斤紝闈欓粯澶辫触
     }
   }
 
-  // 加载客户列表（用于快捷收料/提料）
+  // 鍔犺浇瀹㈡埛鍒楄〃锛堢敤浜庡揩鎹锋敹鏂?鎻愭枡锛?
   const loadQuickFormCustomers = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/customers`)
       if (response.ok) {
         const data = await response.json()
-        console.log('加载客户列表:', data)  // 调试日志
-        // API返回格式: { success: true, data: { customers: [...] } }
+        console.log('鍔犺浇瀹㈡埛鍒楄〃:', data)  // 璋冭瘯鏃ュ織
+        // API杩斿洖鏍煎紡: { success: true, data: { customers: [...] } }
         const customers = data.data?.customers || data.customers || []
         setQuickFormCustomers(Array.isArray(customers) ? customers : [])
       } else {
-        console.error('加载客户列表API失败:', response.status)
-        showToast('加载客户列表失败，请刷新重试')
+        console.error('鍔犺浇瀹㈡埛鍒楄〃API澶辫触:', response.status)
+        showToast('鍔犺浇瀹㈡埛鍒楄〃澶辫触锛岃鍒锋柊閲嶈瘯')
       }
     } catch (error) {
-      console.error('加载客户列表失败:', error)
-      showToast('加载客户列表失败，请检查网络连接')
+      console.error('鍔犺浇瀹㈡埛鍒楄〃澶辫触:', error)
+      showToast('鍔犺浇瀹㈡埛鍒楄〃澶辫触锛岃妫€鏌ョ綉缁滆繛鎺?)
     }
   }
 
-  // 打开快捷收料弹窗
+  // 鎵撳紑蹇嵎鏀舵枡寮圭獥
   const openQuickReceiptModal = () => {
     loadQuickFormCustomers()
-    setQuickReceiptForm({ customer_id: '', gold_weight: '', gold_fineness: '足金999', remark: '' })
+    setQuickReceiptForm({ customer_id: '', gold_weight: '', gold_fineness: '瓒抽噾999', remark: '' })
     setQuickFormCustomerSearch('')
     setShowQuickReceiptModal(true)
   }
 
-  // 打开快捷提料弹窗
+  // 鎵撳紑蹇嵎鎻愭枡寮圭獥
   const openQuickWithdrawalModal = () => {
     loadQuickFormCustomers()
     setQuickWithdrawalForm({ customer_id: '', gold_weight: '', remark: '' })
@@ -621,7 +621,7 @@ function App() {
     setShowQuickWithdrawalModal(true)
   }
 
-  // 查询客户存料余额
+  // 鏌ヨ瀹㈡埛瀛樻枡浣欓
   const fetchCustomerDeposit = async (customerId) => {
     if (!customerId) {
       setSelectedCustomerDeposit(null)
@@ -640,23 +640,23 @@ function App() {
         setSelectedCustomerDeposit({ current_balance: 0, customer_name: '' })
       }
     } catch (error) {
-      console.error('查询客户存料余额失败:', error)
+      console.error('鏌ヨ瀹㈡埛瀛樻枡浣欓澶辫触:', error)
       setSelectedCustomerDeposit({ current_balance: 0, customer_name: '' })
-      showToast('查询客户余额失败，显示为0')
+      showToast('鏌ヨ瀹㈡埛浣欓澶辫触锛屾樉绀轰负0')
     } finally {
       setDepositLoading(false)
     }
   }
 
-  // 创建快捷收料单
+  // 鍒涘缓蹇嵎鏀舵枡鍗?
   const handleQuickReceipt = async (e) => {
     e.preventDefault()
     if (!quickReceiptForm.customer_id) {
-      alert('请选择客户')
+      alert('璇烽€夋嫨瀹㈡埛')
       return
     }
     if (!quickReceiptForm.gold_weight || parseFloat(quickReceiptForm.gold_weight) <= 0) {
-      alert('请输入有效的收料克重')
+      alert('璇疯緭鍏ユ湁鏁堢殑鏀舵枡鍏嬮噸')
       return
     }
     try {
@@ -664,8 +664,8 @@ function App() {
         customer_id: quickReceiptForm.customer_id,
         gold_weight: quickReceiptForm.gold_weight,
         gold_fineness: quickReceiptForm.gold_fineness,
-        remark: quickReceiptForm.remark || '快捷收料',
-        created_by: '结算专员'
+        remark: quickReceiptForm.remark || '蹇嵎鏀舵枡',
+        created_by: '缁撶畻涓撳憳'
       })
       const response = await fetch(`${API_BASE_URL}/api/gold-material/gold-receipts?${params}`, {
         method: 'POST',
@@ -673,18 +673,18 @@ function App() {
       })
       if (response.ok) {
         const result = await response.json()
-        const customerName = quickFormCustomers.find(c => c.id.toString() === quickReceiptForm.customer_id)?.name || '未知客户'
+        const customerName = quickFormCustomers.find(c => c.id.toString() === quickReceiptForm.customer_id)?.name || '鏈煡瀹㈡埛'
         const receiptWeight = parseFloat(quickReceiptForm.gold_weight)
         const remarkText = quickReceiptForm.remark || ''
         
         setShowQuickReceiptModal(false)
-        // 重置表单
-        setQuickReceiptForm({ customer_id: '', gold_weight: '', gold_fineness: '足金999', remark: '' })
+        // 閲嶇疆琛ㄥ崟
+        setQuickReceiptForm({ customer_id: '', gold_weight: '', gold_fineness: '瓒抽噾999', remark: '' })
         setQuickFormCustomerSearch('')
         
-        // 添加收料单记录到聊天框（使用文本格式+隐藏标记）
+        // 娣诲姞鏀舵枡鍗曡褰曞埌鑱婂ぉ妗嗭紙浣跨敤鏂囨湰鏍煎紡+闅愯棌鏍囪锛?
         const downloadUrl = `${API_BASE_URL}/api/gold-material/gold-receipts/${result.data.id}/print`
-        const receiptMessage = `✅ 收料单已生成\n\n📋 单号：${result.data.receipt_no}\n👤 客户：${customerName}\n⚖️ 克重：${receiptWeight.toFixed(2)} 克\n🏷️ 成色：${quickReceiptForm.gold_fineness}${remarkText ? `\n📝 备注：${remarkText}` : ''}\n⏰ 时间：${new Date().toLocaleString('zh-CN')}\n\n<!-- GOLD_RECEIPT:${result.data.id}:${result.data.receipt_no} -->`
+        const receiptMessage = `鉁?鏀舵枡鍗曞凡鐢熸垚\n\n馃搵 鍗曞彿锛?{result.data.receipt_no}\n馃懁 瀹㈡埛锛?{customerName}\n鈿栵笍 鍏嬮噸锛?{receiptWeight.toFixed(2)} 鍏媆n馃彿锔?鎴愯壊锛?{quickReceiptForm.gold_fineness}${remarkText ? `\n馃摑 澶囨敞锛?{remarkText}` : ''}\n鈴?鏃堕棿锛?{new Date().toLocaleString('zh-CN')}\n\n<!-- GOLD_RECEIPT:${result.data.id}:${result.data.receipt_no} -->`
         setMessages(prev => [...prev, {
           id: Date.now(),
           type: 'system',
@@ -693,38 +693,38 @@ function App() {
           goldReceiptId: result.data.id
         }])
         
-        // 自动打开打印页面
+        // 鑷姩鎵撳紑鎵撳嵃椤甸潰
         if (result.data.id) {
           window.open(downloadUrl, '_blank')
         }
       } else {
         const error = await response.json()
-        alert('创建收料单失败：' + (error.detail || '未知错误'))
+        alert('鍒涘缓鏀舵枡鍗曞け璐ワ細' + (error.detail || '鏈煡閿欒'))
       }
     } catch (error) {
-      console.error('创建收料单失败:', error)
-      alert('创建收料单失败')
+      console.error('鍒涘缓鏀舵枡鍗曞け璐?', error)
+      alert('鍒涘缓鏀舵枡鍗曞け璐?)
     }
   }
 
-  // 创建快捷提料单
+  // 鍒涘缓蹇嵎鎻愭枡鍗?
   const handleQuickWithdrawal = async (e) => {
     e.preventDefault()
     if (!quickWithdrawalForm.customer_id) {
-      alert('请选择客户')
+      alert('璇烽€夋嫨瀹㈡埛')
       return
     }
     const weight = parseFloat(quickWithdrawalForm.gold_weight)
     if (!weight || weight <= 0) {
-      alert('请输入有效的提料克重')
+      alert('璇疯緭鍏ユ湁鏁堢殑鎻愭枡鍏嬮噸')
       return
     }
     if (weight > (selectedCustomerDeposit?.current_balance || 0)) {
-      alert(`提料克重不能超过客户存料余额（${selectedCustomerDeposit?.current_balance?.toFixed(2) || 0}克）`)
+      alert(`鎻愭枡鍏嬮噸涓嶈兘瓒呰繃瀹㈡埛瀛樻枡浣欓锛?{selectedCustomerDeposit?.current_balance?.toFixed(2) || 0}鍏嬶級`)
       return
     }
     try {
-      const params = new URLSearchParams({ user_role: 'settlement', created_by: '结算专员' })
+      const params = new URLSearchParams({ user_role: 'settlement', created_by: '缁撶畻涓撳憳' })
       const response = await fetch(`${API_BASE_URL}/api/gold-material/withdrawals?${params}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -732,60 +732,60 @@ function App() {
           customer_id: parseInt(quickWithdrawalForm.customer_id),
           gold_weight: weight,
           withdrawal_type: 'self',
-          remark: quickWithdrawalForm.remark || '快捷提料'
+          remark: quickWithdrawalForm.remark || '蹇嵎鎻愭枡'
         })
       })
       if (response.ok) {
         const result = await response.json()
-        const customerName = quickFormCustomers.find(c => c.id.toString() === quickWithdrawalForm.customer_id)?.name || '未知客户'
+        const customerName = quickFormCustomers.find(c => c.id.toString() === quickWithdrawalForm.customer_id)?.name || '鏈煡瀹㈡埛'
         const withdrawalWeight = parseFloat(quickWithdrawalForm.gold_weight)
         const remarkText = quickWithdrawalForm.remark || ''
         
         setShowQuickWithdrawalModal(false)
-        // 重置表单
+        // 閲嶇疆琛ㄥ崟
         setQuickWithdrawalForm({ customer_id: '', gold_weight: '', remark: '' })
         setSelectedCustomerDeposit(null)
         setQuickFormCustomerSearch('')
         
-        // 添加提料单记录到聊天框（使用文本格式+隐藏标记，确保历史记录持久化）
+        // 娣诲姞鎻愭枡鍗曡褰曞埌鑱婂ぉ妗嗭紙浣跨敤鏂囨湰鏍煎紡+闅愯棌鏍囪锛岀‘淇濆巻鍙茶褰曟寔涔呭寲锛?
         const downloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${result.id}/download?format=html`
-        const withdrawalMessage = `✅ 提料单已生成\n\n📋 单号：${result.withdrawal_no}\n👤 客户：${customerName}\n⚖️ 克重：${withdrawalWeight.toFixed(2)} 克${remarkText ? `\n📝 备注：${remarkText}` : ''}\n⏰ 时间：${new Date().toLocaleString('zh-CN')}\n\n<!-- WITHDRAWAL_ORDER:${result.id}:${result.withdrawal_no} -->`
+        const withdrawalMessage = `鉁?鎻愭枡鍗曞凡鐢熸垚\n\n馃搵 鍗曞彿锛?{result.withdrawal_no}\n馃懁 瀹㈡埛锛?{customerName}\n鈿栵笍 鍏嬮噸锛?{withdrawalWeight.toFixed(2)} 鍏?{remarkText ? `\n馃摑 澶囨敞锛?{remarkText}` : ''}\n鈴?鏃堕棿锛?{new Date().toLocaleString('zh-CN')}\n\n<!-- WITHDRAWAL_ORDER:${result.id}:${result.withdrawal_no} -->`
         setMessages(prev => [...prev, {
           id: Date.now(),
           type: 'system',
           content: withdrawalMessage,
-          // 保留下载链接供按钮使用
+          // 淇濈暀涓嬭浇閾炬帴渚涙寜閽娇鐢?
           withdrawalDownloadUrl: downloadUrl,
           withdrawalId: result.id
         }])
         
-        // 自动打开打印页面
+        // 鑷姩鎵撳紑鎵撳嵃椤甸潰
         if (result.id) {
           window.open(`${API_BASE_URL}/api/gold-material/withdrawals/${result.id}/download?format=html`, '_blank')
         }
       } else {
         const error = await response.json()
-        alert('创建提料单失败：' + (error.detail || '未知错误'))
+        alert('鍒涘缓鎻愭枡鍗曞け璐ワ細' + (error.detail || '鏈煡閿欒'))
       }
     } catch (error) {
-      console.error('创建提料单失败:', error)
-      alert('创建提料单失败')
+      console.error('鍒涘缓鎻愭枡鍗曞け璐?', error)
+      alert('鍒涘缓鎻愭枡鍗曞け璐?)
     }
   }
 
-  // 筛选客户列表（确保是数组）
+  // 绛涢€夊鎴峰垪琛紙纭繚鏄暟缁勶級
   const filteredQuickFormCustomers = (Array.isArray(quickFormCustomers) ? quickFormCustomers : []).filter(c => {
-    if (!quickFormCustomerSearch.trim()) return true; // 空搜索显示全部
+    if (!quickFormCustomerSearch.trim()) return true; // 绌烘悳绱㈡樉绀哄叏閮?
     const search = quickFormCustomerSearch.toLowerCase();
     return (c.name && c.name.toLowerCase().includes(search)) ||
            (c.phone && c.phone.includes(quickFormCustomerSearch));
   })
 
-  // 角色变化时加载待处理数量
+  // 瑙掕壊鍙樺寲鏃跺姞杞藉緟澶勭悊鏁伴噺
   useEffect(() => {
     loadPendingTransferCount()
     loadPendingSalesCount()
-    // 每3秒刷新一次
+    // 姣?绉掑埛鏂颁竴娆?
     const interval = setInterval(() => {
       loadPendingTransferCount()
       loadPendingSalesCount()
@@ -793,32 +793,32 @@ function App() {
     return () => clearInterval(interval)
   }, [userRole])
 
-  // 保存对话到历史记录（保存到当前角色的历史记录）
-  // ========== 保存对话（增强版：去重优化 + 保存上次会话ID） ==========
+  // 淇濆瓨瀵硅瘽鍒板巻鍙茶褰曪紙淇濆瓨鍒板綋鍓嶈鑹茬殑鍘嗗彶璁板綍锛?
+  // ========== 淇濆瓨瀵硅瘽锛堝寮虹増锛氬幓閲嶄紭鍖?+ 淇濆瓨涓婃浼氳瘽ID锛?==========
   const lastSavedRef = useRef({ messageCount: 0, lastMessageId: null })
   
   const saveConversation = () => {
     if (messages.length === 0) return
     
-    // 性能优化：检查消息是否真的变化了，避免重复保存
+    // 鎬ц兘浼樺寲锛氭鏌ユ秷鎭槸鍚︾湡鐨勫彉鍖栦簡锛岄伩鍏嶉噸澶嶄繚瀛?
     const lastMessage = messages[messages.length - 1]
     if (lastSavedRef.current.messageCount === messages.length && 
         lastSavedRef.current.lastMessageId === lastMessage?.id) {
-      return // 消息没有变化，不需要保存
+      return // 娑堟伅娌℃湁鍙樺寲锛屼笉闇€瑕佷繚瀛?
     }
     
-    // 获取当前角色的历史记录key
+    // 鑾峰彇褰撳墠瑙掕壊鐨勫巻鍙茶褰昸ey
     const historyKey = getHistoryKey(userRole)
-    // 从localStorage获取当前角色的最新历史记录
+    // 浠巐ocalStorage鑾峰彇褰撳墠瑙掕壊鐨勬渶鏂板巻鍙茶褰?
     const parsedData = JSON.parse(localStorage.getItem(historyKey) || '[]')
     const history = Array.isArray(parsedData) ? parsedData : []
     
-    // 自动生成对话标题（使用第一条用户消息的前20个字符）
+    // 鑷姩鐢熸垚瀵硅瘽鏍囬锛堜娇鐢ㄧ涓€鏉＄敤鎴锋秷鎭殑鍓?0涓瓧绗︼級
     let title = conversationTitle
-    if (title === '新对话' || !currentConversationId) {
+    if (title === '鏂板璇? || !currentConversationId) {
       const firstUserMessage = messages.find(m => m.type === 'user')
       if (firstUserMessage) {
-        title = firstUserMessage.content.substring(0, 20) || '新对话'
+        title = firstUserMessage.content.substring(0, 20) || '鏂板璇?
         if (firstUserMessage.content.length > 20) title += '...'
         setConversationTitle(title)
       }
@@ -843,79 +843,79 @@ function App() {
       history.unshift(conversation)
     }
     
-    // 只保留最近50个对话
+    // 鍙繚鐣欐渶杩?0涓璇?
     const limitedHistory = history.slice(0, 50)
     localStorage.setItem(historyKey, JSON.stringify(limitedHistory))
     setConversationHistory(limitedHistory)
     setCurrentConversationId(conversationId)
     
-    // 保存当前角色的上次会话ID（用于角色切换时恢复）
+    // 淇濆瓨褰撳墠瑙掕壊鐨勪笂娆′細璇滻D锛堢敤浜庤鑹插垏鎹㈡椂鎭㈠锛?
     const lastSessionKey = getLastSessionKey(userRole)
     localStorage.setItem(lastSessionKey, conversationId)
     
-    // 更新保存状态，用于去重检测
+    // 鏇存柊淇濆瓨鐘舵€侊紝鐢ㄤ簬鍘婚噸妫€娴?
     lastSavedRef.current = { messageCount: messages.length, lastMessageId: lastMessage?.id }
   }
 
-  // 当消息变化时自动保存（优化：去重）
+  // 褰撴秷鎭彉鍖栨椂鑷姩淇濆瓨锛堜紭鍖栵細鍘婚噸锛?
   useEffect(() => {
     if (messages.length === 0) return
     
-    // 延迟保存，避免频繁写入
+    // 寤惰繜淇濆瓨锛岄伩鍏嶉绻佸啓鍏?
     const timer = setTimeout(() => {
       saveConversation()
     }, 1000)
     return () => clearTimeout(timer)
   }, [messages])
 
-  // 加载指定对话（从后端API加载完整消息内容）
+  // 鍔犺浇鎸囧畾瀵硅瘽锛堜粠鍚庣API鍔犺浇瀹屾暣娑堟伅鍐呭锛?
   const loadConversation = async (conversationId) => {
     try {
-      // 从后端API获取该会话的完整消息
+      // 浠庡悗绔疉PI鑾峰彇璇ヤ細璇濈殑瀹屾暣娑堟伅
       const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-history/${conversationId}`)
       const data = await response.json()
       
       if (data.success && Array.isArray(data.messages)) {
-        // 将后端消息格式转换为前端消息格式
+        // 灏嗗悗绔秷鎭牸寮忚浆鎹负鍓嶇娑堟伅鏍煎紡
         const messages = data.messages.map(msg => {
           const message = {
-            type: msg.message_type === 'user' ? 'user' : 'system',  // assistant 消息显示为 system 类型
+            type: msg.message_type === 'user' ? 'user' : 'system',  // assistant 娑堟伅鏄剧ず涓?system 绫诲瀷
             content: msg.content || '',
             id: msg.id
           }
           
-          // 解析所有类型的隐藏标记
+          // 瑙ｆ瀽鎵€鏈夌被鍨嬬殑闅愯棌鏍囪
           if (msg.content) {
-            // 提料单
+            // 鎻愭枡鍗?
             const withdrawalMatch = msg.content.match(/<!-- WITHDRAWAL_ORDER:(\d+):([^>]+) -->/)
             if (withdrawalMatch) {
               const withdrawalId = parseInt(withdrawalMatch[1])
               message.withdrawalId = withdrawalId
               message.withdrawalDownloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${withdrawalId}/download?format=html`
             }
-            // 收料单
+            // 鏀舵枡鍗?
             const goldReceiptMatch = msg.content.match(/<!-- GOLD_RECEIPT:(\d+):/)
             if (goldReceiptMatch) {
               const receiptId = parseInt(goldReceiptMatch[1])
               message.goldReceiptId = receiptId
               message.goldReceiptDownloadUrl = `${API_BASE_URL}/api/gold-material/gold-receipts/${receiptId}/print`
             }
-            // 入库单
+            // 鍏ュ簱鍗?
             const inboundMatch = msg.content.match(/<!-- INBOUND_ORDER:(\d+):/)
             if (inboundMatch) {
               message.inboundOrder = { id: parseInt(inboundMatch[1]) }
             }
-            // 退货单
+            // 閫€璐у崟
             const returnMatch = msg.content.match(/<!-- RETURN_ORDER:(\d+):/)
             if (returnMatch) {
               message.returnOrder = { id: parseInt(returnMatch[1]) }
             }
-            // 销售单
+            // 閿€鍞崟
             const salesMatch = msg.content.match(/<!-- SALES_ORDER:(\d+):/)
             if (salesMatch) {
               message.salesOrderId = parseInt(salesMatch[1])
             }
-            // 结算单
+            // 缁撶畻鍗?
             const settlementMatch = msg.content.match(/<!-- SETTLEMENT_ORDER:(\d+):/)
             if (settlementMatch) {
               message.settlementOrderId = parseInt(settlementMatch[1])
@@ -925,34 +925,34 @@ function App() {
           return message
         })
         
-        // 从历史记录中获取对话标题
+        // 浠庡巻鍙茶褰曚腑鑾峰彇瀵硅瘽鏍囬
         const history = conversationHistory
         const conversation = history.find(c => c.id === conversationId)
-        const title = conversation?.title || messages.find(m => m.type === 'user')?.content?.substring(0, 20) || '新对话'
+        const title = conversation?.title || messages.find(m => m.type === 'user')?.content?.substring(0, 20) || '鏂板璇?
         
         setMessages(messages)
         setCurrentConversationId(conversationId)
         setConversationTitle(title)
         
-        // 设置后端 session_id，确保后续消息继续使用相同的会话
+        // 璁剧疆鍚庣 session_id锛岀‘淇濆悗缁秷鎭户缁娇鐢ㄧ浉鍚岀殑浼氳瘽
         setCurrentSessionId(conversationId)
         localStorage.setItem('current_session_id', conversationId)
         
-        // 只在移动端关闭侧边栏，桌面端保持打开
+        // 鍙湪绉诲姩绔叧闂晶杈规爮锛屾闈㈢淇濇寔鎵撳紑
         if (window.innerWidth < 1024) {
           setSidebarOpen(false)
         } else {
-          // 桌面端确保侧边栏打开
+          // 妗岄潰绔‘淇濅晶杈规爮鎵撳紑
           setSidebarOpen(true)
         }
       } else {
-        // 如果API失败，尝试从localStorage加载
+        // 濡傛灉API澶辫触锛屽皾璇曚粠localStorage鍔犺浇
         const historyKey = getHistoryKey(userRole)
         const parsedData = JSON.parse(localStorage.getItem(historyKey) || '[]')
         const history = Array.isArray(parsedData) ? parsedData : []
         const conversation = history.find(c => c.id === conversationId)
         if (conversation && conversation.messages) {
-          // 解析消息中的隐藏标记，恢复所有特殊消息的额外字段
+          // 瑙ｆ瀽娑堟伅涓殑闅愯棌鏍囪锛屾仮澶嶆墍鏈夌壒娈婃秷鎭殑棰濆瀛楁
           const messages = parseMessageHiddenMarkers(conversation.messages)
           setMessages(messages)
           setCurrentConversationId(conversation.id)
@@ -965,14 +965,14 @@ function App() {
         }
       }
     } catch (error) {
-      console.error('加载对话失败，尝试从本地加载:', error)
-      // 如果API失败，尝试从localStorage加载
+      console.error('鍔犺浇瀵硅瘽澶辫触锛屽皾璇曚粠鏈湴鍔犺浇:', error)
+      // 濡傛灉API澶辫触锛屽皾璇曚粠localStorage鍔犺浇
       const historyKey = getHistoryKey(userRole)
       const parsedData2 = JSON.parse(localStorage.getItem(historyKey) || '[]')
       const history = Array.isArray(parsedData2) ? parsedData2 : []
       const conversation = history.find(c => c.id === conversationId)
       if (conversation && conversation.messages) {
-        // 解析消息中的隐藏标记，恢复所有特殊消息的额外字段
+        // 瑙ｆ瀽娑堟伅涓殑闅愯棌鏍囪锛屾仮澶嶆墍鏈夌壒娈婃秷鎭殑棰濆瀛楁
         const messages = parseMessageHiddenMarkers(conversation.messages)
         setMessages(messages)
         setCurrentConversationId(conversation.id)
@@ -986,30 +986,30 @@ function App() {
     }
   }
 
-  // 新建对话
+  // 鏂板缓瀵硅瘽
   const newConversation = () => {
     setMessages([])
     setCurrentConversationId(null)
-    setConversationTitle('新对话')
+    setConversationTitle('鏂板璇?)
     
-    // 生成新的后端 session_id
+    // 鐢熸垚鏂扮殑鍚庣 session_id
     const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     setCurrentSessionId(newSessionId)
     localStorage.setItem('current_session_id', newSessionId)
     
-    // 只在移动端关闭侧边栏，桌面端保持打开
+    // 鍙湪绉诲姩绔叧闂晶杈规爮锛屾闈㈢淇濇寔鎵撳紑
     if (window.innerWidth < 1024) {
       setSidebarOpen(false)
     } else {
-      // 桌面端确保侧边栏打开
+      // 妗岄潰绔‘淇濅晶杈规爮鎵撳紑
       setSidebarOpen(true)
     }
   }
 
-  // 删除对话（从当前角色的历史记录删除）
+  // 鍒犻櫎瀵硅瘽锛堜粠褰撳墠瑙掕壊鐨勫巻鍙茶褰曞垹闄わ級
   const deleteConversation = (conversationId, e) => {
     e.stopPropagation()
-    // 获取当前角色的历史记录key
+    // 鑾峰彇褰撳墠瑙掕壊鐨勫巻鍙茶褰昸ey
     const historyKey = getHistoryKey(userRole)
     const history = (Array.isArray(conversationHistory) ? conversationHistory : []).filter(c => c.id !== conversationId)
     localStorage.setItem(historyKey, JSON.stringify(history))
@@ -1019,13 +1019,13 @@ function App() {
     }
   }
 
-  // 当对话框打开时自动聚焦
+  // 褰撳璇濇鎵撳紑鏃惰嚜鍔ㄨ仛鐒?
   useEffect(() => {
     if (showOCRModal && ocrTextareaRef.current) {
-      // 延迟聚焦，确保对话框已完全渲染
+      // 寤惰繜鑱氱劍锛岀‘淇濆璇濇宸插畬鍏ㄦ覆鏌?
       const timer = setTimeout(() => {
         ocrTextareaRef.current?.focus()
-        // 将光标移到文本末尾
+        // 灏嗗厜鏍囩Щ鍒版枃鏈湯灏?
         if (ocrTextareaRef.current) {
           const length = ocrTextareaRef.current.value.length
           ocrTextareaRef.current.setSelectionRange(length, length)
@@ -1044,7 +1044,7 @@ function App() {
     setMessages(prev => [...prev, { type: 'user', content: userMessage }])
     setLoading(true)
     
-    // 创建思考过程消息ID
+    // 鍒涘缓鎬濊€冭繃绋嬫秷鎭疘D
     const thinkingMessageId = Date.now()
     let contentMessageId = null
     let currentContent = ''
@@ -1052,10 +1052,10 @@ function App() {
     let thinkingSteps = []
 
     try {
-      console.log('发送流式请求到:', API_ENDPOINTS.CHAT_STREAM)
-      console.log('请求消息:', userMessage)
+      console.log('鍙戦€佹祦寮忚姹傚埌:', API_ENDPOINTS.CHAT_STREAM)
+      console.log('璇锋眰娑堟伅:', userMessage)
       
-      // 取消之前的请求（如果有）
+      // 鍙栨秷涔嬪墠鐨勮姹傦紙濡傛灉鏈夛級
       if (abortControllerRef.current) {
         abortControllerRef.current.abort()
       }
@@ -1069,14 +1069,14 @@ function App() {
         body: JSON.stringify({ 
           message: userMessage, 
           user_role: userRole,
-          session_id: currentSessionId,  // 传递会话ID，确保同一对话的消息关联在一起
-          language: currentLanguage  // 传递当前语言设置
+          session_id: currentSessionId,  // 浼犻€掍細璇滻D锛岀‘淇濆悓涓€瀵硅瘽鐨勬秷鎭叧鑱斿湪涓€璧?
+          language: currentLanguage  // 浼犻€掑綋鍓嶈瑷€璁剧疆
         }),
-        signal: abortControllerRef.current.signal  // 添加取消信号
+        signal: abortControllerRef.current.signal  // 娣诲姞鍙栨秷淇″彿
       })
 
-      console.log('收到响应，状态码:', response.status)
-      console.log('响应头:', {
+      console.log('鏀跺埌鍝嶅簲锛岀姸鎬佺爜:', response.status)
+      console.log('鍝嶅簲澶?', {
         'Content-Type': response.headers.get('Content-Type'),
         'Cache-Control': response.headers.get('Cache-Control'),
         'Connection': response.headers.get('Connection'),
@@ -1084,19 +1084,19 @@ function App() {
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error('响应错误，状态码:', response.status)
-        console.error('错误内容:', errorText)
+        console.error('鍝嶅簲閿欒锛岀姸鎬佺爜:', response.status)
+        console.error('閿欒鍐呭:', errorText)
         throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
       }
       
       if (!response.body) {
-        console.error('响应体为空!')
-        throw new Error('响应体为空')
+        console.error('鍝嶅簲浣撲负绌?')
+        throw new Error('鍝嶅簲浣撲负绌?)
       }
       
-      console.log('开始读取SSE流...')
+      console.log('寮€濮嬭鍙朣SE娴?..')
 
-      // 创建思考过程消息
+      // 鍒涘缓鎬濊€冭繃绋嬫秷鎭?
       setMessages(prev => [...prev, { 
         id: thinkingMessageId,
         type: 'thinking', 
@@ -1104,7 +1104,7 @@ function App() {
         progress: 0
       }])
 
-      // 读取SSE流
+      // 璇诲彇SSE娴?
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
@@ -1115,43 +1115,43 @@ function App() {
           const { done, value } = await reader.read()
           
           if (done) {
-            console.log(`SSE流结束，共收到 ${chunkCount} 个数据块`)
+            console.log(`SSE娴佺粨鏉燂紝鍏辨敹鍒?${chunkCount} 涓暟鎹潡`)
             setLoading(false)
             break
           }
           
           if (!value) {
-            console.warn('收到空值，继续等待...')
+            console.warn('鏀跺埌绌哄€硷紝缁х画绛夊緟...')
             continue
           }
 
           chunkCount++
           if (chunkCount <= 3) {
-            console.log(`收到第 ${chunkCount} 个数据块，长度: ${value.length} 字节`)
+            console.log(`鏀跺埌绗?${chunkCount} 涓暟鎹潡锛岄暱搴? ${value.length} 瀛楄妭`)
           }
 
           buffer += decoder.decode(value, { stream: true })
           const lines = buffer.split('\n')
-          buffer = lines.pop() || '' // 保留不完整的行
+          buffer = lines.pop() || '' // 淇濈暀涓嶅畬鏁寸殑琛?
 
           for (const line of lines) {
-                  if (line.trim() === '') continue // 跳过空行
+                  if (line.trim() === '') continue // 璺宠繃绌鸿
                   if (line.startsWith('data: ')) {
                     try {
                       const jsonStr = line.slice(6)
-                      console.log('解析SSE JSON:', jsonStr) // 显示完整JSON
+                      console.log('瑙ｆ瀽SSE JSON:', jsonStr) // 鏄剧ず瀹屾暣JSON
                       const data = JSON.parse(jsonStr)
-                      console.log('收到SSE数据:', data) // 调试日志
-                      // 特别检查 all_products
+                      console.log('鏀跺埌SSE鏁版嵁:', data) // 璋冭瘯鏃ュ織
+                      // 鐗瑰埆妫€鏌?all_products
                       if (data.data?.all_products) {
-                        console.log('【重要】检测到 all_products:', data.data.all_products)
+                        console.log('銆愰噸瑕併€戞娴嬪埌 all_products:', data.data.all_products)
                       }
                 
-                // 处理思考步骤
+                // 澶勭悊鎬濊€冩楠?
                 if (data.type === 'thinking') {
                   const stepIndex = thinkingSteps.findIndex(s => s.step === data.step)
                   if (stepIndex >= 0) {
-                    // 更新现有步骤
+                    // 鏇存柊鐜版湁姝ラ
                     thinkingSteps[stepIndex] = {
                       step: data.step,
                       message: data.message,
@@ -1159,7 +1159,7 @@ function App() {
                       status: data.status || 'processing'
                     }
                   } else {
-                    // 添加新步骤
+                    // 娣诲姞鏂版楠?
                     thinkingSteps.push({
                       step: data.step,
                       message: data.message,
@@ -1175,7 +1175,7 @@ function App() {
                     return msg
                   }))
                 }
-                // 内容开始
+                // 鍐呭寮€濮?
                 else if (data.type === 'content_start') {
                   isContentStarted = true
                   contentMessageId = Date.now()
@@ -1186,9 +1186,9 @@ function App() {
                     isStreaming: true
                   }])
                 }
-                // 内容块
+                // 鍐呭鍧?
                 else if (data.type === 'content') {
-                  // 如果content_start事件还没收到，先创建消息
+                  // 濡傛灉content_start浜嬩欢杩樻病鏀跺埌锛屽厛鍒涘缓娑堟伅
                   if (!isContentStarted || !contentMessageId) {
                     isContentStarted = true
                     contentMessageId = Date.now()
@@ -1207,13 +1207,13 @@ function App() {
                     return msg
                   }))
                 }
-              // 收款确认
+              // 鏀舵纭
               else if (data.type === 'payment_confirm') {
-                console.log('收到payment_confirm事件:', data)
+                console.log('鏀跺埌payment_confirm浜嬩欢:', data)
                 setLoading(false)
-                // 移除思考过程消息
+                // 绉婚櫎鎬濊€冭繃绋嬫秷鎭?
                 setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
-                // 创建收款确认卡片消息
+                // 鍒涘缓鏀舵纭鍗＄墖娑堟伅
                 const confirmData = data.data
                 setMessages(prev => [...prev, { 
                   id: Date.now(),
@@ -1222,11 +1222,11 @@ function App() {
                   content: confirmData.message
                 }])
               }
-              // 收料确认卡片
+              // 鏀舵枡纭鍗＄墖
               else if (data.type === 'receipt_confirm') {
                 setLoading(false)
                 setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
-                // 创建收料确认卡片消息
+                // 鍒涘缓鏀舵枡纭鍗＄墖娑堟伅
                 const confirmData = data.data
                 setMessages(prev => [...prev, { 
                   id: Date.now(),
@@ -1235,11 +1235,11 @@ function App() {
                   content: confirmData.message
                 }])
               }
-              // 提料确认卡片
+              // 鎻愭枡纭鍗＄墖
               else if (data.type === 'withdrawal_confirm') {
                 setLoading(false)
                 setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
-                // 创建提料确认卡片消息
+                // 鍒涘缓鎻愭枡纭鍗＄墖娑堟伅
                 const confirmData = data.data
                 setMessages(prev => [...prev, { 
                   id: Date.now(),
@@ -1248,39 +1248,39 @@ function App() {
                   content: confirmData.message
                 }])
               }
-              // 完成
+              // 瀹屾垚
               else if (data.type === 'complete') {
-                console.log('收到complete事件:', data)
+                console.log('鏀跺埌complete浜嬩欢:', data)
                 setLoading(false)
-                // 移除思考过程消息（如果存在）
+                // 绉婚櫎鎬濊€冭繃绋嬫秷鎭紙濡傛灉瀛樺湪锛?
                 setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
                 
-                // 如果没有内容消息（比如入库操作直接返回结果），创建一个新消息
+                // 濡傛灉娌℃湁鍐呭娑堟伅锛堟瘮濡傚叆搴撴搷浣滅洿鎺ヨ繑鍥炵粨鏋滐級锛屽垱寤轰竴涓柊娑堟伅
                 if (!contentMessageId || !isContentStarted) {
-                  console.log('创建新的系统消息来显示结果')
+                  console.log('鍒涘缓鏂扮殑绯荤粺娑堟伅鏉ユ樉绀虹粨鏋?)
                   contentMessageId = Date.now()
-                  // 处理入库等操作的响应
+                  // 澶勭悊鍏ュ簱绛夋搷浣滅殑鍝嶅簲
                   if (data.data) {
-                    // ========== 智能表单弹出：当信息不完整时自动弹出表单 ==========
+                    // ========== 鏅鸿兘琛ㄥ崟寮瑰嚭锛氬綋淇℃伅涓嶅畬鏁存椂鑷姩寮瑰嚭琛ㄥ崟 ==========
                     if (data.data.need_form) {
-                      console.log('检测到need_form标志，弹出对应表单:', data.data.action)
+                      console.log('妫€娴嬪埌need_form鏍囧織锛屽脊鍑哄搴旇〃鍗?', data.data.action)
                       
-                      // 根据操作类型弹出对应的表单
-                      if (data.data.action === '退货') {
+                      // 鏍规嵁鎿嶄綔绫诲瀷寮瑰嚭瀵瑰簲鐨勮〃鍗?
+                      if (data.data.action === '閫€璐?) {
                         setShowQuickReturnModal(true)
-                      } else if (data.data.action === '入库') {
+                      } else if (data.data.action === '鍏ュ簱') {
                         setShowQuickInboundModal(true)
-                      } else if (data.data.action === '创建销售单') {
+                      } else if (data.data.action === '鍒涘缓閿€鍞崟') {
                         setShowQuickOrderModal(true)
                       }
                       
-                      // 添加提示消息
+                      // 娣诲姞鎻愮ず娑堟伅
                       setMessages(prev => [...prev, { 
                         type: 'system', 
-                        content: data.data.message || '📝 请在弹出的表格中填写完整信息',
+                        content: data.data.message || '馃摑 璇峰湪寮瑰嚭鐨勮〃鏍间腑濉啓瀹屾暣淇℃伅',
                         id: contentMessageId
                       }])
-                      return  // 不再继续处理
+                      return  // 涓嶅啀缁х画澶勭悊
                     }
                     
                     let messageContent = ''
@@ -1288,36 +1288,36 @@ function App() {
                       messageContent = data.data.message
                     } else if (data.data.success !== undefined) {
                       messageContent = data.data.success 
-                        ? '操作成功完成' 
-                        : (data.data.error || '操作失败')
+                        ? '鎿嶄綔鎴愬姛瀹屾垚' 
+                        : (data.data.error || '鎿嶄綔澶辫触')
                     }
                     
-                    console.log('创建消息，内容:', messageContent)
+                    console.log('鍒涘缓娑堟伅锛屽唴瀹?', messageContent)
                     
-                    // 检查是否是入库操作，如果是则创建待确认的卡片数据
+                    // 妫€鏌ユ槸鍚︽槸鍏ュ簱鎿嶄綔锛屽鏋滄槸鍒欏垱寤哄緟纭鐨勫崱鐗囨暟鎹?
                     let inboundCard = null
-                    let inboundCards = null  // 多商品入库时使用
-                    // 打印完整的 data.data 对象
-                    console.log('【入库调试】完整data.data:', JSON.stringify(data.data, null, 2))
-                    console.log('【入库调试】all_products 是否存在:', 'all_products' in (data.data || {}))
-                    console.log('【入库调试】all_products 值:', data.data?.all_products)
-                    console.log('【入库调试】all_products 长度:', data.data?.all_products?.length)
+                    let inboundCards = null  // 澶氬晢鍝佸叆搴撴椂浣跨敤
+                    // 鎵撳嵃瀹屾暣鐨?data.data 瀵硅薄
+                    console.log('銆愬叆搴撹皟璇曘€戝畬鏁磀ata.data:', JSON.stringify(data.data, null, 2))
+                    console.log('銆愬叆搴撹皟璇曘€慳ll_products 鏄惁瀛樺湪:', 'all_products' in (data.data || {}))
+                    console.log('銆愬叆搴撹皟璇曘€慳ll_products 鍊?', data.data?.all_products)
+                    console.log('銆愬叆搴撹皟璇曘€慳ll_products 闀垮害:', data.data?.all_products?.length)
                     
                     if (data.data?.success && data.data?.pending && data.data?.card_data) {
-                      // 方案B：创建待确认的卡片（status: 'pending'）
+                      // 鏂规B锛氬垱寤哄緟纭鐨勫崱鐗囷紙status: 'pending'锛?
                       try {
-                        // 统一使用 all_products（如果没有则使用 card_data 作为单元素数组）
-                        console.log('【调试】data.data.all_products 原始值:', data.data.all_products)
-                        console.log('【调试】data.data.card_data 原始值:', data.data.card_data)
+                        // 缁熶竴浣跨敤 all_products锛堝鏋滄病鏈夊垯浣跨敤 card_data 浣滀负鍗曞厓绱犳暟缁勶級
+                        console.log('銆愯皟璇曘€慸ata.data.all_products 鍘熷鍊?', data.data.all_products)
+                        console.log('銆愯皟璇曘€慸ata.data.card_data 鍘熷鍊?', data.data.card_data)
                         
                         const allProducts = data.data.all_products && data.data.all_products.length > 0 
                           ? data.data.all_products 
                           : [data.data.card_data]
-                        console.log('收到待确认商品数据，共', allProducts.length, '个商品:', allProducts)
+                        console.log('鏀跺埌寰呯‘璁ゅ晢鍝佹暟鎹紝鍏?, allProducts.length, '涓晢鍝?', allProducts)
                         
-                        // 统一创建卡片数组（无论单商品还是多商品）
+                        // 缁熶竴鍒涘缓鍗＄墖鏁扮粍锛堟棤璁哄崟鍟嗗搧杩樻槸澶氬晢鍝侊級
                         inboundCards = allProducts.map((cardData, index) => {
-                          console.log(`【调试】创建卡片${index+1}:`, cardData)
+                          console.log(`銆愯皟璇曘€戝垱寤哄崱鐗?{index+1}:`, cardData)
                           const card = createNewCard({
                             productName: cardData.product_name,
                             goldWeight: cardData.weight,
@@ -1327,7 +1327,7 @@ function App() {
                             totalCost: cardData.total_cost,
                             supplier: {
                               id: 0,
-                              name: cardData.supplier || '未知供应商',
+                              name: cardData.supplier || '鏈煡渚涘簲鍟?,
                             },
                             status: 'pending',
                             source: 'api',
@@ -1336,19 +1336,19 @@ function App() {
                           card.barcode = ''
                           return card
                         })
-                        console.log('创建入库卡片，共', inboundCards.length, '张:', inboundCards)
+                        console.log('鍒涘缓鍏ュ簱鍗＄墖锛屽叡', inboundCards.length, '寮?', inboundCards)
                         
-                        // 如果只有一个商品，同时设置 inboundCard（向后兼容）
+                        // 濡傛灉鍙湁涓€涓晢鍝侊紝鍚屾椂璁剧疆 inboundCard锛堝悜鍚庡吋瀹癸級
                         if (inboundCards.length === 1) {
                           inboundCard = inboundCards[0]
-                          inboundCards = null  // 单商品时清空数组，使用单卡片显示
+                          inboundCards = null  // 鍗曞晢鍝佹椂娓呯┖鏁扮粍锛屼娇鐢ㄥ崟鍗＄墖鏄剧ず
                         }
                       } catch (error) {
-                        console.error('创建入库卡片失败:', error)
+                        console.error('鍒涘缓鍏ュ簱鍗＄墖澶辫触:', error)
                       }
                     } else if (data.data?.success && data.data?.order && data.data?.detail && !data.data?.pending) {
-                      // 如果已经有订单和明细，且没有pending标志，说明是已确认的（向后兼容或直接入库的情况）
-                      console.log('检测到已确认的入库数据（向后兼容）')
+                      // 濡傛灉宸茬粡鏈夎鍗曞拰鏄庣粏锛屼笖娌℃湁pending鏍囧織锛岃鏄庢槸宸茬‘璁ょ殑锛堝悜鍚庡吋瀹规垨鐩存帴鍏ュ簱鐨勬儏鍐碉級
+                      console.log('妫€娴嬪埌宸茬‘璁ょ殑鍏ュ簱鏁版嵁锛堝悜鍚庡吋瀹癸級')
                       const orderNo = data.data.order.order_no || ''
                       if (orderNo.startsWith('RK')) {
                         try {
@@ -1362,13 +1362,13 @@ function App() {
                             inboundCard.barcode = orderNo
                           }
                           inboundCard.status = 'confirmed'
-                          console.log('创建已确认入库卡片（向后兼容）:', inboundCard)
+                          console.log('鍒涘缓宸茬‘璁ゅ叆搴撳崱鐗囷紙鍚戝悗鍏煎锛?', inboundCard)
                         } catch (error) {
-                          console.error('创建入库卡片失败:', error)
+                          console.error('鍒涘缓鍏ュ簱鍗＄墖澶辫触:', error)
                         }
                       }
                     } else {
-                      console.log('未匹配到入库卡片创建条件，数据:', data.data)
+                      console.log('鏈尮閰嶅埌鍏ュ簱鍗＄墖鍒涘缓鏉′欢锛屾暟鎹?', data.data)
                     }
                     
                     setMessages(prev => [...prev, {
@@ -1376,33 +1376,33 @@ function App() {
                       type: 'system',
                       content: messageContent,
                       isStreaming: false,
-                      // 添加其他数据（如订单信息等）
+                      // 娣诲姞鍏朵粬鏁版嵁锛堝璁㈠崟淇℃伅绛夛級
                       order: data.data.order,
                       detail: data.data.detail,
                       inventory: data.data.inventory,
                       chartData: data.data.chart_data,
                       pieData: data.data.pie_data,
                       chartType: data.data.action,
-                      rawData: data.data.raw_data,  // 原始数据（用于详细数据展示）
-                      // AI意图识别结果（用于可视化显示）
+                      rawData: data.data.raw_data,  // 鍘熷鏁版嵁锛堢敤浜庤缁嗘暟鎹睍绀猴級
+                      // AI鎰忓浘璇嗗埆缁撴灉锛堢敤浜庡彲瑙嗗寲鏄剧ず锛?
                       detectedIntent: data.data.action,
-                      // 添加入库卡片数据（单商品或多商品）
+                      // 娣诲姞鍏ュ簱鍗＄墖鏁版嵁锛堝崟鍟嗗搧鎴栧鍟嗗搧锛?
                       inboundCard: inboundCard,
-                      inboundCards: inboundCards,  // 多商品入库时的卡片数组
+                      inboundCards: inboundCards,  // 澶氬晢鍝佸叆搴撴椂鐨勫崱鐗囨暟缁?
                     }])
                   } else {
-                    console.warn('complete事件没有data字段')
+                    console.warn('complete浜嬩欢娌℃湁data瀛楁')
                   }
                 } else {
-                  console.log('更新现有内容消息')
-                  // 如果有内容消息，更新它
+                  console.log('鏇存柊鐜版湁鍐呭娑堟伅')
+                  // 濡傛灉鏈夊唴瀹规秷鎭紝鏇存柊瀹?
                   setMessages(prev => prev.map(msg => {
                     if (msg.id === contentMessageId) {
                       const updatedMsg = { 
                         ...msg, 
                         isStreaming: false
                       }
-                      // 只有在有图表数据时才添加
+                      // 鍙湁鍦ㄦ湁鍥捐〃鏁版嵁鏃舵墠娣诲姞
                       if (data.data?.chart_data) {
                         updatedMsg.chartData = data.data.chart_data
                         updatedMsg.chartType = data.data.action
@@ -1410,13 +1410,13 @@ function App() {
                       if (data.data?.pie_data) {
                         updatedMsg.pieData = data.data.pie_data
                       }
-                      // 添加其他数据
+                      // 娣诲姞鍏朵粬鏁版嵁
                       if (data.data?.order) updatedMsg.order = data.data.order
                       if (data.data?.detail) updatedMsg.detail = data.data.detail
                       if (data.data?.inventory) updatedMsg.inventory = data.data.inventory
                       if (data.data?.raw_data) updatedMsg.rawData = data.data.raw_data
                       
-                      // 如果是入库操作，创建卡片数据
+                      // 濡傛灉鏄叆搴撴搷浣滐紝鍒涘缓鍗＄墖鏁版嵁
                       if (data.data?.success && data.data?.order && data.data?.detail) {
                         const orderNo = data.data.order.order_no || ''
                         if (orderNo.startsWith('RK')) {
@@ -1425,12 +1425,12 @@ function App() {
                             inboundCard.orderNo = orderNo
                             inboundCard.orderId = data.data.order.id
                             if (!inboundCard.barcode) {
-                              inboundCard.barcode = orderNo // 使用订单号作为条码
+                              inboundCard.barcode = orderNo // 浣跨敤璁㈠崟鍙蜂綔涓烘潯鐮?
                             }
                             inboundCard.status = 'confirmed'
                             updatedMsg.inboundCard = inboundCard
                           } catch (error) {
-                            console.error('创建入库卡片失败:', error)
+                            console.error('鍒涘缓鍏ュ簱鍗＄墖澶辫触:', error)
                           }
                         }
                       }
@@ -1441,49 +1441,49 @@ function App() {
                   }))
                 }
               }
-                // 错误
+                // 閿欒
                 else if (data.type === 'error') {
                   setLoading(false)
                   setMessages(prev => prev.map(msg => {
                     if (msg.id === thinkingMessageId || msg.id === contentMessageId) {
-                      return { ...msg, type: 'system', content: `❌ ${data.message}`, isStreaming: false }
+                      return { ...msg, type: 'system', content: `鉂?${data.message}`, isStreaming: false }
                     }
                     return msg
                   }))
                 }
               } catch (e) {
-                console.error('解析SSE数据失败:', e)
+                console.error('瑙ｆ瀽SSE鏁版嵁澶辫触:', e)
               }
             }
           }
         } catch (readError) {
-          console.error('读取SSE流失败:', readError)
+          console.error('璇诲彇SSE娴佸け璐?', readError)
           setLoading(false)
           setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
           setMessages(prev => [...prev, { 
             type: 'system', 
-            content: `❌ 读取流式响应失败：${readError.message}` 
+            content: `鉂?璇诲彇娴佸紡鍝嶅簲澶辫触锛?{readError.message}` 
           }])
           break
         }
       }
     } catch (error) {
-      // 如果是请求被取消（用户切换页面或发送新消息），静默处理
+      // 濡傛灉鏄姹傝鍙栨秷锛堢敤鎴峰垏鎹㈤〉闈㈡垨鍙戦€佹柊娑堟伅锛夛紝闈欓粯澶勭悊
       if (error.name === 'AbortError') {
-        console.log('SSE 请求已取消')
+        console.log('SSE 璇锋眰宸插彇娑?)
         setLoading(false)
         setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
         return
       }
       
       setLoading(false)
-      // 移除思考过程消息
+      // 绉婚櫎鎬濊€冭繃绋嬫秷鎭?
       setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
       
-      let errorMessage = `❌ 网络错误：${error.message}`
+      let errorMessage = `鉂?缃戠粶閿欒锛?{error.message}`
       
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        errorMessage = '❌ 无法连接到服务器，请检查后端服务是否运行（http://localhost:8000）'
+        errorMessage = '鉂?鏃犳硶杩炴帴鍒版湇鍔″櫒锛岃妫€鏌ュ悗绔湇鍔℃槸鍚﹁繍琛岋紙http://localhost:8000锛?
       }
       
       setMessages(prev => [...prev, { 
@@ -1493,27 +1493,27 @@ function App() {
     }
   }
 
-  // 处理完成响应的辅助函数
+  // 澶勭悊瀹屾垚鍝嶅簲鐨勮緟鍔╁嚱鏁?
   const handleCompleteResponse = (data, messageId) => {
     if (!data.success) {
       setMessages(prev => prev.map(msg => {
         if (msg.id === messageId) {
-          return { ...msg, content: `❌ ${data.message || '处理失败'}` }
+          return { ...msg, content: `鉂?${data.message || '澶勭悊澶辫触'}` }
         }
         return msg
       }))
       return
     }
 
-    // 处理各种响应类型（保持向后兼容）
+    // 澶勭悊鍚勭鍝嶅簲绫诲瀷锛堜繚鎸佸悜鍚庡吋瀹癸級
     let systemMessage = data.message || ''
     
-    // 如果有原始数据，可以用于图表等
+    // 濡傛灉鏈夊師濮嬫暟鎹紝鍙互鐢ㄤ簬鍥捐〃绛?
     if (data.raw_data) {
-      // 可以根据需要处理raw_data
+      // 鍙互鏍规嵁闇€瑕佸鐞唕aw_data
     }
 
-    // 更新消息内容（如果需要添加额外信息）
+    // 鏇存柊娑堟伅鍐呭锛堝鏋滈渶瑕佹坊鍔犻澶栦俊鎭級
     setMessages(prev => prev.map(msg => {
       if (msg.id === messageId) {
         return { ...msg, content: systemMessage }
@@ -1522,7 +1522,7 @@ function App() {
     }))
   }
 
-  // 保留旧的sendMessage作为备用（如果需要回退）
+  // 淇濈暀鏃х殑sendMessage浣滀负澶囩敤锛堝鏋滈渶瑕佸洖閫€锛?
   const sendMessageOld = async () => {
     if (!input.trim() || loading) return
 
@@ -1546,17 +1546,17 @@ function App() {
       if (data.success) {
         let systemMessage = data.message
         
-        // 如果有思考过程，先显示思考过程
+        // 濡傛灉鏈夋€濊€冭繃绋嬶紝鍏堟樉绀烘€濊€冭繃绋?
         if (data.thinking_steps && data.thinking_steps.length > 0) {
-          systemMessage = "💭 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + systemMessage
+          systemMessage = "馃挱 澶勭悊杩囩▼锛歕n" + data.thinking_steps.join('\n') + "\n\n" + systemMessage
         }
 
-        // 如果是图表数据（查询所有库存）
+        // 濡傛灉鏄浘琛ㄦ暟鎹紙鏌ヨ鎵€鏈夊簱瀛橈級
         if (data.chart_data) {
-          systemMessage += `\n\n📊 库存统计：\n` +
-            `商品种类：${data.summary.total_products}种\n` +
-            `供应商数量：${data.summary.total_suppliers}家\n` +
-            `总库存：${data.summary.total_weight.toFixed(2)}克\n`
+          systemMessage += `\n\n馃搳 搴撳瓨缁熻锛歕n` +
+            `鍟嗗搧绉嶇被锛?{data.summary.total_products}绉峔n` +
+            `渚涘簲鍟嗘暟閲忥細${data.summary.total_suppliers}瀹禱n` +
+            `鎬诲簱瀛橈細${data.summary.total_weight.toFixed(2)}鍏媆n`
           
           setMessages(prev => [...prev, { 
             type: 'system', 
@@ -1566,29 +1566,29 @@ function App() {
             tableData: data.table_data
           }])
         }
-        // 如果是批量入库成功
+        // 濡傛灉鏄壒閲忓叆搴撴垚鍔?
         else if (data.order && data.details && data.details.length > 0) {
-          systemMessage += `\n\n📋 入库单信息：\n` +
-            `入库单号：${data.order.order_no}\n` +
-            `商品数量：${data.details.length}个\n\n`
+          systemMessage += `\n\n馃搵 鍏ュ簱鍗曚俊鎭細\n` +
+            `鍏ュ簱鍗曞彿锛?{data.order.order_no}\n` +
+            `鍟嗗搧鏁伴噺锛?{data.details.length}涓猏n\n`
           
-          // 显示每个商品的详细信息
+          // 鏄剧ず姣忎釜鍟嗗搧鐨勮缁嗕俊鎭?
           data.details.forEach((detail, index) => {
-            systemMessage += `商品${index + 1}：\n` +
-              `  商品名称：${detail.product_name}\n` +
-              `  重量：${detail.weight}克\n` +
-              `  工费：${detail.labor_cost}元/克\n` +
-              `  供应商：${detail.supplier}\n` +
-              `  该商品工费：${detail.total_cost.toFixed(2)}元\n\n`
+            systemMessage += `鍟嗗搧${index + 1}锛歕n` +
+              `  鍟嗗搧鍚嶇О锛?{detail.product_name}\n` +
+              `  閲嶉噺锛?{detail.weight}鍏媆n` +
+              `  宸ヨ垂锛?{detail.labor_cost}鍏?鍏媆n` +
+              `  渚涘簲鍟嗭細${detail.supplier}\n` +
+              `  璇ュ晢鍝佸伐璐癸細${detail.total_cost.toFixed(2)}鍏僜n\n`
           })
           
-          systemMessage += `💰 合计工费：${data.total_labor_cost.toFixed(2)}元\n\n`
+          systemMessage += `馃挵 鍚堣宸ヨ垂锛?{data.total_labor_cost.toFixed(2)}鍏僜n\n`
           
-          // 显示库存更新
+          // 鏄剧ず搴撳瓨鏇存柊
           if (data.inventories && data.inventories.length > 0) {
-            systemMessage += `📦 库存更新：\n`
+            systemMessage += `馃摝 搴撳瓨鏇存柊锛歕n`
             data.inventories.forEach(inv => {
-              systemMessage += `  ${inv.product_name}：${inv.total_weight}克\n`
+              systemMessage += `  ${inv.product_name}锛?{inv.total_weight}鍏媆n`
             })
           }
           
@@ -1597,63 +1597,63 @@ function App() {
             content: systemMessage 
           }])
         }
-        // 向后兼容：单个商品入库（旧格式）
+        // 鍚戝悗鍏煎锛氬崟涓晢鍝佸叆搴擄紙鏃ф牸寮忥級
         else if (data.order && data.detail && data.inventory) {
-          systemMessage += `\n\n📋 入库单信息：\n` +
-            `入库单号：${data.order.order_no}\n` +
-            `商品名称：${data.detail.product_name}\n` +
-            `重量：${data.detail.weight}克\n` +
-            `工费：${data.detail.labor_cost}元/克\n` +
-            `供应商：${data.detail.supplier}\n` +
-            `总成本：${data.detail.total_cost.toFixed(2)}元\n\n` +
-            `📦 当前库存：${data.inventory.total_weight}克`
+          systemMessage += `\n\n馃搵 鍏ュ簱鍗曚俊鎭細\n` +
+            `鍏ュ簱鍗曞彿锛?{data.order.order_no}\n` +
+            `鍟嗗搧鍚嶇О锛?{data.detail.product_name}\n` +
+            `閲嶉噺锛?{data.detail.weight}鍏媆n` +
+            `宸ヨ垂锛?{data.detail.labor_cost}鍏?鍏媆n` +
+            `渚涘簲鍟嗭細${data.detail.supplier}\n` +
+            `鎬绘垚鏈細${data.detail.total_cost.toFixed(2)}鍏僜n\n` +
+            `馃摝 褰撳墠搴撳瓨锛?{data.inventory.total_weight}鍏媊
 
           setMessages(prev => [...prev, { 
             type: 'system', 
             content: systemMessage 
           }])
         }
-        // 如果是查询单个库存（保留向后兼容）
+        // 濡傛灉鏄煡璇㈠崟涓簱瀛橈紙淇濈暀鍚戝悗鍏煎锛?
         else if (data.inventory && !data.order) {
-          systemMessage += `\n\n📦 库存信息：\n` +
-            `商品名称：${data.inventory.product_name}\n` +
-            `总重量：${data.inventory.total_weight}克\n`
+          systemMessage += `\n\n馃摝 搴撳瓨淇℃伅锛歕n` +
+            `鍟嗗搧鍚嶇О锛?{data.inventory.product_name}\n` +
+            `鎬婚噸閲忥細${data.inventory.total_weight}鍏媆n`
           
-          // 显示所有工费明细
+          // 鏄剧ず鎵€鏈夊伐璐规槑缁?
           if (data.inventory.labor_cost_details && data.inventory.labor_cost_details.length > 0) {
-            systemMessage += `\n💰 工费明细：\n`
+            systemMessage += `\n馃挵 宸ヨ垂鏄庣粏锛歕n`
             data.inventory.labor_cost_details.forEach((detail, idx) => {
-              systemMessage += `  记录${idx + 1}：工费${detail.labor_cost.toFixed(2)}元/克，重量${detail.weight}克，总工费${detail.total_cost.toFixed(2)}元（入库单：${detail.order_no}）\n`
+              systemMessage += `  璁板綍${idx + 1}锛氬伐璐?{detail.labor_cost.toFixed(2)}鍏?鍏嬶紝閲嶉噺${detail.weight}鍏嬶紝鎬诲伐璐?{detail.total_cost.toFixed(2)}鍏冿紙鍏ュ簱鍗曪細${detail.order_no}锛塡n`
             })
           }
           
           systemMessage += (data.inventory.last_update ? 
-            `\n最后更新：${new Date(data.inventory.last_update).toLocaleString('zh-CN')}` : 
+            `\n鏈€鍚庢洿鏂帮細${new Date(data.inventory.last_update).toLocaleString('zh-CN')}` : 
             '')
 
           setMessages(prev => [...prev, { 
             type: 'system', 
             content: systemMessage,
-            laborCostDetails: data.inventory.labor_cost_details  // 用于表格展示
+            laborCostDetails: data.inventory.labor_cost_details  // 鐢ㄤ簬琛ㄦ牸灞曠ず
           }])
           return
         }
-        // 如果是查询所有库存（返回inventories数组）- 保留向后兼容
+        // 濡傛灉鏄煡璇㈡墍鏈夊簱瀛橈紙杩斿洖inventories鏁扮粍锛? 淇濈暀鍚戝悗鍏煎
         else if (data.inventories && Array.isArray(data.inventories) && data.inventories.length > 0 && !data.action) {
-          systemMessage += `\n\n📦 商品列表：\n`
+          systemMessage += `\n\n馃摝 鍟嗗搧鍒楄〃锛歕n`
           data.inventories.forEach((inv, idx) => {
-            systemMessage += `${idx + 1}. ${inv.product_name}：${inv.total_weight}克`
+            systemMessage += `${idx + 1}. ${inv.product_name}锛?{inv.total_weight}鍏媊
             if (inv.latest_labor_cost) {
-              systemMessage += `，最新工费：${inv.latest_labor_cost}元/克`
+              systemMessage += `锛屾渶鏂板伐璐癸細${inv.latest_labor_cost}鍏?鍏媊
             }
             if (inv.avg_labor_cost) {
-              systemMessage += `，平均工费：${inv.avg_labor_cost.toFixed(2)}元/克`
+              systemMessage += `锛屽钩鍧囧伐璐癸細${inv.avg_labor_cost.toFixed(2)}鍏?鍏媊
             }
             systemMessage += `\n`
           })
           
           if (data.total_weight) {
-            systemMessage += `\n💰 总库存：${data.total_weight.toFixed(2)}克`
+            systemMessage += `\n馃挵 鎬诲簱瀛橈細${data.total_weight.toFixed(2)}鍏媊
           }
           
           setMessages(prev => [...prev, { 
@@ -1662,15 +1662,15 @@ function App() {
           }])
           return
         }
-        // 如果是查询入库单详情（保留向后兼容）
+        // 濡傛灉鏄煡璇㈠叆搴撳崟璇︽儏锛堜繚鐣欏悜鍚庡吋瀹癸級
         else if (data.order && data.details && !data.order.order_no.startsWith('XS')) {
-          systemMessage += `\n\n📋 入库单详情：\n` +
-            `入库单号：${data.order.order_no}\n` +
-            `入库时间：${new Date(data.order.create_time).toLocaleString('zh-CN')}\n` +
-            `状态：${data.order.status}\n\n` +
-            `商品明细：\n`
+          systemMessage += `\n\n馃搵 鍏ュ簱鍗曡鎯咃細\n` +
+            `鍏ュ簱鍗曞彿锛?{data.order.order_no}\n` +
+            `鍏ュ簱鏃堕棿锛?{new Date(data.order.create_time).toLocaleString('zh-CN')}\n` +
+            `鐘舵€侊細${data.order.status}\n\n` +
+            `鍟嗗搧鏄庣粏锛歕n`
           data.details.forEach((detail, idx) => {
-            systemMessage += `${idx + 1}. ${detail.product_category || detail.product_name}：${detail.weight}克，工费${detail.labor_cost}元/克，总工费${detail.total_cost.toFixed(2)}元\n`
+            systemMessage += `${idx + 1}. ${detail.product_category || detail.product_name}锛?{detail.weight}鍏嬶紝宸ヨ垂${detail.labor_cost}鍏?鍏嬶紝鎬诲伐璐?{detail.total_cost.toFixed(2)}鍏僜n`
           })
           
           setMessages(prev => [...prev, { 
@@ -1679,9 +1679,9 @@ function App() {
           }])
           return
         }
-        // 如果是查询最近的入库单列表（保留向后兼容）
+        // 濡傛灉鏄煡璇㈡渶杩戠殑鍏ュ簱鍗曞垪琛紙淇濈暀鍚戝悗鍏煎锛?
         else if (data.orders && Array.isArray(data.orders) && data.orders.length > 0 && !data.orders[0].order_no.startsWith('XS')) {
-          systemMessage += `\n\n📋 最近的入库单：\n`
+          systemMessage += `\n\n馃搵 鏈€杩戠殑鍏ュ簱鍗曪細\n`
           data.orders.forEach((order, idx) => {
             systemMessage += `${idx + 1}. ${order.order_no} - ${new Date(order.create_time).toLocaleString('zh-CN')} (${order.status})\n`
           })
@@ -1692,37 +1692,37 @@ function App() {
           }])
           return
         }
-        // 处理销售单创建成功
+        // 澶勭悊閿€鍞崟鍒涘缓鎴愬姛
         else if (data.order && data.order.order_no && data.order.order_no.startsWith('XS')) {
-          // 这是销售单（销售单号以XS开头）
-          systemMessage += `\n\n📋 销售单信息：\n` +
-            `销售单号：${data.order.order_no}\n` +
-            `客户：${data.order.customer_name}\n` +
-            `业务员：${data.order.salesperson}\n` +
-            `门店代码：${data.order.store_code || '未填写'}\n` +
-            `日期：${new Date(data.order.order_date).toLocaleString('zh-CN')}\n` +
-            `状态：${data.order.status}\n\n` +
-            `商品明细：\n`
+          // 杩欐槸閿€鍞崟锛堥攢鍞崟鍙蜂互XS寮€澶达級
+          systemMessage += `\n\n馃搵 閿€鍞崟淇℃伅锛歕n` +
+            `閿€鍞崟鍙凤細${data.order.order_no}\n` +
+            `瀹㈡埛锛?{data.order.customer_name}\n` +
+            `涓氬姟鍛橈細${data.order.salesperson}\n` +
+            `闂ㄥ簵浠ｇ爜锛?{data.order.store_code || '鏈～鍐?}\n` +
+            `鏃ユ湡锛?{new Date(data.order.order_date).toLocaleString('zh-CN')}\n` +
+            `鐘舵€侊細${data.order.status}\n\n` +
+            `鍟嗗搧鏄庣粏锛歕n`
           
           if (data.order.details && data.order.details.length > 0) {
             data.order.details.forEach((detail, idx) => {
-              systemMessage += `${idx + 1}. ${detail.product_name}：${detail.weight}克，工费${detail.labor_cost}元/克，总工费${detail.total_labor_cost.toFixed(2)}元\n`
+              systemMessage += `${idx + 1}. ${detail.product_name}锛?{detail.weight}鍏嬶紝宸ヨ垂${detail.labor_cost}鍏?鍏嬶紝鎬诲伐璐?{detail.total_labor_cost.toFixed(2)}鍏僜n`
             })
           }
           
-          systemMessage += `\n💰 合计：\n` +
-            `总克重：${data.order.total_weight}克\n` +
-            `总工费：${data.order.total_labor_cost.toFixed(2)}元`
+          systemMessage += `\n馃挵 鍚堣锛歕n` +
+            `鎬诲厠閲嶏細${data.order.total_weight}鍏媆n` +
+            `鎬诲伐璐癸細${data.order.total_labor_cost.toFixed(2)}鍏僠
           
           setMessages(prev => [...prev, { 
             type: 'system', 
             content: systemMessage,
-            salesOrder: data.order  // 保存完整数据用于后续展示
+            salesOrder: data.order  // 淇濆瓨瀹屾暣鏁版嵁鐢ㄤ簬鍚庣画灞曠ず
           }])
         }
-        // 处理销售单列表查询
+        // 澶勭悊閿€鍞崟鍒楄〃鏌ヨ
         else if (data.orders && Array.isArray(data.orders) && data.orders.length > 0 && data.orders[0].order_no && data.orders[0].order_no.startsWith('XS')) {
-          systemMessage += `\n\n📋 销售单列表：\n`
+          systemMessage += `\n\n馃搵 閿€鍞崟鍒楄〃锛歕n`
           data.orders.forEach((order, idx) => {
             systemMessage += `${idx + 1}. ${order.order_no} - ${order.customer_name} - ${new Date(order.order_date).toLocaleString('zh-CN')} - ${order.status}\n`
           })
@@ -1733,28 +1733,28 @@ function App() {
             salesOrders: data.orders
           }])
         }
-        // 处理客户创建/查询
+        // 澶勭悊瀹㈡埛鍒涘缓/鏌ヨ
         else if (data.customer) {
-          systemMessage += `\n\n👤 客户信息：\n` +
-            `客户编号：${data.customer.customer_no}\n` +
-            `客户姓名：${data.customer.name}\n` +
-            `电话：${data.customer.phone || '未填写'}\n` +
-            `类型：${data.customer.customer_type}\n` +
-            `累计购买：${data.customer.total_purchase_amount.toFixed(2)}元\n` +
-            `购买次数：${data.customer.total_purchase_count}次`
+          systemMessage += `\n\n馃懁 瀹㈡埛淇℃伅锛歕n` +
+            `瀹㈡埛缂栧彿锛?{data.customer.customer_no}\n` +
+            `瀹㈡埛濮撳悕锛?{data.customer.name}\n` +
+            `鐢佃瘽锛?{data.customer.phone || '鏈～鍐?}\n` +
+            `绫诲瀷锛?{data.customer.customer_type}\n` +
+            `绱璐拱锛?{data.customer.total_purchase_amount.toFixed(2)}鍏僜n` +
+            `璐拱娆℃暟锛?{data.customer.total_purchase_count}娆
           
           setMessages(prev => [...prev, { 
             type: 'system', 
             content: systemMessage 
           }])
         }
-        // 处理客户列表查询
+        // 澶勭悊瀹㈡埛鍒楄〃鏌ヨ
         else if (data.customers && Array.isArray(data.customers)) {
-          systemMessage += `\n\n👤 客户列表：\n` +
-            `共 ${data.customers.length} 位客户\n\n`
+          systemMessage += `\n\n馃懁 瀹㈡埛鍒楄〃锛歕n` +
+            `鍏?${data.customers.length} 浣嶅鎴穃n\n`
           
           data.customers.forEach((customer, idx) => {
-            systemMessage += `${idx + 1}. ${customer.name} (${customer.customer_no}) - ${customer.phone || '无电话'} - 累计购买${customer.total_purchase_amount.toFixed(2)}元\n`
+            systemMessage += `${idx + 1}. ${customer.name} (${customer.customer_no}) - ${customer.phone || '鏃犵數璇?} - 绱璐拱${customer.total_purchase_amount.toFixed(2)}鍏僜n`
           })
           
           setMessages(prev => [...prev, { 
@@ -1762,15 +1762,15 @@ function App() {
             content: systemMessage 
           }])
         }
-        // 处理库存检查错误
+        // 澶勭悊搴撳瓨妫€鏌ラ敊璇?
         else if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
-          systemMessage += `\n\n❌ 库存检查失败：\n`
+          systemMessage += `\n\n鉂?搴撳瓨妫€鏌ュけ璐ワ細\n`
           data.inventory_errors.forEach((error, idx) => {
-            systemMessage += `${idx + 1}. ${error.product_name}：${error.error}\n` +
-              `   需要：${error.required_weight}克\n` +
-              `   可用：${error.available_weight}克\n`
+            systemMessage += `${idx + 1}. ${error.product_name}锛?{error.error}\n` +
+              `   闇€瑕侊細${error.required_weight}鍏媆n` +
+              `   鍙敤锛?{error.available_weight}鍏媆n`
             if (error.reserved_weight !== undefined) {
-              systemMessage += `   已预留：${error.reserved_weight}克\n`
+              systemMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
             }
             systemMessage += `\n`
           })
@@ -1790,23 +1790,23 @@ function App() {
       } else {
         let errorMessage = data.message
         
-        // 如果有思考过程，先显示思考过程
+        // 濡傛灉鏈夋€濊€冭繃绋嬶紝鍏堟樉绀烘€濊€冭繃绋?
         if (data.thinking_steps && data.thinking_steps.length > 0) {
-          errorMessage = "💭 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + errorMessage
+          errorMessage = "馃挱 澶勭悊杩囩▼锛歕n" + data.thinking_steps.join('\n') + "\n\n" + errorMessage
         }
         
-        // 处理库存检查错误（在错误响应中）
+        // 澶勭悊搴撳瓨妫€鏌ラ敊璇紙鍦ㄩ敊璇搷搴斾腑锛?
         if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
-          errorMessage += `\n\n❌ 库存检查失败：\n`
+          errorMessage += `\n\n鉂?搴撳瓨妫€鏌ュけ璐ワ細\n`
           data.inventory_errors.forEach((error, idx) => {
-            errorMessage += `${idx + 1}. ${error.product_name}：${error.error}\n` +
-              `   需要：${error.required_weight}克\n` +
-              `   可用：${error.available_weight}克\n`
+            errorMessage += `${idx + 1}. ${error.product_name}锛?{error.error}\n` +
+              `   闇€瑕侊細${error.required_weight}鍏媆n` +
+              `   鍙敤锛?{error.available_weight}鍏媆n`
             if (error.reserved_weight !== undefined) {
-              errorMessage += `   已预留：${error.reserved_weight}克\n`
+              errorMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
             }
             if (error.total_weight !== undefined) {
-              errorMessage += `   总库存：${error.total_weight}克\n`
+              errorMessage += `   鎬诲簱瀛橈細${error.total_weight}鍏媆n`
             }
             errorMessage += `\n`
           })
@@ -1820,20 +1820,20 @@ function App() {
           return
         }
         
-        // 如果有缺失字段列表，格式化显示
+        // 濡傛灉鏈夌己澶卞瓧娈靛垪琛紝鏍煎紡鍖栨樉绀?
         if (data.missing_fields && data.missing_fields.length > 0) {
-          errorMessage += `\n\n❌ 缺失的必填项：\n`
+          errorMessage += `\n\n鉂?缂哄け鐨勫繀濉」锛歕n`
           data.missing_fields.forEach(field => {
-            errorMessage += `  • ${field}\n`
+            errorMessage += `  鈥?${field}\n`
           })
-          errorMessage += `\n请补充完整信息后重新提交。`
+          errorMessage += `\n璇疯ˉ鍏呭畬鏁翠俊鎭悗閲嶆柊鎻愪氦銆俙
         }
         
-        // 如果是多供应商错误，添加规则说明
+        // 濡傛灉鏄渚涘簲鍟嗛敊璇紝娣诲姞瑙勫垯璇存槑
         if (data.suppliers && Array.isArray(data.suppliers) && data.suppliers.length > 1) {
-          errorMessage += `\n\n📋 系统规则提醒：\n`
-          errorMessage += `每张入库单只能对应一个供应商。如果一次入库包含多个供应商的商品，请按供应商拆分为多张入库单分别提交。\n`
-          errorMessage += `例如：先提交"供应商A的商品1、商品2"，再提交"供应商B的商品3、商品4"。`
+          errorMessage += `\n\n馃搵 绯荤粺瑙勫垯鎻愰啋锛歕n`
+          errorMessage += `姣忓紶鍏ュ簱鍗曞彧鑳藉搴斾竴涓緵搴斿晢銆傚鏋滀竴娆″叆搴撳寘鍚涓緵搴斿晢鐨勫晢鍝侊紝璇锋寜渚涘簲鍟嗘媶鍒嗕负澶氬紶鍏ュ簱鍗曞垎鍒彁浜ゃ€俓n`
+          errorMessage += `渚嬪锛氬厛鎻愪氦"渚涘簲鍟咥鐨勫晢鍝?銆佸晢鍝?"锛屽啀鎻愪氦"渚涘簲鍟咮鐨勫晢鍝?銆佸晢鍝?"銆俙
         }
         
         setMessages(prev => [...prev, { 
@@ -1843,13 +1843,13 @@ function App() {
       }
     } catch (error) {
       setLoading(false)
-      let errorMessage = `❌ 网络错误：${error.message}`
+      let errorMessage = `鉂?缃戠粶閿欒锛?{error.message}`
       
-      // 提供更详细的错误信息
+      // 鎻愪緵鏇磋缁嗙殑閿欒淇℃伅
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        errorMessage = '❌ 无法连接到服务器，请检查后端服务是否运行（http://localhost:8000）'
+        errorMessage = '鉂?鏃犳硶杩炴帴鍒版湇鍔″櫒锛岃妫€鏌ュ悗绔湇鍔℃槸鍚﹁繍琛岋紙http://localhost:8000锛?
       } else if (error.name === 'AbortError') {
-        errorMessage = '❌ 请求超时，请稍后重试'
+        errorMessage = '鉂?璇锋眰瓒呮椂锛岃绋嶅悗閲嶈瘯'
       }
       
       setMessages(prev => [...prev, { 
@@ -1859,42 +1859,42 @@ function App() {
     }
   }
 
-  // 处理图片上传
+  // 澶勭悊鍥剧墖涓婁紶
   const handleImageUpload = async (event) => {
     const file = event.target.files?.[0]
     if (!file) return
 
-    // 验证文件类型
+    // 楠岃瘉鏂囦欢绫诲瀷
     if (!file.type.startsWith('image/')) {
       setMessages(prev => [...prev, {
         type: 'system',
-        content: '❌ 请上传图片文件（jpg、png等格式）'
+        content: '鉂?璇蜂笂浼犲浘鐗囨枃浠讹紙jpg銆乸ng绛夋牸寮忥級'
       }])
       return
     }
 
-    // 验证文件大小（限制10MB）
+    // 楠岃瘉鏂囦欢澶у皬锛堥檺鍒?0MB锛?
     if (file.size > 10 * 1024 * 1024) {
       setMessages(prev => [...prev, {
         type: 'system',
-        content: '❌ 图片文件过大，请上传小于10MB的图片'
+        content: '鉂?鍥剧墖鏂囦欢杩囧ぇ锛岃涓婁紶灏忎簬10MB鐨勫浘鐗?
       }])
       return
     }
 
     setUploading(true)
     
-    // 保存图片预览（使用Promise确保图片加载完成）
+    // 淇濆瓨鍥剧墖棰勮锛堜娇鐢≒romise纭繚鍥剧墖鍔犺浇瀹屾垚锛?
     const imageDataUrlPromise = new Promise((resolve) => {
       const reader = new FileReader()
       reader.onload = (e) => {
         const imageDataUrl = e.target.result
         setUploadedImage(imageDataUrl)
         
-        // 显示用户上传的图片
+        // 鏄剧ず鐢ㄦ埛涓婁紶鐨勫浘鐗?
         setMessages(prev => [...prev, {
           type: 'user',
-          content: `📷 上传入库单图片：${file.name}`,
+          content: `馃摲 涓婁紶鍏ュ簱鍗曞浘鐗囷細${file.name}`,
           image: imageDataUrl
         }])
         
@@ -1907,7 +1907,7 @@ function App() {
       const formData = new FormData()
       formData.append('file', file)
 
-      // 调用识别接口（只识别，不入库）
+      // 璋冪敤璇嗗埆鎺ュ彛锛堝彧璇嗗埆锛屼笉鍏ュ簱锛?
       const response = await fetch(API_ENDPOINTS.RECOGNIZE_INBOUND_SHEET, {
         method: 'POST',
         body: formData,
@@ -1916,21 +1916,21 @@ function App() {
       const data = await response.json()
       setUploading(false)
 
-      // 等待图片加载完成
+      // 绛夊緟鍥剧墖鍔犺浇瀹屾垚
       const imageDataUrl = await imageDataUrlPromise
 
       if (data.success) {
-        // OCR完成后打开对话框
+        // OCR瀹屾垚鍚庢墦寮€瀵硅瘽妗?
         handleOCRComplete(data.recognized_text, imageDataUrl)
         
-        let systemMessage = "✅ 图片识别完成！\n\n"
+        let systemMessage = "鉁?鍥剧墖璇嗗埆瀹屾垚锛乗n\n"
         
-        // 显示思考过程
+        // 鏄剧ず鎬濊€冭繃绋?
         if (data.thinking_steps && data.thinking_steps.length > 0) {
-          systemMessage += "💭 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n"
+          systemMessage += "馃挱 澶勭悊杩囩▼锛歕n" + data.thinking_steps.join('\n') + "\n\n"
         }
 
-        systemMessage += "📝 识别出的文字内容已显示在编辑对话框中，请仔细审核并编辑。"
+        systemMessage += "馃摑 璇嗗埆鍑虹殑鏂囧瓧鍐呭宸叉樉绀哄湪缂栬緫瀵硅瘽妗嗕腑锛岃浠旂粏瀹℃牳骞剁紪杈戙€?
 
         setMessages(prev => [...prev, {
           type: 'system',
@@ -1939,16 +1939,16 @@ function App() {
       } else {
         let errorMessage = data.message
         
-        // 显示思考过程
+        // 鏄剧ず鎬濊€冭繃绋?
         if (data.thinking_steps && data.thinking_steps.length > 0) {
-          errorMessage = "💭 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + errorMessage
+          errorMessage = "馃挱 澶勭悊杩囩▼锛歕n" + data.thinking_steps.join('\n') + "\n\n" + errorMessage
         }
         
-        // 如果识别失败但有部分文字，也打开对话框
+        // 濡傛灉璇嗗埆澶辫触浣嗘湁閮ㄥ垎鏂囧瓧锛屼篃鎵撳紑瀵硅瘽妗?
         if (data.recognized_text && data.recognized_text.trim().length > 0) {
           const imageDataUrl = await imageDataUrlPromise
           handleOCRComplete(data.recognized_text, imageDataUrl)
-          errorMessage += `\n\n📝 已识别出部分文字（已显示在编辑对话框中），您可以手动修正后确认入库。`
+          errorMessage += `\n\n馃摑 宸茶瘑鍒嚭閮ㄥ垎鏂囧瓧锛堝凡鏄剧ず鍦ㄧ紪杈戝璇濇涓級锛屾偍鍙互鎵嬪姩淇鍚庣‘璁ゅ叆搴撱€俙
         }
 
         setMessages(prev => [...prev, {
@@ -1958,13 +1958,13 @@ function App() {
       }
     } catch (error) {
       setUploading(false)
-      let errorMessage = `❌ 上传失败：${error.message}`
+      let errorMessage = `鉂?涓婁紶澶辫触锛?{error.message}`
       
-      // 提供更详细的错误信息
+      // 鎻愪緵鏇磋缁嗙殑閿欒淇℃伅
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        errorMessage = '❌ 无法连接到服务器，请检查后端服务是否运行（http://localhost:8000）'
+        errorMessage = '鉂?鏃犳硶杩炴帴鍒版湇鍔″櫒锛岃妫€鏌ュ悗绔湇鍔℃槸鍚﹁繍琛岋紙http://localhost:8000锛?
       } else if (error.name === 'AbortError') {
-        errorMessage = '❌ 上传超时，请检查网络连接或稍后重试'
+        errorMessage = '鉂?涓婁紶瓒呮椂锛岃妫€鏌ョ綉缁滆繛鎺ユ垨绋嶅悗閲嶈瘯'
       }
       
       setMessages(prev => [...prev, {
@@ -1973,34 +1973,34 @@ function App() {
       }])
     }
 
-    // 清空文件输入
+    // 娓呯┖鏂囦欢杈撳叆
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
   }
 
-  // OCR完成后打开对话框
+  // OCR瀹屾垚鍚庢墦寮€瀵硅瘽妗?
   const handleOCRComplete = (text, imageUrl) => {
     setOcrResult(text || '')
     setUploadedImage(imageUrl)
     setShowOCRModal(true)
   }
 
-  // 确认入库
+  // 纭鍏ュ簱
   const handleConfirmInbound = async () => {
     const textToSend = ocrResult.trim()
     if (!textToSend) {
-      alert('请输入内容')
+      alert('璇疯緭鍏ュ唴瀹?)
       return
     }
 
-    // 关闭对话框
+    // 鍏抽棴瀵硅瘽妗?
     setShowOCRModal(false)
     setUploadedImage(null)
     const textToProcess = ocrResult
     setOcrResult('')
 
-    // 显示用户消息
+    // 鏄剧ず鐢ㄦ埛娑堟伅
     setMessages(prev => [...prev, { 
       type: 'user', 
       content: textToProcess 
@@ -2022,17 +2022,17 @@ function App() {
       if (data.success) {
         let systemMessage = data.message
         
-        // 如果有思考过程，先显示思考过程
+        // 濡傛灉鏈夋€濊€冭繃绋嬶紝鍏堟樉绀烘€濊€冭繃绋?
         if (data.thinking_steps && data.thinking_steps.length > 0) {
-          systemMessage = "💭 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + systemMessage
+          systemMessage = "馃挱 澶勭悊杩囩▼锛歕n" + data.thinking_steps.join('\n') + "\n\n" + systemMessage
         }
 
-        // 如果是图表数据（查询所有库存）
+        // 濡傛灉鏄浘琛ㄦ暟鎹紙鏌ヨ鎵€鏈夊簱瀛橈級
         if (data.chart_data) {
-          systemMessage += `\n\n📊 库存统计：\n` +
-            `商品种类：${data.summary.total_products}种\n` +
-            `供应商数量：${data.summary.total_suppliers}家\n` +
-            `总库存：${data.summary.total_weight.toFixed(2)}克\n`
+          systemMessage += `\n\n馃搳 搴撳瓨缁熻锛歕n` +
+            `鍟嗗搧绉嶇被锛?{data.summary.total_products}绉峔n` +
+            `渚涘簲鍟嗘暟閲忥細${data.summary.total_suppliers}瀹禱n` +
+            `鎬诲簱瀛橈細${data.summary.total_weight.toFixed(2)}鍏媆n`
           
           setMessages(prev => [...prev, { 
             type: 'system', 
@@ -2042,27 +2042,27 @@ function App() {
             tableData: data.table_data
           }])
         }
-        // 如果是批量入库成功
+        // 濡傛灉鏄壒閲忓叆搴撴垚鍔?
         else if (data.order && data.details && data.details.length > 0 && data.order.order_no && data.order.order_no.startsWith('RK')) {
-          systemMessage += `\n\n📋 入库单信息：\n` +
-            `入库单号：${data.order.order_no}\n` +
-            `商品数量：${data.details.length}个\n\n`
+          systemMessage += `\n\n馃搵 鍏ュ簱鍗曚俊鎭細\n` +
+            `鍏ュ簱鍗曞彿锛?{data.order.order_no}\n` +
+            `鍟嗗搧鏁伴噺锛?{data.details.length}涓猏n\n`
           
           data.details.forEach((detail, index) => {
-            systemMessage += `商品${index + 1}：\n` +
-              `  商品名称：${detail.product_category || detail.product_name}\n` +
-              `  重量：${detail.weight}克\n` +
-              `  工费：${detail.labor_cost}元/克\n` +
-              `  供应商：${detail.supplier}\n` +
-              `  该商品工费：${detail.total_cost.toFixed(2)}元\n\n`
+            systemMessage += `鍟嗗搧${index + 1}锛歕n` +
+              `  鍟嗗搧鍚嶇О锛?{detail.product_category || detail.product_name}\n` +
+              `  閲嶉噺锛?{detail.weight}鍏媆n` +
+              `  宸ヨ垂锛?{detail.labor_cost}鍏?鍏媆n` +
+              `  渚涘簲鍟嗭細${detail.supplier}\n` +
+              `  璇ュ晢鍝佸伐璐癸細${detail.total_cost.toFixed(2)}鍏僜n\n`
           })
           
-          systemMessage += `💰 合计工费：${data.total_labor_cost.toFixed(2)}元\n\n`
+          systemMessage += `馃挵 鍚堣宸ヨ垂锛?{data.total_labor_cost.toFixed(2)}鍏僜n\n`
           
           if (data.inventories && data.inventories.length > 0) {
-            systemMessage += `📦 库存更新：\n`
+            systemMessage += `馃摝 搴撳瓨鏇存柊锛歕n`
             data.inventories.forEach(inv => {
-              systemMessage += `  ${inv.product_name}：${inv.total_weight}克\n`
+              systemMessage += `  ${inv.product_name}锛?{inv.total_weight}鍏媆n`
             })
           }
 
@@ -2071,26 +2071,26 @@ function App() {
             content: systemMessage
           }])
         }
-        // 处理销售单创建成功（OCR确认后也可能创建销售单）
+        // 澶勭悊閿€鍞崟鍒涘缓鎴愬姛锛圤CR纭鍚庝篃鍙兘鍒涘缓閿€鍞崟锛?
         else if (data.order && data.order.order_no && data.order.order_no.startsWith('XS')) {
-          systemMessage += `\n\n📋 销售单信息：\n` +
-            `销售单号：${data.order.order_no}\n` +
-            `客户：${data.order.customer_name}\n` +
-            `业务员：${data.order.salesperson}\n` +
-            `门店代码：${data.order.store_code || '未填写'}\n` +
-            `日期：${new Date(data.order.order_date).toLocaleString('zh-CN')}\n` +
-            `状态：${data.order.status}\n\n` +
-            `商品明细：\n`
+          systemMessage += `\n\n馃搵 閿€鍞崟淇℃伅锛歕n` +
+            `閿€鍞崟鍙凤細${data.order.order_no}\n` +
+            `瀹㈡埛锛?{data.order.customer_name}\n` +
+            `涓氬姟鍛橈細${data.order.salesperson}\n` +
+            `闂ㄥ簵浠ｇ爜锛?{data.order.store_code || '鏈～鍐?}\n` +
+            `鏃ユ湡锛?{new Date(data.order.order_date).toLocaleString('zh-CN')}\n` +
+            `鐘舵€侊細${data.order.status}\n\n` +
+            `鍟嗗搧鏄庣粏锛歕n`
           
           if (data.order.details && data.order.details.length > 0) {
             data.order.details.forEach((detail, idx) => {
-              systemMessage += `${idx + 1}. ${detail.product_name}：${detail.weight}克，工费${detail.labor_cost}元/克，总工费${detail.total_labor_cost.toFixed(2)}元\n`
+              systemMessage += `${idx + 1}. ${detail.product_name}锛?{detail.weight}鍏嬶紝宸ヨ垂${detail.labor_cost}鍏?鍏嬶紝鎬诲伐璐?{detail.total_labor_cost.toFixed(2)}鍏僜n`
             })
           }
           
-          systemMessage += `\n💰 合计：\n` +
-            `总克重：${data.order.total_weight}克\n` +
-            `总工费：${data.order.total_labor_cost.toFixed(2)}元`
+          systemMessage += `\n馃挵 鍚堣锛歕n` +
+            `鎬诲厠閲嶏細${data.order.total_weight}鍏媆n` +
+            `鎬诲伐璐癸細${data.order.total_labor_cost.toFixed(2)}鍏僠
           
           setMessages(prev => [...prev, { 
             type: 'system', 
@@ -2098,22 +2098,22 @@ function App() {
             salesOrder: data.order
           }])
         }
-        // 如果是查询所有库存（返回inventories数组）
+        // 濡傛灉鏄煡璇㈡墍鏈夊簱瀛橈紙杩斿洖inventories鏁扮粍锛?
         else if (data.inventories && Array.isArray(data.inventories) && data.inventories.length > 0) {
-          systemMessage += `\n\n📦 商品列表：\n`
+          systemMessage += `\n\n馃摝 鍟嗗搧鍒楄〃锛歕n`
           data.inventories.forEach((inv, idx) => {
-            systemMessage += `${idx + 1}. ${inv.product_name}：${inv.total_weight}克`
+            systemMessage += `${idx + 1}. ${inv.product_name}锛?{inv.total_weight}鍏媊
             if (inv.latest_labor_cost) {
-              systemMessage += `，最新工费：${inv.latest_labor_cost}元/克`
+              systemMessage += `锛屾渶鏂板伐璐癸細${inv.latest_labor_cost}鍏?鍏媊
             }
             if (inv.avg_labor_cost) {
-              systemMessage += `，平均工费：${inv.avg_labor_cost.toFixed(2)}元/克`
+              systemMessage += `锛屽钩鍧囧伐璐癸細${inv.avg_labor_cost.toFixed(2)}鍏?鍏媊
             }
             systemMessage += `\n`
           })
           
           if (data.total_weight) {
-            systemMessage += `\n💰 总库存：${data.total_weight.toFixed(2)}克`
+            systemMessage += `\n馃挵 鎬诲簱瀛橈細${data.total_weight.toFixed(2)}鍏媊
           }
           
           setMessages(prev => [...prev, { 
@@ -2121,15 +2121,15 @@ function App() {
             content: systemMessage 
           }])
         }
-        // 处理库存检查错误
+        // 澶勭悊搴撳瓨妫€鏌ラ敊璇?
         else if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
-          systemMessage += `\n\n❌ 库存检查失败：\n`
+          systemMessage += `\n\n鉂?搴撳瓨妫€鏌ュけ璐ワ細\n`
           data.inventory_errors.forEach((error, idx) => {
-            systemMessage += `${idx + 1}. ${error.product_name}：${error.error}\n` +
-              `   需要：${error.required_weight}克\n` +
-              `   可用：${error.available_weight}克\n`
+            systemMessage += `${idx + 1}. ${error.product_name}锛?{error.error}\n` +
+              `   闇€瑕侊細${error.required_weight}鍏媆n` +
+              `   鍙敤锛?{error.available_weight}鍏媆n`
             if (error.reserved_weight !== undefined) {
-              systemMessage += `   已预留：${error.reserved_weight}克\n`
+              systemMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
             }
             systemMessage += `\n`
           })
@@ -2140,15 +2140,15 @@ function App() {
             inventoryErrors: data.inventory_errors
           }])
         }
-        // 处理库存检查错误（重复代码，保留以防万一）
+        // 澶勭悊搴撳瓨妫€鏌ラ敊璇紙閲嶅浠ｇ爜锛屼繚鐣欎互闃蹭竾涓€锛?
         else if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
-          systemMessage += `\n\n❌ 库存检查失败：\n`
+          systemMessage += `\n\n鉂?搴撳瓨妫€鏌ュけ璐ワ細\n`
           data.inventory_errors.forEach((error, idx) => {
-            systemMessage += `${idx + 1}. ${error.product_name}：${error.error}\n` +
-              `   需要：${error.required_weight}克\n` +
-              `   可用：${error.available_weight}克\n`
+            systemMessage += `${idx + 1}. ${error.product_name}锛?{error.error}\n` +
+              `   闇€瑕侊細${error.required_weight}鍏媆n` +
+              `   鍙敤锛?{error.available_weight}鍏媆n`
             if (error.reserved_weight !== undefined) {
-              systemMessage += `   已预留：${error.reserved_weight}克\n`
+              systemMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
             }
             systemMessage += `\n`
           })
@@ -2159,7 +2159,7 @@ function App() {
             inventoryErrors: data.inventory_errors
           }])
         }
-        // 其他成功响应
+        // 鍏朵粬鎴愬姛鍝嶅簲
         else {
           setMessages(prev => [...prev, {
             type: 'system',
@@ -2170,21 +2170,21 @@ function App() {
         let errorMessage = data.message
         
         if (data.thinking_steps && data.thinking_steps.length > 0) {
-          errorMessage = "💭 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + errorMessage
+          errorMessage = "馃挱 澶勭悊杩囩▼锛歕n" + data.thinking_steps.join('\n') + "\n\n" + errorMessage
         }
 
-        // 处理库存检查错误（在错误响应中）
+        // 澶勭悊搴撳瓨妫€鏌ラ敊璇紙鍦ㄩ敊璇搷搴斾腑锛?
         if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
-          errorMessage += `\n\n❌ 库存检查失败：\n`
+          errorMessage += `\n\n鉂?搴撳瓨妫€鏌ュけ璐ワ細\n`
           data.inventory_errors.forEach((error, idx) => {
-            errorMessage += `${idx + 1}. ${error.product_name}：${error.error}\n` +
-              `   需要：${error.required_weight}克\n` +
-              `   可用：${error.available_weight}克\n`
+            errorMessage += `${idx + 1}. ${error.product_name}锛?{error.error}\n` +
+              `   闇€瑕侊細${error.required_weight}鍏媆n` +
+              `   鍙敤锛?{error.available_weight}鍏媆n`
             if (error.reserved_weight !== undefined) {
-              errorMessage += `   已预留：${error.reserved_weight}克\n`
+              errorMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
             }
             if (error.total_weight !== undefined) {
-              errorMessage += `   总库存：${error.total_weight}克\n`
+              errorMessage += `   鎬诲簱瀛橈細${error.total_weight}鍏媆n`
             }
             errorMessage += `\n`
           })
@@ -2198,10 +2198,10 @@ function App() {
           return
         }
 
-        // 如果是多供应商错误，添加规则说明
+        // 濡傛灉鏄渚涘簲鍟嗛敊璇紝娣诲姞瑙勫垯璇存槑
         if (data.suppliers && Array.isArray(data.suppliers) && data.suppliers.length > 1) {
-          errorMessage += `\n\n📋 系统规则提醒：\n`
-          errorMessage += `每张入库单只能对应一个供应商。如果一次入库包含多个供应商的商品，请按供应商拆分为多张入库单分别提交。\n`
+          errorMessage += `\n\n馃搵 绯荤粺瑙勫垯鎻愰啋锛歕n`
+          errorMessage += `姣忓紶鍏ュ簱鍗曞彧鑳藉搴斾竴涓緵搴斿晢銆傚鏋滀竴娆″叆搴撳寘鍚涓緵搴斿晢鐨勫晢鍝侊紝璇锋寜渚涘簲鍟嗘媶鍒嗕负澶氬紶鍏ュ簱鍗曞垎鍒彁浜ゃ€俓n`
         }
 
         setMessages(prev => [...prev, {
@@ -2213,7 +2213,7 @@ function App() {
       setLoading(false)
       setMessages(prev => [...prev, {
         type: 'system',
-        content: `❌ 网络错误：${error.message}`
+        content: `鉂?缃戠粶閿欒锛?{error.message}`
       }])
     }
   }
@@ -2225,14 +2225,14 @@ function App() {
     }
   }
 
-  // 语言选择页
+  // 璇█閫夋嫨椤?
   if (showLanguageSelector) {
     return <LanguageSelector onSelect={() => setShowLanguageSelector(false)} />
   }
 
   return (
     <div className="flex h-screen bg-jewelry-gold-50 overflow-hidden">
-      {/* 左侧边栏 - 历史对话记录 */}
+      {/* 宸︿晶杈规爮 - 鍘嗗彶瀵硅瘽璁板綍 */}
       <aside className={`
         ${sidebarOpen ? 'w-80' : 'w-0'} 
         ${sidebarOpen ? 'flex' : 'hidden'}
@@ -2242,7 +2242,7 @@ function App() {
         flex-col
         overflow-hidden
       `}>
-        {/* 侧边栏头部 */}
+        {/* 渚ц竟鏍忓ご閮?*/}
         <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between">
           <h2 className="text-[17px] font-semibold text-white tracking-tight">{t('sidebar.title')}</h2>
           <button
@@ -2255,7 +2255,7 @@ function App() {
           </button>
         </div>
         
-        {/* 新建对话按钮 */}
+        {/* 鏂板缓瀵硅瘽鎸夐挳 */}
         <div className="px-6 py-4 border-b border-white/10">
           <button
             onClick={newConversation}
@@ -2266,7 +2266,7 @@ function App() {
           </button>
         </div>
         
-        {/* 对话列表 */}
+        {/* 瀵硅瘽鍒楄〃 */}
         <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20">
           {conversationHistory.length === 0 ? (
             <div className="px-6 py-8 text-center text-white/50 text-sm">
@@ -2302,12 +2302,12 @@ function App() {
                         })}
                       </div>
                     </div>
-                    {/* 只有管理员可以删除对话记录 */}
+                    {/* 鍙湁绠＄悊鍛樺彲浠ュ垹闄ゅ璇濊褰?*/}
                     {userRole === 'manager' && (
                       <button
                         onClick={(e) => deleteConversation(conv.id, e)}
                         className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded-lg transition-all"
-                        title="删除对话"
+                        title="鍒犻櫎瀵硅瘽"
                       >
                         <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -2322,14 +2322,14 @@ function App() {
         </div>
       </aside>
 
-      {/* 主内容区域 */}
+      {/* 涓诲唴瀹瑰尯鍩?*/}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* 顶部导航栏 - 苹果风格 */}
+        {/* 椤堕儴瀵艰埅鏍?- 鑻规灉椋庢牸 */}
         <header className="bg-white/80 backdrop-blur-xl border-b border-gray-200/60 px-6 py-4 
                            sticky top-0 z-10 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              {/* 移动端侧边栏开关 */}
+              {/* 绉诲姩绔晶杈规爮寮€鍏?*/}
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -2342,7 +2342,7 @@ function App() {
               <div 
                 className="cursor-pointer hover:opacity-80 transition-opacity"
                 onClick={() => setCurrentPage('chat')}
-                title={currentLanguage === 'en' ? 'Click to return home' : '点击返回首页'}
+                title={currentLanguage === 'en' ? 'Click to return home' : '鐐瑰嚮杩斿洖棣栭〉'}
               >
                 <h1 className="text-[28px] font-semibold text-gray-900 tracking-tight">
                   {t('app.title')}
@@ -2351,9 +2351,9 @@ function App() {
               </div>
             </div>
             
-            {/* 右侧按钮区域 */}
+            {/* 鍙充晶鎸夐挳鍖哄煙 */}
             <div className="flex items-center space-x-3">
-              {/* 角色选择器 */}
+              {/* 瑙掕壊閫夋嫨鍣?*/}
               <div className="relative" ref={roleDropdownRef}>
                 <button
                   onClick={() => !roleLoading && setRoleDropdownOpen(!roleDropdownOpen)}
@@ -2373,17 +2373,17 @@ function App() {
                     })
                   )}
                   <span className={getCurrentRole().color}>
-                    {roleLoading ? '切换中...' : getCurrentRole().name}
+                    {roleLoading ? '鍒囨崲涓?..' : getCurrentRole().name}
                   </span>
                   <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 
                                           ${roleDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
                 
-                {/* 下拉菜单 */}
+                {/* 涓嬫媺鑿滃崟 */}
                 {roleDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 
                                   py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="px-3 py-2 text-xs text-gray-400 font-medium">{currentLanguage === 'en' ? 'Select Role' : '选择角色'}</div>
+                    <div className="px-3 py-2 text-xs text-gray-400 font-medium">{currentLanguage === 'en' ? 'Select Role' : '閫夋嫨瑙掕壊'}</div>
                     {USER_ROLES.map((role) => {
                       const IconComponent = role.icon
                       const isActive = userRole === role.id
@@ -2413,20 +2413,20 @@ function App() {
                 )}
               </div>
 
-              {/* 销售管理按钮 - 柜台、结算、业务可见 */}
+              {/* 閿€鍞鐞嗘寜閽?- 鏌滃彴銆佺粨绠椼€佷笟鍔″彲瑙?*/}
               {['counter', 'settlement', 'sales'].includes(userRole) && (
                 <button
                   onClick={() => setShowSalesSearchModal(true)}
                   className="flex items-center space-x-1.5 px-3 py-2 rounded-xl border border-amber-200
                              bg-amber-50 hover:bg-amber-100 transition-all duration-200 font-medium text-[14px] text-amber-700"
-                  title="销售管理"
+                  title="閿€鍞鐞?
                 >
                   <FileText className="w-4 h-4" />
-                  <span>销售管理</span>
+                  <span>閿€鍞鐞?/span>
                 </button>
               )}
 
-              {/* 语言切换按钮 */}
+              {/* 璇█鍒囨崲鎸夐挳 */}
               <button
                 onClick={() => {
                   const newLang = currentLanguage === 'zh' ? 'en' : 'zh'
@@ -2437,14 +2437,14 @@ function App() {
                            hover:bg-gray-50 transition-all duration-200 font-medium text-[14px] text-gray-600"
                 title={t('language.switchLanguage')}
               >
-                <span className="text-base">{currentLanguage === 'zh' ? '🇨🇳' : '🇺🇸'}</span>
-                <span>{currentLanguage === 'zh' ? '中文' : 'EN'}</span>
+                <span className="text-base">{currentLanguage === 'zh' ? '馃嚚馃嚦' : '馃嚭馃嚫'}</span>
+                <span>{currentLanguage === 'zh' ? '涓枃' : 'EN'}</span>
               </button>
 
-              {/* 导航按钮 */}
+              {/* 瀵艰埅鎸夐挳 */}
               {currentPage === 'chat' ? (
                 <>
-                  {/* 仪表盘按钮 - 管理层快速查看 */}
+                  {/* 浠〃鐩樻寜閽?- 绠＄悊灞傚揩閫熸煡鐪?*/}
                   {hasPermission(userRole, 'canViewAnalytics') && (
                     <button
                       onClick={() => setCurrentPage('dashboard')}
@@ -2453,10 +2453,10 @@ function App() {
                                  shadow-sm hover:shadow-md"
                     >
                       <TrendingUp className="w-4 h-4" />
-                      <span>仪表盘</span>
+                      <span>浠〃鐩?/span>
                     </button>
                   )}
-                  {/* 数据分析按钮 - 使用权限检查 */}
+                  {/* 鏁版嵁鍒嗘瀽鎸夐挳 - 浣跨敤鏉冮檺妫€鏌?*/}
                   {hasPermission(userRole, 'canViewAnalytics') && (
                     <>
                       <button
@@ -2466,7 +2466,7 @@ function App() {
                                    shadow-sm hover:shadow-md"
                       >
                         <BarChart3 className="w-4 h-4" />
-                        <span>数据分析</span>
+                        <span>鏁版嵁鍒嗘瀽</span>
                       </button>
                       <button
                         onClick={() => setCurrentPage('export')}
@@ -2475,11 +2475,11 @@ function App() {
                                    shadow-sm hover:shadow-md"
                       >
                         <Download className="w-4 h-4" />
-                        <span>数据导出</span>
+                        <span>鏁版嵁瀵煎嚭</span>
                       </button>
                     </>
                   )}
-                  {/* 业务员管理按钮 - 使用权限检查 */}
+                  {/* 涓氬姟鍛樼鐞嗘寜閽?- 浣跨敤鏉冮檺妫€鏌?*/}
                   {hasPermission(userRole, 'canManageSalespersons') && (
                     <button
                       onClick={() => setCurrentPage('salesperson')}
@@ -2488,10 +2488,10 @@ function App() {
                                  shadow-sm hover:shadow-md"
                     >
                       <Users className="w-4 h-4" />
-                      <span>业务员管理</span>
+                      <span>涓氬姟鍛樼鐞?/span>
                     </button>
                   )}
-                  {/* 分仓库存按钮 - 柜台(接收) + 商品专员(转移) + 管理层 */}
+                  {/* 鍒嗕粨搴撳瓨鎸夐挳 - 鏌滃彴(鎺ユ敹) + 鍟嗗搧涓撳憳(杞Щ) + 绠＄悊灞?*/}
                   {(hasPermission(userRole, 'canReceiveTransfer') || hasPermission(userRole, 'canTransfer')) && (
                     <button
                       onClick={() => setCurrentPage('warehouse')}
@@ -2500,7 +2500,7 @@ function App() {
                     >
                       <Warehouse className="w-4 h-4" />
                       <span>{t('nav.warehouse')}</span>
-                      {/* 待处理转移单数量badge */}
+                      {/* 寰呭鐞嗚浆绉诲崟鏁伴噺badge */}
                       {pendingTransferCount > 0 && (
                         <span className="absolute -top-2 -right-2 min-w-[20px] h-5 flex items-center justify-center 
                                          bg-red-500 text-white text-xs font-bold rounded-full px-1.5 
@@ -2510,7 +2510,7 @@ function App() {
                       )}
                     </button>
                   )}
-                  {/* 结算管理按钮 - 使用权限检查 */}
+                  {/* 缁撶畻绠＄悊鎸夐挳 - 浣跨敤鏉冮檺妫€鏌?*/}
                   {hasPermission(userRole, 'canCreateSettlement') && (
                     <button
                       onClick={() => setCurrentPage('settlement')}
@@ -2519,7 +2519,7 @@ function App() {
                     >
                       <Calculator className="w-4 h-4" />
                       <span>{t('nav.settlement')}</span>
-                      {/* 待结算销售单数量badge */}
+                      {/* 寰呯粨绠楅攢鍞崟鏁伴噺badge */}
                       {pendingSalesCount > 0 && (
                         <span className="absolute -top-2 -right-2 min-w-[20px] h-5 flex items-center justify-center 
                                          bg-red-500 text-white text-xs font-bold rounded-full px-1.5 
@@ -2529,7 +2529,7 @@ function App() {
                       )}
                     </button>
                   )}
-                  {/* 快捷开单按钮 - 使用权限检查 */}
+                  {/* 蹇嵎寮€鍗曟寜閽?- 浣跨敤鏉冮檺妫€鏌?*/}
                   {hasPermission(userRole, 'canCreateSales') && (
                     <button
                       onClick={() => setShowQuickOrderModal(true)}
@@ -2541,7 +2541,7 @@ function App() {
                       <span>{t('nav.quickOrder')}</span>
                     </button>
                   )}
-                  {/* 客户管理按钮 - 使用权限检查（查看或管理权限） */}
+                  {/* 瀹㈡埛绠＄悊鎸夐挳 - 浣跨敤鏉冮檺妫€鏌ワ紙鏌ョ湅鎴栫鐞嗘潈闄愶級 */}
                   {(hasPermission(userRole, 'canViewCustomers') || hasPermission(userRole, 'canManageCustomers')) && (
                     <button
                       onClick={() => setCurrentPage('customer')}
@@ -2552,7 +2552,7 @@ function App() {
                       <span>{t('nav.customers')}</span>
                     </button>
                   )}
-                  {/* 供应商管理按钮 - 使用权限检查 */}
+                  {/* 渚涘簲鍟嗙鐞嗘寜閽?- 浣跨敤鏉冮檺妫€鏌?*/}
                   {hasPermission(userRole, 'canManageSuppliers') && (
                     <button
                       onClick={() => setCurrentPage('supplier')}
@@ -2563,7 +2563,7 @@ function App() {
                       <span>{t('nav.suppliers')}</span>
                     </button>
                   )}
-                  {/* 退货管理按钮 - 使用权限检查 */}
+                  {/* 閫€璐х鐞嗘寜閽?- 浣跨敤鏉冮檺妫€鏌?*/}
                   {(hasPermission(userRole, 'canReturnToSupplier') || hasPermission(userRole, 'canReturnToWarehouse')) && (
                     <button
                       onClick={() => setCurrentPage('returns')}
@@ -2574,7 +2574,7 @@ function App() {
                       <span>{t('nav.returns')}</span>
                     </button>
                   )}
-                  {/* 金料管理按钮 - 料部和管理层可见 */}
+                  {/* 閲戞枡绠＄悊鎸夐挳 - 鏂欓儴鍜岀鐞嗗眰鍙 */}
                   {(hasPermission(userRole, 'canViewGoldMaterial') || hasPermission(userRole, 'canManageGoldMaterial')) && (
                     <button
                       onClick={() => setCurrentPage('gold-material')}
@@ -2585,7 +2585,7 @@ function App() {
                       <span>{t('nav.goldMaterial')}</span>
                     </button>
                   )}
-                  {/* 暂借管理按钮 - 结算专员和管理层可见 */}
+                  {/* 鏆傚€熺鐞嗘寜閽?- 缁撶畻涓撳憳鍜岀鐞嗗眰鍙 */}
                   {hasPermission(userRole, 'canManageLoan') && (
                     <button
                       onClick={() => setCurrentPage('loan')}
@@ -2596,7 +2596,7 @@ function App() {
                       <span>{t('nav.loan')}</span>
                     </button>
                   )}
-                  {/* 商品编码按钮 - 商品专员和管理层可见 */}
+                  {/* 鍟嗗搧缂栫爜鎸夐挳 - 鍟嗗搧涓撳憳鍜岀鐞嗗眰鍙 */}
                   {hasPermission(userRole, 'canManageProductCodes') && (
                     <button
                       onClick={() => setCurrentPage('product-codes')}
@@ -2607,7 +2607,7 @@ function App() {
                       <span>{t('nav.productCodes')}</span>
                     </button>
                   )}
-                  {/* 入库单据按钮 - 商品专员和管理层可见 */}
+                  {/* 鍏ュ簱鍗曟嵁鎸夐挳 - 鍟嗗搧涓撳憳鍜岀鐞嗗眰鍙 */}
                   {(userRole === 'product' || userRole === 'manager') && (
                     <button
                       onClick={() => setCurrentPage('inbound-orders')}
@@ -2618,7 +2618,7 @@ function App() {
                       <span>{t('nav.inboundOrders')}</span>
                     </button>
                   )}
-                  {/* 财务对账按钮 - 使用权限检查 */}
+                  {/* 璐㈠姟瀵硅处鎸夐挳 - 浣跨敤鏉冮檺妫€鏌?*/}
                   {hasPermission(userRole, 'canViewFinance') && (
                     <button
                       onClick={() => setCurrentPage('finance')}
@@ -2629,7 +2629,7 @@ function App() {
                       <span>{t('nav.finance')}</span>
                     </button>
                   )}
-                  {/* 历史回溯按钮 - 所有角色都可用 */}
+                  {/* 鍘嗗彶鍥炴函鎸夐挳 - 鎵€鏈夎鑹查兘鍙敤 */}
                   <button
                     onClick={() => setShowHistoryPanel(true)}
                     className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
@@ -2654,291 +2654,291 @@ function App() {
           </div>
       </header>
 
-        {/* 主内容区域 - 根据 currentPage 切换 */}
+        {/* 涓诲唴瀹瑰尯鍩?- 鏍规嵁 currentPage 鍒囨崲 */}
         {currentPage === 'chat' && (
           <>
-            {/* 对话区域 - 苹果风格 */}
+            {/* 瀵硅瘽鍖哄煙 - 鑻规灉椋庢牸 */}
             <div className="flex-1 overflow-y-auto px-6 py-8">
           <div className="max-w-4xl mx-auto space-y-6">
         {messages.length === 0 && (
               <div className="text-center pt-8">
-                {/* 智能时间问候 + AI标识 */}
+                {/* 鏅鸿兘鏃堕棿闂€?+ AI鏍囪瘑 */}
                 <div className="mb-6">
                   <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-full border border-amber-200">
                     <img src="/ai-avatar.png" alt="AI" className="w-6 h-6 rounded-full object-cover" />
                     <span className="text-sm text-gray-700">
                       {(() => {
                         const hour = new Date().getHours()
-                        if (hour < 9) return '早上好！今天也要加油哦 ☀️'
-                        if (hour < 12) return '上午好！有什么可以帮您的？'
-                        if (hour < 14) return '中午好！记得休息一下 🍵'
-                        if (hour < 18) return '下午好！我随时准备为您服务'
-                        return '晚上好！辛苦了 🌙'
+                        if (hour < 9) return '鏃╀笂濂斤紒浠婂ぉ涔熻鍔犳补鍝?鈽€锔?
+                        if (hour < 12) return '涓婂崍濂斤紒鏈変粈涔堝彲浠ュ府鎮ㄧ殑锛?
+                        if (hour < 14) return '涓崍濂斤紒璁板緱浼戞伅涓€涓?馃嵉'
+                        if (hour < 18) return '涓嬪崍濂斤紒鎴戦殢鏃跺噯澶囦负鎮ㄦ湇鍔?
+                        return '鏅氫笂濂斤紒杈涜嫤浜?馃寵'
                       })()}
                     </span>
                   </div>
                 </div>
                 
-                {/* 智能快捷建议按钮 - 可点击直接发送 */}
+                {/* 鏅鸿兘蹇嵎寤鸿鎸夐挳 - 鍙偣鍑荤洿鎺ュ彂閫?*/}
                 <div className="flex flex-wrap justify-center gap-2 mb-6">
-                  <span className="text-gray-400 text-sm">💡 试试：</span>
+                  <span className="text-gray-400 text-sm">馃挕 璇曡瘯锛?/span>
                   {userRole === 'counter' && (
                     <>
-                      <button onClick={() => setInput('帮我开一张销售单')} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">开销售单</button>
-                      <button onClick={() => setInput('查询今天的销售情况')} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">今日销售</button>
-                      <button onClick={() => setInput('库存还有多少')} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">查库存</button>
+                      <button onClick={() => setInput('甯垜寮€涓€寮犻攢鍞崟')} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">寮€閿€鍞崟</button>
+                      <button onClick={() => setInput('鏌ヨ浠婂ぉ鐨勯攢鍞儏鍐?)} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">浠婃棩閿€鍞?/button>
+                      <button onClick={() => setInput('搴撳瓨杩樻湁澶氬皯')} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">鏌ュ簱瀛?/button>
                     </>
                   )}
                   {userRole === 'product' && (
                     <>
-                      <button onClick={() => setInput('古法黄金戒指 100克 工费6元 供应商金源珠宝 帮我入库')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">入库商品</button>
-                      <button onClick={() => setInput('查询今天的入库单')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">今日入库</button>
-                      <button onClick={() => setInput('库存分析')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">库存分析</button>
+                      <button onClick={() => setInput('鍙ゆ硶榛勯噾鎴掓寚 100鍏?宸ヨ垂6鍏?渚涘簲鍟嗛噾婧愮彔瀹?甯垜鍏ュ簱')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">鍏ュ簱鍟嗗搧</button>
+                      <button onClick={() => setInput('鏌ヨ浠婂ぉ鐨勫叆搴撳崟')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">浠婃棩鍏ュ簱</button>
+                      <button onClick={() => setInput('搴撳瓨鍒嗘瀽')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">搴撳瓨鍒嗘瀽</button>
                     </>
                   )}
                   {userRole === 'settlement' && (
                     <>
-                      <button onClick={() => setInput('查看今天待结算的订单')} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">待结算</button>
-                      <button onClick={() => setInput('张老板提5克')} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">客户提料</button>
-                      <button onClick={() => setInput('收料登记')} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">收料登记</button>
+                      <button onClick={() => setInput('鏌ョ湅浠婂ぉ寰呯粨绠楃殑璁㈠崟')} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">寰呯粨绠?/button>
+                      <button onClick={() => setInput('寮犺€佹澘鎻?鍏?)} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">瀹㈡埛鎻愭枡</button>
+                      <button onClick={() => setInput('鏀舵枡鐧昏')} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">鏀舵枡鐧昏</button>
                     </>
                   )}
                   {userRole === 'finance' && (
                     <>
-                      <button onClick={() => setInput('查看本月财务对账情况')} className="px-3 py-1.5 text-sm bg-purple-50 text-purple-600 rounded-full hover:bg-purple-100 transition-colors">月度对账</button>
-                      <button onClick={() => setInput('今日收款汇总')} className="px-3 py-1.5 text-sm bg-purple-50 text-purple-600 rounded-full hover:bg-purple-100 transition-colors">收款汇总</button>
+                      <button onClick={() => setInput('鏌ョ湅鏈湀璐㈠姟瀵硅处鎯呭喌')} className="px-3 py-1.5 text-sm bg-purple-50 text-purple-600 rounded-full hover:bg-purple-100 transition-colors">鏈堝害瀵硅处</button>
+                      <button onClick={() => setInput('浠婃棩鏀舵姹囨€?)} className="px-3 py-1.5 text-sm bg-purple-50 text-purple-600 rounded-full hover:bg-purple-100 transition-colors">鏀舵姹囨€?/button>
                     </>
                   )}
                   {userRole === 'sales' && (
                     <>
-                      <button onClick={() => setInput('帮我查询张三今天的销售情况')} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">客户销售</button>
-                      <button onClick={() => setInput('王五有多少欠款')} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">欠款查询</button>
-                      <button onClick={() => setInput('查询退货记录')} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">退货记录</button>
+                      <button onClick={() => setInput('甯垜鏌ヨ寮犱笁浠婂ぉ鐨勯攢鍞儏鍐?)} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">瀹㈡埛閿€鍞?/button>
+                      <button onClick={() => setInput('鐜嬩簲鏈夊灏戞瑺娆?)} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">娆犳鏌ヨ</button>
+                      <button onClick={() => setInput('鏌ヨ閫€璐ц褰?)} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">閫€璐ц褰?/button>
                     </>
                   )}
                   {userRole === 'material' && (
                     <>
-                      <button onClick={() => setInput('查看今日金料收付情况')} className="px-3 py-1.5 text-sm bg-yellow-50 text-yellow-600 rounded-full hover:bg-yellow-100 transition-colors">今日收付</button>
-                      <button onClick={() => setInput('金料库存统计')} className="px-3 py-1.5 text-sm bg-yellow-50 text-yellow-600 rounded-full hover:bg-yellow-100 transition-colors">库存统计</button>
+                      <button onClick={() => setInput('鏌ョ湅浠婃棩閲戞枡鏀朵粯鎯呭喌')} className="px-3 py-1.5 text-sm bg-yellow-50 text-yellow-600 rounded-full hover:bg-yellow-100 transition-colors">浠婃棩鏀朵粯</button>
+                      <button onClick={() => setInput('閲戞枡搴撳瓨缁熻')} className="px-3 py-1.5 text-sm bg-yellow-50 text-yellow-600 rounded-full hover:bg-yellow-100 transition-colors">搴撳瓨缁熻</button>
                     </>
                   )}
                   {userRole === 'manager' && (
                     <>
-                      <button onClick={() => setInput('查看今日销售数据汇总')} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">今日汇总</button>
-                      <button onClick={() => setInput('本月业绩分析')} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">业绩分析</button>
-                      <button onClick={() => setInput('库存预警')} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">库存预警</button>
+                      <button onClick={() => setInput('鏌ョ湅浠婃棩閿€鍞暟鎹眹鎬?)} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">浠婃棩姹囨€?/button>
+                      <button onClick={() => setInput('鏈湀涓氱哗鍒嗘瀽')} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">涓氱哗鍒嗘瀽</button>
+                      <button onClick={() => setInput('搴撳瓨棰勮')} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">搴撳瓨棰勮</button>
                     </>
                   )}
                 </div>
                 
-                {/* 库存概览 - 商品专员、柜台、结算、管理层可见 */}
+                {/* 搴撳瓨姒傝 - 鍟嗗搧涓撳憳銆佹煖鍙般€佺粨绠椼€佺鐞嗗眰鍙 */}
                 {(userRole === 'product' || userRole === 'counter' || userRole === 'settlement' || userRole === 'manager') && (
                   <div className="max-w-2xl mx-auto mb-6">
                     <InventoryOverview userRole={userRole} />
           </div>
         )}
 
-                {/* 角色快捷操作卡片 - 使用权限控制 */}
+                {/* 瑙掕壊蹇嵎鎿嶄綔鍗＄墖 - 浣跨敤鏉冮檺鎺у埗 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
                   
-                  {/* 快速开单卡片 - 需要创建销售单权限 */}
+                  {/* 蹇€熷紑鍗曞崱鐗?- 闇€瑕佸垱寤洪攢鍞崟鏉冮檺 */}
                   {hasPermission(userRole, 'canCreateSales') && (
                     <div 
                       onClick={() => setShowQuickOrderModal(true)}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">🧾</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">快速开单</h3>
-                      <p className="text-sm text-gray-600">创建销售单</p>
+                      <div className="text-2xl mb-3">馃Ь</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">蹇€熷紑鍗?/h3>
+                      <p className="text-sm text-gray-600">鍒涘缓閿€鍞崟</p>
                     </div>
                   )}
                   
-                  {/* 接收库存卡片 - 需要接收库存权限 */}
+                  {/* 鎺ユ敹搴撳瓨鍗＄墖 - 闇€瑕佹帴鏀跺簱瀛樻潈闄?*/}
                   {hasPermission(userRole, 'canReceiveTransfer') && (
                     <div 
                       onClick={() => setCurrentPage('warehouse')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">📥</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">接收库存</h3>
-                      <p className="text-sm text-gray-600">接收从仓库转移的商品</p>
+                      <div className="text-2xl mb-3">馃摜</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">鎺ユ敹搴撳瓨</h3>
+                      <p className="text-sm text-gray-600">鎺ユ敹浠庝粨搴撹浆绉荤殑鍟嗗搧</p>
                     </div>
                   )}
                   
-                  {/* 快捷入库卡片 - 需要入库权限 */}
+                  {/* 蹇嵎鍏ュ簱鍗＄墖 - 闇€瑕佸叆搴撴潈闄?*/}
                   {hasPermission(userRole, 'canInbound') && (
                     <div 
                       onClick={() => setShowQuickInboundModal(true)}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">📦</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">快捷入库</h3>
-                      <p className="text-sm text-gray-600">表格形式批量入库</p>
+                      <div className="text-2xl mb-3">馃摝</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">蹇嵎鍏ュ簱</h3>
+                      <p className="text-sm text-gray-600">琛ㄦ牸褰㈠紡鎵归噺鍏ュ簱</p>
                     </div>
                   )}
                   
-                  {/* 库存转移卡片 - 需要转移权限 */}
+                  {/* 搴撳瓨杞Щ鍗＄墖 - 闇€瑕佽浆绉绘潈闄?*/}
                   {hasPermission(userRole, 'canTransfer') && (
                     <div 
                       onClick={() => setCurrentPage('warehouse')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">📊</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">分仓库存</h3>
-                      <p className="text-sm text-gray-600">管理仓库库存和转移</p>
+                      <div className="text-2xl mb-3">馃搳</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">鍒嗕粨搴撳瓨</h3>
+                      <p className="text-sm text-gray-600">绠＄悊浠撳簱搴撳瓨鍜岃浆绉?/p>
                     </div>
                   )}
                   
-                  {/* 快捷退货卡片 - 商品专员（退给供应商） */}
+                  {/* 蹇嵎閫€璐у崱鐗?- 鍟嗗搧涓撳憳锛堥€€缁欎緵搴斿晢锛?*/}
                   {hasPermission(userRole, 'canReturnToSupplier') && (
                     <div 
                       onClick={() => setShowQuickReturnModal(true)}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">🔄</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">快捷退货</h3>
-                      <p className="text-sm text-gray-600">快速创建退货单（退给供应商）</p>
+                      <div className="text-2xl mb-3">馃攧</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">蹇嵎閫€璐?/h3>
+                      <p className="text-sm text-gray-600">蹇€熷垱寤洪€€璐у崟锛堥€€缁欎緵搴斿晢锛?/p>
                     </div>
                   )}
                   
-                  {/* 快捷退货卡片 - 柜台（退给商品部） */}
+                  {/* 蹇嵎閫€璐у崱鐗?- 鏌滃彴锛堥€€缁欏晢鍝侀儴锛?*/}
                   {hasPermission(userRole, 'canReturnToWarehouse') && (
                     <div 
                       onClick={() => setShowQuickReturnModal(true)}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">🔄</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">快捷退货</h3>
-                      <p className="text-sm text-gray-600">快速创建退货单（退给商品部）</p>
+                      <div className="text-2xl mb-3">馃攧</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">蹇嵎閫€璐?/h3>
+                      <p className="text-sm text-gray-600">蹇€熷垱寤洪€€璐у崟锛堥€€缁欏晢鍝侀儴锛?/p>
                     </div>
                   )}
                   
-                  {/* 结算管理卡片 - 需要创建结算单权限 */}
+                  {/* 缁撶畻绠＄悊鍗＄墖 - 闇€瑕佸垱寤虹粨绠楀崟鏉冮檺 */}
                   {hasPermission(userRole, 'canCreateSettlement') && (
                     <div 
                       onClick={() => setCurrentPage('settlement')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">📋</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">待结算订单</h3>
-                      <p className="text-sm text-gray-600">查看待结算的销售单</p>
+                      <div className="text-2xl mb-3">馃搵</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">寰呯粨绠楄鍗?/h3>
+                      <p className="text-sm text-gray-600">鏌ョ湅寰呯粨绠楃殑閿€鍞崟</p>
                     </div>
                   )}
                   
-                  {/* 客户管理卡片 - 需要查看或管理权限 */}
+                  {/* 瀹㈡埛绠＄悊鍗＄墖 - 闇€瑕佹煡鐪嬫垨绠＄悊鏉冮檺 */}
                   {(hasPermission(userRole, 'canViewCustomers') || hasPermission(userRole, 'canManageCustomers')) && (
                     <div 
                       onClick={() => setCurrentPage('customer')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">👥</div>
+                      <div className="text-2xl mb-3">馃懃</div>
                       <h3 className="font-semibold text-gray-900 mb-2">
-                        {userRole === 'sales' ? '客户查询' : '客户管理'}
+                        {userRole === 'sales' ? '瀹㈡埛鏌ヨ' : '瀹㈡埛绠＄悊'}
                       </h3>
                       <p className="text-sm text-gray-600">
                         {userRole === 'sales' 
-                          ? '查询客户销售、退货、欠款、往来账目' 
-                          : '管理客户信息'}
+                          ? '鏌ヨ瀹㈡埛閿€鍞€侀€€璐с€佹瑺娆俱€佸線鏉ヨ处鐩? 
+                          : '绠＄悊瀹㈡埛淇℃伅'}
                       </p>
                     </div>
                   )}
                   
-                  {/* 财务对账卡片 - 需要财务权限 */}
+                  {/* 璐㈠姟瀵硅处鍗＄墖 - 闇€瑕佽储鍔℃潈闄?*/}
                   {hasPermission(userRole, 'canViewFinance') && (
                     <div 
                       onClick={() => setCurrentPage('finance')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">💰</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">财务对账</h3>
-                      <p className="text-sm text-gray-600">查看财务对账情况</p>
+                      <div className="text-2xl mb-3">馃挵</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">璐㈠姟瀵硅处</h3>
+                      <p className="text-sm text-gray-600">鏌ョ湅璐㈠姟瀵硅处鎯呭喌</p>
                     </div>
                   )}
                   
-                  {/* 供应商管理卡片 - 需要供应商管理权限 */}
+                  {/* 渚涘簲鍟嗙鐞嗗崱鐗?- 闇€瑕佷緵搴斿晢绠＄悊鏉冮檺 */}
                   {hasPermission(userRole, 'canManageSuppliers') && (
                     <div 
                       onClick={() => setCurrentPage('supplier')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">🏭</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">供应商管理</h3>
-                      <p className="text-sm text-gray-600">管理供应商信息</p>
+                      <div className="text-2xl mb-3">馃彮</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">渚涘簲鍟嗙鐞?/h3>
+                      <p className="text-sm text-gray-600">绠＄悊渚涘簲鍟嗕俊鎭?/p>
                     </div>
                   )}
                   
-                  {/* 仪表盘卡片 - 管理层快速查看 */}
+                  {/* 浠〃鐩樺崱鐗?- 绠＄悊灞傚揩閫熸煡鐪?*/}
                   {hasPermission(userRole, 'canViewAnalytics') && (
                     <div 
                       onClick={() => setCurrentPage('dashboard')}
                       className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">📈</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">数据仪表盘</h3>
-                      <p className="text-sm text-gray-600">今日销售、业绩排行</p>
+                      <div className="text-2xl mb-3">馃搱</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">鏁版嵁浠〃鐩?/h3>
+                      <p className="text-sm text-gray-600">浠婃棩閿€鍞€佷笟缁╂帓琛?/p>
                     </div>
                   )}
                   
-                  {/* 数据分析卡片 - 需要数据分析权限 */}
+                  {/* 鏁版嵁鍒嗘瀽鍗＄墖 - 闇€瑕佹暟鎹垎鏋愭潈闄?*/}
                   {hasPermission(userRole, 'canViewAnalytics') && (
                     <div 
                       onClick={() => setCurrentPage('analytics')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">📊</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">数据分析</h3>
-                      <p className="text-sm text-gray-600">查看业务数据分析</p>
+                      <div className="text-2xl mb-3">馃搳</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">鏁版嵁鍒嗘瀽</h3>
+                      <p className="text-sm text-gray-600">鏌ョ湅涓氬姟鏁版嵁鍒嗘瀽</p>
                     </div>
                   )}
                   
-                  {/* 数据导出卡片 - 需要数据导出权限 */}
+                  {/* 鏁版嵁瀵煎嚭鍗＄墖 - 闇€瑕佹暟鎹鍑烘潈闄?*/}
                   {hasPermission(userRole, 'canExport') && (
                     <div 
                       onClick={() => setCurrentPage('export')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">📥</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">数据导出</h3>
-                      <p className="text-sm text-gray-600">导出各类数据报表</p>
+                      <div className="text-2xl mb-3">馃摜</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">鏁版嵁瀵煎嚭</h3>
+                      <p className="text-sm text-gray-600">瀵煎嚭鍚勭被鏁版嵁鎶ヨ〃</p>
                     </div>
                   )}
                   
-                  {/* 金料管理卡片 - 料部和管理层 */}
+                  {/* 閲戞枡绠＄悊鍗＄墖 - 鏂欓儴鍜岀鐞嗗眰 */}
                   {(hasPermission(userRole, 'canViewGoldMaterial') || hasPermission(userRole, 'canManageGoldMaterial')) && (
                     <div 
                       onClick={() => setCurrentPage('gold-material')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">⚖️</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">金料管理</h3>
-                      <p className="text-sm text-gray-600">金料台账、收料、付料</p>
+                      <div className="text-2xl mb-3">鈿栵笍</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">閲戞枡绠＄悊</h3>
+                      <p className="text-sm text-gray-600">閲戞枡鍙拌处銆佹敹鏂欍€佷粯鏂?/p>
                     </div>
                   )}
                   
-                  {/* 商品编码管理卡片 - 商品专员和管理层 */}
+                  {/* 鍟嗗搧缂栫爜绠＄悊鍗＄墖 - 鍟嗗搧涓撳憳鍜岀鐞嗗眰 */}
                   {hasPermission(userRole, 'canManageProductCodes') && (
                     <div 
                       onClick={() => setCurrentPage('product-codes')}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">🏷️</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">商品编码</h3>
-                      <p className="text-sm text-gray-600">管理F编码、FL编码</p>
+                      <div className="text-2xl mb-3">馃彿锔?/div>
+                      <h3 className="font-semibold text-gray-900 mb-2">鍟嗗搧缂栫爜</h3>
+                      <p className="text-sm text-gray-600">绠＄悊F缂栫爜銆丗L缂栫爜</p>
                     </div>
                   )}
                   
-                  {/* 创建付料单卡片 - 料部 */}
+                  {/* 鍒涘缓浠樻枡鍗曞崱鐗?- 鏂欓儴 */}
                   {hasPermission(userRole, 'canCreateGoldPayment') && (
                     <div 
                       onClick={() => {
                         setCurrentPage('gold-material');
-                        // 可以通过状态控制打开创建付料单弹窗
+                        // 鍙互閫氳繃鐘舵€佹帶鍒舵墦寮€鍒涘缓浠樻枡鍗曞脊绐?
                       }}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
-                      <div className="text-2xl mb-3">📝</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">创建付料单</h3>
-                      <p className="text-sm text-gray-600">支付供应商金料</p>
+                      <div className="text-2xl mb-3">馃摑</div>
+                      <h3 className="font-semibold text-gray-900 mb-2">鍒涘缓浠樻枡鍗?/h3>
+                      <p className="text-sm text-gray-600">鏀粯渚涘簲鍟嗛噾鏂?/p>
                     </div>
                   )}
                 </div>
@@ -2946,16 +2946,16 @@ function App() {
             )}
 
             {messages.map((msg, idx) => {
-              // 思考过程消息
+              // 鎬濊€冭繃绋嬫秷鎭?
               if (msg.type === 'thinking' && Array.isArray(msg.steps)) {
                 return (
                   <div key={msg.id || idx} className="flex justify-start">
                     <div className="bg-white rounded-3xl px-5 py-4 shadow-sm border border-gray-200/60 max-w-2xl">
-                      {/* 进度条 */}
+                      {/* 杩涘害鏉?*/}
                       {msg.steps.length > 0 && (
                         <div className="mb-3">
                           <div className="flex justify-between text-xs text-gray-600 mb-1">
-                            <span>处理进度</span>
+                            <span>澶勭悊杩涘害</span>
                             <span>{msg.steps[msg.steps.length - 1]?.progress || 0}%</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-1.5">
@@ -2967,7 +2967,7 @@ function App() {
                         </div>
                       )}
                       
-                      {/* 思考步骤 */}
+                      {/* 鎬濊€冩楠?*/}
                       <div className="space-y-2">
                         {msg.steps.map((step, stepIdx) => (
                           <div key={stepIdx} className="flex items-start space-x-3">
@@ -2988,28 +2988,28 @@ function App() {
                 )
               }
               
-              // 收款确认卡片
+              // 鏀舵纭鍗＄墖
               if (msg.type === 'payment_confirm' && msg.paymentData) {
                 const pd = msg.paymentData
                 return (
                   <div key={msg.id || idx} className="flex justify-start">
                     <div className="bg-white rounded-2xl shadow-lg border border-orange-200 max-w-md overflow-hidden">
-                      {/* 标题栏 */}
+                      {/* 鏍囬鏍?*/}
                       <div className="bg-gradient-to-r from-orange-500 to-amber-500 px-5 py-3">
                         <div className="flex items-center gap-2 text-white">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          <span className="font-semibold">确认登记收款</span>
+                          <span className="font-semibold">纭鐧昏鏀舵</span>
                         </div>
                       </div>
                       
-                      {/* 内容区 */}
+                      {/* 鍐呭鍖?*/}
                       <div className="p-5 space-y-4">
-                        {/* 客户信息 */}
+                        {/* 瀹㈡埛淇℃伅 */}
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                            <span className="text-orange-600 font-bold text-lg">{pd.customer?.name?.charAt(0) || '客'}</span>
+                            <span className="text-orange-600 font-bold text-lg">{pd.customer?.name?.charAt(0) || '瀹?}</span>
                           </div>
                           <div>
                             <div className="font-semibold text-gray-900">{pd.customer?.name}</div>
@@ -3017,34 +3017,34 @@ function App() {
                           </div>
                         </div>
                         
-                        {/* 金额信息 */}
+                        {/* 閲戦淇℃伅 */}
                         <div className="bg-gray-50 rounded-xl p-4 space-y-2">
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-600">当前欠款</span>
-                            <span className="font-medium text-gray-900">¥{pd.current_debt?.toFixed(2)}</span>
+                            <span className="text-gray-600">褰撳墠娆犳</span>
+                            <span className="font-medium text-gray-900">楼{pd.current_debt?.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-600">本次收款</span>
-                            <span className="font-bold text-orange-600 text-lg">¥{pd.payment_amount?.toFixed(2)}</span>
+                            <span className="text-gray-600">鏈鏀舵</span>
+                            <span className="font-bold text-orange-600 text-lg">楼{pd.payment_amount?.toFixed(2)}</span>
                           </div>
                           <div className="border-t border-gray-200 pt-2 flex justify-between text-sm">
-                            <span className="text-gray-600">收款后欠款</span>
+                            <span className="text-gray-600">鏀舵鍚庢瑺娆?/span>
                             <span className={`font-medium ${(pd.balance_after || 0) >= 0 ? 'text-orange-600' : 'text-green-600'}`}>
                               {(pd.balance_after || 0) >= 0 
-                                ? `¥${pd.balance_after?.toFixed(2)}` 
-                                : `-¥${Math.abs(pd.balance_after || 0).toFixed(2)} (预收款)`
+                                ? `楼${pd.balance_after?.toFixed(2)}` 
+                                : `-楼${Math.abs(pd.balance_after || 0).toFixed(2)} (棰勬敹娆?`
                               }
                             </span>
                           </div>
                         </div>
                         
-                        {/* 收款方式 */}
+                        {/* 鏀舵鏂瑰紡 */}
                         <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <span>收款方式：</span>
+                          <span>鏀舵鏂瑰紡锛?/span>
                           <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded">{pd.payment_method}</span>
                         </div>
                         
-                        {/* 操作按钮 */}
+                        {/* 鎿嶄綔鎸夐挳 */}
                         <div className="flex gap-3 pt-2">
                           <button
                             onClick={async () => {
@@ -3057,35 +3057,35 @@ function App() {
                                   pd.remark || ''
                                 )
                                 if (result.success) {
-                                  // 更新消息为成功状态
+                                  // 鏇存柊娑堟伅涓烘垚鍔熺姸鎬?
                                   const balanceText = (pd.balance_after || 0) >= 0 
-                                    ? `¥${pd.balance_after.toFixed(2)}` 
-                                    : `-¥${Math.abs(pd.balance_after || 0).toFixed(2)} (预收款)`
+                                    ? `楼${pd.balance_after.toFixed(2)}` 
+                                    : `-楼${Math.abs(pd.balance_after || 0).toFixed(2)} (棰勬敹娆?`
                                   setMessages(prev => prev.map(m => 
                                     m.id === msg.id 
-                                      ? { ...m, type: 'system', content: `✅ 收款登记成功！\n\n客户：${pd.customer.name}\n收款金额：¥${pd.payment_amount.toFixed(2)}\n收款方式：${pd.payment_method}\n收款后欠款：${balanceText}` }
+                                      ? { ...m, type: 'system', content: `鉁?鏀舵鐧昏鎴愬姛锛乗n\n瀹㈡埛锛?{pd.customer.name}\n鏀舵閲戦锛毬?{pd.payment_amount.toFixed(2)}\n鏀舵鏂瑰紡锛?{pd.payment_method}\n鏀舵鍚庢瑺娆撅細${balanceText}` }
                                       : m
                                   ))
                                 } else {
-                                  alert('收款登记失败：' + (result.error || '未知错误'))
+                                  alert('鏀舵鐧昏澶辫触锛? + (result.error || '鏈煡閿欒'))
                                 }
                               } catch (error) {
-                                console.error('收款登记失败:', error)
-                                alert('收款登记失败：' + error.message)
+                                console.error('鏀舵鐧昏澶辫触:', error)
+                                alert('鏀舵鐧昏澶辫触锛? + error.message)
                               }
                             }}
                             className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-medium py-2.5 px-4 rounded-xl transition-colors"
                           >
-                            确认登记
+                            纭鐧昏
                           </button>
                           <button
                             onClick={() => {
-                              // 取消确认，移除此消息
+                              // 鍙栨秷纭锛岀Щ闄ゆ娑堟伅
                               setMessages(prev => prev.filter(m => m.id !== msg.id))
                             }}
                             className="px-4 py-2.5 border border-gray-300 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors"
                           >
-                            取消
+                            鍙栨秷
                           </button>
                         </div>
                       </div>
@@ -3094,28 +3094,28 @@ function App() {
                 )
               }
 
-              // 收料确认卡片
+              // 鏀舵枡纭鍗＄墖
               if (msg.type === 'receipt_confirm' && msg.receiptData) {
                 const rd = msg.receiptData
                 return (
                   <div key={msg.id || idx} className="flex justify-start">
                     <div className="bg-white rounded-2xl shadow-lg border border-yellow-200 max-w-md overflow-hidden">
-                      {/* 标题栏 */}
+                      {/* 鏍囬鏍?*/}
                       <div className="bg-gradient-to-r from-yellow-500 to-amber-500 px-5 py-3">
                         <div className="flex items-center gap-2 text-white">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                           </svg>
-                          <span className="font-semibold">确认开具收料单</span>
+                          <span className="font-semibold">纭寮€鍏锋敹鏂欏崟</span>
                         </div>
                       </div>
                       
-                      {/* 内容区 */}
+                      {/* 鍐呭鍖?*/}
                       <div className="p-5 space-y-4">
-                        {/* 客户信息 */}
+                        {/* 瀹㈡埛淇℃伅 */}
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
-                            <span className="text-yellow-600 font-bold text-lg">{rd.customer?.name?.charAt(0) || '客'}</span>
+                            <span className="text-yellow-600 font-bold text-lg">{rd.customer?.name?.charAt(0) || '瀹?}</span>
                           </div>
                           <div>
                             <div className="font-semibold text-gray-900">{rd.customer?.name}</div>
@@ -3123,25 +3123,25 @@ function App() {
                           </div>
                         </div>
                         
-                        {/* 金料信息 */}
+                        {/* 閲戞枡淇℃伅 */}
                         <div className="bg-yellow-50 rounded-xl p-4 space-y-3">
                           <div className="flex justify-between items-center">
-                            <span className="text-gray-600">收料克重</span>
-                            <span className="font-bold text-yellow-700 text-2xl">{rd.gold_weight?.toFixed(2)} 克</span>
+                            <span className="text-gray-600">鏀舵枡鍏嬮噸</span>
+                            <span className="font-bold text-yellow-700 text-2xl">{rd.gold_weight?.toFixed(2)} 鍏?/span>
                           </div>
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-600">成色</span>
+                            <span className="text-gray-600">鎴愯壊</span>
                             <span className="font-medium text-gray-900 px-2 py-0.5 bg-yellow-100 rounded">{rd.gold_fineness}</span>
                           </div>
                           {rd.remark && (
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-600">备注</span>
+                              <span className="text-gray-600">澶囨敞</span>
                               <span className="text-gray-700">{rd.remark}</span>
                             </div>
                           )}
                         </div>
                         
-                        {/* 操作按钮 */}
+                        {/* 鎿嶄綔鎸夐挳 */}
                         <div className="flex gap-3 pt-2">
                           <button
                             onClick={async () => {
@@ -3150,8 +3150,8 @@ function App() {
                                   customer_id: rd.customer.id.toString(),
                                   gold_weight: rd.gold_weight.toString(),
                                   gold_fineness: rd.gold_fineness,
-                                  remark: rd.remark || '聊天收料',
-                                  created_by: '结算专员'
+                                  remark: rd.remark || '鑱婂ぉ鏀舵枡',
+                                  created_by: '缁撶畻涓撳憳'
                                 })
                                 const response = await fetch(`${API_BASE_URL}/api/gold-material/gold-receipts?${params}`, {
                                   method: 'POST',
@@ -3159,37 +3159,37 @@ function App() {
                                 })
                                 if (response.ok) {
                                   const result = await response.json()
-                                  // 更新消息为成功状态
+                                  // 鏇存柊娑堟伅涓烘垚鍔熺姸鎬?
                                   setMessages(prev => prev.map(m => 
                                     m.id === msg.id 
-                                      ? { ...m, type: 'system', content: `✅ 收料单创建成功！\n\n单号：${result.data.receipt_no}\n客户：${rd.customer.name}\n克重：${rd.gold_weight.toFixed(2)}克\n成色：${rd.gold_fineness}` }
+                                      ? { ...m, type: 'system', content: `鉁?鏀舵枡鍗曞垱寤烘垚鍔燂紒\n\n鍗曞彿锛?{result.data.receipt_no}\n瀹㈡埛锛?{rd.customer.name}\n鍏嬮噸锛?{rd.gold_weight.toFixed(2)}鍏媆n鎴愯壊锛?{rd.gold_fineness}` }
                                       : m
                                   ))
-                                  // 打开打印页面
+                                  // 鎵撳紑鎵撳嵃椤甸潰
                                   if (result.data.id) {
                                     window.open(`${API_BASE_URL}/api/gold-material/gold-receipts/${result.data.id}/print`, '_blank')
                                   }
                                 } else {
                                   const error = await response.json()
-                                  alert('收料单创建失败：' + (error.detail || '未知错误'))
+                                  alert('鏀舵枡鍗曞垱寤哄け璐ワ細' + (error.detail || '鏈煡閿欒'))
                                 }
                               } catch (error) {
-                                console.error('收料单创建失败:', error)
-                                alert('收料单创建失败：' + error.message)
+                                console.error('鏀舵枡鍗曞垱寤哄け璐?', error)
+                                alert('鏀舵枡鍗曞垱寤哄け璐ワ細' + error.message)
                               }
                             }}
                             className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2.5 px-4 rounded-xl transition-colors"
                           >
-                            确认并打印
+                            纭骞舵墦鍗?
                           </button>
                           <button
                             onClick={() => {
-                              // 取消确认，移除此消息
+                              // 鍙栨秷纭锛岀Щ闄ゆ娑堟伅
                               setMessages(prev => prev.filter(m => m.id !== msg.id))
                             }}
                             className="px-4 py-2.5 border border-gray-300 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors"
                           >
-                            取消
+                            鍙栨秷
                           </button>
                         </div>
                       </div>
@@ -3198,28 +3198,28 @@ function App() {
                 )
               }
 
-              // 提料确认卡片
+              // 鎻愭枡纭鍗＄墖
               if (msg.type === 'withdrawal_confirm' && msg.withdrawalData) {
                 const wd = msg.withdrawalData
                 return (
                   <div key={msg.id || idx} className="flex justify-start">
                     <div className="bg-white rounded-2xl shadow-lg border border-blue-200 max-w-md overflow-hidden">
-                      {/* 标题栏 */}
+                      {/* 鏍囬鏍?*/}
                       <div className="bg-gradient-to-r from-blue-500 to-indigo-500 px-5 py-3">
                         <div className="flex items-center gap-2 text-white">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11l5-5m0 0l5 5m-5-5v12" />
                           </svg>
-                          <span className="font-semibold">确认创建提料单</span>
+                          <span className="font-semibold">纭鍒涘缓鎻愭枡鍗?/span>
                         </div>
                       </div>
                       
-                      {/* 内容区 */}
+                      {/* 鍐呭鍖?*/}
                       <div className="p-5 space-y-4">
-                        {/* 客户信息 */}
+                        {/* 瀹㈡埛淇℃伅 */}
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                            <span className="text-blue-600 font-bold text-lg">{wd.customer?.name?.charAt(0) || '客'}</span>
+                            <span className="text-blue-600 font-bold text-lg">{wd.customer?.name?.charAt(0) || '瀹?}</span>
                           </div>
                           <div>
                             <div className="font-semibold text-gray-900">{wd.customer?.name}</div>
@@ -3227,36 +3227,36 @@ function App() {
                           </div>
                         </div>
                         
-                        {/* 提料信息 */}
+                        {/* 鎻愭枡淇℃伅 */}
                         <div className="bg-blue-50 rounded-xl p-4 space-y-3">
                           <div className="flex justify-between items-center">
-                            <span className="text-gray-600">提料克重</span>
-                            <span className="font-bold text-blue-700 text-2xl">{wd.gold_weight?.toFixed(2)} 克</span>
+                            <span className="text-gray-600">鎻愭枡鍏嬮噸</span>
+                            <span className="font-bold text-blue-700 text-2xl">{wd.gold_weight?.toFixed(2)} 鍏?/span>
                           </div>
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-600">当前存料</span>
-                            <span className="font-medium text-gray-900">{wd.current_balance?.toFixed(2)} 克</span>
+                            <span className="text-gray-600">褰撳墠瀛樻枡</span>
+                            <span className="font-medium text-gray-900">{wd.current_balance?.toFixed(2)} 鍏?/span>
                           </div>
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-600">提料后余额</span>
-                            <span className="font-medium text-green-600">{wd.balance_after?.toFixed(2)} 克</span>
+                            <span className="text-gray-600">鎻愭枡鍚庝綑棰?/span>
+                            <span className="font-medium text-green-600">{wd.balance_after?.toFixed(2)} 鍏?/span>
                           </div>
                           {wd.remark && (
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-600">备注</span>
+                              <span className="text-gray-600">澶囨敞</span>
                               <span className="text-gray-700">{wd.remark}</span>
                             </div>
                           )}
                         </div>
                         
-                        {/* 操作按钮 */}
+                        {/* 鎿嶄綔鎸夐挳 */}
                         <div className="flex gap-3 pt-2">
                           <button
                             onClick={async () => {
                               try {
                                 const params = new URLSearchParams({
                                   user_role: 'settlement',
-                                  created_by: '结算专员'
+                                  created_by: '缁撶畻涓撳憳'
                                 })
                                 const response = await fetch(`${API_BASE_URL}/api/gold-material/withdrawals?${params}`, {
                                   method: 'POST',
@@ -3265,42 +3265,42 @@ function App() {
                                     customer_id: wd.customer.id,
                                     gold_weight: wd.gold_weight,
                                     withdrawal_type: 'self',
-                                    remark: wd.remark || '聊天提料'
+                                    remark: wd.remark || '鑱婂ぉ鎻愭枡'
                                   })
                                 })
                                 if (response.ok) {
                                   const result = await response.json()
-                                  // 更新消息为成功状态
+                                  // 鏇存柊娑堟伅涓烘垚鍔熺姸鎬?
                                   setMessages(prev => prev.map(m => 
                                     m.id === msg.id 
-                                      ? { ...m, type: 'system', content: `✅ 提料单创建成功！\n\n单号：${result.withdrawal_no}\n客户：${wd.customer.name}\n克重：${wd.gold_weight.toFixed(2)}克\n（待料部确认发出）` }
+                                      ? { ...m, type: 'system', content: `鉁?鎻愭枡鍗曞垱寤烘垚鍔燂紒\n\n鍗曞彿锛?{result.withdrawal_no}\n瀹㈡埛锛?{wd.customer.name}\n鍏嬮噸锛?{wd.gold_weight.toFixed(2)}鍏媆n锛堝緟鏂欓儴纭鍙戝嚭锛塦 }
                                       : m
                                   ))
-                                  // 打开打印页面
+                                  // 鎵撳紑鎵撳嵃椤甸潰
                                   if (result.id) {
                                     window.open(`${API_BASE_URL}/api/gold-material/withdrawals/${result.id}/download?format=html`, '_blank')
                                   }
                                 } else {
                                   const error = await response.json()
-                                  alert('提料单创建失败：' + (error.detail || '未知错误'))
+                                  alert('鎻愭枡鍗曞垱寤哄け璐ワ細' + (error.detail || '鏈煡閿欒'))
                                 }
                               } catch (error) {
-                                console.error('提料单创建失败:', error)
-                                alert('提料单创建失败：' + error.message)
+                                console.error('鎻愭枡鍗曞垱寤哄け璐?', error)
+                                alert('鎻愭枡鍗曞垱寤哄け璐ワ細' + error.message)
                               }
                             }}
                             className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2.5 px-4 rounded-xl transition-colors"
                           >
-                            确认并打印
+                            纭骞舵墦鍗?
                           </button>
                           <button
                             onClick={() => {
-                              // 取消确认，移除此消息
+                              // 鍙栨秷纭锛岀Щ闄ゆ娑堟伅
                               setMessages(prev => prev.filter(m => m.id !== msg.id))
                             }}
                             className="px-4 py-2.5 border border-gray-300 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors"
                           >
-                            取消
+                            鍙栨秷
                           </button>
                         </div>
                       </div>
@@ -3309,34 +3309,34 @@ function App() {
                 )
               }
 
-              // 提料单记录卡片（已完成的提料单）
+              // 鎻愭枡鍗曡褰曞崱鐗囷紙宸插畬鎴愮殑鎻愭枡鍗曪級
               if (msg.type === 'withdrawal_record' && msg.withdrawalData) {
                 const wd = msg.withdrawalData
                 return (
                   <div key={msg.id || idx} className="flex justify-start">
                     <div className="bg-white rounded-2xl shadow-lg border border-green-200 max-w-md overflow-hidden">
-                      {/* 标题栏 */}
+                      {/* 鏍囬鏍?*/}
                       <div className="bg-gradient-to-r from-green-500 to-emerald-500 px-5 py-3">
                         <div className="flex items-center gap-2 text-white">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                           </svg>
-                          <span className="font-semibold">提料单已生成</span>
+                          <span className="font-semibold">鎻愭枡鍗曞凡鐢熸垚</span>
                         </div>
                       </div>
                       
-                      {/* 内容区 */}
+                      {/* 鍐呭鍖?*/}
                       <div className="p-5 space-y-4">
-                        {/* 单号信息 */}
+                        {/* 鍗曞彿淇℃伅 */}
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-500">单号</span>
+                          <span className="text-sm text-gray-500">鍗曞彿</span>
                           <span className="font-mono font-semibold text-green-700">{wd.withdrawal_no}</span>
                         </div>
                         
-                        {/* 客户信息 */}
+                        {/* 瀹㈡埛淇℃伅 */}
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                            <span className="text-green-600 font-bold text-lg">{wd.customer_name?.charAt(0) || '客'}</span>
+                            <span className="text-green-600 font-bold text-lg">{wd.customer_name?.charAt(0) || '瀹?}</span>
                           </div>
                           <div>
                             <div className="font-semibold text-gray-900">{wd.customer_name}</div>
@@ -3344,21 +3344,21 @@ function App() {
                           </div>
                         </div>
                         
-                        {/* 提料信息 */}
+                        {/* 鎻愭枡淇℃伅 */}
                         <div className="bg-green-50 rounded-xl p-4 space-y-2">
                           <div className="flex justify-between items-center">
-                            <span className="text-gray-600">提料克重</span>
-                            <span className="font-bold text-green-700 text-2xl">{wd.gold_weight?.toFixed(2)} 克</span>
+                            <span className="text-gray-600">鎻愭枡鍏嬮噸</span>
+                            <span className="font-bold text-green-700 text-2xl">{wd.gold_weight?.toFixed(2)} 鍏?/span>
                           </div>
                           {wd.remark && (
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-600">备注</span>
+                              <span className="text-gray-600">澶囨敞</span>
                               <span className="text-gray-700">{wd.remark}</span>
                             </div>
                           )}
                         </div>
                         
-                        {/* 操作按钮 */}
+                        {/* 鎿嶄綔鎸夐挳 */}
                         <div className="flex gap-3 pt-2">
                           <button
                             onClick={() => window.open(wd.download_url, '_blank')}
@@ -3367,7 +3367,7 @@ function App() {
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                             </svg>
-                            打印/下载
+                            鎵撳嵃/涓嬭浇
                           </button>
                         </div>
                       </div>
@@ -3376,7 +3376,7 @@ function App() {
                 )
               }
               
-              // 用户消息
+              // 鐢ㄦ埛娑堟伅
               if (msg.type === 'user') {
                 return (
                   <div key={msg.id || idx} className="flex justify-end">
@@ -3387,48 +3387,48 @@ function App() {
                 )
               }
               
-              // 系统消息（流式内容或普通内容）- 带AI头像
+              // 绯荤粺娑堟伅锛堟祦寮忓唴瀹规垨鏅€氬唴瀹癸級- 甯I澶村儚
               if (msg.type === 'system') {
                 return (
                   <React.Fragment key={msg.id || idx}>
                     <div className="flex justify-start items-start gap-3">
-                      {/* AI头像 - 招财猫 */}
+                      {/* AI澶村儚 - 鎷涜储鐚?*/}
                       <img src="/ai-avatar.png" alt="AI" className="flex-shrink-0 w-8 h-8 rounded-full object-cover shadow-md ring-2 ring-jewelry-gold/30" />
                       <div className={`
                         ${msg.id ? 'max-w-2xl' : 'max-w-[85%] md:max-w-[75%]'}
                         rounded-3xl px-5 py-4 shadow-sm border border-jewelry-gold/20 bg-gradient-to-br from-amber-50/80 to-yellow-50/80
                       `}>
-                        {/* 意图识别可视化标签 - 珠宝风格 */}
+                        {/* 鎰忓浘璇嗗埆鍙鍖栨爣绛?- 鐝犲疂椋庢牸 */}
                         {msg.detectedIntent && (
                           <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-gray-100">
-                            <span className="text-xs text-gray-400">🎯 识别到：</span>
+                            <span className="text-xs text-gray-400">馃幆 璇嗗埆鍒帮細</span>
                             <span className="px-2 py-0.5 text-xs font-medium bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 rounded-full">
                               {msg.detectedIntent}
                             </span>
                           </div>
                         )}
                         <div className="text-[15px] leading-relaxed whitespace-pre-wrap text-gray-800">
-                          {/* 隐藏内容中的特殊标记 */}
+                          {/* 闅愯棌鍐呭涓殑鐗规畩鏍囪 */}
                           {msg.content?.replace(/\n*<!-- (RETURN_ORDER|INBOUND_ORDER|SALES_ORDER|SETTLEMENT_ORDER|CUSTOMER_DEBT|EXPORT_INBOUND|WITHDRAWAL_ORDER|GOLD_RECEIPT):[^>]+ -->/g, '')}
-                          {/* 流式生成时的闪烁光标 */}
+                          {/* 娴佸紡鐢熸垚鏃剁殑闂儊鍏夋爣 */}
                           {msg.isStreaming && (
                             <span className="inline-block w-0.5 h-4 bg-blue-500 ml-1 animate-pulse"></span>
                           )}
                         </div>
-                {/* 如果有图片，显示预览 */}
+                {/* 濡傛灉鏈夊浘鐗囷紝鏄剧ず棰勮 */}
                 {msg.image && (
                           <div className="mt-3">
                     <img 
                       src={msg.image} 
-                      alt="上传的入库单" 
+                      alt="涓婁紶鐨勫叆搴撳崟" 
                               className="max-w-full h-auto rounded-2xl border border-gray-200/60"
                       style={{ maxHeight: '300px' }}
                     />
                   </div>
                 )}
-                        {/* 提料单操作按钮 - 支持从对象或从内容解析 */}
+                        {/* 鎻愭枡鍗曟搷浣滄寜閽?- 鏀寔浠庡璞℃垨浠庡唴瀹硅В鏋?*/}
                         {(() => {
-                          // 尝试从消息对象获取，或从内容中解析隐藏标记
+                          // 灏濊瘯浠庢秷鎭璞¤幏鍙栵紝鎴栦粠鍐呭涓В鏋愰殣钘忔爣璁?
                           let withdrawalId = msg.withdrawalId
                           let downloadUrl = msg.withdrawalDownloadUrl
                           if (!withdrawalId && msg.content) {
@@ -3448,14 +3448,14 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                 </svg>
-                                打印提料单
+                                鎵撳嵃鎻愭枡鍗?
                               </button>
                             </div>
                           )
                         })()}
-                        {/* 收料单操作按钮 - 支持从对象或从内容解析 */}
+                        {/* 鏀舵枡鍗曟搷浣滄寜閽?- 鏀寔浠庡璞℃垨浠庡唴瀹硅В鏋?*/}
                         {(() => {
-                          // 尝试从消息对象获取，或从内容中解析隐藏标记
+                          // 灏濊瘯浠庢秷鎭璞¤幏鍙栵紝鎴栦粠鍐呭涓В鏋愰殣钘忔爣璁?
                           let receiptId = msg.goldReceiptId
                           let downloadUrl = msg.goldReceiptDownloadUrl
                           if (!receiptId && msg.content) {
@@ -3475,14 +3475,14 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                 </svg>
-                                打印收料单
+                                鎵撳嵃鏀舵枡鍗?
                               </button>
                             </div>
                           )
                         })()}
-                        {/* 退货单操作按钮 - 支持从对象或从内容解析 */}
+                        {/* 閫€璐у崟鎿嶄綔鎸夐挳 - 鏀寔浠庡璞℃垨浠庡唴瀹硅В鏋?*/}
                         {(() => {
-                          // 尝试从消息对象获取，或从内容中解析隐藏标记
+                          // 灏濊瘯浠庢秷鎭璞¤幏鍙栵紝鎴栦粠鍐呭涓В鏋愰殣钘忔爣璁?
                           let returnId = msg.returnOrder?.id
                           if (!returnId && msg.content) {
                             const match = msg.content.match(/<!-- RETURN_ORDER:(\d+):/)
@@ -3498,7 +3498,7 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                 </svg>
-                                打印退货单
+                                鎵撳嵃閫€璐у崟
                               </button>
                               <button
                                 onClick={() => window.open(`${API_BASE_URL}/api/returns/${returnId}/download?format=pdf`, '_blank')}
@@ -3507,14 +3507,14 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                 </svg>
-                                下载
+                                涓嬭浇
                               </button>
                             </div>
                           )
                         })()}
-                        {/* 入库单操作按钮 - 支持从对象或从内容解析 */}
+                        {/* 鍏ュ簱鍗曟搷浣滄寜閽?- 鏀寔浠庡璞℃垨浠庡唴瀹硅В鏋?*/}
                         {(() => {
-                          // 尝试从消息对象获取，或从内容中解析隐藏标记
+                          // 灏濊瘯浠庢秷鎭璞¤幏鍙栵紝鎴栦粠鍐呭涓В鏋愰殣钘忔爣璁?
                           let inboundId = msg.inboundOrder?.id
                           if (!inboundId && msg.content) {
                             const match = msg.content.match(/<!-- INBOUND_ORDER:(\d+):/)
@@ -3530,7 +3530,7 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                 </svg>
-                                打印入库单
+                                鎵撳嵃鍏ュ簱鍗?
                               </button>
                               <button
                                 onClick={() => window.open(`${API_BASE_URL}/api/inbound-orders/${inboundId}/download?format=pdf`, '_blank')}
@@ -3539,14 +3539,14 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                 </svg>
-                                下载
+                                涓嬭浇
                               </button>
                             </div>
                           )
                         })()}
-                        {/* 销售单操作按钮 - 支持从对象或从内容解析 */}
+                        {/* 閿€鍞崟鎿嶄綔鎸夐挳 - 鏀寔浠庡璞℃垨浠庡唴瀹硅В鏋?*/}
                         {(() => {
-                          // 尝试从消息对象获取，或从内容中解析隐藏标记
+                          // 灏濊瘯浠庢秷鎭璞¤幏鍙栵紝鎴栦粠鍐呭涓В鏋愰殣钘忔爣璁?
                           let salesId = msg.salesOrderId
                           if (!salesId && msg.content) {
                             const match = msg.content.match(/<!-- SALES_ORDER:(\d+):/)
@@ -3562,7 +3562,7 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                 </svg>
-                                打印销售单
+                                鎵撳嵃閿€鍞崟
                               </button>
                               <button
                                 onClick={() => window.open(`${API_BASE_URL}/api/sales/orders/${salesId}/download?format=pdf`, '_blank')}
@@ -3571,14 +3571,14 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                 </svg>
-                                下载
+                                涓嬭浇
                               </button>
                             </div>
                           )
                         })()}
-                        {/* 结算单操作按钮 - 支持从对象或从内容解析 */}
+                        {/* 缁撶畻鍗曟搷浣滄寜閽?- 鏀寔浠庡璞℃垨浠庡唴瀹硅В鏋?*/}
                         {(() => {
-                          // 尝试从消息对象获取，或从内容中解析隐藏标记
+                          // 灏濊瘯浠庢秷鎭璞¤幏鍙栵紝鎴栦粠鍐呭涓В鏋愰殣钘忔爣璁?
                           let settlementId = msg.settlementOrderId
                           if (!settlementId && msg.content) {
                             const match = msg.content.match(/<!-- SETTLEMENT_ORDER:(\d+):/)
@@ -3594,7 +3594,7 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                 </svg>
-                                打印结算单
+                                鎵撳嵃缁撶畻鍗?
                               </button>
                               <button
                                 onClick={() => window.open(`${API_BASE_URL}/api/settlement/orders/${settlementId}/download?format=pdf`, '_blank')}
@@ -3603,29 +3603,29 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                 </svg>
-                                下载
+                                涓嬭浇
                               </button>
-                              {/* 重新结算按钮 - 仅结算专员和管理层可见 */}
+                              {/* 閲嶆柊缁撶畻鎸夐挳 - 浠呯粨绠椾笓鍛樺拰绠＄悊灞傚彲瑙?*/}
                               {(userRole === 'settlement' || userRole === 'manager') && (
                                 <button
                                   onClick={async () => {
-                                    if (!confirm('确定要撤销此结算单吗？撤销后可以重新选择支付方式进行结算。')) return
+                                    if (!confirm('纭畾瑕佹挙閿€姝ょ粨绠楀崟鍚楋紵鎾ら攢鍚庡彲浠ラ噸鏂伴€夋嫨鏀粯鏂瑰紡杩涜缁撶畻銆?)) return
                                     try {
                                       const response = await fetch(`${API_BASE_URL}/api/settlement/orders/${settlementId}/revert?user_role=${userRole}`, {
                                         method: 'POST'
                                       })
                                       if (response.ok) {
                                         const result = await response.json()
-                                        alert(result.message || '结算单已撤销')
-                                        // 跳转到结算管理页面
+                                        alert(result.message || '缁撶畻鍗曞凡鎾ら攢')
+                                        // 璺宠浆鍒扮粨绠楃鐞嗛〉闈?
                                         setCurrentPage('settlement')
                                       } else {
                                         const error = await response.json()
-                                        alert('撤销失败：' + (error.detail || '未知错误'))
+                                        alert('鎾ら攢澶辫触锛? + (error.detail || '鏈煡閿欒'))
                                       }
                                     } catch (error) {
-                                      console.error('撤销结算单失败:', error)
-                                      alert('撤销失败：' + error.message)
+                                      console.error('鎾ら攢缁撶畻鍗曞け璐?', error)
+                                      alert('鎾ら攢澶辫触锛? + error.message)
                                     }
                                   }}
                                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 transition-colors"
@@ -3633,13 +3633,13 @@ function App() {
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                   </svg>
-                                  重新结算
+                                  閲嶆柊缁撶畻
                                 </button>
                               )}
                             </div>
                           )
                         })()}
-                        {/* 客户账务下载按钮 - 从内容中解析隐藏标记 */}
+                        {/* 瀹㈡埛璐﹀姟涓嬭浇鎸夐挳 - 浠庡唴瀹逛腑瑙ｆ瀽闅愯棌鏍囪 */}
                         {(() => {
                           if (!msg.content) return null
                           const match = msg.content.match(/<!-- CUSTOMER_DEBT:(\d+):(.+?) -->/)
@@ -3655,12 +3655,12 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
-                                下载账务明细 (Excel)
+                                涓嬭浇璐﹀姟鏄庣粏 (Excel)
                               </button>
                             </div>
                           )
                         })()}
-                        {/* 入库单查询导出按钮 - 从内容中解析隐藏标记 */}
+                        {/* 鍏ュ簱鍗曟煡璇㈠鍑烘寜閽?- 浠庡唴瀹逛腑瑙ｆ瀽闅愯棌鏍囪 */}
                         {(() => {
                           if (!msg.content) return null
                           const match = msg.content.match(/<!-- EXPORT_INBOUND:([^:]*):([^:]*):([^:]*):([^>]*) -->/)
@@ -3669,7 +3669,7 @@ function App() {
                           const dateEnd = match[2] || ''
                           const supplier = match[3] || ''
                           const product = match[4] || ''
-                          // 构建查询参数
+                          // 鏋勫缓鏌ヨ鍙傛暟
                           const params = new URLSearchParams()
                           if (dateStart) params.append('date_start', dateStart)
                           if (dateEnd) params.append('date_end', dateEnd)
@@ -3685,28 +3685,28 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
-                                下载入库明细 (Excel)
+                                涓嬭浇鍏ュ簱鏄庣粏 (Excel)
                               </button>
                             </div>
                           )
                         })()}
               </div>
             </div>
-            {/* 工费明细表格（单个商品查询） */}
+            {/* 宸ヨ垂鏄庣粏琛ㄦ牸锛堝崟涓晢鍝佹煡璇級 */}
             {Array.isArray(msg.laborCostDetails) && msg.laborCostDetails.length > 0 && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-4xl w-full bg-white rounded-2xl shadow-sm border border-gray-200/60 p-6">
-                  <h3 className="text-lg font-semibold mb-2">工费明细表</h3>
+                  <h3 className="text-lg font-semibold mb-2">宸ヨ垂鏄庣粏琛?/h3>
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">序号</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">工费（元/克）</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">重量（克）</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">总工费（元）</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">入库单号</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">入库时间</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">搴忓彿</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">宸ヨ垂锛堝厓/鍏嬶級</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">閲嶉噺锛堝厠锛?/th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">鎬诲伐璐癸紙鍏冿級</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">鍏ュ簱鍗曞彿</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">鍏ュ簱鏃堕棿</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
@@ -3726,7 +3726,7 @@ function App() {
                 </div>
               </div>
             )}
-                    {/* 入库核对卡片展示 */}
+                    {/* 鍏ュ簱鏍稿鍗＄墖灞曠ず */}
                     {msg.inboundCard && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-2xl w-full">
@@ -3734,10 +3734,10 @@ function App() {
                             data={msg.inboundCard}
                             actions={{
                               onConfirm: async (card) => {
-                                // 方案B：调用真实的入库API
-                                console.log('确认入库:', card)
+                                // 鏂规B锛氳皟鐢ㄧ湡瀹炵殑鍏ュ簱API
+                                console.log('纭鍏ュ簱:', card)
                                 try {
-                                  // 更新卡片状态为处理中
+                                  // 鏇存柊鍗＄墖鐘舵€佷负澶勭悊涓?
                                   setMessages(prev => prev.map(m => {
                                     if (m.id === msg.id) {
                                       return { ...m, inboundCard: updateCard(card, { status: 'processing' }) }
@@ -3745,17 +3745,17 @@ function App() {
                                     return m
                                   }))
                                   
-                                  // 调用入库API
+                                  // 璋冪敤鍏ュ簱API
                                   const { confirmInbound } = await import('./services/inboundService')
-                                  // 不使用Mock模式，确保获取真实的orderId
+                                  // 涓嶄娇鐢∕ock妯″紡锛岀‘淇濊幏鍙栫湡瀹炵殑orderId
                                   const useMock = false
                                   const result = await confirmInbound(card, useMock)
                                   
-                                  console.log('确认入库结果:', result)
-                                  console.log('订单ID:', result.order?.id)
-                                  console.log('订单号:', result.order?.order_no)
+                                  console.log('纭鍏ュ簱缁撴灉:', result)
+                                  console.log('璁㈠崟ID:', result.order?.id)
+                                  console.log('璁㈠崟鍙?', result.order?.order_no)
                                   
-                                  // 更新卡片状态和订单信息
+                                  // 鏇存柊鍗＄墖鐘舵€佸拰璁㈠崟淇℃伅
                                   setMessages(prev => prev.map(m => {
                                     if (m.id === msg.id) {
                                       const updatedCard = updateCard(card, { 
@@ -3764,22 +3764,22 @@ function App() {
                                         orderId: result.order?.id || card.orderId,
                                         barcode: result.order?.order_no || card.barcode || '',
                                       })
-                                      console.log('更新后的卡片:', updatedCard)
-                                      console.log('更新后的orderId:', updatedCard.orderId)
+                                      console.log('鏇存柊鍚庣殑鍗＄墖:', updatedCard)
+                                      console.log('鏇存柊鍚庣殑orderId:', updatedCard.orderId)
                                       return { ...m, inboundCard: updatedCard }
                                     }
                                     return m
                                   }))
                                 } catch (error) {
-                                  console.error('确认入库失败:', error)
-                                  // 更新状态为错误
+                                  console.error('纭鍏ュ簱澶辫触:', error)
+                                  // 鏇存柊鐘舵€佷负閿欒
                                   setMessages(prev => prev.map(m => {
                                     if (m.id === msg.id) {
                                       return { 
                                         ...m, 
                                         inboundCard: updateCard(card, { 
                                           status: 'error', 
-                                          errorMessage: error instanceof Error ? error.message : '入库失败'
+                                          errorMessage: error instanceof Error ? error.message : '鍏ュ簱澶辫触'
                                         }) 
                                       }
                                     }
@@ -3788,19 +3788,19 @@ function App() {
                                 }
                               },
                               onReportError: async (card, errorReason) => {
-                                // 报告数据错误
-                                console.log('报告入库数据错误:', card, errorReason)
+                                // 鎶ュ憡鏁版嵁閿欒
+                                console.log('鎶ュ憡鍏ュ簱鏁版嵁閿欒:', card, errorReason)
                                 try {
                                   const useMock = import.meta.env.DEV && import.meta.env.VITE_USE_MOCK !== 'false'
                                   await reportError(card, errorReason, useMock)
                                   setMessages(prev => prev.map(m => {
                                     if (m.id === msg.id) {
-                                      return { ...m, inboundCard: updateCard(card, { status: 'error', errorMessage: errorReason || '数据报错已提交' }) }
+                                      return { ...m, inboundCard: updateCard(card, { status: 'error', errorMessage: errorReason || '鏁版嵁鎶ラ敊宸叉彁浜? }) }
                                     }
                                     return m
                                   }))
                                 } catch (error) {
-                                  console.error('报错提交失败:', error)
+                                  console.error('鎶ラ敊鎻愪氦澶辫触:', error)
                                 }
                               },
                             }}
@@ -3808,12 +3808,12 @@ function App() {
                         </div>
                       </div>
                     )}
-                    {/* 多商品入库卡片展示 */}
+                    {/* 澶氬晢鍝佸叆搴撳崱鐗囧睍绀?*/}
                     {Array.isArray(msg.inboundCards) && msg.inboundCards.length > 0 && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-4xl w-full space-y-4">
                           <div className="text-sm text-gray-600 mb-2 font-medium">
-                            共 {msg.inboundCards.length} 个商品待入库
+                            鍏?{msg.inboundCards.length} 涓晢鍝佸緟鍏ュ簱
                           </div>
                           {msg.inboundCards.map((card, cardIndex) => (
                             <div key={card.id || cardIndex} className="border-l-4 border-amber-400 pl-3">
@@ -3821,9 +3821,9 @@ function App() {
                                 data={card}
                                 actions={{
                                   onConfirm: async (cardToConfirm) => {
-                                    console.log('确认入库单个商品:', cardToConfirm)
+                                    console.log('纭鍏ュ簱鍗曚釜鍟嗗搧:', cardToConfirm)
                                     try {
-                                      // 更新当前卡片状态为处理中
+                                      // 鏇存柊褰撳墠鍗＄墖鐘舵€佷负澶勭悊涓?
                                       setMessages(prev => prev.map(m => {
                                         if (m.id === msg.id && m.inboundCards) {
                                           const updatedCards = m.inboundCards.map((c, i) => 
@@ -3834,13 +3834,13 @@ function App() {
                                         return m
                                       }))
                                       
-                                      // 调用入库API
+                                      // 璋冪敤鍏ュ簱API
                                       const { confirmInbound } = await import('./services/inboundService')
                                       const result = await confirmInbound(cardToConfirm, false)
                                       
-                                      console.log('确认入库结果:', result)
+                                      console.log('纭鍏ュ簱缁撴灉:', result)
                                       
-                                      // 更新卡片状态
+                                      // 鏇存柊鍗＄墖鐘舵€?
                                       setMessages(prev => prev.map(m => {
                                         if (m.id === msg.id && m.inboundCards) {
                                           const updatedCards = m.inboundCards.map((c, i) => 
@@ -3856,13 +3856,13 @@ function App() {
                                         return m
                                       }))
                                     } catch (error) {
-                                      console.error('确认入库失败:', error)
+                                      console.error('纭鍏ュ簱澶辫触:', error)
                                       setMessages(prev => prev.map(m => {
                                         if (m.id === msg.id && m.inboundCards) {
                                           const updatedCards = m.inboundCards.map((c, i) => 
                                             i === cardIndex ? updateCard(c, { 
                                               status: 'error', 
-                                              errorMessage: error instanceof Error ? error.message : '入库失败'
+                                              errorMessage: error instanceof Error ? error.message : '鍏ュ簱澶辫触'
                                             }) : c
                                           )
                                           return { ...m, inboundCards: updatedCards }
@@ -3872,7 +3872,7 @@ function App() {
                                     }
                                   },
                                   onReportError: async (cardToReport, errorReason) => {
-                                    console.log('报告入库数据错误:', cardToReport, errorReason)
+                                    console.log('鎶ュ憡鍏ュ簱鏁版嵁閿欒:', cardToReport, errorReason)
                                     try {
                                       await reportError(cardToReport, errorReason, false)
                                       setMessages(prev => prev.map(m => {
@@ -3880,7 +3880,7 @@ function App() {
                                           const updatedCards = m.inboundCards.map((c, i) => 
                                             i === cardIndex ? updateCard(c, { 
                                               status: 'error', 
-                                              errorMessage: errorReason || '数据报错已提交' 
+                                              errorMessage: errorReason || '鏁版嵁鎶ラ敊宸叉彁浜? 
                                             }) : c
                                           )
                                           return { ...m, inboundCards: updatedCards }
@@ -3888,19 +3888,19 @@ function App() {
                                         return m
                                       }))
                                     } catch (error) {
-                                      console.error('报错提交失败:', error)
+                                      console.error('鎶ラ敊鎻愪氦澶辫触:', error)
                                     }
                                   },
                                 }}
                               />
                             </div>
                           ))}
-                          {/* 批量确认按钮 */}
+                          {/* 鎵归噺纭鎸夐挳 */}
                           {msg.inboundCards.some(c => c.status === 'pending') && (
                             <div className="flex gap-3 mt-4 pt-4 border-t border-gray-200">
                               <button
                                 onClick={async () => {
-                                  console.log('批量确认入库')
+                                  console.log('鎵归噺纭鍏ュ簱')
                                   const { confirmInbound } = await import('./services/inboundService')
                                   
                                   for (let i = 0; i < msg.inboundCards.length; i++) {
@@ -3908,7 +3908,7 @@ function App() {
                                     if (card.status !== 'pending') continue
                                     
                                     try {
-                                      // 更新状态为处理中
+                                      // 鏇存柊鐘舵€佷负澶勭悊涓?
                                       setMessages(prev => prev.map(m => {
                                         if (m.id === msg.id && m.inboundCards) {
                                           const updatedCards = m.inboundCards.map((c, idx) => 
@@ -3921,7 +3921,7 @@ function App() {
                                       
                                       const result = await confirmInbound(card, false)
                                       
-                                      // 更新状态为已确认
+                                      // 鏇存柊鐘舵€佷负宸茬‘璁?
                                       setMessages(prev => prev.map(m => {
                                         if (m.id === msg.id && m.inboundCards) {
                                           const updatedCards = m.inboundCards.map((c, idx) => 
@@ -3936,13 +3936,13 @@ function App() {
                                         return m
                                       }))
                                     } catch (error) {
-                                      console.error('批量入库失败:', error)
+                                      console.error('鎵归噺鍏ュ簱澶辫触:', error)
                                       setMessages(prev => prev.map(m => {
                                         if (m.id === msg.id && m.inboundCards) {
                                           const updatedCards = m.inboundCards.map((c, idx) => 
                                             idx === i ? updateCard(c, { 
                                               status: 'error',
-                                              errorMessage: error instanceof Error ? error.message : '入库失败'
+                                              errorMessage: error instanceof Error ? error.message : '鍏ュ簱澶辫触'
                                             }) : c
                                           )
                                           return { ...m, inboundCards: updatedCards }
@@ -3954,90 +3954,90 @@ function App() {
                                 }}
                                 className="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-medium hover:from-amber-600 hover:to-orange-600 transition-all shadow-md"
                               >
-                                ✓ 全部确认入库
+                                鉁?鍏ㄩ儴纭鍏ュ簱
                               </button>
                             </div>
                           )}
                         </div>
                       </div>
                     )}
-                    {/* 销售单卡片展示 */}
+                    {/* 閿€鍞崟鍗＄墖灞曠ず */}
                     {msg.salesOrder && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-4xl w-full bg-gradient-to-r from-green-50 to-blue-50 rounded-2xl shadow-lg p-6 border border-green-200/60">
-                          <h3 className="text-xl font-bold text-gray-800 mb-4">📋 销售单详情</h3>
+                          <h3 className="text-xl font-bold text-gray-800 mb-4">馃搵 閿€鍞崟璇︽儏</h3>
                           <div className="grid grid-cols-2 gap-4 mb-4">
                             <div>
-                              <span className="text-gray-600">销售单号：</span>
+                              <span className="text-gray-600">閿€鍞崟鍙凤細</span>
                               <span className="font-semibold">{msg.salesOrder.order_no}</span>
                             </div>
                             <div>
-                              <span className="text-gray-600">客户：</span>
+                              <span className="text-gray-600">瀹㈡埛锛?/span>
                               <span className="font-semibold">{msg.salesOrder.customer_name}</span>
                             </div>
                             <div>
-                              <span className="text-gray-600">业务员：</span>
+                              <span className="text-gray-600">涓氬姟鍛橈細</span>
                               <span className="font-semibold">{msg.salesOrder.salesperson}</span>
                             </div>
                             <div>
-                              <span className="text-gray-600">门店代码：</span>
-                              <span className="font-semibold">{msg.salesOrder.store_code || '未填写'}</span>
+                              <span className="text-gray-600">闂ㄥ簵浠ｇ爜锛?/span>
+                              <span className="font-semibold">{msg.salesOrder.store_code || '鏈～鍐?}</span>
                             </div>
                             <div>
-                              <span className="text-gray-600">日期：</span>
+                              <span className="text-gray-600">鏃ユ湡锛?/span>
                               <span className="font-semibold">{new Date(msg.salesOrder.order_date).toLocaleString('zh-CN')}</span>
                             </div>
                             <div>
-                              <span className="text-gray-600">状态：</span>
+                              <span className="text-gray-600">鐘舵€侊細</span>
                               <span className={`font-semibold ${
-                                msg.salesOrder.status === '已结算' ? 'text-green-600' : 
-                                msg.salesOrder.status === '待结算' ? 'text-yellow-600' : 
+                                msg.salesOrder.status === '宸茬粨绠? ? 'text-green-600' : 
+                                msg.salesOrder.status === '寰呯粨绠? ? 'text-yellow-600' : 
                                 'text-gray-600'
                               }`}>
                                 {msg.salesOrder.status}
                               </span>
                             </div>
                           </div>
-                          {/* 商品明细表格 */}
+                          {/* 鍟嗗搧鏄庣粏琛ㄦ牸 */}
                           {Array.isArray(msg.salesOrder?.details) && msg.salesOrder.details.length > 0 && (
                             <div className="mt-4">
-                              <h4 className="font-semibold mb-2 text-gray-700">商品明细</h4>
+                              <h4 className="font-semibold mb-2 text-gray-700">鍟嗗搧鏄庣粏</h4>
                               <div className="overflow-x-auto">
                                 <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg">
                                   <thead className="bg-gray-100">
                                     <tr>
-                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">商品名称</th>
-                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">克重</th>
-                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">工费</th>
-                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">总工费</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">鍟嗗搧鍚嶇О</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">鍏嬮噸</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">宸ヨ垂</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">鎬诲伐璐?/th>
                                     </tr>
                                   </thead>
                                   <tbody className="bg-white divide-y divide-gray-200">
                                     {msg.salesOrder.details.map((detail, idx) => (
                                       <tr key={idx} className="hover:bg-gray-50">
                                         <td className="px-4 py-2 text-sm text-gray-900">{detail.product_name}</td>
-                                        <td className="px-4 py-2 text-sm text-gray-900">{detail.weight}克</td>
-                                        <td className="px-4 py-2 text-sm text-gray-900">{detail.labor_cost}元/克</td>
-                                        <td className="px-4 py-2 text-sm font-semibold text-gray-900">{detail.total_labor_cost.toFixed(2)}元</td>
+                                        <td className="px-4 py-2 text-sm text-gray-900">{detail.weight}鍏?/td>
+                                        <td className="px-4 py-2 text-sm text-gray-900">{detail.labor_cost}鍏?鍏?/td>
+                                        <td className="px-4 py-2 text-sm font-semibold text-gray-900">{detail.total_labor_cost.toFixed(2)}鍏?/td>
                                       </tr>
                                     ))}
                                   </tbody>
                                 </table>
                               </div>
                               <div className="mt-4 flex justify-end space-x-6 text-lg font-bold text-gray-800">
-                                <span>总克重：<span className="text-blue-600">{msg.salesOrder.total_weight}克</span></span>
-                                <span>总工费：<span className="text-green-600">{msg.salesOrder.total_labor_cost.toFixed(2)}元</span></span>
+                                <span>鎬诲厠閲嶏細<span className="text-blue-600">{msg.salesOrder.total_weight}鍏?/span></span>
+                                <span>鎬诲伐璐癸細<span className="text-green-600">{msg.salesOrder.total_labor_cost.toFixed(2)}鍏?/span></span>
                               </div>
                             </div>
                           )}
                         </div>
                       </div>
                     )}
-                    {/* 库存检查错误提示卡片 */}
+                    {/* 搴撳瓨妫€鏌ラ敊璇彁绀哄崱鐗?*/}
                     {Array.isArray(msg.inventoryErrors) && msg.inventoryErrors.length > 0 && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-4xl w-full bg-red-50 rounded-2xl shadow-sm p-6 border border-red-200/60">
-                          <h3 className="text-xl font-bold text-red-800 mb-4">❌ 库存检查失败</h3>
+                          <h3 className="text-xl font-bold text-red-800 mb-4">鉂?搴撳瓨妫€鏌ュけ璐?/h3>
                           <div className="space-y-4">
                             {msg.inventoryErrors.map((error, idx) => (
                               <div key={idx} className="bg-white rounded-lg p-4 border border-red-200">
@@ -4046,27 +4046,27 @@ function App() {
                                 </div>
                                 <div className="text-sm text-gray-700 space-y-1">
                                   <div className="flex items-center">
-                                    <span className="text-red-600 font-medium">错误：</span>
+                                    <span className="text-red-600 font-medium">閿欒锛?/span>
                                     <span className="ml-2">{error.error}</span>
                                   </div>
                                   <div className="flex items-center">
-                                    <span className="text-gray-600">需要：</span>
-                                    <span className="ml-2 font-semibold">{error.required_weight}克</span>
+                                    <span className="text-gray-600">闇€瑕侊細</span>
+                                    <span className="ml-2 font-semibold">{error.required_weight}鍏?/span>
                                   </div>
                                   <div className="flex items-center">
-                                    <span className="text-gray-600">可用：</span>
-                                    <span className="ml-2 font-semibold text-red-600">{error.available_weight}克</span>
+                                    <span className="text-gray-600">鍙敤锛?/span>
+                                    <span className="ml-2 font-semibold text-red-600">{error.available_weight}鍏?/span>
                                   </div>
                                   {error.reserved_weight !== undefined && (
                                     <div className="flex items-center">
-                                      <span className="text-gray-600">已预留：</span>
-                                      <span className="ml-2 font-semibold">{error.reserved_weight}克</span>
+                                      <span className="text-gray-600">宸查鐣欙細</span>
+                                      <span className="ml-2 font-semibold">{error.reserved_weight}鍏?/span>
                                     </div>
                                   )}
                                   {error.total_weight !== undefined && (
                                     <div className="flex items-center">
-                                      <span className="text-gray-600">总库存：</span>
-                                      <span className="ml-2 font-semibold">{error.total_weight}克</span>
+                                      <span className="text-gray-600">鎬诲簱瀛橈細</span>
+                                      <span className="ml-2 font-semibold">{error.total_weight}鍏?/span>
                                     </div>
                                   )}
                                 </div>
@@ -4076,13 +4076,13 @@ function App() {
                         </div>
                       </div>
                     )}
-            {/* 图表展示 */}
+            {/* 鍥捐〃灞曠ず */}
             {msg.chartData && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-5xl w-full bg-white rounded-2xl shadow-sm border border-gray-200/60 p-6">
-                          {/* 图表网格布局 */}
+                          {/* 鍥捐〃缃戞牸甯冨眬 */}
                           <div className={`grid gap-6 ${msg.pieData ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
-                            {/* 柱状图/折线图 */}
+                            {/* 鏌辩姸鍥?鎶樼嚎鍥?*/}
                             <div className="bg-gray-50 rounded-xl p-4">
                               {msg.lineData ? (
                                 <Line 
@@ -4093,7 +4093,7 @@ function App() {
                                       legend: { position: 'top' },
                                       title: {
                                         display: true,
-                                        text: msg.chartTitle || '趋势分析（折线图）',
+                                        text: msg.chartTitle || '瓒嬪娍鍒嗘瀽锛堟姌绾垮浘锛?,
                                         font: { size: 14, weight: 'bold' }
                                       },
                                     },
@@ -4112,12 +4112,12 @@ function App() {
                         title: {
                           display: true,
                                         text: (() => {
-                                          if (msg.chartType === '供应商分析' || msg.chartType === '生成图表') {
-                                            return '供应商对比分析（柱状图）'
-                                          } else if (msg.chartType === '查询库存') {
-                                            return '📊 库存统计图表'
+                                          if (msg.chartType === '渚涘簲鍟嗗垎鏋? || msg.chartType === '鐢熸垚鍥捐〃') {
+                                            return '渚涘簲鍟嗗姣斿垎鏋愶紙鏌辩姸鍥撅級'
+                                          } else if (msg.chartType === '鏌ヨ搴撳瓨') {
+                                            return '馃搳 搴撳瓨缁熻鍥捐〃'
                                           }
-                                          return '数据统计图表'
+                                          return '鏁版嵁缁熻鍥捐〃'
                                         })(),
                                         font: { size: 14, weight: 'bold' }
                         },
@@ -4126,7 +4126,7 @@ function App() {
                             label: function(context) {
                               const label = context.dataset.label || '';
                               const value = context.parsed.y;
-                              const unit = label.includes('工费') ? ' 元' : ' 克';
+                              const unit = label.includes('宸ヨ垂') ? ' 鍏? : ' 鍏?;
                               return `${label}: ${value.toLocaleString()}${unit}`;
                             }
                           }
@@ -4135,10 +4135,10 @@ function App() {
                       scales: {
                         y: {
                           beginAtZero: true,
-                                        title: { display: true, text: '重量（克）' }
+                                        title: { display: true, text: '閲嶉噺锛堝厠锛? }
                         },
                         x: {
-                                        title: { display: true, text: '商品名称' }
+                                        title: { display: true, text: '鍟嗗搧鍚嶇О' }
                         }
                       }
                     }} 
@@ -4146,7 +4146,7 @@ function App() {
                               )}
                             </div>
                   
-                            {/* 环形图（替代饼图，更现代） */}
+                            {/* 鐜舰鍥撅紙鏇夸唬楗煎浘锛屾洿鐜颁唬锛?*/}
                   {msg.pieData && (
                               <div className="bg-gray-50 rounded-xl p-4">
                                 <Doughnut 
@@ -4158,10 +4158,10 @@ function App() {
                             title: {
                               display: true,
                                         text: (() => {
-                                          if (msg.chartType === '供应商分析' || msg.chartType === '生成图表') {
-                                            return '🍩 供应商占比分布'
+                                          if (msg.chartType === '渚涘簲鍟嗗垎鏋? || msg.chartType === '鐢熸垚鍥捐〃') {
+                                            return '馃崺 渚涘簲鍟嗗崰姣斿垎甯?
                                           }
-                                          return '🍩 库存占比分布'
+                                          return '馃崺 搴撳瓨鍗犳瘮鍒嗗竷'
                                         })(),
                                         font: { size: 14, weight: 'bold' }
                                       },
@@ -4172,7 +4172,7 @@ function App() {
                                   const value = context.parsed;
                                   const total = context.dataset.data.reduce((a, b) => a + b, 0);
                                   const percentage = ((value / total) * 100).toFixed(1);
-                                  return `${label}: ${value.toLocaleString()} 元 (${percentage}%)`;
+                                  return `${label}: ${value.toLocaleString()} 鍏?(${percentage}%)`;
                                 }
                               }
                             }
@@ -4183,22 +4183,22 @@ function App() {
                     </div>
                   )}
                       </div>
-                          {/* 查看详细数据折叠面板 */}
+                          {/* 鏌ョ湅璇︾粏鏁版嵁鎶樺彔闈㈡澘 */}
                           {msg.rawData && (msg.rawData.suppliers || msg.rawData.inventory) && (
                             <details className="mt-4 border-t border-gray-100 pt-4">
                               <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
-                                <span>📊 查看详细数据</span>
+                                <span>馃搳 鏌ョ湅璇︾粏鏁版嵁</span>
                               </summary>
                               <div className="mt-3 overflow-x-auto">
-                                {/* 供应商数据表格 */}
+                                {/* 渚涘簲鍟嗘暟鎹〃鏍?*/}
                                 {msg.rawData.suppliers && msg.rawData.suppliers.length > 0 && (
                                   <table className="min-w-full text-sm">
                                     <thead className="bg-gray-50">
                                       <tr>
-                                        <th className="px-3 py-2 text-left font-medium text-gray-600">供应商</th>
-                                        <th className="px-3 py-2 text-right font-medium text-gray-600">供货重量(克)</th>
-                                        <th className="px-3 py-2 text-right font-medium text-gray-600">总工费(元)</th>
-                                        <th className="px-3 py-2 text-right font-medium text-gray-600">供货次数</th>
+                                        <th className="px-3 py-2 text-left font-medium text-gray-600">渚涘簲鍟?/th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-600">渚涜揣閲嶉噺(鍏?</th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-600">鎬诲伐璐?鍏?</th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-600">渚涜揣娆℃暟</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -4213,14 +4213,14 @@ function App() {
                                     </tbody>
                                   </table>
                                 )}
-                                {/* 库存数据表格 */}
+                                {/* 搴撳瓨鏁版嵁琛ㄦ牸 */}
                                 {msg.rawData.inventory && msg.rawData.inventory.length > 0 && (
                                   <table className="min-w-full text-sm">
                                     <thead className="bg-gray-50">
                                       <tr>
-                                        <th className="px-3 py-2 text-left font-medium text-gray-600">商品名称</th>
-                                        <th className="px-3 py-2 text-right font-medium text-gray-600">库存重量(克)</th>
-                                        <th className="px-3 py-2 text-right font-medium text-gray-600">入库次数</th>
+                                        <th className="px-3 py-2 text-left font-medium text-gray-600">鍟嗗搧鍚嶇О</th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-600">搴撳瓨閲嶉噺(鍏?</th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-600">鍏ュ簱娆℃暟</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -4247,15 +4247,15 @@ function App() {
               return null
             })}
 
-        {/* AI思考状态动画 - 珠宝风格 */}
+        {/* AI鎬濊€冪姸鎬佸姩鐢?- 鐝犲疂椋庢牸 */}
         {(loading || uploading) && (
           <div className="flex justify-start items-start gap-3">
-            {/* AI头像 + 脉冲动画 */}
+            {/* AI澶村儚 + 鑴夊啿鍔ㄧ敾 */}
             <div className="relative flex-shrink-0">
               <img src="/ai-avatar.png" alt="AI" className="w-9 h-9 rounded-full object-cover shadow-lg" />
               <div className="absolute inset-0 bg-amber-400 rounded-full animate-ping opacity-30"></div>
             </div>
-            {/* 思考气泡 */}
+            {/* 鎬濊€冩皵娉?*/}
             <div className="bg-gradient-to-br from-white to-amber-50 rounded-3xl px-5 py-4 shadow-sm border border-amber-100">
               <div className="flex items-center gap-3">
                 <div className="flex space-x-1.5">
@@ -4264,7 +4264,7 @@ function App() {
                   <div className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
                 </div>
                 <span className="text-sm text-amber-600 font-medium">
-                  {uploading ? 'AI正在识别图片...' : 'AI正在分析...'}
+                  {uploading ? 'AI姝ｅ湪璇嗗埆鍥剧墖...' : 'AI姝ｅ湪鍒嗘瀽...'}
                 </span>
               </div>
             </div>
@@ -4275,12 +4275,12 @@ function App() {
           </div>
       </div>
 
-      {/* OCR识别编辑对话框 */}
+      {/* OCR璇嗗埆缂栬緫瀵硅瘽妗?*/}
       {showOCRModal && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4"
           onClick={(e) => {
-            // 点击背景关闭对话框
+            // 鐐瑰嚮鑳屾櫙鍏抽棴瀵硅瘽妗?
             if (e.target === e.currentTarget) {
               setShowOCRModal(false)
               setOcrResult('')
@@ -4289,12 +4289,12 @@ function App() {
           }}
         >
           <div className="bg-white rounded-lg shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
-            {/* 对话框标题栏 */}
+            {/* 瀵硅瘽妗嗘爣棰樻爮 */}
             <div className="px-4 sm:px-6 py-4 border-b flex justify-between items-center bg-gray-50">
               <div className="flex items-center space-x-2">
-                <span className="text-2xl">📝</span>
+                <span className="text-2xl">馃摑</span>
                 <h2 className="text-lg sm:text-xl font-semibold text-gray-800">
-                  审核并编辑识别内容
+                  瀹℃牳骞剁紪杈戣瘑鍒唴瀹?
                 </h2>
               </div>
               <button
@@ -4304,71 +4304,71 @@ function App() {
                   setUploadedImage(null)
                 }}
                 className="text-gray-400 hover:text-gray-600 text-3xl font-light w-8 h-8 flex items-center justify-center transition-colors"
-                title="关闭"
+                title="鍏抽棴"
               >
-                ×
+                脳
               </button>
             </div>
             
-            {/* 对话框内容区域 */}
+            {/* 瀵硅瘽妗嗗唴瀹瑰尯鍩?*/}
             <div className="flex-1 overflow-hidden flex flex-col sm:flex-row">
-              {/* 左侧：图片预览（桌面端显示，移动端隐藏或折叠） */}
+              {/* 宸︿晶锛氬浘鐗囬瑙堬紙妗岄潰绔樉绀猴紝绉诲姩绔殣钘忔垨鎶樺彔锛?*/}
               {uploadedImage && (
                 <div className="hidden sm:block w-80 border-r bg-gray-50 p-4 overflow-y-auto">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">原始图片</h3>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">鍘熷鍥剧墖</h3>
                   <div className="bg-white rounded-lg p-2 shadow-sm">
                     <img 
                       src={uploadedImage} 
-                      alt="上传的入库单" 
+                      alt="涓婁紶鐨勫叆搴撳崟" 
                       className="w-full h-auto rounded border border-gray-200"
                     />
                   </div>
                   <p className="text-xs text-gray-500 mt-3">
-                    请对照图片检查识别内容是否正确
+                    璇峰鐓у浘鐗囨鏌ヨ瘑鍒唴瀹规槸鍚︽纭?
                   </p>
                 </div>
               )}
               
-              {/* 右侧：编辑区域 */}
+              {/* 鍙充晶锛氱紪杈戝尯鍩?*/}
               <div className="flex-1 flex flex-col overflow-hidden">
-                {/* 提示信息 */}
+                {/* 鎻愮ず淇℃伅 */}
                 <div className="px-4 sm:px-6 py-3 sm:py-4 border-b bg-blue-50">
                   <p className="text-xs sm:text-sm text-blue-800 font-medium mb-1">
-                    ⚠️ 请检查并编辑识别内容，确认无误后点击"确认入库"
+                    鈿狅笍 璇锋鏌ュ苟缂栬緫璇嗗埆鍐呭锛岀‘璁ゆ棤璇悗鐐瑰嚮"纭鍏ュ簱"
                   </p>
                   <ul className="text-xs text-blue-700 list-disc list-inside space-y-0.5 mt-2">
-                    <li>检查商品名称是否正确</li>
-                    <li>检查重量、工费、供应商等信息</li>
-                    <li>可以手动编辑修改内容</li>
+                    <li>妫€鏌ュ晢鍝佸悕绉版槸鍚︽纭?/li>
+                    <li>妫€鏌ラ噸閲忋€佸伐璐广€佷緵搴斿晢绛変俊鎭?/li>
+                    <li>鍙互鎵嬪姩缂栬緫淇敼鍐呭</li>
                   </ul>
                 </div>
                 
-                {/* 文本编辑区域 */}
+                {/* 鏂囨湰缂栬緫鍖哄煙 */}
                 <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
                   <LineNumberedTextarea
                     ref={ocrTextareaRef}
                     value={ocrResult}
                     onChange={(e) => setOcrResult(e.target.value)}
-                    placeholder="识别出的文字内容将显示在这里..."
+                    placeholder="璇嗗埆鍑虹殑鏂囧瓧鍐呭灏嗘樉绀哄湪杩欓噷..."
                     className="min-h-[300px]"
                   />
                 </div>
               </div>
             </div>
             
-            {/* 移动端图片预览（可选，在编辑区域下方显示） */}
+            {/* 绉诲姩绔浘鐗囬瑙堬紙鍙€夛紝鍦ㄧ紪杈戝尯鍩熶笅鏂规樉绀猴級 */}
             {uploadedImage && (
               <div className="sm:hidden border-t bg-gray-50 p-4 max-h-48 overflow-y-auto">
-                <h3 className="text-xs font-semibold text-gray-700 mb-2">原始图片</h3>
+                <h3 className="text-xs font-semibold text-gray-700 mb-2">鍘熷鍥剧墖</h3>
                 <img 
                   src={uploadedImage} 
-                  alt="上传的入库单" 
+                  alt="涓婁紶鐨勫叆搴撳崟" 
                   className="w-full h-auto rounded border border-gray-200"
                 />
               </div>
             )}
             
-            {/* 对话框底部按钮 */}
+            {/* 瀵硅瘽妗嗗簳閮ㄦ寜閽?*/}
             <div className="px-4 sm:px-6 py-4 border-t bg-gray-50 flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-4">
               <button
                 onClick={() => {
@@ -4378,25 +4378,25 @@ function App() {
                 }}
                 className="w-full sm:w-auto px-6 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-white transition-colors font-medium order-2 sm:order-1"
               >
-                取消
+                鍙栨秷
               </button>
               <button
                 onClick={handleConfirmInbound}
                 disabled={loading || !ocrResult.trim()}
                 className="w-full sm:w-auto px-8 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium order-1 sm:order-2"
               >
-                {loading ? '处理中...' : '确认入库'}
+                {loading ? '澶勭悊涓?..' : '纭鍏ュ簱'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-        {/* 输入区域 - 苹果风格 */}
+        {/* 杈撳叆鍖哄煙 - 鑻规灉椋庢牸 */}
         <footer className="bg-white/80 backdrop-blur-xl border-t border-gray-200/60 px-6 py-5">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-end space-x-3">
-              {/* 快捷入库按钮 - 仅商品专员可见 */}
+              {/* 蹇嵎鍏ュ簱鎸夐挳 - 浠呭晢鍝佷笓鍛樺彲瑙?*/}
               {userRole === 'product' && (
                 <button
                   onClick={() => setShowQuickInboundModal(true)}
@@ -4409,13 +4409,13 @@ function App() {
                       : 'bg-orange-500 text-white hover:bg-orange-600 shadow-sm hover:shadow-md'
                     }
                   `}
-                  title="快捷入库"
+                  title="蹇嵎鍏ュ簱"
                 >
-                  📦 入库
+                  馃摝 鍏ュ簱
                 </button>
               )}
 
-              {/* 快速开单按钮 - 仅柜台可见（结算专员不需要） */}
+              {/* 蹇€熷紑鍗曟寜閽?- 浠呮煖鍙板彲瑙侊紙缁撶畻涓撳憳涓嶉渶瑕侊級 */}
               {userRole === 'counter' && (
                 <button
                   onClick={() => setShowQuickOrderModal(true)}
@@ -4428,13 +4428,13 @@ function App() {
                       : 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm hover:shadow-md'
                     }
                   `}
-                  title="快速开单"
+                  title="蹇€熷紑鍗?
                 >
-                  📝 开单
+                  馃摑 寮€鍗?
                 </button>
               )}
 
-              {/* 快捷退货按钮 - 商品专员和柜台可见 */}
+              {/* 蹇嵎閫€璐ф寜閽?- 鍟嗗搧涓撳憳鍜屾煖鍙板彲瑙?*/}
               {(userRole === 'product' || userRole === 'counter') && (
                 <button
                   onClick={() => setShowQuickReturnModal(true)}
@@ -4447,13 +4447,13 @@ function App() {
                       : 'bg-red-500 text-white hover:bg-red-600 shadow-sm hover:shadow-md'
                     }
                   `}
-                  title="快捷退货"
+                  title="蹇嵎閫€璐?
                 >
-                  ↩️ 退货
+                  鈫╋笍 閫€璐?
                 </button>
               )}
 
-          {/* 图片上传按钮 */}
+          {/* 鍥剧墖涓婁紶鎸夐挳 */}
           <input
             ref={fileInputRef}
             type="file"
@@ -4465,7 +4465,7 @@ function App() {
           />
           <label
             htmlFor="image-upload"
-            title="OCR识别入库单据 - 支持拍照或上传单据图片自动识别"
+            title="OCR璇嗗埆鍏ュ簱鍗曟嵁 - 鏀寔鎷嶇収鎴栦笂浼犲崟鎹浘鐗囪嚜鍔ㄨ瘑鍒?
                 className={`
                   px-4 py-3 rounded-2xl cursor-pointer transition-all duration-200
                   h-[52px] flex items-center font-medium text-[15px]
@@ -4475,25 +4475,25 @@ function App() {
                   }
                 `}
               >
-                {uploading ? `📷 ${t('chat.scanning')}` : `📷 ${t('chat.scan')}`}
+                {uploading ? `馃摲 ${t('chat.scanning')}` : `馃摲 ${t('chat.scan')}`}
           </label>
 
-          {/* 快捷收料/提料按钮 - 结算专员和管理层可见 */}
+          {/* 蹇嵎鏀舵枡/鎻愭枡鎸夐挳 - 缁撶畻涓撳憳鍜岀鐞嗗眰鍙 */}
           {(userRole === 'settlement' || userRole === 'manager') && (
             <>
               <button
                 onClick={openQuickReceiptModal}
                 className="px-4 py-3 rounded-2xl h-[52px] flex items-center font-medium text-[15px] bg-gradient-to-r from-jewelry-gold to-jewelry-gold-light text-white hover:from-jewelry-gold-dark hover:to-jewelry-gold shadow-sm hover:shadow-md transition-all duration-200"
-                title={currentLanguage === 'en' ? 'Quick Receipt' : '快捷收料'}
+                title={currentLanguage === 'en' ? 'Quick Receipt' : '蹇嵎鏀舵枡'}
               >
-                📦 {t('chat.receipt')}
+                馃摝 {t('chat.receipt')}
               </button>
               <button
                 onClick={openQuickWithdrawalModal}
                 className="px-4 py-3 rounded-2xl h-[52px] flex items-center font-medium text-[15px] border-2 border-jewelry-navy text-jewelry-navy hover:bg-jewelry-navy hover:text-white transition-all duration-200"
-                title={currentLanguage === 'en' ? 'Quick Withdrawal' : '快捷提料'}
+                title={currentLanguage === 'en' ? 'Quick Withdrawal' : '蹇嵎鎻愭枡'}
               >
-                ⬆️ {t('chat.withdrawal')}
+                猬嗭笍 {t('chat.withdrawal')}
               </button>
             </>
           )}
@@ -4559,30 +4559,30 @@ function App() {
           <div className="flex-1 overflow-y-auto">
             <SettlementPage 
               onSettlementConfirmed={(data) => {
-                // 结算单确认后，在聊天框显示明细
+                // 缁撶畻鍗曠‘璁ゅ悗锛屽湪鑱婂ぉ妗嗘樉绀烘槑缁?
                 const itemsList = (Array.isArray(data?.details) ? data.details : []).map((item, idx) => 
-                  `${idx + 1}. ${item.product_name}：${item.weight}克 × ¥${item.labor_cost}/克 = ¥${item.total_labor_cost.toFixed(2)}`
+                  `${idx + 1}. ${item.product_name}锛?{item.weight}鍏?脳 楼${item.labor_cost}/鍏?= 楼${item.total_labor_cost.toFixed(2)}`
                 ).join('\n')
                 
-                const paymentMethodStr = data.payment_method === 'cash_price' ? '结价' : 
-                          data.payment_method === 'mixed' ? '混合支付' : '结料'
+                const paymentMethodStr = data.payment_method === 'cash_price' ? '缁撲环' : 
+                          data.payment_method === 'mixed' ? '娣峰悎鏀粯' : '缁撴枡'
                 
-                const settlementMessage = `✅ **结算单确认成功**
+                const settlementMessage = `鉁?**缁撶畻鍗曠‘璁ゆ垚鍔?*
 
-📋 **结算单号**：${data.settlement_no}
-👤 **客户**：${data.customer_name}
-🧑‍💼 **业务员**：${data.salesperson}
-💳 **支付方式**：${paymentMethodStr}
+馃搵 **缁撶畻鍗曞彿**锛?{data.settlement_no}
+馃懁 **瀹㈡埛**锛?{data.customer_name}
+馃鈥嶐煉?**涓氬姟鍛?*锛?{data.salesperson}
+馃挸 **鏀粯鏂瑰紡**锛?{paymentMethodStr}
 
-📦 **商品明细**：
+馃摝 **鍟嗗搧鏄庣粏**锛?
 ${itemsList}
 
-📊 **汇总**：
-- 总克重：${data.total_weight.toFixed(2)}克
-- 工费合计：¥${data.labor_amount.toFixed(2)}
-${data.gold_price ? `- 金价：${data.gold_price.toFixed(2)} 元/克` : ''}
-${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(2)}` : ''}
-- **应收总计：¥${data.total_amount.toFixed(2)}**
+馃搳 **姹囨€?*锛?
+- 鎬诲厠閲嶏細${data.total_weight.toFixed(2)}鍏?
+- 宸ヨ垂鍚堣锛毬?{data.labor_amount.toFixed(2)}
+${data.gold_price ? `- 閲戜环锛?{data.gold_price.toFixed(2)} 鍏?鍏媊 : ''}
+${data.material_amount > 0 ? `- 閲戞枡閲戦锛毬?{data.material_amount.toFixed(2)}` : ''}
+- **搴旀敹鎬昏锛毬?{data.total_amount.toFixed(2)}**
 
 <!-- SETTLEMENT_ORDER:${data.settlement_id}:${data.settlement_no} -->`
 
@@ -4593,7 +4593,7 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
                   settlementOrderNo: data.settlement_no
                 }])
                 
-                // 保存到聊天历史
+                // 淇濆瓨鍒拌亰澶╁巻鍙?
                 if (currentSessionId) {
                   const params = new URLSearchParams({
                     session_id: currentSessionId,
@@ -4603,10 +4603,10 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
                   })
                   fetch(`${API_BASE_URL}/api/chat-logs/message?${params}`, {
                     method: 'POST'
-                  }).catch(err => console.error('保存结算单消息失败:', err))
+                  }).catch(err => console.error('淇濆瓨缁撶畻鍗曟秷鎭け璐?', err))
                 }
                 
-                // 切换回聊天页面
+                // 鍒囨崲鍥炶亰澶╅〉闈?
                 setCurrentPage('chat')
               }}
             />
@@ -4684,29 +4684,29 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
         )}
       </div>
 
-      {/* 快捷开单弹窗 - 仅柜台可用（结算专员不需要） */}
+      {/* 蹇嵎寮€鍗曞脊绐?- 浠呮煖鍙板彲鐢紙缁撶畻涓撳憳涓嶉渶瑕侊級 */}
       {userRole === 'counter' && (
         <QuickOrderModal
           isOpen={showQuickOrderModal}
           onClose={() => setShowQuickOrderModal(false)}
           onSuccess={(result) => {
-            // 开单成功后在聊天框显示销售单明细
+            // 寮€鍗曟垚鍔熷悗鍦ㄨ亰澶╂鏄剧ず閿€鍞崟鏄庣粏
             const itemsList = (Array.isArray(result?.items) ? result.items : []).map((item, idx) => 
-              `${idx + 1}. ${item.product_name}：${item.weight}克 × ¥${item.labor_cost}/克 = ¥${(item.weight * item.labor_cost).toFixed(2)}`
+              `${idx + 1}. ${item.product_name}锛?{item.weight}鍏?脳 楼${item.labor_cost}/鍏?= 楼${(item.weight * item.labor_cost).toFixed(2)}`
             ).join('\n')
             
-            const salesMessage = `✅ **销售单创建成功**
+            const salesMessage = `鉁?**閿€鍞崟鍒涘缓鎴愬姛**
 
-📋 **销售单号**：${result.order_no}
-👤 **客户**：${result.customer_name}
-🧑‍💼 **业务员**：${result.salesperson}
+馃搵 **閿€鍞崟鍙?*锛?{result.order_no}
+馃懁 **瀹㈡埛**锛?{result.customer_name}
+馃鈥嶐煉?**涓氬姟鍛?*锛?{result.salesperson}
 
-📦 **商品明细**：
+馃摝 **鍟嗗搧鏄庣粏**锛?
 ${itemsList}
 
-📊 **汇总**：
-- 总克重：${result.total_weight.toFixed(2)}克
-- 总工费：¥${result.total_labor_cost.toFixed(2)}
+馃搳 **姹囨€?*锛?
+- 鎬诲厠閲嶏細${result.total_weight.toFixed(2)}鍏?
+- 鎬诲伐璐癸細楼${result.total_labor_cost.toFixed(2)}
 
 <!-- SALES_ORDER:${result.order_id}:${result.order_no} -->`
 
@@ -4717,7 +4717,7 @@ ${itemsList}
               salesOrderNo: result.order_no
             }])
             
-            // 保存到聊天历史
+            // 淇濆瓨鍒拌亰澶╁巻鍙?
             if (currentSessionId) {
               const params = new URLSearchParams({
                 session_id: currentSessionId,
@@ -4727,22 +4727,22 @@ ${itemsList}
               })
               fetch(`${API_BASE_URL}/api/chat-logs/message?${params}`, {
                 method: 'POST'
-              }).catch(err => console.error('保存销售单消息失败:', err))
+              }).catch(err => console.error('淇濆瓨閿€鍞崟娑堟伅澶辫触:', err))
             }
           }}
         />
       )}
 
-      {/* 快捷退货弹窗 - 商品专员和柜台可用 */}
+      {/* 蹇嵎閫€璐у脊绐?- 鍟嗗搧涓撳憳鍜屾煖鍙板彲鐢?*/}
       {(hasPermission(userRole, 'canReturnToSupplier') || hasPermission(userRole, 'canReturnToWarehouse')) && (
         <QuickReturnModal
           isOpen={showQuickReturnModal}
           onClose={() => setShowQuickReturnModal(false)}
           onSuccess={async (result) => {
-            // 构建退货成功的消息内容（包含隐藏的ID标记，用于历史记录中显示打印按钮）
-            const returnMessage = `✅ **退货单创建成功**\n\n📋 单号：${result.return_no}\n📦 商品数量：${result.item_count}个\n⚖️ 总退货克重：${result.total_weight?.toFixed(2) || 0}克\n💰 总工费：¥${result.total_labor_cost?.toFixed(2) || 0}\n📝 退货原因：${result.return_reason}${result.supplier_name ? `\n🏭 供应商：${result.supplier_name}` : ''}${result.from_location_name ? `\n📍 发起位置：${result.from_location_name}` : ''}\n\n<!-- RETURN_ORDER:${result.return_id}:${result.return_no} -->`
+            // 鏋勫缓閫€璐ф垚鍔熺殑娑堟伅鍐呭锛堝寘鍚殣钘忕殑ID鏍囪锛岀敤浜庡巻鍙茶褰曚腑鏄剧ず鎵撳嵃鎸夐挳锛?
+            const returnMessage = `鉁?**閫€璐у崟鍒涘缓鎴愬姛**\n\n馃搵 鍗曞彿锛?{result.return_no}\n馃摝 鍟嗗搧鏁伴噺锛?{result.item_count}涓猏n鈿栵笍 鎬婚€€璐у厠閲嶏細${result.total_weight?.toFixed(2) || 0}鍏媆n馃挵 鎬诲伐璐癸細楼${result.total_labor_cost?.toFixed(2) || 0}\n馃摑 閫€璐у師鍥狅細${result.return_reason}${result.supplier_name ? `\n馃彮 渚涘簲鍟嗭細${result.supplier_name}` : ''}${result.from_location_name ? `\n馃搷 鍙戣捣浣嶇疆锛?{result.from_location_name}` : ''}\n\n<!-- RETURN_ORDER:${result.return_id}:${result.return_no} -->`
             
-            // 添加到聊天记录显示（包含退货单信息，用于下载/打印）
+            // 娣诲姞鍒拌亰澶╄褰曟樉绀猴紙鍖呭惈閫€璐у崟淇℃伅锛岀敤浜庝笅杞?鎵撳嵃锛?
             setMessages(prev => [...prev, {
               type: 'system',
               content: returnMessage,
@@ -4752,41 +4752,41 @@ ${itemsList}
               }
             }])
             
-            // 保存到后端聊天历史（包含ID标记）
+            // 淇濆瓨鍒板悗绔亰澶╁巻鍙诧紙鍖呭惈ID鏍囪锛?
             try {
-              await fetch(`${API_BASE_URL}/api/chat-logs/message?session_id=${encodeURIComponent(currentSessionId)}&message_type=assistant&content=${encodeURIComponent(returnMessage)}&user_role=${userRole}&intent=退货`, {
+              await fetch(`${API_BASE_URL}/api/chat-logs/message?session_id=${encodeURIComponent(currentSessionId)}&message_type=assistant&content=${encodeURIComponent(returnMessage)}&user_role=${userRole}&intent=閫€璐, {
                 method: 'POST'
               })
             } catch (error) {
-              console.error('保存退货记录到聊天历史失败:', error)
+              console.error('淇濆瓨閫€璐ц褰曞埌鑱婂ぉ鍘嗗彶澶辫触:', error)
             }
           }}
           userRole={userRole}
         />
       )}
 
-      {/* 快捷入库弹窗 - 需要入库权限 */}
+      {/* 蹇嵎鍏ュ簱寮圭獥 - 闇€瑕佸叆搴撴潈闄?*/}
       {hasPermission(userRole, 'canInbound') && (
         <QuickInboundModal
           isOpen={showQuickInboundModal}
           onClose={() => setShowQuickInboundModal(false)}
           onSuccess={async (result) => {
-            // 构建入库成功的消息内容（包含隐藏的ID标记，用于历史记录中显示打印按钮）
+            // 鏋勫缓鍏ュ簱鎴愬姛鐨勬秷鎭唴瀹癸紙鍖呭惈闅愯棌鐨処D鏍囪锛岀敤浜庡巻鍙茶褰曚腑鏄剧ず鎵撳嵃鎸夐挳锛?
             const productList = (Array.isArray(result?.products) ? result.products : []).slice(0, 5).map(p => {
-              let info = `  • ${p.name}：${p.weight}克 (工费¥${p.labor_cost}/g)`
+              let info = `  鈥?${p.name}锛?{p.weight}鍏?(宸ヨ垂楼${p.labor_cost}/g)`
               const pieceCount = parseInt(p.piece_count) || 0
               const pieceLaborCost = parseFloat(p.piece_labor_cost) || 0
               if (pieceCount > 0) {
-                info += ` [${pieceCount}件, 件工费¥${pieceLaborCost}]`
+                info += ` [${pieceCount}浠? 浠跺伐璐孤?{pieceLaborCost}]`
               }
               return info
             }).join('\n')
-            const moreProducts = result.products.length > 5 ? `\n  ... 等共 ${result.products.length} 件商品` : ''
-            // 只在有多件商品时显示件数，单件只显示克重
-            const countInfo = result.total_count > 1 ? `\n📦 入库数量：${result.total_count} 件` : ''
-            const inboundMessage = `✅ **入库成功**${result.order_no ? `\n\n📋 单号：${result.order_no}` : ''}\n🏭 供应商：${result.supplier_name || '未指定'}${countInfo}\n⚖️ 总克重：${result.total_weight.toFixed(2)}克\n💰 总工费：¥${result.total_labor_cost.toFixed(2)}\n\n📋 商品明细：\n${productList}${moreProducts}${result.order_id ? `\n\n<!-- INBOUND_ORDER:${result.order_id}:${result.order_no} -->` : ''}`
+            const moreProducts = result.products.length > 5 ? `\n  ... 绛夊叡 ${result.products.length} 浠跺晢鍝乣 : ''
+            // 鍙湪鏈夊浠跺晢鍝佹椂鏄剧ず浠舵暟锛屽崟浠跺彧鏄剧ず鍏嬮噸
+            const countInfo = result.total_count > 1 ? `\n馃摝 鍏ュ簱鏁伴噺锛?{result.total_count} 浠禶 : ''
+            const inboundMessage = `鉁?**鍏ュ簱鎴愬姛**${result.order_no ? `\n\n馃搵 鍗曞彿锛?{result.order_no}` : ''}\n馃彮 渚涘簲鍟嗭細${result.supplier_name || '鏈寚瀹?}${countInfo}\n鈿栵笍 鎬诲厠閲嶏細${result.total_weight.toFixed(2)}鍏媆n馃挵 鎬诲伐璐癸細楼${result.total_labor_cost.toFixed(2)}\n\n馃搵 鍟嗗搧鏄庣粏锛歕n${productList}${moreProducts}${result.order_id ? `\n\n<!-- INBOUND_ORDER:${result.order_id}:${result.order_no} -->` : ''}`
             
-            // 添加到聊天记录显示（包含入库单信息，用于下载/打印）
+            // 娣诲姞鍒拌亰澶╄褰曟樉绀猴紙鍖呭惈鍏ュ簱鍗曚俊鎭紝鐢ㄤ簬涓嬭浇/鎵撳嵃锛?
             setMessages(prev => [...prev, {
               type: 'system',
               content: inboundMessage,
@@ -4796,45 +4796,42 @@ ${itemsList}
               } : null
             }])
             
-            // 保存到后端聊天历史（包含ID标记）
+            // 淇濆瓨鍒板悗绔亰澶╁巻鍙诧紙鍖呭惈ID鏍囪锛?
             try {
-              await fetch(`${API_BASE_URL}/api/chat-logs/message?session_id=${encodeURIComponent(currentSessionId)}&message_type=assistant&content=${encodeURIComponent(inboundMessage)}&user_role=${userRole}&intent=入库`, {
+              await fetch(`${API_BASE_URL}/api/chat-logs/message?session_id=${encodeURIComponent(currentSessionId)}&message_type=assistant&content=${encodeURIComponent(inboundMessage)}&user_role=${userRole}&intent=鍏ュ簱`, {
                 method: 'POST'
               })
             } catch (error) {
-              console.error('保存入库记录到聊天历史失败:', error)
+              console.error('淇濆瓨鍏ュ簱璁板綍鍒拌亰澶╁巻鍙插け璐?', error)
             }
           }}
           userRole={userRole}
         />
       )}
 
-      {/* 销售管理弹窗 - 柜台、结算、业务可用 */}
+      {/* 閿€鍞鐞嗗脊绐?- 鏌滃彴銆佺粨绠椼€佷笟鍔″彲鐢?*/}
       {['counter', 'settlement', 'sales'].includes(userRole) && (
-        <SalesSearchModal
-          isOpen={showSalesSearchModal}
-          onClose={() => setShowSalesSearchModal(false)}
-        />
+        {showSalesSearchModal && (<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><SalesOrdersPage userRole={userRole} onClose={() => setShowSalesSearchModal(false)} /></div>)}
       )}
 
-      {/* 历史回溯面板 - 所有角色可用 */}
+      {/* 鍘嗗彶鍥炴函闈㈡澘 - 鎵€鏈夎鑹插彲鐢?*/}
       <ChatHistoryPanel
         isOpen={showHistoryPanel}
         onClose={() => setShowHistoryPanel(false)}
         userRole={userRole}
         onLoadSession={(sessionId, sessionMessages) => {
-          // 加载历史对话到当前聊天
+          // 鍔犺浇鍘嗗彶瀵硅瘽鍒板綋鍓嶈亰澶?
           if (sessionMessages && sessionMessages.length > 0) {
             const formattedMessages = sessionMessages.map(msg => ({
-              type: msg.message_type === 'user' ? 'user' : 'system',  // 使用 type 和 system（与渲染逻辑一致）
+              type: msg.message_type === 'user' ? 'user' : 'system',  // 浣跨敤 type 鍜?system锛堜笌娓叉煋閫昏緫涓€鑷达級
               content: msg.content,
               timestamp: msg.created_at
             }))
-            // 解析消息中的隐藏标记，恢复所有特殊消息的额外字段
+            // 瑙ｆ瀽娑堟伅涓殑闅愯棌鏍囪锛屾仮澶嶆墍鏈夌壒娈婃秷鎭殑棰濆瀛楁
             const parsedMessages = parseMessageHiddenMarkers(formattedMessages)
             setMessages(parsedMessages)
             
-            // 设置当前 session_id，确保后续消息继续使用相同的会话
+            // 璁剧疆褰撳墠 session_id锛岀‘淇濆悗缁秷鎭户缁娇鐢ㄧ浉鍚岀殑浼氳瘽
             setCurrentSessionId(sessionId)
             localStorage.setItem('current_session_id', sessionId)
             setCurrentConversationId(sessionId)
@@ -4844,37 +4841,37 @@ ${itemsList}
         }}
       />
 
-      {/* 快捷收料弹窗 */}
+      {/* 蹇嵎鏀舵枡寮圭獥 */}
       {showQuickReceiptModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold flex items-center">
-                <span className="text-xl mr-2">📦</span>
-                快捷收料
+                <span className="text-xl mr-2">馃摝</span>
+                蹇嵎鏀舵枡
               </h3>
-              <button onClick={() => setShowQuickReceiptModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+              <button onClick={() => setShowQuickReceiptModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">脳</button>
             </div>
             <form onSubmit={handleQuickReceipt} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">选择客户</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">閫夋嫨瀹㈡埛</label>
                 <input
                   type="text"
-                  placeholder="搜索客户姓名或电话..."
+                  placeholder="鎼滅储瀹㈡埛濮撳悕鎴栫數璇?.."
                   value={quickFormCustomerSearch}
                   onChange={(e) => setQuickFormCustomerSearch(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 mb-2"
                 />
                 <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
                   {filteredQuickFormCustomers.length === 0 ? (
-                    <div className="p-3 text-center text-gray-500 text-sm">暂无匹配客户</div>
+                    <div className="p-3 text-center text-gray-500 text-sm">鏆傛棤鍖归厤瀹㈡埛</div>
                   ) : (
                     filteredQuickFormCustomers.slice(0, 10).map(customer => (
                       <div
                         key={customer.id}
                         onClick={() => {
                           setQuickReceiptForm({ ...quickReceiptForm, customer_id: customer.id.toString() })
-                          setQuickFormCustomerSearch(customer.name) // 设置搜索框为客户名，收起下拉
+                          setQuickFormCustomerSearch(customer.name) // 璁剧疆鎼滅储妗嗕负瀹㈡埛鍚嶏紝鏀惰捣涓嬫媺
                         }}
                         className={`p-3 cursor-pointer hover:bg-yellow-50 border-b last:border-b-0 flex justify-between items-center ${
                           quickReceiptForm.customer_id === customer.id.toString() ? 'bg-yellow-100' : ''
@@ -4888,85 +4885,85 @@ ${itemsList}
                 </div>
                 {quickReceiptForm.customer_id && (
                   <div className="mt-2 text-sm text-green-600">
-                    已选择：{quickFormCustomers.find(c => c.id.toString() === quickReceiptForm.customer_id)?.name}
+                    宸查€夋嫨锛歿quickFormCustomers.find(c => c.id.toString() === quickReceiptForm.customer_id)?.name}
                   </div>
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">收料克重 (克)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">鏀舵枡鍏嬮噸 (鍏?</label>
                 <input
                   type="number"
                   step="0.01"
                   value={quickReceiptForm.gold_weight}
                   onChange={(e) => setQuickReceiptForm({ ...quickReceiptForm, gold_weight: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                  placeholder="输入收料克重"
+                  placeholder="杈撳叆鏀舵枡鍏嬮噸"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">成色</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">鎴愯壊</label>
                 <select
                   value={quickReceiptForm.gold_fineness}
                   onChange={(e) => setQuickReceiptForm({ ...quickReceiptForm, gold_fineness: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
                 >
-                  <option value="足金999">足金999</option>
-                  <option value="足金9999">足金9999</option>
+                  <option value="瓒抽噾999">瓒抽噾999</option>
+                  <option value="瓒抽噾9999">瓒抽噾9999</option>
                   <option value="Au999">Au999</option>
                   <option value="Au9999">Au9999</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">备注（可选）</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">澶囨敞锛堝彲閫夛級</label>
                 <textarea
                   value={quickReceiptForm.remark}
                   onChange={(e) => setQuickReceiptForm({ ...quickReceiptForm, remark: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
                   rows={2}
-                  placeholder="客户存料 / 其他说明"
+                  placeholder="瀹㈡埛瀛樻枡 / 鍏朵粬璇存槑"
                 />
               </div>
               <div className="flex space-x-3 pt-4">
-                <button type="button" onClick={() => setShowQuickReceiptModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">取消</button>
-                <button type="submit" className="flex-1 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600">确认并打印</button>
+                <button type="button" onClick={() => setShowQuickReceiptModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">鍙栨秷</button>
+                <button type="submit" className="flex-1 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600">纭骞舵墦鍗?/button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* 快捷提料弹窗 */}
+      {/* 蹇嵎鎻愭枡寮圭獥 */}
       {showQuickWithdrawalModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold flex items-center">
-                <span className="text-xl mr-2">⬆️</span>
-                快捷提料
+                <span className="text-xl mr-2">猬嗭笍</span>
+                蹇嵎鎻愭枡
               </h3>
-              <button onClick={() => setShowQuickWithdrawalModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+              <button onClick={() => setShowQuickWithdrawalModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">脳</button>
             </div>
             <form onSubmit={handleQuickWithdrawal} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">选择客户</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">閫夋嫨瀹㈡埛</label>
                 <input
                   type="text"
-                  placeholder="搜索客户姓名或电话..."
+                  placeholder="鎼滅储瀹㈡埛濮撳悕鎴栫數璇?.."
                   value={quickFormCustomerSearch}
                   onChange={(e) => setQuickFormCustomerSearch(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
                 />
                 <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
                   {filteredQuickFormCustomers.length === 0 ? (
-                    <div className="p-3 text-center text-gray-500 text-sm">暂无匹配客户</div>
+                    <div className="p-3 text-center text-gray-500 text-sm">鏆傛棤鍖归厤瀹㈡埛</div>
                   ) : (
                     filteredQuickFormCustomers.slice(0, 10).map(customer => (
                       <div
                         key={customer.id}
                         onClick={() => {
                           setQuickWithdrawalForm({ ...quickWithdrawalForm, customer_id: customer.id.toString() })
-                          setQuickFormCustomerSearch(customer.name) // 设置搜索框为客户名，收起下拉
+                          setQuickFormCustomerSearch(customer.name) // 璁剧疆鎼滅储妗嗕负瀹㈡埛鍚嶏紝鏀惰捣涓嬫媺
                           fetchCustomerDeposit(customer.id.toString())
                         }}
                         className={`p-3 cursor-pointer hover:bg-blue-50 border-b last:border-b-0 flex justify-between items-center ${
@@ -4981,59 +4978,59 @@ ${itemsList}
                 </div>
                 {quickWithdrawalForm.customer_id && (
                   <div className="mt-2 text-sm text-green-600">
-                    已选择：{quickFormCustomers.find(c => c.id.toString() === quickWithdrawalForm.customer_id)?.name}
+                    宸查€夋嫨锛歿quickFormCustomers.find(c => c.id.toString() === quickWithdrawalForm.customer_id)?.name}
                   </div>
                 )}
               </div>
-              {/* 存料余额显示 */}
+              {/* 瀛樻枡浣欓鏄剧ず */}
               {quickWithdrawalForm.customer_id && (
                 <div className={`p-4 rounded-lg ${
                   depositLoading ? 'bg-gray-100' : 
                   (selectedCustomerDeposit?.current_balance || 0) > 0 ? 'bg-blue-50 border border-blue-200' : 'bg-red-50 border border-red-200'
                 }`}>
                   {depositLoading ? (
-                    <div className="text-center text-gray-500">查询中...</div>
+                    <div className="text-center text-gray-500">鏌ヨ涓?..</div>
                   ) : (
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">当前存料余额</span>
+                      <span className="text-sm font-medium text-gray-700">褰撳墠瀛樻枡浣欓</span>
                       <span className={`text-xl font-bold ${(selectedCustomerDeposit?.current_balance || 0) > 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                        {selectedCustomerDeposit?.current_balance?.toFixed(2) || '0.00'} 克
+                        {selectedCustomerDeposit?.current_balance?.toFixed(2) || '0.00'} 鍏?
                       </span>
                     </div>
                   )}
                   {!depositLoading && (selectedCustomerDeposit?.current_balance || 0) === 0 && (
-                    <div className="mt-2 text-xs text-red-600">⚠️ 该客户暂无存料，无法提料</div>
+                    <div className="mt-2 text-xs text-red-600">鈿狅笍 璇ュ鎴锋殏鏃犲瓨鏂欙紝鏃犳硶鎻愭枡</div>
                   )}
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">提料克重 (克)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">鎻愭枡鍏嬮噸 (鍏?</label>
                 <input
                   type="number"
                   step="0.01"
                   value={quickWithdrawalForm.gold_weight}
                   onChange={(e) => setQuickWithdrawalForm({ ...quickWithdrawalForm, gold_weight: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="输入提料克重"
+                  placeholder="杈撳叆鎻愭枡鍏嬮噸"
                   max={selectedCustomerDeposit?.current_balance || 0}
                   required
                 />
                 {quickWithdrawalForm.gold_weight && parseFloat(quickWithdrawalForm.gold_weight) > (selectedCustomerDeposit?.current_balance || 0) && (
-                  <div className="mt-1 text-xs text-red-600">⚠️ 提料克重不能超过存料余额</div>
+                  <div className="mt-1 text-xs text-red-600">鈿狅笍 鎻愭枡鍏嬮噸涓嶈兘瓒呰繃瀛樻枡浣欓</div>
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">备注（可选）</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">澶囨敞锛堝彲閫夛級</label>
                 <textarea
                   value={quickWithdrawalForm.remark}
                   onChange={(e) => setQuickWithdrawalForm({ ...quickWithdrawalForm, remark: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   rows={2}
-                  placeholder="客户提料 / 其他说明"
+                  placeholder="瀹㈡埛鎻愭枡 / 鍏朵粬璇存槑"
                 />
               </div>
               <div className="flex space-x-3 pt-4">
-                <button type="button" onClick={() => setShowQuickWithdrawalModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">取消</button>
+                <button type="button" onClick={() => setShowQuickWithdrawalModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">鍙栨秷</button>
                 <button 
                   type="submit" 
                   disabled={!quickWithdrawalForm.customer_id || 
@@ -5042,7 +5039,7 @@ ${itemsList}
                     parseFloat(quickWithdrawalForm.gold_weight) > (selectedCustomerDeposit?.current_balance || 0)}
                   className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
-                  确认并打印
+                  纭骞舵墦鍗?
                 </button>
               </div>
             </form>
@@ -5050,7 +5047,7 @@ ${itemsList}
         </div>
       )}
       
-      {/* Toast 通知容器 */}
+      {/* Toast 閫氱煡瀹瑰櫒 */}
       <Toaster 
         position="top-center"
         toastOptions={{
@@ -5073,7 +5070,7 @@ ${itemsList}
         }}
       />
       
-      {/* Toast 提示组件 */}
+      {/* Toast 鎻愮ず缁勪欢 */}
       {toastMessage && (
         <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
           <div className="bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg text-sm">

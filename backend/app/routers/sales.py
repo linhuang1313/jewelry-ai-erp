@@ -1,5 +1,5 @@
-"""
-销售单管理路由
+﻿"""
+閿€鍞崟绠＄悊璺敱
 """
 
 from fastapi import APIRouter, Depends, Query, HTTPException
@@ -17,27 +17,27 @@ from ..schemas import SalesOrderCreate, SalesOrderResponse, SalesDetailResponse
 
 logger = logging.getLogger(__name__)
 
-# 中国时区 UTC+8
+# 涓浗鏃跺尯 UTC+8
 CHINA_TZ = timezone(timedelta(hours=8))
 
 def china_now() -> datetime:
-    """获取中国时间（UTC+8）"""
+    """鑾峰彇涓浗鏃堕棿锛圲TC+8锛?""
     return datetime.now(CHINA_TZ)
 
-router = APIRouter(prefix="/api/sales", tags=["销售单管理"])
+router = APIRouter(prefix="/api/sales", tags=["閿€鍞崟绠＄悊"])
 
 
 @router.post("/orders")
 async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends(get_db)):
-    """创建销售单"""
+    """鍒涘缓閿€鍞崟"""
     try:
-        # ==================== 数据验证 ====================
-        # 验证商品明细数据
+        # ==================== 鏁版嵁楠岃瘉 ====================
+        # 楠岃瘉鍟嗗搧鏄庣粏鏁版嵁
         for item in order_data.items:
             if item.weight <= 0:
                 return {
                     "success": False,
-                    "message": f"商品 {item.product_name} 的重量必须大于0",
+                    "message": f"鍟嗗搧 {item.product_name} 鐨勯噸閲忓繀椤诲ぇ浜?",
                     "validation_error": {
                         "product_name": item.product_name,
                         "field": "weight",
@@ -47,82 +47,82 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
             if item.labor_cost < 0:
                 return {
                     "success": False,
-                    "message": f"商品 {item.product_name} 的工费不能为负数",
+                    "message": f"鍟嗗搧 {item.product_name} 鐨勫伐璐逛笉鑳戒负璐熸暟",
                     "validation_error": {
                         "product_name": item.product_name,
                         "field": "labor_cost",
                         "value": item.labor_cost
                     }
                 }
-        # ==================== 数据验证结束 ====================
+        # ==================== 鏁版嵁楠岃瘉缁撴潫 ====================
         
-        # ==================== 商品编码转换 ====================
-        # 如果输入的是商品编码，自动转换为商品名称
+        # ==================== 鍟嗗搧缂栫爜杞崲 ====================
+        # 濡傛灉杈撳叆鐨勬槸鍟嗗搧缂栫爜锛岃嚜鍔ㄨ浆鎹负鍟嗗搧鍚嶇О
         for item in order_data.items:
             product_name = item.product_name
-            # 检查是否是商品编码（全大写或包含数字）
+            # 妫€鏌ユ槸鍚︽槸鍟嗗搧缂栫爜锛堝叏澶у啓鎴栧寘鍚暟瀛楋級
             if product_name and (product_name.isupper() or any(c.isdigit() for c in product_name)):
                 code_record = db.query(ProductCode).filter(ProductCode.code == product_name).first()
                 if code_record and code_record.name:
-                    # 找到了对应的商品名称，更新 item
-                    logger.info(f"商品编码转换: {product_name} -> {code_record.name}")
+                    # 鎵惧埌浜嗗搴旂殑鍟嗗搧鍚嶇О锛屾洿鏂?item
+                    logger.info(f"鍟嗗搧缂栫爜杞崲: {product_name} -> {code_record.name}")
                     item.product_name = code_record.name
-        # ==================== 商品编码转换结束 ====================
+        # ==================== 鍟嗗搧缂栫爜杞崲缁撴潫 ====================
         
-        # ==================== 库存检查 ====================
-        # 在创建客户之前先检查库存，避免创建了客户但销售单创建失败
+        # ==================== 搴撳瓨妫€鏌?====================
+        # 鍦ㄥ垱寤哄鎴蜂箣鍓嶅厛妫€鏌ュ簱瀛橈紝閬垮厤鍒涘缓浜嗗鎴蜂絾閿€鍞崟鍒涘缓澶辫触
         inventory_errors = []
         for item in order_data.items:
-            # 查询库存（精确匹配商品名称）
+            # 鏌ヨ搴撳瓨锛堢簿纭尮閰嶅晢鍝佸悕绉帮級
             inventory = db.query(Inventory).filter(
                 Inventory.product_name == item.product_name
             ).first()
             
             if not inventory:
-                # 商品不存在于库存中
+                # 鍟嗗搧涓嶅瓨鍦ㄤ簬搴撳瓨涓?
                 inventory_errors.append({
                     "product_name": item.product_name,
-                    "error": "商品不存在于库存中",
+                    "error": "鍟嗗搧涓嶅瓨鍦ㄤ簬搴撳瓨涓?,
                     "required_weight": item.weight,
                     "available_weight": 0.0
                 })
             else:
-                # 计算可用库存：总库存 - 待结算销售单占用的库存
-                # 查询该商品在待结算销售单中的总重量
+                # 璁＄畻鍙敤搴撳瓨锛氭€诲簱瀛?- 寰呯粨绠楅攢鍞崟鍗犵敤鐨勫簱瀛?
+                # 鏌ヨ璇ュ晢鍝佸湪寰呯粨绠楅攢鍞崟涓殑鎬婚噸閲?
                 reserved_weight = db.query(func.sum(SalesDetail.weight)).join(
                     SalesOrder
                 ).filter(
                     SalesDetail.product_name == item.product_name,
-                    SalesOrder.status == "待结算"
+                    SalesOrder.status == "寰呯粨绠?
                 ).scalar() or 0.0
                 
                 available_weight = inventory.total_weight - reserved_weight
                 
                 if available_weight < item.weight:
-                    # 库存不足（考虑待结算的销售单）
+                    # 搴撳瓨涓嶈冻锛堣€冭檻寰呯粨绠楃殑閿€鍞崟锛?
                     inventory_errors.append({
                         "product_name": item.product_name,
-                        "error": "库存不足",
+                        "error": "搴撳瓨涓嶈冻",
                         "required_weight": item.weight,
                         "available_weight": available_weight,
                         "total_weight": inventory.total_weight,
                         "reserved_weight": reserved_weight
                     })
         
-        # 如果有任何商品库存不足，拒绝创建销售单
+        # 濡傛灉鏈変换浣曞晢鍝佸簱瀛樹笉瓒筹紝鎷掔粷鍒涘缓閿€鍞崟
         if inventory_errors:
             return {
                 "success": False,
-                "message": "库存检查失败，无法创建销售单",
+                "message": "搴撳瓨妫€鏌ュけ璐ワ紝鏃犳硶鍒涘缓閿€鍞崟",
                 "inventory_errors": inventory_errors
             }
-        # ==================== 库存检查结束 ====================
+        # ==================== 搴撳瓨妫€鏌ョ粨鏉?====================
         
-        # 处理客户（在库存检查通过后）
+        # 澶勭悊瀹㈡埛锛堝湪搴撳瓨妫€鏌ラ€氳繃鍚庯級
         customer_id = order_data.customer_id
         customer_name = order_data.customer_name
         
-        # 如果没有提供customer_id，尝试根据姓名查找
+        # 濡傛灉娌℃湁鎻愪緵customer_id锛屽皾璇曟牴鎹鍚嶆煡鎵?
         if not customer_id:
             customer = db.query(Customer).filter(
                 Customer.name == customer_name,
@@ -131,19 +131,19 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
             if customer:
                 customer_id = customer.id
             else:
-                # 客户不存在，自动创建
+                # 瀹㈡埛涓嶅瓨鍦紝鑷姩鍒涘缓
                 customer_no = f"KH{china_now().strftime('%Y%m%d%H%M%S')}"
                 customer = Customer(
                     customer_no=customer_no,
                     name=customer_name,
-                    customer_type="个人"
+                    customer_type="涓汉"
                 )
                 db.add(customer)
                 db.flush()
                 customer_id = customer.id
         
-        # 计算总工费和总克重
-        # 总工费 = (克重 × 克工费) + (件数 × 件工费)
+        # 璁＄畻鎬诲伐璐瑰拰鎬诲厠閲?
+        # 鎬诲伐璐?= (鍏嬮噸 脳 鍏嬪伐璐? + (浠舵暟 脳 浠跺伐璐?
         def calc_item_total(item):
             gram_cost = item.labor_cost * item.weight
             piece_cost = (item.piece_count or 0) * (item.piece_labor_cost or 0)
@@ -152,10 +152,10 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
         total_labor_cost = sum(calc_item_total(item) for item in order_data.items)
         total_weight = sum(item.weight for item in order_data.items)
         
-        # 生成销售单号（使用中国时间）
+        # 鐢熸垚閿€鍞崟鍙凤紙浣跨敤涓浗鏃堕棿锛?
         order_no = f"XS{china_now().strftime('%Y%m%d%H%M%S')}"
         
-        # 创建销售单
+        # 鍒涘缓閿€鍞崟
         sales_order = SalesOrder(
             order_no=order_no,
             order_date=order_data.order_date or datetime.now(),
@@ -166,15 +166,15 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
             remark=order_data.remark,
             total_labor_cost=total_labor_cost,
             total_weight=total_weight,
-            status="待结算"
+            status="寰呯粨绠?
         )
         db.add(sales_order)
         db.flush()
         
-        # 创建销售明细
+        # 鍒涘缓閿€鍞槑缁?
         details = []
         for item in order_data.items:
-            # 计算单项总工费：(克重 × 克工费) + (件数 × 件工费)
+            # 璁＄畻鍗曢」鎬诲伐璐癸細(鍏嬮噸 脳 鍏嬪伐璐? + (浠舵暟 脳 浠跺伐璐?
             gram_cost = item.labor_cost * item.weight
             piece_cost = (item.piece_count or 0) * (item.piece_labor_cost or 0)
             item_total_cost = gram_cost + piece_cost
@@ -191,23 +191,23 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
             db.add(detail)
             details.append(detail)
         
-        # ==================== 规则A: 创建销售单时立即扣减库存 ====================
-        # 获取展厅位置（销售从展厅发生）
+        # ==================== 瑙勫垯A: 鍒涘缓閿€鍞崟鏃剁珛鍗虫墸鍑忓簱瀛?====================
+        # 鑾峰彇灞曞巺浣嶇疆锛堥攢鍞粠灞曞巺鍙戠敓锛?
         showroom_location = db.query(Location).filter(
             Location.location_type == "showroom",
             Location.is_active == 1
         ).first()
         
         for item in order_data.items:
-            # 1. 扣减总库存 (Inventory 表)
+            # 1. 鎵ｅ噺鎬诲簱瀛?(Inventory 琛?
             inventory = db.query(Inventory).filter(
                 Inventory.product_name == item.product_name
             ).first()
             if inventory:
                 inventory.total_weight = round(inventory.total_weight - item.weight, 3)
-                logger.info(f"扣减总库存: {item.product_name} - {item.weight}克, 剩余: {inventory.total_weight}克")
+                logger.info(f"鎵ｅ噺鎬诲簱瀛? {item.product_name} - {item.weight}鍏? 鍓╀綑: {inventory.total_weight}鍏?)
             
-            # 2. 扣减展厅库存 (LocationInventory 表)
+            # 2. 鎵ｅ噺灞曞巺搴撳瓨 (LocationInventory 琛?
             if showroom_location:
                 location_inv = db.query(LocationInventory).filter(
                     LocationInventory.product_name == item.product_name,
@@ -215,10 +215,10 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
                 ).first()
                 if location_inv:
                     location_inv.weight -= item.weight
-                    logger.info(f"扣减展厅库存: {item.product_name} - {item.weight}克, 剩余: {location_inv.weight}克")
-        # ==================== 库存扣减完成 ====================
+                    logger.info(f"鎵ｅ噺灞曞巺搴撳瓨: {item.product_name} - {item.weight}鍏? 鍓╀綑: {location_inv.weight}鍏?)
+        # ==================== 搴撳瓨鎵ｅ噺瀹屾垚 ====================
         
-        # 更新客户统计信息
+        # 鏇存柊瀹㈡埛缁熻淇℃伅
         if customer_id:
             customer = db.query(Customer).filter(Customer.id == customer_id).first()
             if customer:
@@ -231,36 +231,36 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
         for detail in details:
             db.refresh(detail)
         
-        # 构建响应
+        # 鏋勫缓鍝嶅簲
         order_response = SalesOrderResponse.model_validate(sales_order)
         order_response.details = [SalesDetailResponse.model_validate(d).model_dump(mode='json') for d in details]
         
         return {
             "success": True,
-            "message": f"销售单创建成功：{order_no}",
+            "message": f"閿€鍞崟鍒涘缓鎴愬姛锛歿order_no}",
             "order": order_response.model_dump(mode='json')
         }
     
     except Exception as e:
         db.rollback()
-        logger.error(f"创建销售单失败: {e}", exc_info=True)
+        logger.error(f"鍒涘缓閿€鍞崟澶辫触: {e}", exc_info=True)
         return {
             "success": False,
-            "message": f"创建销售单失败: {str(e)}"
+            "message": f"鍒涘缓閿€鍞崟澶辫触: {str(e)}"
         }
 
 
 @router.get("/orders")
 async def get_sales_orders(
-    order_no: Optional[str] = Query(None, description="销售单号（模糊匹配）"),
+    order_no: Optional[str] = Query(None, description="閿€鍞崟鍙凤紙妯＄硦鍖归厤锛?),
     customer_name: Optional[str] = None,
     salesperson: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    limit: int = Query(100, ge=1, le=500, description="返回数量限制"),
+    limit: int = Query(100, ge=1, le=500, description="杩斿洖鏁伴噺闄愬埗"),
     db: Session = Depends(get_db)
 ):
-    """获取销售单列表（已优化：批量查询避免 N+1）"""
+    """鑾峰彇閿€鍞崟鍒楄〃锛堝凡浼樺寲锛氭壒閲忔煡璇㈤伩鍏?N+1锛?""
     from collections import defaultdict
     
     try:
@@ -290,21 +290,21 @@ async def get_sales_orders(
         if not orders:
             return {"success": True, "orders": []}
         
-        # ========== 批量查询优化：避免 N+1 问题 ==========
+        # ========== 鎵归噺鏌ヨ浼樺寲锛氶伩鍏?N+1 闂 ==========
         order_ids = [o.id for o in orders]
         
-        # 批量查询所有销售明细（1 次查询）
+        # 鎵归噺鏌ヨ鎵€鏈夐攢鍞槑缁嗭紙1 娆℃煡璇級
         all_details = db.query(SalesDetail).filter(
             SalesDetail.order_id.in_(order_ids)
         ).all()
         
-        # 构建映射字典
+        # 鏋勫缓鏄犲皠瀛楀吀
         details_map = defaultdict(list)
         for d in all_details:
             details_map[d.order_id].append(d)
         
-        # 构建结果（使用预加载数据，无额外查询）
-        # 直接构建字典，避免 Pydantic model_validate 的性能开销
+        # 鏋勫缓缁撴灉锛堜娇鐢ㄩ鍔犺浇鏁版嵁锛屾棤棰濆鏌ヨ锛?
+        # 鐩存帴鏋勫缓瀛楀吀锛岄伩鍏?Pydantic model_validate 鐨勬€ц兘寮€閿€
         result = []
         for order in orders:
             details = details_map.get(order.id, [])
@@ -340,23 +340,23 @@ async def get_sales_orders(
             "orders": result
         }
     except Exception as e:
-        logger.error(f"查询销售单失败: {e}", exc_info=True)
+        logger.error(f"鏌ヨ閿€鍞崟澶辫触: {e}", exc_info=True)
         return {
             "success": False,
-            "message": f"查询销售单失败: {str(e)}"
+            "message": f"鏌ヨ閿€鍞崟澶辫触: {str(e)}"
         }
 
 
 @router.get("/orders/{order_id}")
 async def get_sales_order(order_id: int, db: Session = Depends(get_db)):
-    """获取销售单详情"""
+    """鑾峰彇閿€鍞崟璇︽儏"""
     try:
         order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
         
         if not order:
             return {
                 "success": False,
-                "message": "销售单不存在"
+                "message": "閿€鍞崟涓嶅瓨鍦?
             }
         
         details = db.query(SalesDetail).filter(SalesDetail.order_id == order.id).all()
@@ -368,16 +368,16 @@ async def get_sales_order(order_id: int, db: Session = Depends(get_db)):
             "order": order_response.model_dump(mode='json')
         }
     except Exception as e:
-        logger.error(f"查询销售单详情失败: {e}", exc_info=True)
+        logger.error(f"鏌ヨ閿€鍞崟璇︽儏澶辫触: {e}", exc_info=True)
         return {
             "success": False,
-            "message": f"查询销售单详情失败: {str(e)}"
+            "message": f"鏌ヨ閿€鍞崟璇︽儏澶辫触: {str(e)}"
         }
 
 
 @router.options("/orders/{order_id}/download")
 async def download_sales_order_options(order_id: int):
-    """处理CORS预检请求"""
+    """澶勭悊CORS棰勬璇锋眰"""
     return Response(
         status_code=200,
         headers={
@@ -394,29 +394,29 @@ async def download_sales_order(
     format: str = Query("pdf", pattern="^(pdf|html)$"),
     db: Session = Depends(get_db)
 ):
-    """下载或打印销售单（支持PDF和HTML格式）"""
+    """涓嬭浇鎴栨墦鍗伴攢鍞崟锛堟敮鎸丳DF鍜孒TML鏍煎紡锛?""
     try:
-        logger.info(f"下载销售单请求: order_id={order_id}, format={format}")
+        logger.info(f"涓嬭浇閿€鍞崟璇锋眰: order_id={order_id}, format={format}")
         
-        # 查询销售单
+        # 鏌ヨ閿€鍞崟
         order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
         if not order:
-            raise HTTPException(status_code=404, detail="销售单不存在")
+            raise HTTPException(status_code=404, detail="閿€鍞崟涓嶅瓨鍦?)
         
-        # 查询销售明细
+        # 鏌ヨ閿€鍞槑缁?
         details = db.query(SalesDetail).filter(SalesDetail.order_id == order_id).all()
         if not details:
-            raise HTTPException(status_code=404, detail="销售单明细不存在")
+            raise HTTPException(status_code=404, detail="閿€鍞崟鏄庣粏涓嶅瓨鍦?)
         
-        logger.info(f"找到销售单: order_no={order.order_no}, 明细数={len(details)}")
+        logger.info(f"鎵惧埌閿€鍞崟: order_no={order.order_no}, 鏄庣粏鏁?{len(details)}")
         
-        # 时间格式化
+        # 鏃堕棿鏍煎紡鍖?
         from ..timezone_utils import to_china_time, format_china_time
         if order.order_date:
             china_time = to_china_time(order.order_date)
             order_date_str = format_china_time(china_time, '%Y-%m-%d %H:%M:%S')
         else:
-            order_date_str = "未知"
+            order_date_str = "鏈煡"
         
         if format == "pdf":
             try:
@@ -425,7 +425,7 @@ async def download_sales_order(
                 from reportlab.pdfbase import pdfmetrics
                 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
                 
-                # 自定义纸张尺寸：241mm × 140mm 横向（针式打印机）
+                # 鑷畾涔夌焊寮犲昂瀵革細241mm 脳 140mm 妯悜锛堥拡寮忔墦鍗版満锛?
                 PAGE_WIDTH = 241 * mm
                 PAGE_HEIGHT = 140 * mm
                 
@@ -433,61 +433,61 @@ async def download_sales_order(
                 p = canvas.Canvas(buffer, pagesize=(PAGE_WIDTH, PAGE_HEIGHT))
                 width, height = PAGE_WIDTH, PAGE_HEIGHT
                 
-                # 使用 CID 字体
+                # 浣跨敤 CID 瀛椾綋
                 try:
                     pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
                     chinese_font = 'STSong-Light'
                 except Exception as cid_error:
-                    logger.warning(f"注册CID字体失败: {cid_error}")
+                    logger.warning(f"娉ㄥ唽CID瀛椾綋澶辫触: {cid_error}")
                     chinese_font = None
                 
-                # 页边距
+                # 椤佃竟璺?
                 left_margin = 8 * mm
                 right_margin = width - 8 * mm
                 top_margin = height - 6 * mm
                 
-                # 标题（居中）
+                # 鏍囬锛堝眳涓級
                 if chinese_font:
                     p.setFont(chinese_font, 12)
                 else:
                     p.setFont("Helvetica-Bold", 12)
-                p.drawCentredString(width / 2, top_margin, "销售单")
+                p.drawCentredString(width / 2, top_margin, "閿€鍞崟")
                 
-                # 基本信息（紧凑两列布局）
+                # 鍩烘湰淇℃伅锛堢揣鍑戜袱鍒楀竷灞€锛?
                 y = top_margin - 14
                 if chinese_font:
                     p.setFont(chinese_font, 8)
                 else:
                     p.setFont("Helvetica", 8)
                 
-                customer_name = (order.customer_name or '未知')[:10]
-                salesperson = (order.salesperson or '未知')[:6]
-                p.drawString(left_margin, y, f"单号：{order.order_no}")
-                p.drawString(width/2, y, f"日期：{order_date_str}")
+                customer_name = (order.customer_name or '鏈煡')[:10]
+                salesperson = (order.salesperson or '鏈煡')[:6]
+                p.drawString(left_margin, y, f"鍗曞彿锛歿order.order_no}")
+                p.drawString(width/2, y, f"鏃ユ湡锛歿order_date_str}")
                 y -= 10
-                p.drawString(left_margin, y, f"客户：{customer_name}  业务员：{salesperson}")
-                p.drawString(width/2, y, f"状态：{order.status}")
+                p.drawString(left_margin, y, f"瀹㈡埛锛歿customer_name}  涓氬姟鍛橈細{salesperson}")
+                p.drawString(width/2, y, f"鐘舵€侊細{order.status}")
                 y -= 12
                 
-                # 分隔线
+                # 鍒嗛殧绾?
                 p.line(left_margin, y, right_margin, y)
                 y -= 10
                 
-                # 商品明细表头
+                # 鍟嗗搧鏄庣粏琛ㄥご
                 col_x = [left_margin, 55*mm, 85*mm, 115*mm, 145*mm]
                 if chinese_font:
                     p.setFont(chinese_font, 7)
                 else:
                     p.setFont("Helvetica-Bold", 7)
-                p.drawString(col_x[0], y, "商品名称")
-                p.drawString(col_x[1], y, "克重(g)")
-                p.drawString(col_x[2], y, "工费/克")
-                p.drawString(col_x[3], y, "总工费")
+                p.drawString(col_x[0], y, "鍟嗗搧鍚嶇О")
+                p.drawString(col_x[1], y, "鍏嬮噸(g)")
+                p.drawString(col_x[2], y, "宸ヨ垂/鍏?)
+                p.drawString(col_x[3], y, "鎬诲伐璐?)
                 y -= 8
                 p.line(left_margin, y, right_margin, y)
                 y -= 8
                 
-                # 商品明细行
+                # 鍟嗗搧鏄庣粏琛?
                 for detail in details:
                     product_name = detail.product_name[:12] if len(detail.product_name) > 12 else detail.product_name
                     if chinese_font:
@@ -503,20 +503,20 @@ async def download_sales_order(
                 p.line(left_margin, y, right_margin, y)
                 y -= 10
                 
-                # 汇总
+                # 姹囨€?
                 if chinese_font:
                     p.setFont(chinese_font, 8)
                 else:
                     p.setFont("Helvetica-Bold", 8)
-                p.drawString(left_margin, y, f"合计：总克重 {order.total_weight:.2f}g  |  总工费 ¥{order.total_labor_cost:.2f}")
+                p.drawString(left_margin, y, f"鍚堣锛氭€诲厠閲?{order.total_weight:.2f}g  |  鎬诲伐璐?楼{order.total_labor_cost:.2f}")
                 y -= 10
                 
-                # 备注
+                # 澶囨敞
                 if order.remark:
                     if chinese_font:
                         p.setFont(chinese_font, 7)
                     remark_text = order.remark[:30] if len(order.remark) > 30 else order.remark
-                    p.drawString(left_margin, y, f"备注：{remark_text}")
+                    p.drawString(left_margin, y, f"澶囨敞锛歿remark_text}")
                 
                 p.save()
                 buffer.seek(0)
@@ -531,17 +531,17 @@ async def download_sales_order(
                     }
                 )
             except Exception as pdf_error:
-                logger.error(f"生成销售单PDF失败: {pdf_error}", exc_info=True)
-                raise HTTPException(status_code=500, detail=f"生成PDF失败: {str(pdf_error)}")
+                logger.error(f"鐢熸垚閿€鍞崟PDF澶辫触: {pdf_error}", exc_info=True)
+                raise HTTPException(status_code=500, detail=f"鐢熸垚PDF澶辫触: {str(pdf_error)}")
         
         elif format == "html":
-            # HTML 打印格式
+            # HTML 鎵撳嵃鏍煎紡
             html_content = f"""
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>销售单 - {order.order_no}</title>
+    <title>閿€鍞崟 - {order.order_no}</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: 'Microsoft YaHei', SimSun, sans-serif; padding: 20px; background: #f5f5f5; }}
@@ -573,35 +573,35 @@ async def download_sales_order(
 <body>
     <div class="container">
         <div class="header">
-            <h1>销售单</h1>
-            <div class="order-no">单号：{order.order_no}</div>
+            <h1>閿€鍞崟</h1>
+            <div class="order-no">鍗曞彿锛歿order.order_no}</div>
         </div>
         <div class="info-grid">
             <div class="info-item">
-                <label>销售日期</label>
+                <label>閿€鍞棩鏈?/label>
                 <span>{order_date_str}</span>
             </div>
             <div class="info-item">
-                <label>客户名称</label>
-                <span>{order.customer_name or '未知'}</span>
+                <label>瀹㈡埛鍚嶇О</label>
+                <span>{order.customer_name or '鏈煡'}</span>
             </div>
             <div class="info-item">
-                <label>业务员</label>
-                <span>{order.salesperson or '未知'}</span>
+                <label>涓氬姟鍛?/label>
+                <span>{order.salesperson or '鏈煡'}</span>
             </div>
             <div class="info-item">
-                <label>订单状态</label>
+                <label>璁㈠崟鐘舵€?/label>
                 <span>{order.status}</span>
             </div>
         </div>
         <table class="details-table">
             <thead>
                 <tr>
-                    <th>序号</th>
-                    <th>商品名称</th>
-                    <th>克重(g)</th>
-                    <th>工费(元/克)</th>
-                    <th>总工费(元)</th>
+                    <th>搴忓彿</th>
+                    <th>鍟嗗搧鍚嶇О</th>
+                    <th>鍏嬮噸(g)</th>
+                    <th>宸ヨ垂(鍏?鍏?</th>
+                    <th>鎬诲伐璐?鍏?</th>
                 </tr>
             </thead>
             <tbody>
@@ -618,20 +618,20 @@ async def download_sales_order(
         </table>
         <div class="summary">
             <div class="summary-row">
-                <span>商品数量</span>
-                <span>{len(details)} 件</span>
+                <span>鍟嗗搧鏁伴噺</span>
+                <span>{len(details)} 浠?/span>
             </div>
             <div class="summary-row">
-                <span>总克重</span>
-                <span>{order.total_weight:.2f} 克</span>
+                <span>鎬诲厠閲?/span>
+                <span>{order.total_weight:.2f} 鍏?/span>
             </div>
             <div class="summary-row total">
-                <span>总工费</span>
-                <span>¥{order.total_labor_cost:.2f}</span>
+                <span>鎬诲伐璐?/span>
+                <span>楼{order.total_labor_cost:.2f}</span>
             </div>
         </div>
-        {f'<div class="remark"><strong>备注：</strong>{order.remark}</div>' if order.remark else ''}
-        <button class="print-btn" onclick="window.print()">打印销售单</button>
+        {f'<div class="remark"><strong>澶囨敞锛?/strong>{order.remark}</div>' if order.remark else ''}
+        <button class="print-btn" onclick="window.print()">鎵撳嵃閿€鍞崟</button>
     </div>
 </body>
 </html>
@@ -642,54 +642,54 @@ async def download_sales_order(
             )
         
         else:
-            raise HTTPException(status_code=400, detail="不支持的格式，请使用 pdf 或 html")
+            raise HTTPException(status_code=400, detail="涓嶆敮鎸佺殑鏍煎紡锛岃浣跨敤 pdf 鎴?html")
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"生成销售单失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"生成销售单失败: {str(e)}")
+        logger.error(f"鐢熸垚閿€鍞崟澶辫触: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"鐢熸垚閿€鍞崟澶辫触: {str(e)}")
 
 
 @router.post("/orders/{order_id}/cancel")
 async def cancel_sales_order(order_id: int, db: Session = Depends(get_db)):
-    """取消销售单并回滚库存（仅待结算状态可取消）"""
+    """鍙栨秷閿€鍞崟骞跺洖婊氬簱瀛橈紙浠呭緟缁撶畻鐘舵€佸彲鍙栨秷锛?""
     try:
-        # 查询销售单
+        # 鏌ヨ閿€鍞崟
         order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
         if not order:
             return {
                 "success": False,
-                "message": "销售单不存在"
+                "message": "閿€鍞崟涓嶅瓨鍦?
             }
         
-        # 只有待结算状态才能取消
-        if order.status != "待结算":
+        # 鍙湁寰呯粨绠楃姸鎬佹墠鑳藉彇娑?
+        if order.status != "寰呯粨绠?:
             return {
                 "success": False,
-                "message": f"只有待结算状态的销售单可以取消，当前状态: {order.status}"
+                "message": f"鍙湁寰呯粨绠楃姸鎬佺殑閿€鍞崟鍙互鍙栨秷锛屽綋鍓嶇姸鎬? {order.status}"
             }
         
-        # 查询销售明细
+        # 鏌ヨ閿€鍞槑缁?
         details = db.query(SalesDetail).filter(SalesDetail.order_id == order_id).all()
         
-        # ==================== 回滚库存 ====================
-        # 获取展厅位置
+        # ==================== 鍥炴粴搴撳瓨 ====================
+        # 鑾峰彇灞曞巺浣嶇疆
         showroom_location = db.query(Location).filter(
             Location.location_type == "showroom",
             Location.is_active == 1
         ).first()
         
         for detail in details:
-            # 1. 回滚总库存 (Inventory 表)
+            # 1. 鍥炴粴鎬诲簱瀛?(Inventory 琛?
             inventory = db.query(Inventory).filter(
                 Inventory.product_name == detail.product_name
             ).first()
             if inventory:
                 inventory.total_weight = round(inventory.total_weight + detail.weight, 3)
-                logger.info(f"回滚总库存: {detail.product_name} + {detail.weight}克, 剩余: {inventory.total_weight}克")
+                logger.info(f"鍥炴粴鎬诲簱瀛? {detail.product_name} + {detail.weight}鍏? 鍓╀綑: {inventory.total_weight}鍏?)
             
-            # 2. 回滚展厅库存 (LocationInventory 表)
+            # 2. 鍥炴粴灞曞巺搴撳瓨 (LocationInventory 琛?
             if showroom_location:
                 location_inv = db.query(LocationInventory).filter(
                     LocationInventory.product_name == detail.product_name,
@@ -697,13 +697,13 @@ async def cancel_sales_order(order_id: int, db: Session = Depends(get_db)):
                 ).first()
                 if location_inv:
                     location_inv.weight += detail.weight
-                    logger.info(f"回滚展厅库存: {detail.product_name} + {detail.weight}克, 剩余: {location_inv.weight}克")
-        # ==================== 库存回滚完成 ====================
+                    logger.info(f"鍥炴粴灞曞巺搴撳瓨: {detail.product_name} + {detail.weight}鍏? 鍓╀綑: {location_inv.weight}鍏?)
+        # ==================== 搴撳瓨鍥炴粴瀹屾垚 ====================
         
-        # 更新销售单状态为已取消
-        order.status = "已取消"
+        # 鏇存柊閿€鍞崟鐘舵€佷负宸插彇娑?
+        order.status = "宸插彇娑?
         
-        # 更新客户统计信息（回滚）
+        # 鏇存柊瀹㈡埛缁熻淇℃伅锛堝洖婊氾級
         if order.customer_id:
             customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
             if customer:
@@ -712,18 +712,18 @@ async def cancel_sales_order(order_id: int, db: Session = Depends(get_db)):
         
         db.commit()
         
-        logger.info(f"销售单已取消: {order.order_no}, 库存已回滚")
+        logger.info(f"閿€鍞崟宸插彇娑? {order.order_no}, 搴撳瓨宸插洖婊?)
         
         return {
             "success": True,
-            "message": f"销售单 {order.order_no} 已取消，库存已回滚"
+            "message": f"閿€鍞崟 {order.order_no} 宸插彇娑堬紝搴撳瓨宸插洖婊?
         }
     
     except Exception as e:
         db.rollback()
-        logger.error(f"取消销售单失败: {e}", exc_info=True)
+        logger.error(f"鍙栨秷閿€鍞崟澶辫触: {e}", exc_info=True)
         return {
             "success": False,
-            "message": f"取消销售单失败: {str(e)}"
+            "message": f"鍙栨秷閿€鍞崟澶辫触: {str(e)}"
         }
 
