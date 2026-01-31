@@ -1072,7 +1072,7 @@ async def get_customer_detail(
                     "id": f"payment_{p.id}",
                     "type": "payment",
                     "description": f"收款：¥{p.amount:.2f}",
-                    "amount": -(p.amount or 0),  # 收款减少欠款
+                    "amount": p.amount or 0,  # 正数表示客户给我们钱（抵消欠款）
                     "gold_weight": None,
                     "created_at": p.create_time.isoformat() if p.create_time else None
                 })

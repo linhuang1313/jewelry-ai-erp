@@ -368,7 +368,7 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
                     "type": "收款",
                     "order_no": f"PY{p.id:06d}",
                     "description": f"现金收款",
-                    "amount": -(p.amount or 0),
+                    "amount": p.amount or 0,  # 正数表示客户给我们钱
                     "gold_weight": 0,
                     "created_at": p.create_time
                 })
