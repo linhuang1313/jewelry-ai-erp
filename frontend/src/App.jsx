@@ -871,9 +871,35 @@ function App() {
 
   // 鍔犺浇鎸囧畾瀵硅瘽锛堜粠鍚庣API鍔犺浇瀹屾暣娑堟伅鍐呭锛?
   const loadConversation = async (conversationId) => {
+    // 先尝试从localStorage加载（优先本地缓存，避免后端不可用时无法加载）
+    const historyKey = getHistoryKey(userRole)
+    let localConversation = null
     try {
-      // 浠庡悗绔疉PI鑾峰彇璇ヤ細璇濈殑瀹屾暣娑堟伅
+      const parsedData = JSON.parse(localStorage.getItem(historyKey) || '[]')
+      const history = Array.isArray(parsedData) ? parsedData : []
+      localConversation = history.find(c => c.id === conversationId)
+    } catch {}
+    
+    // 如果本地有完整消息，直接使用
+    if (localConversation && localConversation.messages && localConversation.messages.length > 0) {
+      const messages = parseMessageHiddenMarkers(localConversation.messages)
+      setMessages(messages)
+      setCurrentConversationId(localConversation.id)
+      setConversationTitle(localConversation.title || '对话')
+      setCurrentSessionId(conversationId)
+      localStorage.setItem('current_session_id', conversationId)
+      if (window.innerWidth < 1024) {
+        setSidebarOpen(false)
+      }
+      return // 本地有数据，无需请求后端
+    }
+    
+    try {
+      // 本地无数据，尝试从后端API获取
       const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-history/${conversationId}`)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
       const data = await response.json()
       
       if (data.success && Array.isArray(data.messages)) {
@@ -966,23 +992,18 @@ function App() {
         }
       }
     } catch (error) {
-      console.error('Load conversation failed, try to load from local:', error)
-      // 濡傛灉API澶辫触锛屽皾璇曚粠localStorage鍔犺浇
-      const historyKey = getHistoryKey(userRole)
-      const parsedData2 = JSON.parse(localStorage.getItem(historyKey) || '[]')
-      const history = Array.isArray(parsedData2) ? parsedData2 : []
-      const conversation = history.find(c => c.id === conversationId)
-      if (conversation && conversation.messages) {
-        // 瑙ｆ瀽娑堟伅涓殑闅愯棌鏍囪锛屾仮澶嶆墍鏈夌壒娈婃秷鎭殑棰濆瀛楁
-        const messages = parseMessageHiddenMarkers(conversation.messages)
-        setMessages(messages)
-        setCurrentConversationId(conversation.id)
-        setConversationTitle(conversation.title)
-        if (window.innerWidth < 1024) {
-          setSidebarOpen(false)
-        } else {
-          setSidebarOpen(true)
-        }
+      console.error('Load conversation failed:', error)
+      // 后端不可用，显示提示消息
+      showToast('后端服务暂时不可用，无法加载历史对话详情')
+      // 至少切换到该对话（即使没有消息内容）
+      setCurrentConversationId(conversationId)
+      setConversationTitle(localConversation?.title || '对话')
+      setMessages([{
+        type: 'system',
+        content: '⚠️ 后端服务暂时不可用，无法加载此对话的历史消息。\n\n请稍后重试，或开始新对话。'
+      }])
+      if (window.innerWidth < 1024) {
+        setSidebarOpen(false)
       }
     }
   }
