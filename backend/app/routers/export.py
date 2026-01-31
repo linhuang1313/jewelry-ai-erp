@@ -280,7 +280,7 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
                 "type": "销售",
                 "order_no": order.order_no,
                 "description": f"工费",
-                "amount": order.total_labor_cost or 0,  # 正数表示客户欠款增加
+                "amount": -(order.total_labor_cost or 0),  # 负数表示客户产生欠款
                 "gold_weight": 0,
                 "created_at": order.create_time
             })
