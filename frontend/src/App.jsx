@@ -862,7 +862,7 @@ function App() {
   useEffect(() => {
     if (messages.length === 0) return
     
-    // 寤惰繜淇濆瓨锛岄伩鍏嶉绻佸啓鍏?
+    // 寤惰繜淇濆瓨锛岄伩鍏嶉绻佸啓克
     const timer = setTimeout(() => {
       saveConversation()
     }, 1000)
@@ -1575,7 +1575,7 @@ function App() {
 
         // 濡傛灉鏄浘琛ㄦ暟鎹紙鏌ヨ鎵€鏈夊簱瀛橈級
         if (data.chart_data) {
-          systemMessage += `\n\n馃搳 搴撳瓨缁熻锛歕n` +
+          systemMessage += `\n\n📊 搴撳瓨缁熻锛歕n` +
             `鍟嗗搧绉嶇被：{data.summary.total_products}绉峔n` +
             `渚涘簲鍟嗘暟閲忥細${data.summary.total_suppliers}瀹禱n` +
             `鎬诲簱瀛橈細${data.summary.total_weight.toFixed(2)}鍏媆n`
@@ -1590,7 +1590,7 @@ function App() {
         }
         // 濡傛灉鏄壒閲忓叆搴撴垚鍔?
         else if (data.order && data.details && data.details.length > 0) {
-          systemMessage += `\n\n馃搵 鍏ュ簱鍗曚俊鎭細\n` +
+          systemMessage += `\n\n📋 鍏ュ簱鍗曚俊鎭細\n` +
             `鍏ュ簱单号：{data.order.order_no}\n` +
             `鍟嗗搧鏁伴噺：{data.details.length}涓猏n\n`
           
@@ -1599,7 +1599,7 @@ function App() {
             systemMessage += `鍟嗗搧${index + 1}锛歕n` +
               `  鍟嗗搧鍚嶇О：{detail.product_name}\n` +
               `  閲嶉噺：{detail.weight}鍏媆n` +
-              `  宸ヨ垂：{detail.labor_cost}鍏?鍏媆n` +
+              `  宸ヨ垂：{detail.labor_cost}克鍏媆n` +
               `  渚涘簲鍟嗭細${detail.supplier}\n` +
               `  璇ュ晢鍝佸伐璐癸細${detail.total_cost.toFixed(2)}鍏僜n\n`
           })
@@ -1621,7 +1621,7 @@ function App() {
         }
         // 鍚戝悗鍏煎锛氬崟涓晢鍝佸叆搴擄紙鏃ф牸寮忥級
         else if (data.order && data.detail && data.inventory) {
-          systemMessage += `\n\n馃搵 鍏ュ簱鍗曚俊鎭細\n` +
+          systemMessage += `\n\n📋 鍏ュ簱鍗曚俊鎭細\n` +
             `鍏ュ簱单号：{data.order.order_no}\n` +
             `鍟嗗搧鍚嶇О：{data.detail.product_name}\n` +
             `重量：${data.detail.weight}克\n` +
@@ -1714,7 +1714,7 @@ function App() {
           }])
           return
         }
-        // 澶勭悊閿€鍞崟鍒涘缓鎴愬姛
+        // 澶勭悊销售单创建成功
         else if (data.order && data.order.order_no && data.order.order_no.startsWith('XS')) {
           // 杩欐槸閿€鍞崟锛堥攢鍞崟鍙蜂互XS寮€澶达級
           systemMessage += `\n\n📋 销售单信息：\n` +
@@ -2051,7 +2051,7 @@ function App() {
 
         // 濡傛灉鏄浘琛ㄦ暟鎹紙鏌ヨ鎵€鏈夊簱瀛橈級
         if (data.chart_data) {
-          systemMessage += `\n\n馃搳 搴撳瓨缁熻锛歕n` +
+          systemMessage += `\n\n📊 搴撳瓨缁熻锛歕n` +
             `鍟嗗搧绉嶇被：{data.summary.total_products}绉峔n` +
             `渚涘簲鍟嗘暟閲忥細${data.summary.total_suppliers}瀹禱n` +
             `鎬诲簱瀛橈細${data.summary.total_weight.toFixed(2)}鍏媆n`
@@ -2066,7 +2066,7 @@ function App() {
         }
         // 濡傛灉鏄壒閲忓叆搴撴垚鍔?
         else if (data.order && data.details && data.details.length > 0 && data.order.order_no && data.order.order_no.startsWith('RK')) {
-          systemMessage += `\n\n馃搵 鍏ュ簱鍗曚俊鎭細\n` +
+          systemMessage += `\n\n📋 鍏ュ簱鍗曚俊鎭細\n` +
             `鍏ュ簱单号：{data.order.order_no}\n` +
             `鍟嗗搧鏁伴噺：{data.details.length}涓猏n\n`
           
@@ -2093,7 +2093,7 @@ function App() {
             content: systemMessage
           }])
         }
-        // 澶勭悊閿€鍞崟鍒涘缓鎴愬姛锛圤CR纭鍚庝篃鍙兘鍒涘缓閿€鍞崟：
+        // 澶勭悊销售单创建成功锛圤CR纭鍚庝篃鍙兘鍒涘缓閿€鍞崟：
         else if (data.order && data.order.order_no && data.order.order_no.startsWith('XS')) {
           systemMessage += `\n\n📋 销售单信息：\n` +
             `销售单号：${data.order.order_no}\n` +
@@ -2222,7 +2222,7 @@ function App() {
 
         // 濡傛灉鏄渚涘簲鍟嗛敊璇紝娣诲姞瑙勫垯璇存槑
         if (data.suppliers && Array.isArray(data.suppliers) && data.suppliers.length > 1) {
-          errorMessage += `\n\n馃搵 绯荤粺瑙勫垯鎻愰啋锛歕n`
+          errorMessage += `\n\n📋 绯荤粺瑙勫垯鎻愰啋锛歕n`
           errorMessage += `姣忓紶鍏ュ簱鍗曞彧鑳藉搴斾竴涓緵搴斿晢銆傚鏋滀竴娆″叆搴撳寘鍚涓緵搴斿晢鐨勫晢鍝侊紝璇锋寜渚涘簲鍟嗘媶鍒嗕负澶氬紶鍏ュ簱鍗曞垎鍒彁浜ゃ€俓n`
         }
 
@@ -2351,7 +2351,7 @@ function App() {
                            sticky top-0 z-10 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              {/* 绉诲姩绔晶杈规爮寮€鍏?*/}
+              {/* 绉诲姩绔晶杈规爮寮€克*/}
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -3836,7 +3836,7 @@ function App() {
                       <div className="flex justify-start mt-2">
                         <div className="max-w-4xl w-full space-y-4">
                           <div className="text-sm text-gray-600 mb-2 font-medium">
-                            鍏?{msg.inboundCards.length} 涓晢鍝佸緟鍏ュ簱
+                            克{msg.inboundCards.length} 涓晢鍝佸緟鍏ュ簱
                           </div>
                           {msg.inboundCards.map((card, cardIndex) => (
                             <div key={card.id || cardIndex} className="border-l-4 border-amber-400 pl-3">
@@ -3988,7 +3988,7 @@ function App() {
                     {msg.salesOrder && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-4xl w-full bg-gradient-to-r from-green-50 to-blue-50 rounded-2xl shadow-lg p-6 border border-green-200/60">
-                          <h3 className="text-xl font-bold text-gray-800 mb-4">馃搵 閿€鍞崟璇︽儏</h3>
+                          <h3 className="text-xl font-bold text-gray-800 mb-4">📋 閿€鍞崟璇︽儏</h3>
                           <div className="grid grid-cols-2 gap-4 mb-4">
                             <div>
                               <span className="text-gray-600">销售单号：</span>
@@ -4195,7 +4195,7 @@ function App() {
                                   const value = context.parsed;
                                   const total = context.dataset.data.reduce((a, b) => a + b, 0);
                                   const percentage = ((value / total) * 100).toFixed(1);
-                                  return `${label}: ${value.toLocaleString()} 鍏?(${percentage}%)`;
+                                  return `${label}: ${value.toLocaleString()} 克(${percentage}%)`;
                                 }
                               }
                             }
@@ -4616,7 +4616,7 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
                   settlementOrderNo: data.settlement_no
                 }])
                 
-                // 淇濆瓨鍒拌亰澶╁巻鍙?
+                // 保存到聊天历史
                 if (currentSessionId) {
                   const params = new URLSearchParams({
                     session_id: currentSessionId,
@@ -4713,22 +4713,22 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
           isOpen={showQuickOrderModal}
           onClose={() => setShowQuickOrderModal(false)}
           onSuccess={(result) => {
-            // 寮€鍗曟垚鍔熷悗鍦ㄨ亰澶╂鏄剧ず閿€鍞崟鏄庣粏
+            // 开单成功后在聊天栏显示销售单明细
             const itemsList = (Array.isArray(result?.items) ? result.items : []).map((item, idx) => 
-              `${idx + 1}. ${item.product_name}：{item.weight}克 × ¥${item.labor_cost}/克 = ¥${(item.weight * item.labor_cost).toFixed(2)}`
+              `${idx + 1}. ${item.product_name}：${item.weight}克 × ¥${item.labor_cost}/克 = ¥${(item.weight * item.labor_cost).toFixed(2)}`
             ).join('\n')
             
-            const salesMessage = `✅ **閿€鍞崟鍒涘缓鎴愬姛**
+            const salesMessage = `✅ **销售单创建成功**
 
-馃搵 **閿€鍞崟鍙?*：{result.order_no}
-👤 **客户**：{result.customer_name}
-馃鈥嶐煉?**涓氬姟鍛?*：{result.salesperson}
+📋 **销售单号**：${result.order_no}
+👤 **客户**：${result.customer_name}
+🧑‍💼 **业务员**：${result.salesperson}
 
 📦 **商品明细**：
 ${itemsList}
 
-馃搳 **姹囨€?*：
-- 鎬诲厠閲嶏細${result.total_weight.toFixed(2)}鍏?
+📊 **汇总**：
+- 总克重：${result.total_weight.toFixed(2)}克
 - 总工费：¥${result.total_labor_cost.toFixed(2)}
 
 <!-- SALES_ORDER:${result.order_id}:${result.order_no} -->`
@@ -4740,7 +4740,7 @@ ${itemsList}
               salesOrderNo: result.order_no
             }])
             
-            // 淇濆瓨鍒拌亰澶╁巻鍙?
+            // 保存到聊天历史
             if (currentSessionId) {
               const params = new URLSearchParams({
                 session_id: currentSessionId,
@@ -5017,7 +5017,7 @@ ${itemsList}
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-700">褰撳墠瀛樻枡浣欓</span>
                       <span className={`text-xl font-bold ${(selectedCustomerDeposit?.current_balance || 0) > 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                        {selectedCustomerDeposit?.current_balance?.toFixed(2) || '0.00'} 鍏?
+                        {selectedCustomerDeposit?.current_balance?.toFixed(2) || '0.00'} 克
                       </span>
                     </div>
                   )}
