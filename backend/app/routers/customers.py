@@ -903,14 +903,13 @@ async def get_customer_detail(
             returns_list = []
         
         # 获取欠款/存料余额
-        # 现金欠款 - 从应收账款表获取
+        # 现金欠款 - 汇总所有未付清的应收账款
         cash_debt = 0.0
         try:
-            latest_receivable = db.query(AccountReceivable).filter(
-                AccountReceivable.customer_id == customer_id
-            ).order_by(desc(AccountReceivable.credit_start_date)).first()
-            if latest_receivable:
-                cash_debt = latest_receivable.closing_balance or 0.0
+            cash_debt = db.query(func.coalesce(func.sum(AccountReceivable.unpaid_amount), 0)).filter(
+                AccountReceivable.customer_id == customer_id,
+                AccountReceivable.status.in_(["unpaid", "overdue"])
+            ).scalar() or 0.0
         except Exception as e:
             logger.warning(f"查询现金欠款时出错: {e}")
         

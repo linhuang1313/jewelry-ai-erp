@@ -444,14 +444,13 @@ async def create_settlement_order(
         except Exception as e:
             logger.warning(f"查询金料账户失败: {e}")
         
-        # 查询现金欠款（从应收账款表获取）
+        # 查询现金欠款（汇总所有未付清的应收账款）
         from ..models.finance import AccountReceivable
         try:
-            account_receivable = db.query(AccountReceivable).filter(
-                AccountReceivable.customer_id == customer_id
-            ).first()
-            if account_receivable:
-                previous_cash_debt = account_receivable.balance or 0.0
+            previous_cash_debt = db.query(func.coalesce(func.sum(AccountReceivable.unpaid_amount), 0)).filter(
+                AccountReceivable.customer_id == customer_id,
+                AccountReceivable.status.in_(["unpaid", "overdue"])
+            ).scalar() or 0.0
         except Exception as e:
             logger.warning(f"查询应收账款失败: {e}")
     
