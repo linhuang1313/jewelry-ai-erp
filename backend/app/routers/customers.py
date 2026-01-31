@@ -937,12 +937,21 @@ async def get_customer_detail(
                 GoldReceipt.status == 'received'
             ).scalar() or 0
             
+            # 调试日志：打印收料记录数量
+            receipt_count = db.query(GoldReceipt).filter(
+                GoldReceipt.customer_id == customer_id,
+                GoldReceipt.status == 'received'
+            ).count()
+            logger.info(f"[客户详情] customer_id={customer_id}, 收料记录数={receipt_count}, 来料总计={total_receipts_gold}, 结算用料={total_settlement_gold}")
+            
             # 3. 净金料 = 来料 - 结算欠料（正数=存料，负数=欠料）
             net_gold = float(total_receipts_gold) - total_settlement_gold
             
             # 从净值计算兼容字段
             gold_deposit = max(0, net_gold)  # 正值 = 存料
             gold_debt = max(0, -net_gold)    # 负值的绝对值 = 欠料
+            
+            logger.info(f"[客户详情] net_gold={net_gold}, gold_deposit={gold_deposit}, gold_debt={gold_debt}")
         except Exception as e:
             logger.warning(f"查询金料账户时出错: {e}")
         
