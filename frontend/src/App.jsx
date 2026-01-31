@@ -3628,7 +3628,7 @@ function App() {
                                 </svg>
                                 下载
                               </button>
-                              {/* 閲嶆柊缁撶畻鎸夐挳 - 浠呯粨绠椾笓鍛樺拰绠＄悊灞傚彲瑙?*/}
+                              {/* 重新结算鎸夐挳 - 浠呯粨绠椾笓鍛樺拰绠＄悊灞傚彲瑙?*/}
                               {(userRole === 'settlement' || userRole === 'manager') && (
                                 <button
                                   onClick={async () => {
@@ -3639,7 +3639,7 @@ function App() {
                                       })
                                       if (response.ok) {
                                         const result = await response.json()
-                                        alert(result.message || '缁撶畻鍗曞凡鎾ら攢')
+                                        alert(result.message || '结算单已撤销')
                                         // 璺宠浆鍒扮粨绠楃鐞嗛〉闈?
                                         setCurrentPage('settlement')
                                       } else {
@@ -3656,7 +3656,7 @@ function App() {
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                   </svg>
-                                  閲嶆柊缁撶畻
+                                  重新结算
                                 </button>
                               )}
                             </div>
