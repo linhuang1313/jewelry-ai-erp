@@ -116,15 +116,15 @@ function App() {
   const [showQuickReturnModal, setShowQuickReturnModal] = useState(false) // 蹇嵎閫€璐у脊绐?
   const [showQuickInboundModal, setShowQuickInboundModal] = useState(false) // 蹇嵎鍏ュ簱寮圭獥
   const [showSalesSearchModal, setShowSalesSearchModal] = useState(false) // 閿€鍞鐞嗗脊绐?
-  const [showHistoryPanel, setShowHistoryPanel] = useState(false) // 鍘嗗彶鍥炴函闈㈡澘
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false) // 历史回顾面板
   const [showQuickReceiptModal, setShowQuickReceiptModal] = useState(false) // 蹇嵎鏀舵枡寮圭獥
   const [showQuickWithdrawalModal, setShowQuickWithdrawalModal] = useState(false) // 蹇嵎鎻愭枡寮圭獥
-  const [toastMessage, setToastMessage] = useState('') // Toast 鎻愮ず娑堟伅
-  const [quickFormCustomers, setQuickFormCustomers] = useState([]) // 瀹㈡埛鍒楄〃
-  const [quickFormCustomerSearch, setQuickFormCustomerSearch] = useState('') // 瀹㈡埛鎼滅储
-  const [quickReceiptForm, setQuickReceiptForm] = useState({ customer_id: '', gold_weight: '', gold_fineness: '瓒抽噾999', remark: '' })
+  const [toastMessage, setToastMessage] = useState('') // Toast 提示消息
+  const [quickFormCustomers, setQuickFormCustomers] = useState([]) // 客户列表
+  const [quickFormCustomerSearch, setQuickFormCustomerSearch] = useState('') // 客户搜索
+  const [quickReceiptForm, setQuickReceiptForm] = useState({ customer_id: '', gold_weight: '', gold_fineness: '足金999', remark: '' })
   const [quickWithdrawalForm, setQuickWithdrawalForm] = useState({ customer_id: '', gold_weight: '', remark: '' })
-  const [selectedCustomerDeposit, setSelectedCustomerDeposit] = useState(null) // 閫変腑瀹㈡埛鐨勫瓨鏂欎綑棰?
+  const [selectedCustomerDeposit, setSelectedCustomerDeposit] = useState(null) // 选中客户的存料余额
   const [depositLoading, setDepositLoading] = useState(false)
   
   // 鐢ㄦ埛瑙掕壊鐩稿叧鐘舵€?
@@ -584,7 +584,7 @@ function App() {
     }
   }
 
-  // 鍔犺浇瀹㈡埛鍒楄〃锛堢敤浜庡揩鎹锋敹鏂?鎻愭枡锛?
+  // 加载客户列表（用于快捷收料/提料）
   const loadQuickFormCustomers = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/customers`)
@@ -596,7 +596,7 @@ function App() {
         setQuickFormCustomers(Array.isArray(customers) ? customers : [])
       } else {
         console.error('Load customer list API failed:', response.status)
-        showToast('鍔犺浇瀹㈡埛鍒楄〃澶辫触锛岃鍒锋柊閲嶈瘯')
+        showToast('鍔犺浇客户列表澶辫触锛岃鍒锋柊閲嶈瘯')
       }
     } catch (error) {
       console.error('Load customer list failed:', error)
@@ -607,7 +607,7 @@ function App() {
   // 鎵撳紑蹇嵎鏀舵枡寮圭獥
   const openQuickReceiptModal = () => {
     loadQuickFormCustomers()
-    setQuickReceiptForm({ customer_id: '', gold_weight: '', gold_fineness: '瓒抽噾999', remark: '' })
+    setQuickReceiptForm({ customer_id: '', gold_weight: '', gold_fineness: '足金999', remark: '' })
     setQuickFormCustomerSearch('')
     setShowQuickReceiptModal(true)
   }
@@ -652,11 +652,11 @@ function App() {
   const handleQuickReceipt = async (e) => {
     e.preventDefault()
     if (!quickReceiptForm.customer_id) {
-      alert('璇烽€夋嫨瀹㈡埛')
+      alert('请选择客户')
       return
     }
     if (!quickReceiptForm.gold_weight || parseFloat(quickReceiptForm.gold_weight) <= 0) {
-      alert('璇疯緭鍏ユ湁鏁堢殑鏀舵枡鍏嬮噸')
+      alert('请输入有效的收料克重')
       return
     }
     try {
@@ -679,12 +679,13 @@ function App() {
         
         setShowQuickReceiptModal(false)
         // 閲嶇疆琛ㄥ崟
-        setQuickReceiptForm({ customer_id: '', gold_weight: '', gold_fineness: '瓒抽噾999', remark: '' })
+        setQuickReceiptForm({ customer_id: '', gold_weight: '', gold_fineness: '足金999', remark: '' })
         setQuickFormCustomerSearch('')
         
         // 娣诲姞鏀舵枡鍗曡褰曞埌鑱婂ぉ妗嗭紙浣跨敤鏂囨湰鏍煎紡+闅愯棌鏍囪锛?
         const downloadUrl = `${API_BASE_URL}/api/gold-material/gold-receipts/${result.data.id}/print`
-        const receiptMessage = `鉁?鏀舵枡鍗曞凡鐢熸垚\n\n馃搵 鍗曞彿锛?{result.data.receipt_no}\n馃懁 瀹㈡埛锛?{customerName}\n鈿栵笍 鍏嬮噸锛?{receiptWeight.toFixed(2)} 鍏媆n馃彿锔?鎴愯壊锛?{quickReceiptForm.gold_fineness}${remarkText ? `\n馃摑 澶囨敞锛?{remarkText}` : ''}\n鈴?鏃堕棿锛?{new Date().toLocaleString('zh-CN')}\n\n<!-- GOLD_RECEIPT:${result.data.id}:${result.data.receipt_no} -->`
+        const receiptMessage = `✅ 收料单已生成\n\n📋 单号：{result.data.receipt_no}\n👤 客户：{customerName}\n⚖️ 克重：{receiptWeight.toFixed(2)} 克
+🏷️ 成色：{quickReceiptForm.gold_fineness}${remarkText ? `\n📝 备注：{remarkText}` : ''}\n🕐 时间：{new Date().toLocaleString('zh-CN')}\n\n<!-- GOLD_RECEIPT:${result.data.id}:${result.data.receipt_no} -->`
         setMessages(prev => [...prev, {
           id: Date.now(),
           type: 'system',
@@ -707,20 +708,20 @@ function App() {
     }
   }
 
-  // 鍒涘缓蹇嵎鎻愭枡鍗?
+  // 鍒涘缓蹇嵎提料单
   const handleQuickWithdrawal = async (e) => {
     e.preventDefault()
     if (!quickWithdrawalForm.customer_id) {
-      alert('璇烽€夋嫨瀹㈡埛')
+      alert('请选择客户')
       return
     }
     const weight = parseFloat(quickWithdrawalForm.gold_weight)
     if (!weight || weight <= 0) {
-      alert('璇疯緭鍏ユ湁鏁堢殑鎻愭枡鍏嬮噸')
+      alert('请输入有效的提料克重')
       return
     }
     if (weight > (selectedCustomerDeposit?.current_balance || 0)) {
-      alert(`鎻愭枡鍏嬮噸涓嶈兘瓒呰繃瀹㈡埛瀛樻枡浣欓锛?{selectedCustomerDeposit?.current_balance?.toFixed(2) || 0}鍏嬶級`)
+      alert(`鎻愭枡鍏嬮噸涓嶈兘瓒呰繃瀹㈡埛瀛樻枡浣欓锛?{selectedCustomerDeposit?.current_balance?.toFixed(2) || 0}克）`)
       return
     }
     try {
@@ -886,7 +887,7 @@ function App() {
           
           // 瑙ｆ瀽鎵€鏈夌被鍨嬬殑闅愯棌鏍囪
           if (msg.content) {
-            // 鎻愭枡鍗?
+            // 提料单
             const withdrawalMatch = msg.content.match(/<!-- WITHDRAWAL_ORDER:(\d+):([^>]+) -->/)
             if (withdrawalMatch) {
               const withdrawalId = parseInt(withdrawalMatch[1])
@@ -1586,7 +1587,7 @@ function App() {
           
           // 鏄剧ず搴撳瓨鏇存柊
           if (data.inventories && data.inventories.length > 0) {
-            systemMessage += `馃摝 搴撳瓨鏇存柊锛歕n`
+            systemMessage += `📦 搴撳瓨鏇存柊锛歕n`
             data.inventories.forEach(inv => {
               systemMessage += `  ${inv.product_name}锛?{inv.total_weight}鍏媆n`
             })
@@ -1640,7 +1641,7 @@ function App() {
         }
         // 濡傛灉鏄煡璇㈡墍鏈夊簱瀛橈紙杩斿洖inventories鏁扮粍锛? 淇濈暀鍚戝悗鍏煎
         else if (data.inventories && Array.isArray(data.inventories) && data.inventories.length > 0 && !data.action) {
-          systemMessage += `\n\n馃摝 鍟嗗搧鍒楄〃锛歕n`
+          systemMessage += `\n\n📦 鍟嗗搧鍒楄〃锛歕n`
           data.inventories.forEach((inv, idx) => {
             systemMessage += `${idx + 1}. ${inv.product_name}：${inv.total_weight}克`
             if (inv.latest_labor_cost) {
@@ -1733,7 +1734,7 @@ function App() {
             salesOrders: data.orders
           }])
         }
-        // 澶勭悊瀹㈡埛鍒涘缓/鏌ヨ
+        // 处理客户创建/查询
         else if (data.customer) {
           systemMessage += `\n\n👤 客户信息：\n` +
             `客户编号：${data.customer.customer_no}\n` +
@@ -1748,7 +1749,7 @@ function App() {
             content: systemMessage 
           }])
         }
-        // 澶勭悊瀹㈡埛鍒楄〃鏌ヨ
+        // 澶勭悊客户列表鏌ヨ
         else if (data.customers && Array.isArray(data.customers)) {
           systemMessage += `\n\n👤 客户列表：\n` +
             `共 ${data.customers.length} 位客户\n\n`
@@ -2753,7 +2754,7 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 鎺ユ敹搴撳瓨鍗＄墖 - 闇€瑕佹帴鏀跺簱瀛樻潈闄?*/}
+                  {/* 接收库存卡片 - 需要接收库存权限*/}
                   {hasPermission(userRole, 'canReceiveTransfer') && (
                     <div 
                       onClick={() => setCurrentPage('warehouse')}
@@ -2813,7 +2814,7 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 缁撶畻绠＄悊鍗＄墖 - 闇€瑕佸垱寤虹粨绠楀崟鏉冮檺 */}
+                  {/* 结算管理卡片 - 需要创建结算单权限 */}
                   {hasPermission(userRole, 'canCreateSettlement') && (
                     <div 
                       onClick={() => setCurrentPage('settlement')}
@@ -2825,7 +2826,7 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 瀹㈡埛绠＄悊鍗＄墖 - 闇€瑕佹煡鐪嬫垨绠＄悊鏉冮檺 */}
+                  {/* 客户管理卡片 - 需要查看或管理权限 */}
                   {(hasPermission(userRole, 'canViewCustomers') || hasPermission(userRole, 'canManageCustomers')) && (
                     <div 
                       onClick={() => setCurrentPage('customer')}
@@ -2843,7 +2844,7 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 璐㈠姟瀵硅处鍗＄墖 - 闇€瑕佽储鍔℃潈闄?*/}
+                  {/* 财务对账卡片 - 需要财务权限*/}
                   {hasPermission(userRole, 'canViewFinance') && (
                     <div 
                       onClick={() => setCurrentPage('finance')}
@@ -3006,7 +3007,7 @@ function App() {
                       
                       {/* 鍐呭鍖?*/}
                       <div className="p-5 space-y-4">
-                        {/* 瀹㈡埛淇℃伅 */}
+                        {/* 客户信息 */}
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
                             <span className="text-orange-600 font-bold text-lg">{pd.customer?.name?.charAt(0) || '客'}</span>
@@ -3063,7 +3064,7 @@ function App() {
                                     : `-楼${Math.abs(pd.balance_after || 0).toFixed(2)} (棰勬敹娆?`
                                   setMessages(prev => prev.map(m => 
                                     m.id === msg.id 
-                                      ? { ...m, type: 'system', content: `鉁?鏀舵鐧昏鎴愬姛锛乗n\n瀹㈡埛锛?{pd.customer.name}\n鏀舵閲戦锛毬?{pd.payment_amount.toFixed(2)}\n鏀舵鏂瑰紡锛?{pd.payment_method}\n鏀舵鍚庢瑺娆撅細${balanceText}` }
+                                      ? { ...m, type: 'system', content: `鉁?鏀舵鐧昏鎴愬姛锛乗n\n客户：{pd.customer.name}\n鏀舵閲戦锛毬?{pd.payment_amount.toFixed(2)}\n鏀舵鏂瑰紡锛?{pd.payment_method}\n鏀舵鍚庢瑺娆撅細${balanceText}` }
                                       : m
                                   ))
                                 } else {
@@ -3112,7 +3113,7 @@ function App() {
                       
                       {/* 鍐呭鍖?*/}
                       <div className="p-5 space-y-4">
-                        {/* 瀹㈡埛淇℃伅 */}
+                        {/* 客户信息 */}
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
                               <span className="text-yellow-600 font-bold text-lg">{rd.customer?.name?.charAt(0) || '客'}</span>
@@ -3162,7 +3163,8 @@ function App() {
                                   // 鏇存柊娑堟伅涓烘垚鍔熺姸鎬?
                                   setMessages(prev => prev.map(m => 
                                     m.id === msg.id 
-                                      ? { ...m, type: 'system', content: `鉁?鏀舵枡鍗曞垱寤烘垚鍔燂紒\n\n鍗曞彿锛?{result.data.receipt_no}\n瀹㈡埛锛?{rd.customer.name}\n鍏嬮噸锛?{rd.gold_weight.toFixed(2)}鍏媆n鎴愯壊锛?{rd.gold_fineness}` }
+                                      ? { ...m, type: 'system', content: `鉁?鏀舵枡鍗曞垱寤烘垚鍔燂紒\n\n鍗曞彿锛?{result.data.receipt_no}\n客户：{rd.customer.name}\n克重：{rd.gold_weight.toFixed(2)}克
+成色：{rd.gold_fineness}` }
                                       : m
                                   ))
                                   // 鎵撳紑鎵撳嵃椤甸潰
@@ -3216,7 +3218,7 @@ function App() {
                       
                       {/* 鍐呭鍖?*/}
                       <div className="p-5 space-y-4">
-                        {/* 瀹㈡埛淇℃伅 */}
+                        {/* 客户信息 */}
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                               <span className="text-blue-600 font-bold text-lg">{wd.customer?.name?.charAt(0) || '客'}</span>
@@ -3227,7 +3229,7 @@ function App() {
                           </div>
                         </div>
                         
-                        {/* 鎻愭枡淇℃伅 */}
+                        {/* 提料信息 */}
                         <div className="bg-blue-50 rounded-xl p-4 space-y-3">
                           <div className="flex justify-between items-center">
                             <span className="text-gray-600">提料克重</span>
@@ -3321,7 +3323,7 @@ function App() {
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                           </svg>
-                          <span className="font-semibold">鎻愭枡鍗曞凡鐢熸垚</span>
+                          <span className="font-semibold">提料单已生成</span>
                         </div>
                       </div>
                       
@@ -3333,7 +3335,7 @@ function App() {
                           <span className="font-mono font-semibold text-green-700">{wd.withdrawal_no}</span>
                         </div>
                         
-                        {/* 瀹㈡埛淇℃伅 */}
+                        {/* 客户信息 */}
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
                               <span className="text-green-600 font-bold text-lg">{wd.customer_name?.charAt(0) || '客'}</span>
@@ -3344,7 +3346,7 @@ function App() {
                           </div>
                         </div>
                         
-                        {/* 鎻愭枡淇℃伅 */}
+                        {/* 提料信息 */}
                         <div className="bg-green-50 rounded-xl p-4 space-y-2">
                           <div className="flex justify-between items-center">
                             <span className="text-gray-600">提料克重</span>
@@ -3639,7 +3641,7 @@ function App() {
                             </div>
                           )
                         })()}
-                        {/* 瀹㈡埛璐﹀姟下载鎸夐挳 - 浠庡唴瀹逛腑瑙ｆ瀽闅愯棌鏍囪 */}
+                        {/* 客户账务下载按钮 - 从内容中解析隐藏标记 */}
                         {(() => {
                           if (!msg.content) return null
                           const match = msg.content.match(/<!-- CUSTOMER_DEBT:(\d+):(.+?) -->/)
@@ -3737,7 +3739,7 @@ function App() {
                                 // 鏂规B锛氳皟鐢ㄧ湡瀹炵殑鍏ュ簱API
                                 console.log('Confirm inbound:', card)
                                 try {
-                                  // 鏇存柊鍗＄墖鐘舵€佷负澶勭悊涓?
+                                  // 更新卡片状态为处理中
                                   setMessages(prev => prev.map(m => {
                                     if (m.id === msg.id) {
                                       return { ...m, inboundCard: updateCard(card, { status: 'processing' }) }
@@ -3755,7 +3757,7 @@ function App() {
                                   console.log('Order ID:', result.order?.id)
                                   console.log('Order No:', result.order?.order_no)
                                   
-                                  // 鏇存柊鍗＄墖鐘舵€佸拰璁㈠崟淇℃伅
+                                  // 更新卡片状态和订单信息
                                   setMessages(prev => prev.map(m => {
                                     if (m.id === msg.id) {
                                       const updatedCard = updateCard(card, { 
@@ -3823,7 +3825,7 @@ function App() {
                                   onConfirm: async (cardToConfirm) => {
                                     console.log('Confirm single product inbound:', cardToConfirm)
                                     try {
-                                      // 鏇存柊褰撳墠鍗＄墖鐘舵€佷负澶勭悊涓?
+                                      // 更新当前卡片状态为处理中
                                       setMessages(prev => prev.map(m => {
                                         if (m.id === msg.id && m.inboundCards) {
                                           const updatedCards = m.inboundCards.map((c, i) => 
@@ -3840,7 +3842,7 @@ function App() {
                                       
                                       console.log('Confirm inbound result:', result)
                                       
-                                      // 鏇存柊鍗＄墖鐘舵€?
+                                      // 更新卡片状态
                                       setMessages(prev => prev.map(m => {
                                         if (m.id === msg.id && m.inboundCards) {
                                           const updatedCards = m.inboundCards.map((c, i) => 
@@ -4306,7 +4308,7 @@ function App() {
                 className="text-gray-400 hover:text-gray-600 text-3xl font-light w-8 h-8 flex items-center justify-center transition-colors"
                 title="鍏抽棴"
               >
-                脳
+                ×
               </button>
             </div>
             
@@ -4692,16 +4694,16 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
           onSuccess={(result) => {
             // 寮€鍗曟垚鍔熷悗鍦ㄨ亰澶╂鏄剧ず閿€鍞崟鏄庣粏
             const itemsList = (Array.isArray(result?.items) ? result.items : []).map((item, idx) => 
-              `${idx + 1}. ${item.product_name}锛?{item.weight}鍏?脳 楼${item.labor_cost}/鍏?= 楼${(item.weight * item.labor_cost).toFixed(2)}`
+              `${idx + 1}. ${item.product_name}锛?{item.weight}鍏?× 楼${item.labor_cost}/鍏?= 楼${(item.weight * item.labor_cost).toFixed(2)}`
             ).join('\n')
             
             const salesMessage = `鉁?**閿€鍞崟鍒涘缓鎴愬姛**
 
 馃搵 **閿€鍞崟鍙?*锛?{result.order_no}
-馃懁 **瀹㈡埛**锛?{result.customer_name}
+👤 **客户**：{result.customer_name}
 馃鈥嶐煉?**涓氬姟鍛?*锛?{result.salesperson}
 
-馃摝 **商品明细**锛?
+📦 **商品明细**锛?
 ${itemsList}
 
 馃搳 **姹囨€?*锛?
@@ -4814,7 +4816,7 @@ ${itemsList}
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><SalesOrdersPage userRole={userRole} onClose={() => setShowSalesSearchModal(false)} /></div>
       )}
 
-      {/* 鍘嗗彶鍥炴函闈㈡澘 - 鎵€鏈夎鑹插彲鐢?*/}
+      {/* 历史回顾面板 - 鎵€鏈夎鑹插彲鐢?*/}
       <ChatHistoryPanel
         isOpen={showHistoryPanel}
         onClose={() => setShowHistoryPanel(false)}
@@ -4847,31 +4849,31 @@ ${itemsList}
           <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold flex items-center">
-                <span className="text-xl mr-2">馃摝</span>
+                <span className="text-xl mr-2">📦</span>
                 蹇嵎鏀舵枡
               </h3>
-              <button onClick={() => setShowQuickReceiptModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">脳</button>
+              <button onClick={() => setShowQuickReceiptModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
             </div>
             <form onSubmit={handleQuickReceipt} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">閫夋嫨瀹㈡埛</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">选择客户</label>
                 <input
                   type="text"
-                  placeholder="鎼滅储瀹㈡埛濮撳悕鎴栫數璇?.."
+                  placeholder="搜索客户姓名或电话..."
                   value={quickFormCustomerSearch}
                   onChange={(e) => setQuickFormCustomerSearch(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 mb-2"
                 />
                 <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
                   {filteredQuickFormCustomers.length === 0 ? (
-                    <div className="p-3 text-center text-gray-500 text-sm">鏆傛棤鍖归厤瀹㈡埛</div>
+                    <div className="p-3 text-center text-gray-500 text-sm">暂无匹配客户</div>
                   ) : (
                     filteredQuickFormCustomers.slice(0, 10).map(customer => (
                       <div
                         key={customer.id}
                         onClick={() => {
                           setQuickReceiptForm({ ...quickReceiptForm, customer_id: customer.id.toString() })
-                          setQuickFormCustomerSearch(customer.name) // 璁剧疆鎼滅储妗嗕负瀹㈡埛鍚嶏紝鏀惰捣涓嬫媺
+                          setQuickFormCustomerSearch(customer.name) // 设置搜索框为客户名，收起下拉
                         }}
                         className={`p-3 cursor-pointer hover:bg-yellow-50 border-b last:border-b-0 flex justify-between items-center ${
                           quickReceiptForm.customer_id === customer.id.toString() ? 'bg-yellow-100' : ''
@@ -4890,38 +4892,38 @@ ${itemsList}
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">鏀舵枡鍏嬮噸 (鍏?</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">收料克重 (克)</label>
                 <input
                   type="number"
                   step="0.01"
                   value={quickReceiptForm.gold_weight}
                   onChange={(e) => setQuickReceiptForm({ ...quickReceiptForm, gold_weight: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                  placeholder="杈撳叆鏀舵枡鍏嬮噸"
+                  placeholder="输入收料克重"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">鎴愯壊</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">成色</label>
                 <select
                   value={quickReceiptForm.gold_fineness}
                   onChange={(e) => setQuickReceiptForm({ ...quickReceiptForm, gold_fineness: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
                 >
-                  <option value="瓒抽噾999">瓒抽噾999</option>
-                  <option value="瓒抽噾9999">瓒抽噾9999</option>
+                  <option value="足金999">足金999</option>
+                  <option value="足金9999">足金9999</option>
                   <option value="Au999">Au999</option>
                   <option value="Au9999">Au9999</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">澶囨敞锛堝彲閫夛級</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">备注（可选）</label>
                 <textarea
                   value={quickReceiptForm.remark}
                   onChange={(e) => setQuickReceiptForm({ ...quickReceiptForm, remark: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
                   rows={2}
-                  placeholder="瀹㈡埛瀛樻枡 / 鍏朵粬璇存槑"
+                  placeholder="客户存料 / 其他说明"
                 />
               </div>
               <div className="flex space-x-3 pt-4">
@@ -4939,31 +4941,31 @@ ${itemsList}
           <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold flex items-center">
-                <span className="text-xl mr-2">猬嗭笍</span>
+                <span className="text-xl mr-2">⬆️</span>
                 蹇嵎鎻愭枡
               </h3>
-              <button onClick={() => setShowQuickWithdrawalModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">脳</button>
+              <button onClick={() => setShowQuickWithdrawalModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
             </div>
             <form onSubmit={handleQuickWithdrawal} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">閫夋嫨瀹㈡埛</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">选择客户</label>
                 <input
                   type="text"
-                  placeholder="鎼滅储瀹㈡埛濮撳悕鎴栫數璇?.."
+                  placeholder="搜索客户姓名或电话..."
                   value={quickFormCustomerSearch}
                   onChange={(e) => setQuickFormCustomerSearch(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
                 />
                 <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
                   {filteredQuickFormCustomers.length === 0 ? (
-                    <div className="p-3 text-center text-gray-500 text-sm">鏆傛棤鍖归厤瀹㈡埛</div>
+                    <div className="p-3 text-center text-gray-500 text-sm">暂无匹配客户</div>
                   ) : (
                     filteredQuickFormCustomers.slice(0, 10).map(customer => (
                       <div
                         key={customer.id}
                         onClick={() => {
                           setQuickWithdrawalForm({ ...quickWithdrawalForm, customer_id: customer.id.toString() })
-                          setQuickFormCustomerSearch(customer.name) // 璁剧疆鎼滅储妗嗕负瀹㈡埛鍚嶏紝鏀惰捣涓嬫媺
+                          setQuickFormCustomerSearch(customer.name) // 设置搜索框为客户名，收起下拉
                           fetchCustomerDeposit(customer.id.toString())
                         }}
                         className={`p-3 cursor-pointer hover:bg-blue-50 border-b last:border-b-0 flex justify-between items-center ${
@@ -4999,34 +5001,34 @@ ${itemsList}
                     </div>
                   )}
                   {!depositLoading && (selectedCustomerDeposit?.current_balance || 0) === 0 && (
-                    <div className="mt-2 text-xs text-red-600">鈿狅笍 璇ュ鎴锋殏鏃犲瓨鏂欙紝鏃犳硶鎻愭枡</div>
+                    <div className="mt-2 text-xs text-red-600">⚠️ 璇ュ鎴锋殏鏃犲瓨鏂欙紝鏃犳硶鎻愭枡</div>
                   )}
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">鎻愭枡鍏嬮噸 (鍏?</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">提料克重 (克)</label>
                 <input
                   type="number"
                   step="0.01"
                   value={quickWithdrawalForm.gold_weight}
                   onChange={(e) => setQuickWithdrawalForm({ ...quickWithdrawalForm, gold_weight: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="杈撳叆鎻愭枡鍏嬮噸"
+                  placeholder="输入提料克重"
                   max={selectedCustomerDeposit?.current_balance || 0}
                   required
                 />
                 {quickWithdrawalForm.gold_weight && parseFloat(quickWithdrawalForm.gold_weight) > (selectedCustomerDeposit?.current_balance || 0) && (
-                  <div className="mt-1 text-xs text-red-600">鈿狅笍 鎻愭枡鍏嬮噸涓嶈兘瓒呰繃瀛樻枡浣欓</div>
+                  <div className="mt-1 text-xs text-red-600">⚠️ 提料克重不能超过存料余额</div>
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">澶囨敞锛堝彲閫夛級</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">备注（可选）</label>
                 <textarea
                   value={quickWithdrawalForm.remark}
                   onChange={(e) => setQuickWithdrawalForm({ ...quickWithdrawalForm, remark: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   rows={2}
-                  placeholder="瀹㈡埛鎻愭枡 / 鍏朵粬璇存槑"
+                  placeholder="客户提料 / 其他说明"
                 />
               </div>
               <div className="flex space-x-3 pt-4">
