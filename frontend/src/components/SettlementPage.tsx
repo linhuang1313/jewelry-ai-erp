@@ -1274,8 +1274,11 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
                         <StatusBadge status={settlement.status} />
                       </div>
                     </div>
-                    <div className="text-sm text-gray-600 mb-2">
+                    <div className="text-sm text-gray-600 mb-1">
                       销售单: {settlement.sales_order?.order_no || '-'}
+                    </div>
+                    <div className="text-sm text-gray-600 mb-2">
+                      👤 客户: <span className="font-medium text-gray-800">{settlement.sales_order?.customer_name || '-'}</span>
                     </div>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm text-gray-500">
