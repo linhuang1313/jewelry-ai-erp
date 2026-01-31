@@ -161,8 +161,105 @@ async def handle_payment_registration(ai_response, db: Session) -> Dict[str, Any
 
 
 async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
-    """处理收料"""
-    return {"success": False, "message": "请使用金料模块处理收料", "need_confirm": True}
+    """处理收料 - 自动创建收料单"""
+    from ..models import Customer, GoldReceipt, CustomerGoldTransaction
+    from ..utils import china_now
+    
+    # 提取参数
+    customer_name = getattr(ai_response, 'receipt_customer_name', None)
+    gold_weight = getattr(ai_response, 'receipt_gold_weight', None)
+    gold_fineness = getattr(ai_response, 'receipt_gold_fineness', '足金999') or '足金999'
+    remark = getattr(ai_response, 'receipt_remark', '') or ''
+    
+    if not customer_name:
+        return {"success": False, "message": "未识别到客户名称，请提供客户名", "action": "收料"}
+    
+    if not gold_weight or float(gold_weight) <= 0:
+        return {"success": False, "message": "未识别到有效的克重，请提供收料克重", "action": "收料"}
+    
+    gold_weight = float(gold_weight)
+    
+    # 通过客户名查找客户
+    customer = db.query(Customer).filter(Customer.name == customer_name).first()
+    if not customer:
+        # 尝试模糊匹配
+        customer = db.query(Customer).filter(Customer.name.contains(customer_name)).first()
+    
+    if not customer:
+        return {"success": False, "message": f"未找到客户「{customer_name}」，请先在客户管理中创建该客户", "action": "收料"}
+    
+    try:
+        # 生成收料单号 SL + 时间戳
+        now = china_now()
+        receipt_no = f"SL{now.strftime('%Y%m%d%H%M%S')}"
+        
+        # 创建收料单
+        receipt = GoldReceipt(
+            receipt_no=receipt_no,
+            customer_id=customer.id,
+            gold_weight=gold_weight,
+            gold_fineness=gold_fineness,
+            status="pending",  # 待接收状态
+            remark=remark or f"AI对话收料",
+            created_by="AI助手"
+        )
+        db.add(receipt)
+        db.flush()  # 获取ID
+        
+        # 直接确认接收（更新客户存料余额）
+        receipt.status = "received"
+        receipt.received_by = "AI助手"
+        receipt.received_at = now
+        
+        # 更新客户金料账户（单一账户模式：current_balance）
+        customer.current_balance = (customer.current_balance or 0) + gold_weight
+        
+        # 记录金料交易流水
+        transaction = CustomerGoldTransaction(
+            customer_id=customer.id,
+            transaction_type="deposit",  # 存料
+            gold_weight=gold_weight,
+            gold_fineness=gold_fineness,
+            balance_after=customer.current_balance,
+            reference_type="gold_receipt",
+            reference_id=receipt.id,
+            remark=f"收料单{receipt_no}",
+            created_by="AI助手"
+        )
+        db.add(transaction)
+        
+        db.commit()
+        
+        # 返回成功消息（包含隐藏标记供前端解析打印按钮）
+        message = f"""✅ **收料单已创建**
+
+📋 单号：{receipt_no}
+👤 客户：{customer.name}
+⚖️ 克重：{gold_weight:.2f}克
+🏷️ 成色：{gold_fineness}
+💎 当前存料余额：{customer.current_balance:.2f}克
+🕐 时间：{now.strftime('%Y-%m-%d %H:%M:%S')}
+
+<!-- GOLD_RECEIPT:{receipt.id}:{receipt_no} -->"""
+        
+        return {
+            "success": True,
+            "action": "收料",
+            "message": message,
+            "data": {
+                "receipt_id": receipt.id,
+                "receipt_no": receipt_no,
+                "customer_name": customer.name,
+                "gold_weight": gold_weight,
+                "gold_fineness": gold_fineness,
+                "current_balance": customer.current_balance
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"创建收料单失败: {e}", exc_info=True)
+        return {"success": False, "message": f"创建收料单失败：{str(e)}", "action": "收料"}
 
 
 async def handle_gold_payment(ai_response, db: Session, user_role: str) -> Dict[str, Any]:
@@ -582,20 +679,8 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                     elif ai_response.action == "退货":
                         result = await handle_return(ai_response, db, user_role)
                     elif ai_response.action == "收料":
-                        # 收料功能引导用户使用快捷收料
-                        customer_name = getattr(ai_response, 'receipt_customer_name', '') or ''
-                        weight = getattr(ai_response, 'receipt_gold_weight', 0) or 0
-                        result = {
-                            "success": False,
-                            "action": "收料",
-                            "message": f"📦 已识别到收料意图：\n\n👤 客户：{customer_name}\n⚖️ 克重：{weight}克\n\n请使用页面右上角的「快捷收料」按钮完成操作，可以自动生成收料单并打印。",
-                            "need_confirm": True,
-                            "parsed_data": {
-                                "customer_name": customer_name,
-                                "gold_weight": weight,
-                                "gold_fineness": getattr(ai_response, 'receipt_gold_fineness', '足金999')
-                            }
-                        }
+                        # 自动创建收料单
+                        result = await handle_gold_receipt(ai_response, db)
                     elif ai_response.action == "登记收款":
                         result = await handle_payment_registration(ai_response, db)
                     elif ai_response.action == "查询客户账务":
