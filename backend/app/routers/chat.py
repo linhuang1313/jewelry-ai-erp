@@ -277,9 +277,10 @@ async def handle_payment_registration(ai_response, db: Session) -> Dict[str, Any
 
 async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
     """处理收料 - 自动创建收料单"""
-    from ..models import Customer, CustomerGoldDeposit, CustomerGoldDepositTransaction
+    from ..models import Customer, CustomerGoldDeposit, CustomerGoldDepositTransaction, SettlementOrder, SalesOrder
     from ..models.finance import GoldReceipt
     from ..timezone_utils import china_now
+    from sqlalchemy import func
     
     # 提取参数
     customer_name = getattr(ai_response, 'receipt_customer_name', None)
@@ -309,72 +310,60 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
         now = china_now()
         receipt_no = f"SL{now.strftime('%Y%m%d%H%M%S')}"
         
-        # 创建收料单
+        # 创建收料单（这是核心数据源）
         receipt = GoldReceipt(
             receipt_no=receipt_no,
             customer_id=customer.id,
             gold_weight=gold_weight,
             gold_fineness=gold_fineness,
-            status="pending",  # 待接收状态
+            status="received",  # 直接确认接收
             remark=remark or f"AI对话收料",
-            created_by="AI助手"
+            created_by="AI助手",
+            received_by="AI助手",
+            received_at=now
         )
         db.add(receipt)
-        db.flush()  # 获取ID
-        
-        # 直接确认接收
-        receipt.status = "received"
-        receipt.received_by = "AI助手"
-        receipt.received_at = now
-        
-        # 获取或创建客户存料账户
-        deposit = db.query(CustomerGoldDeposit).filter(
-            CustomerGoldDeposit.customer_id == customer.id
-        ).first()
-        
-        if not deposit:
-            deposit = CustomerGoldDeposit(
-                customer_id=customer.id,
-                customer_name=customer.name,
-                current_balance=0.0,
-                total_deposited=0.0,
-                total_used=0.0
-            )
-            db.add(deposit)
-            db.flush()
-        
-        # 记录交易前余额
-        balance_before = deposit.current_balance
-        balance_after = balance_before + gold_weight
-        
-        # 更新客户存料余额
-        deposit.current_balance = balance_after
-        deposit.total_deposited += gold_weight
-        deposit.last_transaction_at = now
-        
-        # 记录存料交易流水
-        transaction = CustomerGoldDepositTransaction(
-            customer_id=customer.id,
-            customer_name=customer.name,
-            transaction_type="deposit",  # 存入
-            amount=gold_weight,
-            balance_before=balance_before,
-            balance_after=balance_after,
-            created_by="AI助手",
-            remark=f"收料单：{receipt_no}"
-        )
-        db.add(transaction)
+        db.flush()
         
         db.commit()
         
+        # ========== 使用 GoldReceipt 计算方式获取最新余额（与查询/详情页一致） ==========
+        # 1. 结算用料（结料支付 + 混合支付的金料部分）
+        total_settlement_gold = 0.0
+        settlements = db.query(SettlementOrder).join(SalesOrder).filter(
+            SalesOrder.customer_id == customer.id,
+            SettlementOrder.status.in_(['confirmed', 'printed'])
+        ).all()
+        for s in settlements:
+            if s.payment_method == 'physical_gold':
+                total_settlement_gold += s.physical_gold_weight or 0
+            elif s.payment_method == 'mixed':
+                total_settlement_gold += s.gold_payment_weight or 0
+        
+        # 2. 来料（GoldReceipt）
+        total_receipts_gold = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
+            GoldReceipt.customer_id == customer.id,
+            GoldReceipt.status == 'received'
+        ).scalar() or 0
+        
+        # 3. 净金料 = 来料 - 结算用料
+        net_gold = float(total_receipts_gold) - total_settlement_gold
+        
         # 返回成功消息（包含隐藏标记供前端解析打印按钮）
+        if net_gold > 0:
+            balance_text = f"当前存料余额：{net_gold:.2f}克"
+        elif net_gold < 0:
+            balance_text = f"当前欠料：{abs(net_gold):.2f}克"
+        else:
+            balance_text = "金料已结清（余额：0克）"
+        
         message = f"""✅ **收料单已创建**
 
 📋 单号：{receipt_no}
 👤 客户：{customer.name}
 ⚖️ 克重：{gold_weight:.2f}克
 🏷️ 成色：{gold_fineness}
-💎 当前存料余额：{balance_after:.2f}克
+💎 {balance_text}
 🕐 时间：{now.strftime('%Y-%m-%d %H:%M:%S')}
 
 <!-- GOLD_RECEIPT:{receipt.id}:{receipt_no} -->"""
@@ -389,7 +378,7 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
                 "customer_name": customer.name,
                 "gold_weight": gold_weight,
                 "gold_fineness": gold_fineness,
-                "current_balance": balance_after
+                "current_balance": net_gold
             }
         }
         
@@ -1110,10 +1099,14 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             
             fast_result = None
             
-            # 快速路径：客户存料查询
-            deposit_match = re.search(r'^(.+?)(有|的)?(存料|余额|金料余额)(吗|多少)?[？?]?$', user_msg)
+            # 快速路径：客户存料查询（支持"测试客户1目前存料多少"等句式）
+            deposit_match = re.search(r'^(.+?)(目前|现在|当前)?(有|的)?(存料|余额|金料余额)(吗|多少|是多少)?[？?]?$', user_msg)
             if deposit_match:
                 customer_name = deposit_match.group(1).strip()
+                # 排除可能被误匹配的时间词后缀
+                for suffix in ['目前', '现在', '当前', '的', '有']:
+                    if customer_name.endswith(suffix):
+                        customer_name = customer_name[:-len(suffix)].strip()
                 logger.info(f"[快速路径] 检测到存料查询: {customer_name}")
                 yield f"data: {json.dumps({'type': 'thinking', 'step': '快速查询', 'message': f'正在查询 {customer_name} 的存料信息...', 'progress': 30}, ensure_ascii=False)}\n\n"
                 
