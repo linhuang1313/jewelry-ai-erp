@@ -277,8 +277,9 @@ async def handle_payment_registration(ai_response, db: Session) -> Dict[str, Any
 
 async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
     """处理收料 - 自动创建收料单"""
-    from ..models import Customer, GoldReceipt, CustomerGoldTransaction
-    from ..utils import china_now
+    from ..models import Customer, CustomerGoldDeposit, CustomerGoldDepositTransaction
+    from ..models.finance import GoldReceipt
+    from ..timezone_utils import china_now
     
     # 提取参数
     customer_name = getattr(ai_response, 'receipt_customer_name', None)
@@ -321,25 +322,46 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
         db.add(receipt)
         db.flush()  # 获取ID
         
-        # 直接确认接收（更新客户存料余额）
+        # 直接确认接收
         receipt.status = "received"
         receipt.received_by = "AI助手"
         receipt.received_at = now
         
-        # 更新客户金料账户（单一账户模式：current_balance）
-        customer.current_balance = (customer.current_balance or 0) + gold_weight
+        # 获取或创建客户存料账户
+        deposit = db.query(CustomerGoldDeposit).filter(
+            CustomerGoldDeposit.customer_id == customer.id
+        ).first()
         
-        # 记录金料交易流水
-        transaction = CustomerGoldTransaction(
+        if not deposit:
+            deposit = CustomerGoldDeposit(
+                customer_id=customer.id,
+                customer_name=customer.name,
+                current_balance=0.0,
+                total_deposited=0.0,
+                total_used=0.0
+            )
+            db.add(deposit)
+            db.flush()
+        
+        # 记录交易前余额
+        balance_before = deposit.current_balance
+        balance_after = balance_before + gold_weight
+        
+        # 更新客户存料余额
+        deposit.current_balance = balance_after
+        deposit.total_deposited += gold_weight
+        deposit.last_transaction_at = now
+        
+        # 记录存料交易流水
+        transaction = CustomerGoldDepositTransaction(
             customer_id=customer.id,
-            transaction_type="deposit",  # 存料
-            gold_weight=gold_weight,
-            gold_fineness=gold_fineness,
-            balance_after=customer.current_balance,
-            reference_type="gold_receipt",
-            reference_id=receipt.id,
-            remark=f"收料单{receipt_no}",
-            created_by="AI助手"
+            customer_name=customer.name,
+            transaction_type="deposit",  # 存入
+            amount=gold_weight,
+            balance_before=balance_before,
+            balance_after=balance_after,
+            created_by="AI助手",
+            remark=f"收料单：{receipt_no}"
         )
         db.add(transaction)
         
@@ -352,7 +374,7 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
 👤 客户：{customer.name}
 ⚖️ 克重：{gold_weight:.2f}克
 🏷️ 成色：{gold_fineness}
-💎 当前存料余额：{customer.current_balance:.2f}克
+💎 当前存料余额：{balance_after:.2f}克
 🕐 时间：{now.strftime('%Y-%m-%d %H:%M:%S')}
 
 <!-- GOLD_RECEIPT:{receipt.id}:{receipt_no} -->"""
@@ -367,7 +389,7 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
                 "customer_name": customer.name,
                 "gold_weight": gold_weight,
                 "gold_fineness": gold_fineness,
-                "current_balance": customer.current_balance
+                "current_balance": balance_after
             }
         }
         
