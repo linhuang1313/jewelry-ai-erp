@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Toaster } from 'react-hot-toast'
@@ -754,7 +754,7 @@ function App() {
           id: Date.now(),
           type: 'system',
           content: withdrawalMessage,
-          // 淇濈暀涓嬭浇閾炬帴渚涙寜閽娇鐢?
+          // 淇濈暀下载閾炬帴渚涙寜閽娇鐢?
           withdrawalDownloadUrl: downloadUrl,
           withdrawalId: result.id
         }])
@@ -3367,7 +3367,7 @@ function App() {
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                             </svg>
-                            鎵撳嵃/涓嬭浇
+                            打印/下载
                           </button>
                         </div>
                       </div>
@@ -3448,7 +3448,7 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                 </svg>
-                                鎵撳嵃鎻愭枡鍗?
+                                打印提料单
                               </button>
                             </div>
                           )
@@ -3475,7 +3475,7 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                 </svg>
-                                鎵撳嵃鏀舵枡鍗?
+                                打印收料单
                               </button>
                             </div>
                           )
@@ -3498,7 +3498,7 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                 </svg>
-                                鎵撳嵃閫€璐у崟
+                                打印退货单
                               </button>
                               <button
                                 onClick={() => window.open(`${API_BASE_URL}/api/returns/${returnId}/download?format=pdf`, '_blank')}
@@ -3507,7 +3507,7 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                 </svg>
-                                涓嬭浇
+                                下载
                               </button>
                             </div>
                           )
@@ -3530,7 +3530,7 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                 </svg>
-                                鎵撳嵃鍏ュ簱鍗?
+                                打印入库单
                               </button>
                               <button
                                 onClick={() => window.open(`${API_BASE_URL}/api/inbound-orders/${inboundId}/download?format=pdf`, '_blank')}
@@ -3539,7 +3539,7 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                 </svg>
-                                涓嬭浇
+                                下载
                               </button>
                             </div>
                           )
@@ -3562,7 +3562,7 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                 </svg>
-                                鎵撳嵃閿€鍞崟
+                                打印销售单
                               </button>
                               <button
                                 onClick={() => window.open(`${API_BASE_URL}/api/sales/orders/${salesId}/download?format=pdf`, '_blank')}
@@ -3571,7 +3571,7 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                 </svg>
-                                涓嬭浇
+                                下载
                               </button>
                             </div>
                           )
@@ -3594,7 +3594,7 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                 </svg>
-                                鎵撳嵃缁撶畻鍗?
+                                打印结算单
                               </button>
                               <button
                                 onClick={() => window.open(`${API_BASE_URL}/api/settlement/orders/${settlementId}/download?format=pdf`, '_blank')}
@@ -3603,7 +3603,7 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                 </svg>
-                                涓嬭浇
+                                下载
                               </button>
                               {/* 閲嶆柊缁撶畻鎸夐挳 - 浠呯粨绠椾笓鍛樺拰绠＄悊灞傚彲瑙?*/}
                               {(userRole === 'settlement' || userRole === 'manager') && (
@@ -3639,7 +3639,7 @@ function App() {
                             </div>
                           )
                         })()}
-                        {/* 瀹㈡埛璐﹀姟涓嬭浇鎸夐挳 - 浠庡唴瀹逛腑瑙ｆ瀽闅愯棌鏍囪 */}
+                        {/* 瀹㈡埛璐﹀姟下载鎸夐挳 - 浠庡唴瀹逛腑瑙ｆ瀽闅愯棌鏍囪 */}
                         {(() => {
                           if (!msg.content) return null
                           const match = msg.content.match(/<!-- CUSTOMER_DEBT:(\d+):(.+?) -->/)
@@ -3655,7 +3655,7 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
-                                涓嬭浇璐﹀姟鏄庣粏 (Excel)
+                                下载账务明细 (Excel)
                               </button>
                             </div>
                           )
@@ -3685,7 +3685,7 @@ function App() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
-                                涓嬭浇鍏ュ簱鏄庣粏 (Excel)
+                                下载入库明细 (Excel)
                               </button>
                             </div>
                           )
@@ -3998,10 +3998,10 @@ function App() {
                               </span>
                             </div>
                           </div>
-                          {/* 鍟嗗搧鏄庣粏琛ㄦ牸 */}
+                          {/* 商品明细琛ㄦ牸 */}
                           {Array.isArray(msg.salesOrder?.details) && msg.salesOrder.details.length > 0 && (
                             <div className="mt-4">
-                              <h4 className="font-semibold mb-2 text-gray-700">鍟嗗搧鏄庣粏</h4>
+                              <h4 className="font-semibold mb-2 text-gray-700">商品明细</h4>
                               <div className="overflow-x-auto">
                                 <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg">
                                   <thead className="bg-gray-100">
@@ -4701,7 +4701,7 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
 馃懁 **瀹㈡埛**锛?{result.customer_name}
 馃鈥嶐煉?**涓氬姟鍛?*锛?{result.salesperson}
 
-馃摝 **鍟嗗搧鏄庣粏**锛?
+馃摝 **商品明细**锛?
 ${itemsList}
 
 馃搳 **姹囨€?*锛?
