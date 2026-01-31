@@ -1,4 +1,4 @@
-﻿"""
+"""
 珠宝ERP系统 - FastAPI主入口
 精简版：核心配置、异常处理、启动事件、路由注册
 
@@ -126,6 +126,7 @@ from .routers.chat import router as chat_router
 from .routers.inbound import router as inbound_router
 from .routers.chat_history import router as chat_history_router
 from .routers.inventory_maintenance import router as inventory_maintenance_router
+from .routers.data_cleanup import router as data_cleanup_router
 
 # 注册已有路由
 app.include_router(finance_router)
@@ -149,6 +150,7 @@ app.include_router(chat_router)
 app.include_router(inbound_router)
 app.include_router(chat_history_router)
 app.include_router(inventory_maintenance_router)
+app.include_router(data_cleanup_router)
 
 
 # ========== 数据库初始化和迁移 ==========

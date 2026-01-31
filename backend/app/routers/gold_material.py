@@ -500,8 +500,14 @@ async def get_customer_deposit(
     if not customer:
         raise HTTPException(status_code=404, detail="客户不存在")
     
-    # ========== 计算净金料（与AI分析一致）==========
-    # 1. 结算欠料（结料支付 + 混合支付的金料部分）
+    # ========== 统一使用历史交易汇总：来料 - 结算用料 - 提料 ==========
+    # 1. 来料（GoldReceipt）
+    total_receipts = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
+        GoldReceipt.customer_id == customer_id,
+        GoldReceipt.status == 'received'
+    ).scalar() or 0
+    
+    # 2. 结算用料（结料支付 + 混合支付的金料部分）
     total_settlement_gold = 0.0
     settlements = db.query(SettlementOrder).join(SalesOrder).filter(
         SalesOrder.customer_id == customer_id,
@@ -513,14 +519,14 @@ async def get_customer_deposit(
         elif s.payment_method == 'mixed':
             total_settlement_gold += s.gold_payment_weight or 0
     
-    # 2. 来料（GoldReceipt）
-    total_receipts_gold = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
-        GoldReceipt.customer_id == customer_id,
-        GoldReceipt.status == 'received'
+    # 3. 提料（CustomerWithdrawal）
+    total_withdrawals = db.query(func.coalesce(func.sum(CustomerWithdrawal.gold_weight), 0)).filter(
+        CustomerWithdrawal.customer_id == customer_id,
+        CustomerWithdrawal.status.in_(['pending', 'completed'])
     ).scalar() or 0
     
-    # 3. 净金料 = 来料 - 结算欠料（正数=存料，负数=欠料）
-    net_gold = float(total_receipts_gold) - total_settlement_gold
+    # 4. 净存料 = 来料 - 结算用料 - 提料
+    net_gold = float(total_receipts) - total_settlement_gold - float(total_withdrawals)
     
     # 获取最近的存料交易记录
     recent_transactions = db.query(CustomerGoldDepositTransaction).filter(
@@ -539,8 +545,9 @@ async def get_customer_deposit(
                 "current_balance": net_gold,  # 使用计算的净金料值
                 "net_gold": net_gold,         # 净金料字段（正=存料，负=欠料）
                 "has_deposit": net_gold > 0,  # 是否有存料可提
-                "settlement_gold": total_settlement_gold,  # 结算欠料总额
-                "receipts_gold": float(total_receipts_gold),  # 来料总额
+                "receipts_gold": float(total_receipts),      # 来料总额
+                "settlement_gold": total_settlement_gold,    # 结算用料总额
+                "withdrawals_gold": float(total_withdrawals), # 提料总额
             },
             "recent_transactions": [
                 {

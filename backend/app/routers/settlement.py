@@ -399,22 +399,50 @@ async def create_settlement_order(
     if data.payment_method == "physical_gold":
         remark = f"结料支付：{actual_gold_due:.2f}克。" + remark
     
-    # ========== 查询客户历史余额信息 ==========
+    # ========== 查询客户历史余额信息（统一使用历史交易汇总） ==========
     previous_cash_debt = 0.0  # 上次现金欠款
     previous_gold_debt = 0.0  # 上次金料欠款
     gold_deposit_balance = 0.0  # 存料余额
     cash_deposit_balance = 0.0  # 存款余额
     
     if customer_id:
-        # 查询金料账户（单一账户模式：current_balance 正=存料，负=欠料）
-        customer_deposit = db.query(CustomerGoldDeposit).filter(
-            CustomerGoldDeposit.customer_id == customer_id
-        ).first()
-        if customer_deposit:
-            current_balance = customer_deposit.current_balance or 0.0
-            # 从单一账户派生兼容字段
-            gold_deposit_balance = max(0, current_balance)  # 正值 = 存料
-            previous_gold_debt = max(0, -current_balance)   # 负值的绝对值 = 欠料
+        # 金料账户（统一使用历史交易汇总：来料 - 结算用料 - 提料）
+        try:
+            from ..models.finance import GoldReceipt
+            from ..models import CustomerWithdrawal
+            
+            # 1. 来料（GoldReceipt）
+            total_receipts = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
+                GoldReceipt.customer_id == customer_id,
+                GoldReceipt.status == 'received'
+            ).scalar() or 0
+            
+            # 2. 结算用料（结料支付 + 混合支付的金料部分）
+            total_settlement_gold = 0.0
+            existing_settlements = db.query(SettlementOrder).join(SalesOrder).filter(
+                SalesOrder.customer_id == customer_id,
+                SettlementOrder.status.in_(['confirmed', 'printed'])
+            ).all()
+            for s in existing_settlements:
+                if s.payment_method == 'physical_gold':
+                    total_settlement_gold += s.physical_gold_weight or 0
+                elif s.payment_method == 'mixed':
+                    total_settlement_gold += s.gold_payment_weight or 0
+            
+            # 3. 提料（CustomerWithdrawal）
+            total_withdrawals = db.query(func.coalesce(func.sum(CustomerWithdrawal.gold_weight), 0)).filter(
+                CustomerWithdrawal.customer_id == customer_id,
+                CustomerWithdrawal.status.in_(['pending', 'completed'])
+            ).scalar() or 0
+            
+            # 4. 净存料 = 来料 - 结算用料 - 提料
+            net_gold = float(total_receipts) - total_settlement_gold - float(total_withdrawals)
+            
+            # 从净值派生兼容字段
+            gold_deposit_balance = max(0, net_gold)  # 正值 = 存料
+            previous_gold_debt = max(0, -net_gold)   # 负值的绝对值 = 欠料
+        except Exception as e:
+            logger.warning(f"查询金料账户失败: {e}")
         
         # 查询现金欠款（从应收账款表获取）
         from ..models.finance import AccountReceivable

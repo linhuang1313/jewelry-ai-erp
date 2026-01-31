@@ -341,8 +341,16 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
         customer_name_final = customer.name
         customer_id = customer.id
         
-        # ========== 使用 GoldReceipt 计算方式获取最新余额（与查询/详情页一致） ==========
-        # 1. 结算用料（结料支付 + 混合支付的金料部分）
+        # ========== 统一使用历史交易汇总：来料 - 结算用料 - 提料 ==========
+        from ..models import CustomerWithdrawal
+        
+        # 1. 来料（GoldReceipt）
+        total_receipts = local_db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
+            GoldReceipt.customer_id == customer_id,
+            GoldReceipt.status == 'received'
+        ).scalar() or 0
+        
+        # 2. 结算用料（结料支付 + 混合支付的金料部分）
         total_settlement_gold = 0.0
         settlements = local_db.query(SettlementOrder).join(SalesOrder).filter(
             SalesOrder.customer_id == customer_id,
@@ -354,16 +362,16 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
             elif s.payment_method == 'mixed':
                 total_settlement_gold += s.gold_payment_weight or 0
         
-        # 2. 来料（GoldReceipt）
-        total_receipts_gold = local_db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
-            GoldReceipt.customer_id == customer_id,
-            GoldReceipt.status == 'received'
+        # 3. 提料（CustomerWithdrawal）
+        total_withdrawals = local_db.query(func.coalesce(func.sum(CustomerWithdrawal.gold_weight), 0)).filter(
+            CustomerWithdrawal.customer_id == customer_id,
+            CustomerWithdrawal.status.in_(['pending', 'completed'])
         ).scalar() or 0
         
-        # 3. 净金料 = 来料 - 结算用料
-        net_gold = float(total_receipts_gold) - total_settlement_gold
+        # 4. 净存料 = 来料 - 结算用料 - 提料
+        net_gold = float(total_receipts) - total_settlement_gold - float(total_withdrawals)
         
-        logger.info(f"[收料] 余额计算: receipts={total_receipts_gold}, settlements={total_settlement_gold}, net={net_gold}")
+        logger.info(f"[收料] 余额计算: 来料={total_receipts}, 结算用料={total_settlement_gold}, 提料={total_withdrawals}, 净存料={net_gold}")
         
         # 返回成功消息（包含隐藏标记供前端解析打印按钮）
         if net_gold > 0:
@@ -1138,6 +1146,15 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         customer = min(candidates, key=lambda c: abs(len(c.name) - len(customer_name)))
                 
                 if customer:
+                    from ..models import CustomerWithdrawal
+                    
+                    # 1. 来料（GoldReceipt）
+                    total_receipts = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
+                        GoldReceipt.customer_id == customer.id,
+                        GoldReceipt.status == 'received'
+                    ).scalar() or 0
+                    
+                    # 2. 结算用料
                     total_settlement_gold = 0.0
                     settlements = db.query(SettlementOrder).join(SalesOrder).filter(
                         SalesOrder.customer_id == customer.id,
@@ -1149,12 +1166,14 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         elif s.payment_method == 'mixed':
                             total_settlement_gold += s.gold_payment_weight or 0
                     
-                    total_receipts_gold = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
-                        GoldReceipt.customer_id == customer.id,
-                        GoldReceipt.status == 'received'
+                    # 3. 提料（CustomerWithdrawal）
+                    total_withdrawals = db.query(func.coalesce(func.sum(CustomerWithdrawal.gold_weight), 0)).filter(
+                        CustomerWithdrawal.customer_id == customer.id,
+                        CustomerWithdrawal.status.in_(['pending', 'completed'])
                     ).scalar() or 0
                     
-                    net_gold = float(total_receipts_gold) - total_settlement_gold
+                    # 4. 净存料 = 来料 - 结算用料 - 提料
+                    net_gold = float(total_receipts) - total_settlement_gold - float(total_withdrawals)
                     
                     if net_gold > 0:
                         msg = f"**{customer.name}** 当前存料余额：**{net_gold:.2f}克**"
