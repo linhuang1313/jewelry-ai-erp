@@ -1,5 +1,5 @@
 """
-数据清理工具 - 用于清理测试数据
+数据清理工具 - 用于清理测试数据和诊断问题
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -14,6 +14,81 @@ import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["数据清理"])
+
+
+@router.get("/api/debug/customer-gold")
+async def debug_customer_gold(
+    customer_name: str = Query(..., description="客户名称"),
+    db: Session = Depends(get_db)
+):
+    """
+    诊断客户金料账户数据
+    """
+    # 查找客户
+    customers = db.query(Customer).filter(
+        Customer.name.contains(customer_name)
+    ).all()
+    
+    if not customers:
+        return {"success": False, "message": f"未找到包含 '{customer_name}' 的客户"}
+    
+    result = []
+    for customer in customers:
+        customer_id = customer.id
+        
+        # 查询收料单
+        receipts = db.query(GoldReceipt).filter(
+            GoldReceipt.customer_id == customer_id
+        ).all()
+        
+        # 计算余额
+        total_receipts = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
+            GoldReceipt.customer_id == customer_id,
+            GoldReceipt.status == 'received'
+        ).scalar() or 0
+        
+        total_settlement_gold = 0.0
+        settlements = db.query(SettlementOrder).join(SalesOrder).filter(
+            SalesOrder.customer_id == customer_id,
+            SettlementOrder.status.in_(['confirmed', 'printed'])
+        ).all()
+        for s in settlements:
+            if s.payment_method == 'physical_gold':
+                total_settlement_gold += s.physical_gold_weight or 0
+            elif s.payment_method == 'mixed':
+                total_settlement_gold += s.gold_payment_weight or 0
+        
+        total_withdrawals = db.query(func.coalesce(func.sum(CustomerWithdrawal.gold_weight), 0)).filter(
+            CustomerWithdrawal.customer_id == customer_id,
+            CustomerWithdrawal.status.in_(['pending', 'completed'])
+        ).scalar() or 0
+        
+        net_gold = float(total_receipts) - total_settlement_gold - float(total_withdrawals)
+        
+        result.append({
+            "customer_id": customer_id,
+            "customer_name": customer.name,
+            "customer_no": customer.customer_no,
+            "receipts_count": len(receipts),
+            "receipts": [
+                {
+                    "id": r.id,
+                    "receipt_no": r.receipt_no,
+                    "gold_weight": r.gold_weight,
+                    "status": r.status,
+                    "created_at": r.created_at.isoformat() if r.created_at else None
+                }
+                for r in receipts
+            ],
+            "balance_calculation": {
+                "total_receipts": float(total_receipts),
+                "total_settlement_gold": total_settlement_gold,
+                "total_withdrawals": float(total_withdrawals),
+                "net_gold": net_gold
+            }
+        })
+    
+    return {"success": True, "data": result}
 
 
 @router.get("/api/cleanup/preview")
