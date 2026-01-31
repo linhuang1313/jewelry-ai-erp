@@ -87,7 +87,8 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
   
   // 根据角色确定退货配置
   const getReturnConfig = () => {
-    if (userRole === 'counter') {
+    // 柜台和结算专员：只能退给商品部（展厅 → 商品部）
+    if (userRole === 'counter' || userRole === 'settlement') {
       return {
         returnType: 'to_warehouse',
         locationCode: 'showroom',
@@ -97,7 +98,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
         subtitle: '快速创建退货单（退给商品部）'
       };
     } else {
-      // 商品专员
+      // 商品专员：可以退给供应商
       return {
         returnType: 'to_supplier',
         locationCode: 'warehouse',
