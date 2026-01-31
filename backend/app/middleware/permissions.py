@@ -128,7 +128,8 @@ ROLE_PERMISSIONS = {
         'can_return_to_supplier': False,
         'can_return_to_warehouse': False,
         'can_view_finance': True,          # 可以查看财务
-        'can_record_payment': True,        # 可以登记收款
+        'can_record_payment': True,        # 可以登记收款（客户）
+        'can_record_supplier_payment': True,  # 可以登记供应商付款（工费）
         'can_view_supplier_gold_account': False,  # 不能查看供应商金料账户
     },
     
@@ -185,7 +186,8 @@ ROLE_PERMISSIONS = {
         'can_return_to_supplier': True,
         'can_return_to_warehouse': True,
         'can_view_finance': True,
-        'can_record_payment': True,        # 可以登记收款
+        'can_record_payment': True,        # 可以登记收款（客户）
+        'can_record_supplier_payment': True,  # 可以登记供应商付款（工费）
         # 金料管理权限（全部）
         'can_create_gold_receipt': True,
         'can_view_gold_material': True,
@@ -252,6 +254,9 @@ PERMISSION_NAMES = {
     # 暂借单权限
     'can_create_loan': '创建暂借单',
     'can_manage_loan': '管理暂借单',
+    # 财务付款权限
+    'can_record_payment': '登记客户收款',
+    'can_record_supplier_payment': '登记供应商付款',
 }
 
 # AI操作到权限的映射
@@ -260,17 +265,20 @@ ACTION_TO_PERMISSION = {
     '创建销售单': 'can_create_sales',
     '创建结算单': 'can_create_settlement',
     '创建转移单': 'can_transfer',
+    '批量转移': 'can_transfer',  # 批量转移使用相同的转移权限
     '接收库存': 'can_receive_transfer',
     '创建客户': 'can_manage_customers',
     '创建供应商': 'can_manage_suppliers',
     # 金料操作
     '创建收料单': 'can_create_gold_receipt',
+    '收料': 'can_create_gold_receipt',  # 收料 = 创建收料单
     '确认收料': 'can_confirm_gold_receive',
     '创建付料单': 'can_create_gold_payment',
-    # 付料操作 - 注意：这个需要根据角色动态判断，不在此映射
-    # '付料': 需在代码中根据角色判断使用 can_gold_payment_to_supplier 或 can_gold_refund_to_customer
+    '付料': 'can_gold_payment_to_supplier',  # 付料给供应商
+    '提料': 'can_create_withdrawal',  # 客户提料
     # 财务操作
     '登记收款': 'can_record_payment',
+    '供应商付款': 'can_record_supplier_payment',  # 供应商工费付款
 }
 
 

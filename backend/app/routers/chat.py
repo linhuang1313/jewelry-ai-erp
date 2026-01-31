@@ -156,8 +156,123 @@ async def handle_return(ai_response, db: Session, user_role: str) -> Dict[str, A
 
 
 async def handle_payment_registration(ai_response, db: Session) -> Dict[str, Any]:
-    """处理登记收款"""
-    return {"success": False, "message": "请使用财务模块登记收款", "need_confirm": True}
+    """处理登记收款 - 自动登记客户收款"""
+    from ..models import Customer
+    from ..models.finance import PaymentRecord, AccountReceivable
+    from ..timezone_utils import china_now
+    from datetime import date
+    
+    # 提取参数
+    customer_name = getattr(ai_response, 'payment_customer_name', None)
+    amount = getattr(ai_response, 'payment_amount', None)
+    payment_method = getattr(ai_response, 'payment_method', '转账') or '转账'
+    remark = getattr(ai_response, 'payment_remark', '') or ''
+    
+    if not customer_name:
+        return {"success": False, "message": "未识别到客户名称，请提供客户名", "action": "登记收款"}
+    
+    if not amount or float(amount) <= 0:
+        return {"success": False, "message": "未识别到有效的金额，请提供收款金额", "action": "登记收款"}
+    
+    amount = float(amount)
+    
+    # 通过客户名查找客户
+    customer = db.query(Customer).filter(Customer.name == customer_name).first()
+    if not customer:
+        # 尝试模糊匹配
+        customer = db.query(Customer).filter(Customer.name.contains(customer_name)).first()
+    
+    if not customer:
+        return {"success": False, "message": f"未找到客户「{customer_name}」，请先在客户管理中创建该客户", "action": "登记收款"}
+    
+    # 转换付款方式为英文
+    method_map = {
+        '转账': 'bank_transfer',
+        '现金': 'cash',
+        '微信': 'wechat',
+        '支付宝': 'alipay',
+        '刷卡': 'card'
+    }
+    payment_method_en = method_map.get(payment_method, 'bank_transfer')
+    
+    try:
+        now = china_now()
+        payment_no = f"SK{now.strftime('%Y%m%d%H%M%S')}"
+        
+        # 创建收款记录
+        payment = PaymentRecord(
+            payment_no=payment_no,
+            account_receivable_id=None,
+            customer_id=customer.id,
+            payment_date=date.today(),
+            amount=amount,
+            payment_method=payment_method_en,
+            remark=remark or "AI对话收款",
+            operator="AI助手"
+        )
+        db.add(payment)
+        db.flush()
+        
+        # FIFO方式冲抵应收账款
+        unpaid_receivables = db.query(AccountReceivable).filter(
+            AccountReceivable.customer_id == customer.id,
+            AccountReceivable.status.in_(["unpaid", "overdue"]),
+            AccountReceivable.unpaid_amount > 0
+        ).order_by(AccountReceivable.credit_start_date.asc()).all()
+        
+        remaining_amount = amount
+        offset_details = []
+        
+        for receivable in unpaid_receivables:
+            if remaining_amount <= 0:
+                break
+            
+            offset_amount = min(remaining_amount, receivable.unpaid_amount)
+            receivable.received_amount += offset_amount
+            receivable.unpaid_amount = receivable.total_amount - receivable.received_amount
+            
+            if receivable.unpaid_amount <= 0:
+                receivable.status = "paid"
+            
+            offset_details.append(f"冲抵{receivable.receivable_no}：¥{offset_amount:.2f}")
+            remaining_amount -= offset_amount
+        
+        db.commit()
+        
+        # 构建返回消息
+        offset_info = ""
+        if offset_details:
+            offset_info = f"\n📝 冲抵明细：\n" + "\n".join([f"   • {d}" for d in offset_details])
+        if remaining_amount > 0:
+            offset_info += f"\n💰 剩余预收款：¥{remaining_amount:.2f}"
+        
+        message = f"""✅ **收款登记成功**
+
+📋 单号：{payment_no}
+👤 客户：{customer.name}
+💰 金额：¥{amount:.2f}
+💳 方式：{payment_method}
+🕐 时间：{now.strftime('%Y-%m-%d %H:%M:%S')}{offset_info}
+
+<!-- PAYMENT:{payment.id}:{payment_no} -->"""
+        
+        return {
+            "success": True,
+            "action": "登记收款",
+            "message": message,
+            "data": {
+                "payment_id": payment.id,
+                "payment_no": payment_no,
+                "customer_name": customer.name,
+                "amount": amount,
+                "payment_method": payment_method
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"登记收款失败: {e}", exc_info=True)
+        return {"success": False, "message": f"登记收款失败：{str(e)}", "action": "登记收款"}
 
 
 async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
@@ -263,23 +378,506 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
 
 
 async def handle_gold_payment(ai_response, db: Session, user_role: str) -> Dict[str, Any]:
-    """处理付料"""
-    return {"success": False, "message": "请使用金料模块处理付料", "need_confirm": True}
+    """处理付料（给供应商金料）- 自动创建付料单"""
+    from ..models import Supplier, GoldMaterialTransaction, SupplierGoldAccount, SupplierGoldTransaction
+    from ..timezone_utils import china_now
+    
+    # 提取参数
+    supplier_name = getattr(ai_response, 'gold_payment_supplier', None)
+    gold_weight = getattr(ai_response, 'gold_payment_weight', None)
+    remark = getattr(ai_response, 'gold_payment_remark', '') or ''
+    
+    if not supplier_name:
+        return {"success": False, "message": "未识别到供应商名称，请提供供应商名", "action": "付料"}
+    
+    if not gold_weight or float(gold_weight) <= 0:
+        return {"success": False, "message": "未识别到有效的克重，请提供付料克重", "action": "付料"}
+    
+    gold_weight = float(gold_weight)
+    
+    # 通过供应商名查找供应商
+    supplier = db.query(Supplier).filter(Supplier.name == supplier_name).first()
+    if not supplier:
+        # 尝试模糊匹配
+        supplier = db.query(Supplier).filter(Supplier.name.contains(supplier_name)).first()
+    
+    if not supplier:
+        return {"success": False, "message": f"未找到供应商「{supplier_name}」，请先在供应商管理中创建该供应商", "action": "付料"}
+    
+    try:
+        now = china_now()
+        count = db.query(GoldMaterialTransaction).filter(
+            GoldMaterialTransaction.transaction_no.like(f"FL{now.strftime('%Y%m%d')}%")
+        ).count()
+        payment_no = f"FL{now.strftime('%Y%m%d')}{count + 1:03d}"
+        
+        # 创建金料支出记录（付料单）
+        transaction = GoldMaterialTransaction(
+            transaction_no=payment_no,
+            transaction_type='expense',
+            supplier_id=supplier.id,
+            supplier_name=supplier.name,
+            gold_weight=gold_weight,
+            status="confirmed",  # 付料单直接确认
+            created_by="AI助手",
+            confirmed_by="AI助手",
+            confirmed_at=now,
+            remark=remark or "AI对话付料"
+        )
+        db.add(transaction)
+        db.flush()
+        
+        # 更新供应商金料账户
+        supplier_gold_account = db.query(SupplierGoldAccount).filter(
+            SupplierGoldAccount.supplier_id == supplier.id
+        ).first()
+        
+        if not supplier_gold_account:
+            supplier_gold_account = SupplierGoldAccount(
+                supplier_id=supplier.id,
+                supplier_name=supplier.name,
+                current_balance=0.0,
+                total_received=0.0,
+                total_paid=0.0
+            )
+            db.add(supplier_gold_account)
+            db.flush()
+        
+        balance_before = supplier_gold_account.current_balance
+        supplier_gold_account.current_balance = round(supplier_gold_account.current_balance - gold_weight, 3)
+        supplier_gold_account.total_paid = round(supplier_gold_account.total_paid + gold_weight, 3)
+        supplier_gold_account.last_transaction_at = now
+        
+        # 创建供应商金料交易记录
+        supplier_gold_tx = SupplierGoldTransaction(
+            supplier_id=supplier.id,
+            supplier_name=supplier.name,
+            transaction_type='pay',
+            payment_transaction_id=transaction.id,
+            gold_weight=gold_weight,
+            balance_before=balance_before,
+            balance_after=supplier_gold_account.current_balance,
+            created_by="AI助手",
+            remark=f"付料单：{payment_no}"
+        )
+        db.add(supplier_gold_tx)
+        
+        db.commit()
+        
+        # 构建余额状态描述
+        if supplier_gold_account.current_balance > 0:
+            status_text = f"我们仍欠供应商 {supplier_gold_account.current_balance:.2f}克"
+        elif supplier_gold_account.current_balance < 0:
+            status_text = f"供应商欠我们 {abs(supplier_gold_account.current_balance):.2f}克"
+        else:
+            status_text = "已结清"
+        
+        message = f"""✅ **付料单已创建**
+
+📋 单号：{payment_no}
+🏭 供应商：{supplier.name}
+⚖️ 付料克重：{gold_weight:.2f}克
+💎 金料账户：{status_text}
+🕐 时间：{now.strftime('%Y-%m-%d %H:%M:%S')}
+
+<!-- GOLD_PAYMENT:{transaction.id}:{payment_no} -->"""
+        
+        return {
+            "success": True,
+            "action": "付料",
+            "message": message,
+            "data": {
+                "transaction_id": transaction.id,
+                "payment_no": payment_no,
+                "supplier_name": supplier.name,
+                "gold_weight": gold_weight,
+                "balance_after": supplier_gold_account.current_balance
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"创建付料单失败: {e}", exc_info=True)
+        return {"success": False, "message": f"创建付料单失败：{str(e)}", "action": "付料"}
 
 
 async def handle_gold_withdrawal(ai_response, db: Session) -> Dict[str, Any]:
-    """处理提料"""
-    return {"success": False, "message": "请使用金料模块处理提料", "need_confirm": True}
+    """处理提料（客户取料）- 自动创建提料单"""
+    from ..models import Customer, CustomerGoldDeposit, CustomerWithdrawal, CustomerGoldDepositTransaction
+    from ..timezone_utils import china_now
+    
+    # 提取参数
+    customer_name = getattr(ai_response, 'withdrawal_customer_name', None)
+    gold_weight = getattr(ai_response, 'withdrawal_gold_weight', None)
+    remark = getattr(ai_response, 'withdrawal_remark', '') or ''
+    
+    if not customer_name:
+        return {"success": False, "message": "未识别到客户名称，请提供客户名", "action": "提料"}
+    
+    if not gold_weight or float(gold_weight) <= 0:
+        return {"success": False, "message": "未识别到有效的克重，请提供提料克重", "action": "提料"}
+    
+    gold_weight = float(gold_weight)
+    
+    # 通过客户名查找客户
+    customer = db.query(Customer).filter(Customer.name == customer_name).first()
+    if not customer:
+        # 尝试模糊匹配
+        customer = db.query(Customer).filter(Customer.name.contains(customer_name)).first()
+    
+    if not customer:
+        return {"success": False, "message": f"未找到客户「{customer_name}」，请先在客户管理中创建该客户", "action": "提料"}
+    
+    # 验证存料余额
+    deposit = db.query(CustomerGoldDeposit).filter(
+        CustomerGoldDeposit.customer_id == customer.id
+    ).first()
+    
+    current_balance = deposit.current_balance if deposit else 0.0
+    if current_balance < gold_weight:
+        return {
+            "success": False, 
+            "message": f"客户「{customer.name}」存料余额不足。\n当前余额：{current_balance:.2f}克\n申请提料：{gold_weight:.2f}克",
+            "action": "提料"
+        }
+    
+    try:
+        now = china_now()
+        count = db.query(CustomerWithdrawal).filter(
+            CustomerWithdrawal.withdrawal_no.like(f"QL{now.strftime('%Y%m%d')}%")
+        ).count()
+        withdrawal_no = f"QL{now.strftime('%Y%m%d')}{count + 1:03d}"
+        
+        # 记录扣减前余额
+        balance_before = deposit.current_balance
+        balance_after = balance_before - gold_weight
+        
+        # 创建取料单
+        withdrawal = CustomerWithdrawal(
+            withdrawal_no=withdrawal_no,
+            customer_id=customer.id,
+            customer_name=customer.name,
+            gold_weight=gold_weight,
+            withdrawal_type="self",  # 默认自取
+            status="pending",  # 待取料
+            created_by="AI助手",
+            remark=remark or "AI对话提料"
+        )
+        db.add(withdrawal)
+        
+        # 扣减客户存料余额
+        deposit.current_balance = balance_after
+        deposit.total_used += gold_weight
+        deposit.last_transaction_at = now
+        
+        # 创建存料交易记录
+        transaction = CustomerGoldDepositTransaction(
+            customer_id=customer.id,
+            customer_name=customer.name,
+            transaction_type="use",
+            amount=-gold_weight,  # 负数表示支出
+            balance_before=balance_before,
+            balance_after=balance_after,
+            created_by="AI助手",
+            remark=f"提料单：{withdrawal_no}" + (f" - {remark}" if remark else "")
+        )
+        db.add(transaction)
+        
+        db.commit()
+        db.refresh(withdrawal)
+        
+        message = f"""✅ **提料单已创建**
+
+📋 单号：{withdrawal_no}
+👤 客户：{customer.name}
+⚖️ 提料克重：{gold_weight:.2f}克
+💎 剩余存料：{balance_after:.2f}克
+📦 状态：待取料
+🕐 时间：{now.strftime('%Y-%m-%d %H:%M:%S')}
+
+<!-- GOLD_WITHDRAWAL:{withdrawal.id}:{withdrawal_no} -->"""
+        
+        return {
+            "success": True,
+            "action": "提料",
+            "message": message,
+            "data": {
+                "withdrawal_id": withdrawal.id,
+                "withdrawal_no": withdrawal_no,
+                "customer_name": customer.name,
+                "gold_weight": gold_weight,
+                "balance_after": balance_after
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"创建提料单失败: {e}", exc_info=True)
+        return {"success": False, "message": f"创建提料单失败：{str(e)}", "action": "提料"}
 
 
 async def handle_supplier_cash_payment(ai_response, db: Session) -> Dict[str, Any]:
-    """处理供应商付款"""
-    return {"success": False, "message": "请使用财务模块处理供应商付款", "need_confirm": True}
+    """处理供应商付款（工费）- 自动登记给供应商付款"""
+    from ..models import Supplier
+    from ..models.finance import SupplierPayment, AccountPayable
+    from ..timezone_utils import china_now
+    from datetime import date, datetime
+    
+    # 提取参数
+    supplier_name = getattr(ai_response, 'supplier_payment_name', None)
+    amount = getattr(ai_response, 'supplier_payment_amount', None)
+    payment_method = getattr(ai_response, 'supplier_payment_method', '转账') or '转账'
+    remark = getattr(ai_response, 'supplier_payment_remark', '') or ''
+    
+    if not supplier_name:
+        return {"success": False, "message": "未识别到供应商名称，请提供供应商名", "action": "供应商付款"}
+    
+    if not amount or float(amount) <= 0:
+        return {"success": False, "message": "未识别到有效的金额，请提供付款金额", "action": "供应商付款"}
+    
+    amount = float(amount)
+    
+    # 通过供应商名查找供应商
+    supplier = db.query(Supplier).filter(Supplier.name == supplier_name).first()
+    if not supplier:
+        # 尝试模糊匹配
+        supplier = db.query(Supplier).filter(Supplier.name.contains(supplier_name)).first()
+    
+    if not supplier:
+        return {"success": False, "message": f"未找到供应商「{supplier_name}」，请先在供应商管理中创建该供应商", "action": "供应商付款"}
+    
+    # 转换付款方式为英文
+    method_map = {
+        '转账': 'bank_transfer',
+        '现金': 'cash',
+        '支票': 'check',
+        '承兑': 'acceptance'
+    }
+    payment_method_en = method_map.get(payment_method, 'bank_transfer')
+    
+    try:
+        now = china_now()
+        count = db.query(SupplierPayment).filter(
+            SupplierPayment.create_time >= datetime.now().replace(hour=0, minute=0, second=0)
+        ).count()
+        payment_no = f"FK{now.strftime('%Y%m%d')}{count + 1:03d}"
+        
+        # 创建付款记录
+        payment = SupplierPayment(
+            payment_no=payment_no,
+            supplier_id=supplier.id,
+            payment_date=date.today(),
+            amount=amount,
+            payment_method=payment_method_en,
+            remark=remark or "AI对话付款",
+            created_by="AI助手"
+        )
+        db.add(payment)
+        db.flush()
+        
+        # FIFO方式冲抵应付账款
+        unpaid_payables = db.query(AccountPayable).filter(
+            AccountPayable.supplier_id == supplier.id,
+            AccountPayable.status.in_(["unpaid", "partial"]),
+            AccountPayable.unpaid_amount > 0
+        ).order_by(AccountPayable.due_date.asc()).all()
+        
+        remaining_amount = amount
+        offset_details = []
+        
+        for payable in unpaid_payables:
+            if remaining_amount <= 0:
+                break
+            
+            offset_amount = min(remaining_amount, payable.unpaid_amount)
+            payable.paid_amount += offset_amount
+            payable.unpaid_amount = payable.total_amount - payable.paid_amount
+            
+            if payable.unpaid_amount <= 0:
+                payable.status = "paid"
+            else:
+                payable.status = "partial"
+            
+            offset_details.append(f"冲抵{payable.payable_no}：¥{offset_amount:.2f}")
+            remaining_amount -= offset_amount
+        
+        db.commit()
+        
+        # 构建返回消息
+        offset_info = ""
+        if offset_details:
+            offset_info = f"\n📝 冲抵明细：\n" + "\n".join([f"   • {d}" for d in offset_details])
+        if remaining_amount > 0:
+            offset_info += f"\n💰 剩余预付款：¥{remaining_amount:.2f}"
+        
+        message = f"""✅ **供应商付款成功**
+
+📋 单号：{payment_no}
+🏭 供应商：{supplier.name}
+💰 金额：¥{amount:.2f}
+💳 方式：{payment_method}
+🕐 时间：{now.strftime('%Y-%m-%d %H:%M:%S')}{offset_info}
+
+<!-- SUPPLIER_PAYMENT:{payment.id}:{payment_no} -->"""
+        
+        return {
+            "success": True,
+            "action": "供应商付款",
+            "message": message,
+            "data": {
+                "payment_id": payment.id,
+                "payment_no": payment_no,
+                "supplier_name": supplier.name,
+                "amount": amount,
+                "payment_method": payment_method
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"供应商付款失败: {e}", exc_info=True)
+        return {"success": False, "message": f"供应商付款失败：{str(e)}", "action": "供应商付款"}
 
 
-async def handle_batch_transfer(ai_response, db: Session) -> Dict[str, Any]:
-    """处理批量转移"""
-    return {"success": False, "message": "请使用仓库模块处理批量转移", "need_confirm": True}
+async def handle_batch_transfer(ai_response, db: Session, user_role: str) -> Dict[str, Any]:
+    """处理批量转移 - 按入库单号批量转移商品到目标位置"""
+    from ..models import InboundOrder, InboundDetail, Location, LocationInventory, InventoryTransfer
+    from ..timezone_utils import china_now
+    from datetime import datetime
+    
+    # 提取参数
+    order_no = getattr(ai_response, 'batch_transfer_order_no', None)
+    to_location_name = getattr(ai_response, 'batch_transfer_to_location', '展厅') or '展厅'
+    
+    if not order_no:
+        return {"success": False, "message": "未识别到入库单号，请提供RK开头的入库单号", "action": "批量转移"}
+    
+    # 查找入库单
+    inbound_order = db.query(InboundOrder).filter(InboundOrder.order_no == order_no).first()
+    if not inbound_order:
+        return {"success": False, "message": f"未找到入库单「{order_no}」", "action": "批量转移"}
+    
+    # 获取入库单商品明细
+    details = db.query(InboundDetail).filter(InboundDetail.order_id == inbound_order.id).all()
+    if not details:
+        return {"success": False, "message": f"入库单「{order_no}」没有商品明细", "action": "批量转移"}
+    
+    # 确定源位置和目标位置
+    # 入库单商品默认在商品部仓库
+    from_location = db.query(Location).filter(Location.code == "warehouse").first()
+    
+    # 目标位置：根据用户输入匹配
+    if "展厅" in to_location_name or "showroom" in to_location_name.lower():
+        to_location = db.query(Location).filter(Location.code == "showroom").first()
+        to_location_display = "展厅"
+    elif "仓库" in to_location_name or "warehouse" in to_location_name.lower():
+        to_location = db.query(Location).filter(Location.code == "warehouse").first()
+        to_location_display = "商品部仓库"
+    else:
+        # 默认转到展厅
+        to_location = db.query(Location).filter(Location.code == "showroom").first()
+        to_location_display = "展厅"
+    
+    if not from_location:
+        return {"success": False, "message": "系统配置错误：未找到商品部仓库位置", "action": "批量转移"}
+    if not to_location:
+        return {"success": False, "message": f"系统配置错误：未找到{to_location_display}位置", "action": "批量转移"}
+    if from_location.id == to_location.id:
+        return {"success": False, "message": "商品已在目标位置，无需转移", "action": "批量转移"}
+    
+    try:
+        now = china_now()
+        created_transfers = []
+        errors = []
+        
+        for detail in details:
+            try:
+                # 检查源位置库存
+                inventory = db.query(LocationInventory).filter(
+                    LocationInventory.location_id == from_location.id,
+                    LocationInventory.product_name == detail.product_name
+                ).first()
+                
+                if not inventory or inventory.weight < detail.weight:
+                    available = inventory.weight if inventory else 0
+                    errors.append(f"{detail.product_name}: 库存不足（需要{detail.weight:.2f}克，仅有{available:.2f}克）")
+                    continue
+                
+                # 扣减源位置库存
+                inventory.weight -= detail.weight
+                inventory.last_update = now
+                
+                # 生成转移单号
+                transfer_no = f"ZY{now.strftime('%Y%m%d%H%M%S')}{len(created_transfers):03d}"
+                
+                # 创建转移单
+                new_transfer = InventoryTransfer(
+                    transfer_no=transfer_no,
+                    product_name=detail.product_name,
+                    weight=detail.weight,
+                    from_location_id=from_location.id,
+                    to_location_id=to_location.id,
+                    status="pending",
+                    created_by="AI助手",
+                    created_at=now,
+                    remark=f"来自入库单{order_no}"
+                )
+                db.add(new_transfer)
+                created_transfers.append({
+                    "product_name": detail.product_name,
+                    "weight": detail.weight,
+                    "transfer_no": transfer_no
+                })
+            except Exception as e:
+                errors.append(f"{detail.product_name}: {str(e)}")
+        
+        db.commit()
+        
+        if not created_transfers:
+            return {
+                "success": False,
+                "message": f"批量转移失败，所有商品转移失败：\n" + "\n".join([f"• {e}" for e in errors]),
+                "action": "批量转移"
+            }
+        
+        total_weight = sum(t["weight"] for t in created_transfers)
+        
+        # 构建商品列表
+        items_text = "\n".join([f"   • {t['product_name']}：{t['weight']:.2f}克" for t in created_transfers])
+        
+        error_text = ""
+        if errors:
+            error_text = f"\n\n⚠️ 部分商品转移失败：\n" + "\n".join([f"   • {e}" for e in errors])
+        
+        message = f"""✅ **批量转移单已创建**
+
+📋 来源入库单：{order_no}
+📍 转移路径：商品部仓库 → {to_location_display}
+📦 转移商品（{len(created_transfers)}种）：
+{items_text}
+⚖️ 总克重：{total_weight:.2f}克
+📊 状态：待接收
+🕐 时间：{now.strftime('%Y-%m-%d %H:%M:%S')}{error_text}
+
+<!-- BATCH_TRANSFER:{order_no}:{len(created_transfers)} -->"""
+        
+        return {
+            "success": True,
+            "action": "批量转移",
+            "message": message,
+            "data": {
+                "order_no": order_no,
+                "created_count": len(created_transfers),
+                "total_weight": total_weight,
+                "created_transfers": created_transfers,
+                "errors": errors
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"批量转移失败: {e}", exc_info=True)
+        return {"success": False, "message": f"批量转移失败：{str(e)}", "action": "批量转移"}
 
 
 # ========== API端点 ==========
@@ -653,7 +1251,7 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 return
             
             # 写操作处理
-            if ai_response.action in ["入库", "创建客户", "创建供应商", "创建销售单", "创建转移单", "退货", "登记收款", "查询客户账务", "收料"]:
+            if ai_response.action in ["入库", "创建客户", "创建供应商", "创建销售单", "创建转移单", "退货", "登记收款", "查询客户账务", "收料", "提料", "付料", "批量转移", "供应商付款"]:
                 from ..middleware.permissions import check_action_permission
                 
                 has_perm, perm_error = check_action_permission(user_role, ai_response.action)
@@ -682,7 +1280,20 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         # 自动创建收料单
                         result = await handle_gold_receipt(ai_response, db)
                     elif ai_response.action == "登记收款":
+                        # 自动登记客户收款
                         result = await handle_payment_registration(ai_response, db)
+                    elif ai_response.action == "提料":
+                        # 自动创建客户提料单
+                        result = await handle_gold_withdrawal(ai_response, db)
+                    elif ai_response.action == "付料":
+                        # 自动创建供应商付料单
+                        result = await handle_gold_payment(ai_response, db, user_role)
+                    elif ai_response.action == "批量转移":
+                        # 按入库单号批量转移商品
+                        result = await handle_batch_transfer(ai_response, db, user_role)
+                    elif ai_response.action == "供应商付款":
+                        # 自动登记供应商付款
+                        result = await handle_supplier_cash_payment(ai_response, db)
                     elif ai_response.action == "查询客户账务":
                         # 让查询客户账务继续走AI分析流程
                         pass
