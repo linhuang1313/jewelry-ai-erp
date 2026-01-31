@@ -976,25 +976,44 @@ async def get_customer_detail(
                 "created_at": order.create_time.isoformat() if order.create_time else None
             })
         
-        # 金料存取记录
+        # 金料收料记录（从GoldReceipt表获取，这是核心数据源）
         try:
-            deposit_transactions = db.query(CustomerGoldDepositTransaction).filter(
-                CustomerGoldDepositTransaction.customer_id == customer_id
-            ).order_by(desc(CustomerGoldDepositTransaction.created_at)).limit(20).all()
+            gold_receipts = db.query(GoldReceipt).filter(
+                GoldReceipt.customer_id == customer_id,
+                GoldReceipt.status == 'received'
+            ).order_by(desc(GoldReceipt.received_at)).limit(20).all()
             
-            for tx in deposit_transactions:
-                tx_type = "gold_receipt" if tx.transaction_type == "deposit" else "gold_receipt"
-                amount_sign = 1 if tx.transaction_type == "deposit" else -1
+            for receipt in gold_receipts:
                 transactions_list.append({
-                    "id": tx.id,
-                    "type": tx_type,
-                    "description": tx.remark or f"金料{tx.transaction_type}",
+                    "id": receipt.id,
+                    "type": "gold_receipt",
+                    "description": f"客户来料：{receipt.receipt_no}",
                     "amount": None,
-                    "gold_weight": tx.amount * amount_sign if tx.amount else 0,
-                    "created_at": tx.created_at.isoformat() if tx.created_at else None
+                    "gold_weight": receipt.gold_weight,
+                    "created_at": (receipt.received_at or receipt.created_at).isoformat() if (receipt.received_at or receipt.created_at) else None
                 })
         except Exception as e:
-            logger.warning(f"查询金料交易记录时出错: {e}")
+            logger.warning(f"查询收料记录时出错: {e}")
+        
+        # 金料提料记录（从CustomerWithdrawal表获取）
+        try:
+            from ..models.finance import CustomerWithdrawal
+            withdrawals = db.query(CustomerWithdrawal).filter(
+                CustomerWithdrawal.customer_id == customer_id,
+                CustomerWithdrawal.status == 'completed'
+            ).order_by(desc(CustomerWithdrawal.completed_at)).limit(20).all()
+            
+            for withdrawal in withdrawals:
+                transactions_list.append({
+                    "id": withdrawal.id,
+                    "type": "gold_withdrawal",
+                    "description": f"客户提料：{withdrawal.withdrawal_no}",
+                    "amount": None,
+                    "gold_weight": -withdrawal.gold_weight,  # 提料为负数
+                    "created_at": (withdrawal.completed_at or withdrawal.created_at).isoformat() if (withdrawal.completed_at or withdrawal.created_at) else None
+                })
+        except Exception as e:
+            logger.warning(f"查询提料记录时出错: {e}")
         
         # 按时间排序
         transactions_list.sort(key=lambda x: x["created_at"] or "", reverse=True)
