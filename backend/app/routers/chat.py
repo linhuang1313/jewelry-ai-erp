@@ -581,6 +581,26 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                         result = await handle_create_transfer(ai_response, db)
                     elif ai_response.action == "退货":
                         result = await handle_return(ai_response, db, user_role)
+                    elif ai_response.action == "收料":
+                        # 收料功能引导用户使用快捷收料
+                        customer_name = getattr(ai_response, 'receipt_customer_name', '') or ''
+                        weight = getattr(ai_response, 'receipt_gold_weight', 0) or 0
+                        result = {
+                            "success": False,
+                            "action": "收料",
+                            "message": f"📦 已识别到收料意图：\n\n👤 客户：{customer_name}\n⚖️ 克重：{weight}克\n\n请使用页面右上角的「快捷收料」按钮完成操作，可以自动生成收料单并打印。",
+                            "need_confirm": True,
+                            "parsed_data": {
+                                "customer_name": customer_name,
+                                "gold_weight": weight,
+                                "gold_fineness": getattr(ai_response, 'receipt_gold_fineness', '足金999')
+                            }
+                        }
+                    elif ai_response.action == "登记收款":
+                        result = await handle_payment_registration(ai_response, db)
+                    elif ai_response.action == "查询客户账务":
+                        # 让查询客户账务继续走AI分析流程
+                        pass
                     
                     if result is not None:
                         yield f"data: {json.dumps({'type': 'complete', 'data': result}, ensure_ascii=False, default=str)}\n\n"
