@@ -255,6 +255,116 @@ async def export_sales(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/customer-transactions/{customer_id}")
+async def export_customer_transactions(customer_id: int, db: Session = Depends(get_db)):
+    """导出指定客户的往来账目为 Excel"""
+    from ..models.finance import GoldReceipt, CustomerWithdrawal
+    from sqlalchemy import desc
+    
+    try:
+        # 获取客户信息
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        if not customer:
+            raise HTTPException(status_code=404, detail="客户不存在")
+        
+        transactions_list = []
+        
+        # 1. 销售记录
+        sales_orders = db.query(SalesOrder).filter(
+            SalesOrder.customer_name == customer.name,
+            SalesOrder.status != "已取消"
+        ).order_by(desc(SalesOrder.create_time)).all()
+        
+        for order in sales_orders:
+            transactions_list.append({
+                "type": "销售",
+                "order_no": order.order_no,
+                "description": f"销售单",
+                "amount": order.total_labor_cost or 0,
+                "gold_weight": order.total_weight or 0,
+                "created_at": order.create_time
+            })
+        
+        # 2. 收料记录
+        try:
+            gold_receipts = db.query(GoldReceipt).filter(
+                GoldReceipt.customer_id == customer_id,
+                GoldReceipt.status == 'received'
+            ).order_by(desc(GoldReceipt.received_at)).all()
+            
+            for receipt in gold_receipts:
+                transactions_list.append({
+                    "type": "客户来料",
+                    "order_no": receipt.receipt_no,
+                    "description": f"收料",
+                    "amount": 0,
+                    "gold_weight": receipt.gold_weight or 0,
+                    "created_at": receipt.received_at or receipt.created_at
+                })
+        except Exception as e:
+            logger.warning(f"查询收料记录时出错: {e}")
+        
+        # 3. 提料记录
+        try:
+            withdrawals = db.query(CustomerWithdrawal).filter(
+                CustomerWithdrawal.customer_id == customer_id,
+                CustomerWithdrawal.status == 'completed'
+            ).order_by(desc(CustomerWithdrawal.completed_at)).all()
+            
+            for withdrawal in withdrawals:
+                transactions_list.append({
+                    "type": "客户提料",
+                    "order_no": withdrawal.withdrawal_no,
+                    "description": f"提料",
+                    "amount": 0,
+                    "gold_weight": -(withdrawal.gold_weight or 0),
+                    "created_at": withdrawal.completed_at or withdrawal.created_at
+                })
+        except Exception as e:
+            logger.warning(f"查询提料记录时出错: {e}")
+        
+        # 按时间排序
+        transactions_list.sort(key=lambda x: x["created_at"] or datetime.min, reverse=True)
+        
+        # 创建 Excel
+        wb = Workbook()
+        ws = wb.active
+        ws.title = f"{customer.name}往来账目"
+        
+        # 客户信息
+        ws.append([f"客户：{customer.name}"])
+        ws.append([f"客户编号：{customer.customer_no}"])
+        ws.append([f"导出时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"])
+        ws.append([])  # 空行
+        
+        # 表头
+        headers = ["类型", "单号", "说明", "金额(元)", "金重(克)", "时间"]
+        ws.append(headers)
+        style_header(ws, row=5)
+        
+        # 数据
+        for tx in transactions_list:
+            ws.append([
+                tx["type"],
+                tx["order_no"],
+                tx["description"],
+                tx["amount"] if tx["amount"] else "",
+                tx["gold_weight"] if tx["gold_weight"] else "",
+                tx["created_at"].strftime("%Y-%m-%d %H:%M:%S") if tx["created_at"] else ""
+            ])
+        
+        auto_column_width(ws)
+        
+        filename = f"{customer.name}_往来账目_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        return create_excel_response(wb, filename)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"导出客户往来账目失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/customers")
 async def export_customers(db: Session = Depends(get_db)):
     """导出客户列表为 Excel"""
