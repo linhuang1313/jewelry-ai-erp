@@ -128,6 +128,12 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
   const [editingId, setEditingId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
   
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCustomers, setTotalCustomers] = useState(0);
+  const pageSize = 20;
+  
   // 批量导入相关状态
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -169,8 +175,8 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
     remark: ''
   });
 
-  // 获取客户列表（带重试机制）
-  const fetchCustomers = async (retryCount = 0) => {
+  // 获取客户列表（带分页和重试机制）
+  const fetchCustomers = async (page = currentPage, retryCount = 0) => {
     setLoading(true);
     const maxRetries = 2;
     const retryDelay = 1000; // 1秒
@@ -180,6 +186,8 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
       if (searchName) {
         params.append('name', searchName);
       }
+      params.append('page', page.toString());
+      params.append('page_size', pageSize.toString());
       params.append('user_role', userRole);
       const url = `${API_BASE_URL}/api/customers?${params.toString()}`;
       
@@ -197,10 +205,14 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
       const data = await response.json();
       
       if (data.success) {
-        // 后端返回格式: { success: true, data: { customers: [...] } }
-        const customersData = data.data?.customers || data.customers || [];
+        // 后端返回格式: { success: true, data: { customers: [...], total, page, total_pages } }
+        const responseData = data.data || {};
+        const customersData = responseData.customers || data.customers || [];
         const customersArray = Array.isArray(customersData) ? customersData : [];
         setCustomers(customersArray);
+        setTotalCustomers(responseData.total || customersArray.length);
+        setTotalPages(responseData.total_pages || 1);
+        setCurrentPage(responseData.page || page);
         
         // 调试信息（仅在开发环境）
         if (customersArray.length === 0 && !searchName) {
@@ -218,7 +230,7 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
       if (retryCount < maxRetries && (error.message.includes('fetch') || error.message.includes('network') || error.message.includes('CORS'))) {
         console.log(`${retryDelay}ms 后重试...`);
         await new Promise(resolve => setTimeout(resolve, retryDelay));
-        return fetchCustomers(retryCount + 1);
+        return fetchCustomers(page, retryCount + 1);
       }
       
       // 最终失败
@@ -230,12 +242,13 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
   };
 
   useEffect(() => {
-    fetchCustomers();
+    fetchCustomers(1);
   }, []);
 
   // 搜索
   const handleSearch = () => {
-    fetchCustomers();
+    setCurrentPage(1);
+    fetchCustomers(1);
   };
 
   // 添加客户
@@ -852,7 +865,7 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
             </>
           )}
           <button
-            onClick={mainTab === 'list' ? fetchCustomers : fetchDebtSummary}
+            onClick={mainTab === 'list' ? () => fetchCustomers(currentPage) : fetchDebtSummary}
             className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl
                        hover:bg-gray-200 transition-all"
           >
@@ -920,7 +933,7 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
           </button>
           {searchName && (
             <button
-              onClick={() => { setSearchName(''); fetchCustomers(); }}
+              onClick={() => { setSearchName(''); setCurrentPage(1); fetchCustomers(1); }}
               className="px-4 py-2.5 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-all"
             >
               清除
@@ -1011,9 +1024,9 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
 
       {/* 客户列表 */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
           <h2 className="text-lg font-semibold text-gray-800">
-            客户列表 ({customers.length}人)
+            客户列表 (共{totalCustomers}人，第{currentPage}/{totalPages}页)
           </h2>
         </div>
 
@@ -1156,6 +1169,64 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                 ))}
               </tbody>
             </table>
+            
+            {/* 分页控件 */}
+            {totalPages > 1 && (
+              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
+                <div className="text-sm text-gray-600">
+                  显示 {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, totalCustomers)} 条，共 {totalCustomers} 条
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => fetchCustomers(1)}
+                    disabled={currentPage === 1}
+                    className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                      currentPage === 1 
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    首页
+                  </button>
+                  <button
+                    onClick={() => fetchCustomers(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                      currentPage === 1 
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    上一页
+                  </button>
+                  <span className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg">
+                    {currentPage}
+                  </span>
+                  <button
+                    onClick={() => fetchCustomers(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                      currentPage === totalPages 
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    下一页
+                  </button>
+                  <button
+                    onClick={() => fetchCustomers(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                      currentPage === totalPages 
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    末页
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -79,10 +79,12 @@ async def create_customer(
 @router.get("")
 async def get_customers(
     name: Optional[str] = None,
+    page: int = Query(default=1, ge=1, description="页码"),
+    page_size: int = Query(default=20, ge=1, le=100, description="每页数量"),
     user_role: str = Query(default="manager", description="用户角色"),
     db: Session = Depends(get_db)
 ):
-    """获取客户列表"""
+    """获取客户列表（分页）"""
     # 权限检查 - 需要 can_view_customers 或 can_manage_customers 权限
     from ..middleware.permissions import has_permission
     if not has_permission(user_role, 'can_view_customers') and not has_permission(user_role, 'can_manage_customers'):
@@ -94,10 +96,21 @@ async def get_customers(
         if name:
             query = query.filter(Customer.name.contains(name))
         
-        customers = query.order_by(desc(Customer.create_time)).all()
+        # 获取总数
+        total = query.count()
+        
+        # 分页查询
+        offset = (page - 1) * page_size
+        customers = query.order_by(desc(Customer.create_time)).offset(offset).limit(page_size).all()
         
         return success_response(
-            data={"customers": [CustomerResponse.model_validate(c).model_dump(mode='json') for c in customers]},
+            data={
+                "customers": [CustomerResponse.model_validate(c).model_dump(mode='json') for c in customers],
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": (total + page_size - 1) // page_size
+            },
             message="查询成功"
         )
     except Exception as e:
