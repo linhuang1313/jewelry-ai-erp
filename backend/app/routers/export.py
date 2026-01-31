@@ -377,14 +377,14 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
         
         # 6. 退货记录
         try:
-            from ..models import ReturnOrder, ReturnDetail
+            from ..models import ReturnOrder, ReturnOrderDetail
             for order in sales_orders:
                 returns = db.query(ReturnOrder).filter(
                     ReturnOrder.related_sales_order_id == order.id,
                     ReturnOrder.status == 'completed'
                 ).all()
                 for r in returns:
-                    return_details = db.query(ReturnDetail).filter(ReturnDetail.return_order_id == r.id).all()
+                    return_details = db.query(ReturnOrderDetail).filter(ReturnOrderDetail.return_order_id == r.id).all()
                     total_weight = sum(d.weight or 0 for d in return_details)
                     
                     transactions_list.append({

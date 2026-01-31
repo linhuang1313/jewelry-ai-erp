@@ -1068,7 +1068,7 @@ async def get_customer_detail(
         
         # 退货记录（从ReturnOrder表获取）
         try:
-            from ..models import ReturnOrder, ReturnDetail
+            from ..models import ReturnOrder, ReturnOrderDetail
             # 查找退给此客户的退货单（通过销售单关联）
             for order in sales_orders[:20]:
                 returns = db.query(ReturnOrder).filter(
@@ -1077,7 +1077,7 @@ async def get_customer_detail(
                 ).all()
                 for r in returns:
                     # 计算退货金额
-                    return_details = db.query(ReturnDetail).filter(ReturnDetail.return_order_id == r.id).all()
+                    return_details = db.query(ReturnOrderDetail).filter(ReturnOrderDetail.return_order_id == r.id).all()
                     total_weight = sum(d.weight or 0 for d in return_details)
                     
                     transactions_list.append({
