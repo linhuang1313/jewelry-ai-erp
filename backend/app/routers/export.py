@@ -323,6 +323,81 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
         except Exception as e:
             logger.warning(f"查询提料记录时出错: {e}")
         
+        # 4. 结算记录
+        try:
+            from ..models import SettlementOrder
+            for order in sales_orders:
+                settlements = db.query(SettlementOrder).filter(
+                    SettlementOrder.sales_order_id == order.id,
+                    SettlementOrder.status.in_(['confirmed', 'printed'])
+                ).all()
+                for s in settlements:
+                    if s.payment_method == 'cash_price':
+                        method_desc = f"结价 ¥{s.gold_price or 0}/克"
+                        gold_change = 0
+                        amount_change = -(s.total_amount or 0)
+                    elif s.payment_method == 'physical_gold':
+                        method_desc = f"结料 {s.physical_gold_weight or 0}克"
+                        gold_change = -(s.physical_gold_weight or 0)
+                        amount_change = 0
+                    else:
+                        method_desc = f"混合支付"
+                        gold_change = -(s.gold_payment_weight or 0)
+                        amount_change = -(s.cash_payment_amount or 0)
+                    
+                    transactions_list.append({
+                        "type": "结算",
+                        "order_no": s.settlement_no,
+                        "description": method_desc,
+                        "amount": amount_change,
+                        "gold_weight": gold_change,
+                        "created_at": s.created_at
+                    })
+        except Exception as e:
+            logger.warning(f"查询结算记录时出错: {e}")
+        
+        # 5. 收款记录
+        try:
+            from ..models import PaymentRecord
+            payments = db.query(PaymentRecord).filter(
+                PaymentRecord.customer_id == customer_id
+            ).order_by(desc(PaymentRecord.create_time)).all()
+            
+            for p in payments:
+                transactions_list.append({
+                    "type": "收款",
+                    "order_no": f"PY{p.id:06d}",
+                    "description": f"现金收款",
+                    "amount": -(p.amount or 0),
+                    "gold_weight": 0,
+                    "created_at": p.create_time
+                })
+        except Exception as e:
+            logger.warning(f"查询收款记录时出错: {e}")
+        
+        # 6. 退货记录
+        try:
+            from ..models import ReturnOrder, ReturnDetail
+            for order in sales_orders:
+                returns = db.query(ReturnOrder).filter(
+                    ReturnOrder.related_sales_order_id == order.id,
+                    ReturnOrder.status == 'completed'
+                ).all()
+                for r in returns:
+                    return_details = db.query(ReturnDetail).filter(ReturnDetail.return_order_id == r.id).all()
+                    total_weight = sum(d.weight or 0 for d in return_details)
+                    
+                    transactions_list.append({
+                        "type": "退货",
+                        "order_no": r.return_no,
+                        "description": f"退货",
+                        "amount": 0,
+                        "gold_weight": -total_weight if total_weight else 0,
+                        "created_at": r.completed_at or r.created_at
+                    })
+        except Exception as e:
+            logger.warning(f"查询退货记录时出错: {e}")
+        
         # 按时间排序
         transactions_list.sort(key=lambda x: x["created_at"] or datetime.min, reverse=True)
         

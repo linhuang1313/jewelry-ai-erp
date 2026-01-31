@@ -6,7 +6,7 @@ import {
   MapPin, Search, UserPlus, Eye, ShoppingBag, RotateCcw, 
   Wallet, FileText, ChevronRight, ArrowLeft, Upload, 
   CreditCard, TrendingDown, ArrowUpDown, Clock, Download,
-  Diamond, CheckCircle, AlertCircle
+  Diamond, CheckCircle, AlertCircle, Calculator
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -770,11 +770,15 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                                 tx.type === 'sale' ? 'bg-green-100' :
                                 tx.type === 'return' ? 'bg-orange-100' :
                                 tx.type === 'payment' ? 'bg-blue-100' :
+                                tx.type === 'settlement' ? 'bg-cyan-100' :
+                                tx.type === 'gold_withdrawal' ? 'bg-purple-100' :
                                 'bg-yellow-100'
                               }`}>
                                 {tx.type === 'sale' && <ShoppingBag className="w-4 h-4 text-green-600" />}
                                 {tx.type === 'return' && <RotateCcw className="w-4 h-4 text-orange-600" />}
                                 {tx.type === 'payment' && <Wallet className="w-4 h-4 text-blue-600" />}
+                                {tx.type === 'settlement' && <Calculator className="w-4 h-4 text-cyan-600" />}
+                                {tx.type === 'gold_withdrawal' && <TrendingDown className="w-4 h-4 text-purple-600" />}
                                 {tx.type === 'gold_receipt' && <FileText className="w-4 h-4 text-yellow-600" />}
                               </div>
                               <div>
