@@ -7,9 +7,9 @@ from sqlalchemy import func
 from ..database import get_db
 from ..models import (
     Customer, SalesOrder, CustomerGoldDeposit, CustomerGoldDepositTransaction,
-    CustomerWithdrawal, CustomerTransfer
+    CustomerWithdrawal, CustomerTransfer, SettlementOrder
 )
-from ..models.finance import GoldReceipt, SettlementOrder, AccountReceivable
+from ..models.finance import GoldReceipt, AccountReceivable
 import logging
 
 logger = logging.getLogger(__name__)
