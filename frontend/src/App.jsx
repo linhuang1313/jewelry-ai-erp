@@ -91,7 +91,7 @@ function App() {
   const [conversationHistory, setConversationHistory] = useState([]) // 鍘嗗彶瀵硅瘽鍒楄〃
   const [currentConversationId, setCurrentConversationId] = useState(null) // 褰撳墠瀵硅瘽ID
   
-  // 鍚庣浼氳瘽ID锛堢敤浜庤亰澶╄褰曟寔涔呭寲锛?
+  // 鍚庣浼氳瘽ID锛堢敤浜庤亰澶╄褰曟寔涔呭寲：
   const [currentSessionId, setCurrentSessionId] = useState(() => {
     // 鐢熸垚鎴栨仮澶?session_id
     if (typeof window !== 'undefined') {
@@ -103,7 +103,7 @@ function App() {
     }
     return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   })
-  // 渚ц竟鏍忓紑鍏筹紙妗岄潰绔粯璁ゆ墦寮€锛岀Щ鍔ㄧ榛樿鍏抽棴锛?
+  // 渚ц竟鏍忓紑鍏筹紙妗岄潰绔粯璁ゆ墦寮€锛岀Щ鍔ㄧ榛樿鍏抽棴：
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth >= 1024
@@ -140,12 +140,12 @@ function App() {
   const roleDropdownRef = useRef(null)
   const roleHistoryCache = useRef({})  // 瑙掕壊鍘嗗彶璁板綍缂撳瓨
   
-  // 寰呭鐞嗚浆绉诲崟鏁伴噺锛堢敤浜庡垎浠撳簱瀛樻寜閽産adge锛?
+  // 寰呭鐞嗚浆绉诲崟鏁伴噺锛堢敤浜庡垎浠撳簱瀛樻寜閽産adge：
   const [pendingTransferCount, setPendingTransferCount] = useState(0)
-  // 寰呯粨绠楅攢鍞崟鏁伴噺锛堢敤浜庣粨绠楃鐞嗘寜閽産adge锛?
+  // 寰呯粨绠楅攢鍞崟鏁伴噺锛堢敤浜庣粨绠楃鐞嗘寜閽産adge：
   const [pendingSalesCount, setPendingSalesCount] = useState(0)
 
-  // Toast 鎻愮ず鍑芥暟锛?绉掑悗鑷姩娑堝け锛?
+  // Toast 鎻愮ず鍑芥暟：绉掑悗鑷姩娑堝け：
   const showToast = (message, duration = 3000) => {
     setToastMessage(message)
     setTimeout(() => setToastMessage(''), duration)
@@ -250,7 +250,7 @@ function App() {
     })
   }
 
-  // 鍔犺浇鎸囧畾瑙掕壊鐨勫巻鍙茶褰曪紙浼樺寲鐗堬細浼樺厛浣跨敤缂撳瓨/localStorage锛屽悗鍙伴潤榛樺悓姝PI锛?
+  // 鍔犺浇鎸囧畾瑙掕壊鐨勫巻鍙茶褰曪紙浼樺寲鐗堬細浼樺厛浣跨敤缂撳瓨/localStorage锛屽悗鍙伴潤榛樺悓姝PI：
   const loadRoleHistory = async (role) => {
     const historyKey = getHistoryKey(role)
     
@@ -272,7 +272,7 @@ function App() {
       setConversationHistory([])
     }
     
-    // 3. 鍚庡彴闈欓粯鍚屾 API 鏁版嵁锛堜笉闃诲 UI锛?
+    // 3. 鍚庡彴闈欓粯鍚屾 API 鏁版嵁锛堜笉闃诲 UI：
     // 浣跨敤 setTimeout 璁?UI 鍏堟洿鏂?
     setTimeout(async () => {
       try {
@@ -342,7 +342,7 @@ function App() {
     if (roleId !== userRole) {
       // 1. 淇濆瓨褰撳墠瑙掕壊鐨勫璇濆拰浼氳瘽ID
       if (messages.length > 0) {
-        // 鐩存帴淇濆瓨鍒板綋鍓嶈鑹茬殑鍘嗗彶璁板綍锛堜笉浣跨敤寤惰繜淇濆瓨锛?
+        // 鐩存帴淇濆瓨鍒板綋鍓嶈鑹茬殑鍘嗗彶璁板綍锛堜笉浣跨敤寤惰繜淇濆瓨：
         const currentHistoryKey = getHistoryKey(userRole)
         const parsedHistory = JSON.parse(localStorage.getItem(currentHistoryKey) || '[]')
         const currentHistory = Array.isArray(parsedHistory) ? parsedHistory : []
@@ -531,7 +531,7 @@ function App() {
     restoreCurrentConversation()
   }, [userRole]) // 渚濊禆 userRole锛岀‘淇濊鑹插彉鍖栨椂涔熻兘姝ｇ‘鎭㈠
 
-  // 鍔犺浇寰呭鐞嗚浆绉诲崟鏁伴噺锛堟煖鍙拌鑹查渶瑕佺湅鍒板晢鍝侀儴鍙戞潵鐨勮浆绉诲崟锛?
+  // 鍔犺浇寰呭鐞嗚浆绉诲崟鏁伴噺锛堟煖鍙拌鑹查渶瑕佺湅鍒板晢鍝侀儴鍙戞潵鐨勮浆绉诲崟：
   const loadPendingTransferCount = async () => {
     // 鍙湁鏌滃彴銆佺粨绠椼€佺鐞嗗眰闇€瑕佺湅鍒板緟鎺ユ敹杞Щ鍗曟暟閲?
     if (!['counter', 'settlement', 'manager'].includes(userRole)) {
@@ -565,7 +565,7 @@ function App() {
     }
   }
 
-  // 鍔犺浇寰呯粨绠楅攢鍞崟鏁伴噺锛堢粨绠椾笓鍛橀渶瑕佺湅鍒版煖鍙板紑鐨勯攢鍞崟锛?
+  // 鍔犺浇寰呯粨绠楅攢鍞崟鏁伴噺锛堢粨绠椾笓鍛橀渶瑕佺湅鍒版煖鍙板紑鐨勯攢鍞崟：
   const loadPendingSalesCount = async () => {
     // 鍙湁缁撶畻涓撳憳鍜岀鐞嗗眰闇€瑕佺湅鍒板緟缁撶畻閿€鍞崟鏁伴噺
     if (!['settlement', 'manager'].includes(userRole)) {
@@ -682,7 +682,7 @@ function App() {
         setQuickReceiptForm({ customer_id: '', gold_weight: '', gold_fineness: '足金999', remark: '' })
         setQuickFormCustomerSearch('')
         
-        // 娣诲姞鏀舵枡鍗曡褰曞埌鑱婂ぉ妗嗭紙浣跨敤鏂囨湰鏍煎紡+闅愯棌鏍囪锛?
+        // 娣诲姞鏀舵枡鍗曡褰曞埌鑱婂ぉ妗嗭紙浣跨敤鏂囨湰鏍煎紡+闅愯棌鏍囪：
         const downloadUrl = `${API_BASE_URL}/api/gold-material/gold-receipts/${result.data.id}/print`
         const receiptMessage = `✅ 收料单已生成\n\n📋 单号：{result.data.receipt_no}\n👤 客户：{customerName}\n⚖️ 克重：{receiptWeight.toFixed(2)} 克
 🏷️ 成色：{quickReceiptForm.gold_fineness}${remarkText ? `\n📝 备注：{remarkText}` : ''}\n🕐 时间：{new Date().toLocaleString('zh-CN')}\n\n<!-- GOLD_RECEIPT:${result.data.id}:${result.data.receipt_no} -->`
@@ -700,7 +700,7 @@ function App() {
         }
       } else {
         const error = await response.json()
-        alert('鍒涘缓鏀舵枡鍗曞け璐ワ細' + (error.detail || '鏈煡閿欒'))
+        alert('创建收料单失败：' + (error.detail || '鏈煡閿欒'))
       }
     } catch (error) {
       console.error('创建收料单失败', error)
@@ -721,7 +721,7 @@ function App() {
       return
     }
     if (weight > (selectedCustomerDeposit?.current_balance || 0)) {
-      alert(`鎻愭枡鍏嬮噸涓嶈兘瓒呰繃瀹㈡埛瀛樻枡浣欓锛?{selectedCustomerDeposit?.current_balance?.toFixed(2) || 0}克）`)
+      alert(`鎻愭枡鍏嬮噸涓嶈兘瓒呰繃瀹㈡埛瀛樻枡浣欓：{selectedCustomerDeposit?.current_balance?.toFixed(2) || 0}克）`)
       return
     }
     try {
@@ -748,7 +748,7 @@ function App() {
         setSelectedCustomerDeposit(null)
         setQuickFormCustomerSearch('')
         
-        // 娣诲姞鎻愭枡鍗曡褰曞埌鑱婂ぉ妗嗭紙浣跨敤鏂囨湰鏍煎紡+闅愯棌鏍囪锛岀‘淇濆巻鍙茶褰曟寔涔呭寲锛?
+        // 娣诲姞鎻愭枡鍗曡褰曞埌鑱婂ぉ妗嗭紙浣跨敤鏂囨湰鏍煎紡+闅愯棌鏍囪锛岀‘淇濆巻鍙茶褰曟寔涔呭寲：
         const downloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${result.id}/download?format=html`
           const withdrawalMessage = `✅ 提料单已生成\n\n📋 单号：${result.withdrawal_no}\n👤 客户：${customerName}\n⚖️ 克重：${withdrawalWeight.toFixed(2)} 克${remarkText ? `\n📝 备注：${remarkText}` : ''}\n⏰ 时间：${new Date().toLocaleString('zh-CN')}\n\n<!-- WITHDRAWAL_ORDER:${result.id}:${result.withdrawal_no} -->`
         setMessages(prev => [...prev, {
@@ -794,8 +794,8 @@ function App() {
     return () => clearInterval(interval)
   }, [userRole])
 
-  // 淇濆瓨瀵硅瘽鍒板巻鍙茶褰曪紙淇濆瓨鍒板綋鍓嶈鑹茬殑鍘嗗彶璁板綍锛?
-  // ========== 淇濆瓨瀵硅瘽锛堝寮虹増锛氬幓閲嶄紭鍖?+ 淇濆瓨涓婃浼氳瘽ID锛?==========
+  // 淇濆瓨瀵硅瘽鍒板巻鍙茶褰曪紙淇濆瓨鍒板綋鍓嶈鑹茬殑鍘嗗彶璁板綍：
+  // ========== 淇濆瓨瀵硅瘽锛堝寮虹増锛氬幓閲嶄紭鍖?+ 淇濆瓨涓婃浼氳瘽ID：==========
   const lastSavedRef = useRef({ messageCount: 0, lastMessageId: null })
   
   const saveConversation = () => {
@@ -850,7 +850,7 @@ function App() {
     setConversationHistory(limitedHistory)
     setCurrentConversationId(conversationId)
     
-    // 淇濆瓨褰撳墠瑙掕壊鐨勪笂娆′細璇滻D锛堢敤浜庤鑹插垏鎹㈡椂鎭㈠锛?
+    // 淇濆瓨褰撳墠瑙掕壊鐨勪笂娆′細璇滻D锛堢敤浜庤鑹插垏鎹㈡椂鎭㈠：
     const lastSessionKey = getLastSessionKey(userRole)
     localStorage.setItem(lastSessionKey, conversationId)
     
@@ -858,7 +858,7 @@ function App() {
     lastSavedRef.current = { messageCount: messages.length, lastMessageId: lastMessage?.id }
   }
 
-  // 褰撴秷鎭彉鍖栨椂鑷姩淇濆瓨锛堜紭鍖栵細鍘婚噸锛?
+  // 褰撴秷鎭彉鍖栨椂鑷姩淇濆瓨锛堜紭鍖栵細鍘婚噸：
   useEffect(() => {
     if (messages.length === 0) return
     
@@ -869,7 +869,7 @@ function App() {
     return () => clearTimeout(timer)
   }, [messages])
 
-  // 鍔犺浇鎸囧畾瀵硅瘽锛堜粠鍚庣API鍔犺浇瀹屾暣娑堟伅鍐呭锛?
+  // 鍔犺浇鎸囧畾瀵硅瘽锛堜粠鍚庣API鍔犺浇瀹屾暣娑堟伅鍐呭：
   const loadConversation = async (conversationId) => {
     // 先尝试从localStorage加载（优先本地缓存，避免后端不可用时无法加载）
     const historyKey = getHistoryKey(userRole)
@@ -1066,7 +1066,7 @@ function App() {
     setMessages(prev => [...prev, { type: 'user', content: userMessage }])
     setLoading(true)
     
-    // 鍒涘缓鎬濊€冭繃绋嬫秷鎭疘D
+    // 创建思考过程消息ID
     const thinkingMessageId = Date.now()
     let contentMessageId = null
     let currentContent = ''
@@ -1118,7 +1118,7 @@ function App() {
       
         console.log('Start reading SSE stream...')
 
-      // 鍒涘缓鎬濊€冭繃绋嬫秷鎭?
+      // 创建思考过程消息
       setMessages(prev => [...prev, { 
         id: thinkingMessageId,
         type: 'thinking', 
@@ -1126,7 +1126,7 @@ function App() {
         progress: 0
       }])
 
-      // 璇诲彇SSE娴?
+      // 读取SSE流
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
@@ -1173,7 +1173,7 @@ function App() {
                 if (data.type === 'thinking') {
                   const stepIndex = thinkingSteps.findIndex(s => s.step === data.step)
                   if (stepIndex >= 0) {
-                    // 鏇存柊鐜版湁姝ラ
+                    // 更新现有步骤
                     thinkingSteps[stepIndex] = {
                       step: data.step,
                       message: data.message,
@@ -1233,7 +1233,7 @@ function App() {
               else if (data.type === 'payment_confirm') {
                 console.log('Received payment_confirm event:', data)
                 setLoading(false)
-                // 绉婚櫎鎬濊€冭繃绋嬫秷鎭?
+                // 移除思考过程消息
                 setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
                 // 鍒涘缓鏀舵纭鍗＄墖娑堟伅
                 const confirmData = data.data
@@ -1274,14 +1274,14 @@ function App() {
               else if (data.type === 'complete') {
                 console.log('Received complete event:', data)
                 setLoading(false)
-                // 绉婚櫎鎬濊€冭繃绋嬫秷鎭紙濡傛灉瀛樺湪锛?
+                // 绉婚櫎鎬濊€冭繃绋嬫秷鎭紙濡傛灉瀛樺湪：
                 setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
                 
                 // 濡傛灉娌℃湁鍐呭娑堟伅锛堟瘮濡傚叆搴撴搷浣滅洿鎺ヨ繑鍥炵粨鏋滐級锛屽垱寤轰竴涓柊娑堟伅
                 if (!contentMessageId || !isContentStarted) {
                     console.log('Create new system message to display result')
                   contentMessageId = Date.now()
-                  // 澶勭悊鍏ュ簱绛夋搷浣滅殑鍝嶅簲
+                  // 处理入库等操作的响应
                   if (data.data) {
                     // ========== 鏅鸿兘琛ㄥ崟寮瑰嚭锛氬綋淇℃伅涓嶅畬鏁存椂鑷姩寮瑰嚭琛ㄥ崟 ==========
                     if (data.data.need_form) {
@@ -1310,8 +1310,8 @@ function App() {
                       messageContent = data.data.message
                     } else if (data.data.success !== undefined) {
                       messageContent = data.data.success 
-                        ? '鎿嶄綔鎴愬姛瀹屾垚' 
-                        : (data.data.error || '鎿嶄綔澶辫触')
+                        ? '操作成功完成' 
+                        : (data.data.error || '操作失败')
                     }
                     
                     console.log('Create message, content:', messageContent)
@@ -1326,7 +1326,7 @@ function App() {
                     console.log('[Inbound Debug] all_products length:', data.data?.all_products?.length)
                     
                     if (data.data?.success && data.data?.pending && data.data?.card_data) {
-                      // 鏂规B锛氬垱寤哄緟纭鐨勫崱鐗囷紙status: 'pending'锛?
+                      // 鏂规B锛氬垱寤哄緟纭鐨勫崱鐗囷紙status: 'pending'：
                       try {
                         // 缁熶竴浣跨敤 all_products锛堝鏋滄病鏈夊垯浣跨敤 card_data 浣滀负鍗曞厓绱犳暟缁勶級
                         console.log('[Debug] data.data.all_products original:', data.data.all_products)
@@ -1406,9 +1406,9 @@ function App() {
                       pieData: data.data.pie_data,
                       chartType: data.data.action,
                       rawData: data.data.raw_data,  // 鍘熷鏁版嵁锛堢敤浜庤缁嗘暟鎹睍绀猴級
-                      // AI鎰忓浘璇嗗埆缁撴灉锛堢敤浜庡彲瑙嗗寲鏄剧ず锛?
+                      // AI鎰忓浘璇嗗埆缁撴灉锛堢敤浜庡彲瑙嗗寲鏄剧ず：
                       detectedIntent: data.data.action,
-                      // 娣诲姞鍏ュ簱鍗＄墖鏁版嵁锛堝崟鍟嗗搧鎴栧鍟嗗搧锛?
+                      // 娣诲姞鍏ュ簱鍗＄墖鏁版嵁锛堝崟鍟嗗搧鎴栧鍟嗗搧：
                       inboundCard: inboundCard,
                       inboundCards: inboundCards,  // 澶氬晢鍝佸叆搴撴椂鐨勫崱鐗囨暟缁?
                     }])
@@ -1468,7 +1468,7 @@ function App() {
                   setLoading(false)
                   setMessages(prev => prev.map(msg => {
                     if (msg.id === thinkingMessageId || msg.id === contentMessageId) {
-                      return { ...msg, type: 'system', content: `鉂?${data.message}`, isStreaming: false }
+                      return { ...msg, type: 'system', content: `❌ ${data.message}`, isStreaming: false }
                     }
                     return msg
                   }))
@@ -1484,7 +1484,7 @@ function App() {
           setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
           setMessages(prev => [...prev, { 
             type: 'system', 
-            content: `鉂?璇诲彇娴佸紡鍝嶅簲澶辫触锛?{readError.message}` 
+            content: `❌ 读取流式响应失败：{readError.message}` 
           }])
           break
         }
@@ -1499,10 +1499,10 @@ function App() {
       }
       
       setLoading(false)
-      // 绉婚櫎鎬濊€冭繃绋嬫秷鎭?
+      // 移除思考过程消息
       setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
       
-      let errorMessage = `鉂?缃戠粶閿欒锛?{error.message}`
+      let errorMessage = `❌ 缃戠粶閿欒：{error.message}`
       
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
         errorMessage = '❌ 无法连接到服务器，请检查后端服务是否运行（http://localhost:8000）'
@@ -1520,7 +1520,7 @@ function App() {
     if (!data.success) {
       setMessages(prev => prev.map(msg => {
         if (msg.id === messageId) {
-          return { ...msg, content: `鉂?${data.message || '澶勭悊澶辫触'}` }
+          return { ...msg, content: `❌ ${data.message || '澶勭悊澶辫触'}` }
         }
         return msg
       }))
@@ -1544,7 +1544,7 @@ function App() {
     }))
   }
 
-  // 淇濈暀鏃х殑sendMessage浣滀负澶囩敤锛堝鏋滈渶瑕佸洖閫€锛?
+  // 淇濈暀鏃х殑sendMessage浣滀负澶囩敤锛堝鏋滈渶瑕佸洖閫€：
   const sendMessageOld = async () => {
     if (!input.trim() || loading) return
 
@@ -1570,13 +1570,13 @@ function App() {
         
         // 濡傛灉鏈夋€濊€冭繃绋嬶紝鍏堟樉绀烘€濊€冭繃绋?
         if (data.thinking_steps && data.thinking_steps.length > 0) {
-          systemMessage = "馃挱 澶勭悊杩囩▼锛歕n" + data.thinking_steps.join('\n') + "\n\n" + systemMessage
+          systemMessage = "💡 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + systemMessage
         }
 
         // 濡傛灉鏄浘琛ㄦ暟鎹紙鏌ヨ鎵€鏈夊簱瀛橈級
         if (data.chart_data) {
           systemMessage += `\n\n馃搳 搴撳瓨缁熻锛歕n` +
-            `鍟嗗搧绉嶇被锛?{data.summary.total_products}绉峔n` +
+            `鍟嗗搧绉嶇被：{data.summary.total_products}绉峔n` +
             `渚涘簲鍟嗘暟閲忥細${data.summary.total_suppliers}瀹禱n` +
             `鎬诲簱瀛橈細${data.summary.total_weight.toFixed(2)}鍏媆n`
           
@@ -1591,26 +1591,26 @@ function App() {
         // 濡傛灉鏄壒閲忓叆搴撴垚鍔?
         else if (data.order && data.details && data.details.length > 0) {
           systemMessage += `\n\n馃搵 鍏ュ簱鍗曚俊鎭細\n` +
-            `鍏ュ簱鍗曞彿锛?{data.order.order_no}\n` +
-            `鍟嗗搧鏁伴噺锛?{data.details.length}涓猏n\n`
+            `鍏ュ簱单号：{data.order.order_no}\n` +
+            `鍟嗗搧鏁伴噺：{data.details.length}涓猏n\n`
           
           // 鏄剧ず姣忎釜鍟嗗搧鐨勮缁嗕俊鎭?
           data.details.forEach((detail, index) => {
             systemMessage += `鍟嗗搧${index + 1}锛歕n` +
-              `  鍟嗗搧鍚嶇О锛?{detail.product_name}\n` +
-              `  閲嶉噺锛?{detail.weight}鍏媆n` +
-              `  宸ヨ垂锛?{detail.labor_cost}鍏?鍏媆n` +
+              `  鍟嗗搧鍚嶇О：{detail.product_name}\n` +
+              `  閲嶉噺：{detail.weight}鍏媆n` +
+              `  宸ヨ垂：{detail.labor_cost}鍏?鍏媆n` +
               `  渚涘簲鍟嗭細${detail.supplier}\n` +
               `  璇ュ晢鍝佸伐璐癸細${detail.total_cost.toFixed(2)}鍏僜n\n`
           })
           
-          systemMessage += `馃挵 鍚堣宸ヨ垂锛?{data.total_labor_cost.toFixed(2)}鍏僜n\n`
+          systemMessage += `馃挵 鍚堣宸ヨ垂：{data.total_labor_cost.toFixed(2)}鍏僜n\n`
           
           // 鏄剧ず搴撳瓨鏇存柊
           if (data.inventories && data.inventories.length > 0) {
             systemMessage += `📦 搴撳瓨鏇存柊锛歕n`
             data.inventories.forEach(inv => {
-              systemMessage += `  ${inv.product_name}锛?{inv.total_weight}鍏媆n`
+              systemMessage += `  ${inv.product_name}：{inv.total_weight}鍏媆n`
             })
           }
           
@@ -1622,8 +1622,8 @@ function App() {
         // 鍚戝悗鍏煎锛氬崟涓晢鍝佸叆搴擄紙鏃ф牸寮忥級
         else if (data.order && data.detail && data.inventory) {
           systemMessage += `\n\n馃搵 鍏ュ簱鍗曚俊鎭細\n` +
-            `鍏ュ簱鍗曞彿锛?{data.order.order_no}\n` +
-            `鍟嗗搧鍚嶇О锛?{data.detail.product_name}\n` +
+            `鍏ュ簱单号：{data.order.order_no}\n` +
+            `鍟嗗搧鍚嶇О：{data.detail.product_name}\n` +
             `重量：${data.detail.weight}克\n` +
             `工费：${data.detail.labor_cost}元/克\n` +
             `供应商：${data.detail.supplier}\n` +
@@ -1635,7 +1635,7 @@ function App() {
             content: systemMessage 
           }])
         }
-        // 濡傛灉鏄煡璇㈠崟涓簱瀛橈紙淇濈暀鍚戝悗鍏煎锛?
+        // 濡傛灉鏄煡璇㈠崟涓簱瀛橈紙淇濈暀鍚戝悗鍏煎：
         else if (data.inventory && !data.order) {
           systemMessage += `\n\n📦 库存信息：\n` +
             `商品名称：${data.inventory.product_name}\n` +
@@ -1660,7 +1660,7 @@ function App() {
           }])
           return
         }
-        // 濡傛灉鏄煡璇㈡墍鏈夊簱瀛橈紙杩斿洖inventories鏁扮粍锛? 淇濈暀鍚戝悗鍏煎
+        // 濡傛灉鏄煡璇㈡墍鏈夊簱瀛橈紙杩斿洖inventories鏁扮粍： 淇濈暀鍚戝悗鍏煎
         else if (data.inventories && Array.isArray(data.inventories) && data.inventories.length > 0 && !data.action) {
           systemMessage += `\n\n📦 鍟嗗搧鍒楄〃锛歕n`
           data.inventories.forEach((inv, idx) => {
@@ -1701,7 +1701,7 @@ function App() {
           }])
           return
         }
-        // 濡傛灉鏄煡璇㈡渶杩戠殑鍏ュ簱鍗曞垪琛紙淇濈暀鍚戝悗鍏煎锛?
+        // 濡傛灉鏄煡璇㈡渶杩戠殑鍏ュ簱鍗曞垪琛紙淇濈暀鍚戝悗鍏煎：
         else if (data.orders && Array.isArray(data.orders) && data.orders.length > 0 && !data.orders[0].order_no.startsWith('XS')) {
           systemMessage += `\n\n📋 最近的入库单：\n`
           data.orders.forEach((order, idx) => {
@@ -1788,9 +1788,9 @@ function App() {
         else if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
           systemMessage += `\n\n❌ 库存检查失败：\n`
           data.inventory_errors.forEach((error, idx) => {
-            systemMessage += `${idx + 1}. ${error.product_name}锛?{error.error}\n` +
+            systemMessage += `${idx + 1}. ${error.product_name}：{error.error}\n` +
               `   闇€瑕侊細${error.required_weight}鍏媆n` +
-              `   鍙敤锛?{error.available_weight}鍏媆n`
+              `   鍙敤：{error.available_weight}鍏媆n`
             if (error.reserved_weight !== undefined) {
               systemMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
             }
@@ -1814,16 +1814,16 @@ function App() {
         
         // 濡傛灉鏈夋€濊€冭繃绋嬶紝鍏堟樉绀烘€濊€冭繃绋?
         if (data.thinking_steps && data.thinking_steps.length > 0) {
-          errorMessage = "馃挱 澶勭悊杩囩▼锛歕n" + data.thinking_steps.join('\n') + "\n\n" + errorMessage
+          errorMessage = "💡 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + errorMessage
         }
         
-        // 澶勭悊搴撳瓨妫€鏌ラ敊璇紙鍦ㄩ敊璇搷搴斾腑锛?
+        // 澶勭悊搴撳瓨妫€鏌ラ敊璇紙鍦ㄩ敊璇搷搴斾腑：
         if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
-          errorMessage += `\n\n鉂?搴撳瓨妫€鏌ュけ璐ワ細\n`
+          errorMessage += `\n\n❌ 搴撳瓨妫€鏌ュけ璐ワ細\n`
           data.inventory_errors.forEach((error, idx) => {
-            errorMessage += `${idx + 1}. ${error.product_name}锛?{error.error}\n` +
+            errorMessage += `${idx + 1}. ${error.product_name}：{error.error}\n` +
               `   闇€瑕侊細${error.required_weight}鍏媆n` +
-              `   鍙敤锛?{error.available_weight}鍏媆n`
+              `   鍙敤：{error.available_weight}鍏媆n`
             if (error.reserved_weight !== undefined) {
               errorMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
             }
@@ -1865,13 +1865,13 @@ function App() {
       }
     } catch (error) {
       setLoading(false)
-      let errorMessage = `鉂?缃戠粶閿欒锛?{error.message}`
+      let errorMessage = `❌ 缃戠粶閿欒：{error.message}`
       
       // 鎻愪緵鏇磋缁嗙殑閿欒淇℃伅
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
         errorMessage = '❌ 无法连接到服务器，请检查后端服务是否运行（http://localhost:8000）'
       } else if (error.name === 'AbortError') {
-        errorMessage = '鉂?璇锋眰瓒呮椂锛岃绋嶅悗閲嶈瘯'
+        errorMessage = '❌ 璇锋眰瓒呮椂锛岃绋嶅悗閲嶈瘯'
       }
       
       setMessages(prev => [...prev, { 
@@ -1890,12 +1890,12 @@ function App() {
     if (!file.type.startsWith('image/')) {
       setMessages(prev => [...prev, {
         type: 'system',
-        content: '鉂?璇蜂笂浼犲浘鐗囨枃浠讹紙jpg銆乸ng绛夋牸寮忥級'
+        content: '❌ 璇蜂笂浼犲浘鐗囨枃浠讹紙jpg銆乸ng绛夋牸寮忥級'
       }])
       return
     }
 
-    // 楠岃瘉鏂囦欢澶у皬锛堥檺鍒?0MB锛?
+    // 楠岃瘉鏂囦欢澶у皬锛堥檺鍒?0MB：
     if (file.size > 10 * 1024 * 1024) {
       setMessages(prev => [...prev, {
         type: 'system',
@@ -1906,7 +1906,7 @@ function App() {
 
     setUploading(true)
     
-    // 淇濆瓨鍥剧墖棰勮锛堜娇鐢≒romise纭繚鍥剧墖鍔犺浇瀹屾垚锛?
+    // 淇濆瓨鍥剧墖棰勮锛堜娇鐢≒romise纭繚鍥剧墖鍔犺浇瀹屾垚：
     const imageDataUrlPromise = new Promise((resolve) => {
       const reader = new FileReader()
       reader.onload = (e) => {
@@ -1929,7 +1929,7 @@ function App() {
       const formData = new FormData()
       formData.append('file', file)
 
-      // 璋冪敤璇嗗埆鎺ュ彛锛堝彧璇嗗埆锛屼笉鍏ュ簱锛?
+      // 璋冪敤璇嗗埆鎺ュ彛锛堝彧璇嗗埆锛屼笉鍏ュ簱：
       const response = await fetch(API_ENDPOINTS.RECOGNIZE_INBOUND_SHEET, {
         method: 'POST',
         body: formData,
@@ -1947,7 +1947,7 @@ function App() {
         
         let systemMessage = "✅ 图片识别完成！\n\n"
         
-        // 鏄剧ず鎬濊€冭繃绋?
+        // 显示思考过程
         if (data.thinking_steps && data.thinking_steps.length > 0) {
           systemMessage += "💡 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n"
         }
@@ -1961,12 +1961,12 @@ function App() {
       } else {
         let errorMessage = data.message
         
-        // 鏄剧ず鎬濊€冭繃绋?
+        // 显示思考过程
         if (data.thinking_steps && data.thinking_steps.length > 0) {
           errorMessage = "💡 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + errorMessage
         }
         
-        // 濡傛灉璇嗗埆澶辫触浣嗘湁閮ㄥ垎鏂囧瓧锛屼篃鎵撳紑瀵硅瘽妗?
+        // 如果识别失败但有部分文字，也打开对话框
         if (data.recognized_text && data.recognized_text.trim().length > 0) {
           const imageDataUrl = await imageDataUrlPromise
           handleOCRComplete(data.recognized_text, imageDataUrl)
@@ -2046,13 +2046,13 @@ function App() {
         
         // 濡傛灉鏈夋€濊€冭繃绋嬶紝鍏堟樉绀烘€濊€冭繃绋?
         if (data.thinking_steps && data.thinking_steps.length > 0) {
-          systemMessage = "馃挱 澶勭悊杩囩▼锛歕n" + data.thinking_steps.join('\n') + "\n\n" + systemMessage
+          systemMessage = "💡 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + systemMessage
         }
 
         // 濡傛灉鏄浘琛ㄦ暟鎹紙鏌ヨ鎵€鏈夊簱瀛橈級
         if (data.chart_data) {
           systemMessage += `\n\n馃搳 搴撳瓨缁熻锛歕n` +
-            `鍟嗗搧绉嶇被锛?{data.summary.total_products}绉峔n` +
+            `鍟嗗搧绉嶇被：{data.summary.total_products}绉峔n` +
             `渚涘簲鍟嗘暟閲忥細${data.summary.total_suppliers}瀹禱n` +
             `鎬诲簱瀛橈細${data.summary.total_weight.toFixed(2)}鍏媆n`
           
@@ -2067,13 +2067,13 @@ function App() {
         // 濡傛灉鏄壒閲忓叆搴撴垚鍔?
         else if (data.order && data.details && data.details.length > 0 && data.order.order_no && data.order.order_no.startsWith('RK')) {
           systemMessage += `\n\n馃搵 鍏ュ簱鍗曚俊鎭細\n` +
-            `鍏ュ簱鍗曞彿锛?{data.order.order_no}\n` +
-            `鍟嗗搧鏁伴噺锛?{data.details.length}涓猏n\n`
+            `鍏ュ簱单号：{data.order.order_no}\n` +
+            `鍟嗗搧鏁伴噺：{data.details.length}涓猏n\n`
           
           data.details.forEach((detail, index) => {
             systemMessage += `鍟嗗搧${index + 1}锛歕n` +
-              `  鍟嗗搧鍚嶇О锛?{detail.product_category || detail.product_name}\n` +
-              `  閲嶉噺锛?{detail.weight}鍏媆n` +
+              `  鍟嗗搧鍚嶇О：{detail.product_category || detail.product_name}\n` +
+              `  閲嶉噺：{detail.weight}鍏媆n` +
               `  工费：${detail.labor_cost}元/克\n` +
               `  供应商：${detail.supplier}\n` +
               `  该商品工费：${detail.total_cost.toFixed(2)}元\n\n`
@@ -2093,7 +2093,7 @@ function App() {
             content: systemMessage
           }])
         }
-        // 澶勭悊閿€鍞崟鍒涘缓鎴愬姛锛圤CR纭鍚庝篃鍙兘鍒涘缓閿€鍞崟锛?
+        // 澶勭悊閿€鍞崟鍒涘缓鎴愬姛锛圤CR纭鍚庝篃鍙兘鍒涘缓閿€鍞崟：
         else if (data.order && data.order.order_no && data.order.order_no.startsWith('XS')) {
           systemMessage += `\n\n📋 销售单信息：\n` +
             `销售单号：${data.order.order_no}\n` +
@@ -2120,7 +2120,7 @@ function App() {
             salesOrder: data.order
           }])
         }
-        // 濡傛灉鏄煡璇㈡墍鏈夊簱瀛橈紙杩斿洖inventories鏁扮粍锛?
+        // 濡傛灉鏄煡璇㈡墍鏈夊簱瀛橈紙杩斿洖inventories鏁扮粍：
         else if (data.inventories && Array.isArray(data.inventories) && data.inventories.length > 0) {
           systemMessage += `\n\n📦 商品列表：\n`
           data.inventories.forEach((inv, idx) => {
@@ -2145,11 +2145,11 @@ function App() {
         }
         // 澶勭悊搴撳瓨妫€鏌ラ敊璇?
         else if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
-          systemMessage += `\n\n鉂?搴撳瓨妫€鏌ュけ璐ワ細\n`
+          systemMessage += `\n\n❌ 搴撳瓨妫€鏌ュけ璐ワ細\n`
           data.inventory_errors.forEach((error, idx) => {
-            systemMessage += `${idx + 1}. ${error.product_name}锛?{error.error}\n` +
+            systemMessage += `${idx + 1}. ${error.product_name}：{error.error}\n` +
               `   闇€瑕侊細${error.required_weight}鍏媆n` +
-              `   鍙敤锛?{error.available_weight}鍏媆n`
+              `   鍙敤：{error.available_weight}鍏媆n`
             if (error.reserved_weight !== undefined) {
               systemMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
             }
@@ -2162,13 +2162,13 @@ function App() {
             inventoryErrors: data.inventory_errors
           }])
         }
-        // 澶勭悊搴撳瓨妫€鏌ラ敊璇紙閲嶅浠ｇ爜锛屼繚鐣欎互闃蹭竾涓€锛?
+        // 澶勭悊搴撳瓨妫€鏌ラ敊璇紙閲嶅浠ｇ爜锛屼繚鐣欎互闃蹭竾涓€：
         else if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
-          systemMessage += `\n\n鉂?搴撳瓨妫€鏌ュけ璐ワ細\n`
+          systemMessage += `\n\n❌ 搴撳瓨妫€鏌ュけ璐ワ細\n`
           data.inventory_errors.forEach((error, idx) => {
-            systemMessage += `${idx + 1}. ${error.product_name}锛?{error.error}\n` +
+            systemMessage += `${idx + 1}. ${error.product_name}：{error.error}\n` +
               `   闇€瑕侊細${error.required_weight}鍏媆n` +
-              `   鍙敤锛?{error.available_weight}鍏媆n`
+              `   鍙敤：{error.available_weight}鍏媆n`
             if (error.reserved_weight !== undefined) {
               systemMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
             }
@@ -2192,16 +2192,16 @@ function App() {
         let errorMessage = data.message
         
         if (data.thinking_steps && data.thinking_steps.length > 0) {
-          errorMessage = "馃挱 澶勭悊杩囩▼锛歕n" + data.thinking_steps.join('\n') + "\n\n" + errorMessage
+          errorMessage = "💡 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + errorMessage
         }
 
-        // 澶勭悊搴撳瓨妫€鏌ラ敊璇紙鍦ㄩ敊璇搷搴斾腑锛?
+        // 澶勭悊搴撳瓨妫€鏌ラ敊璇紙鍦ㄩ敊璇搷搴斾腑：
         if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
-          errorMessage += `\n\n鉂?搴撳瓨妫€鏌ュけ璐ワ細\n`
+          errorMessage += `\n\n❌ 搴撳瓨妫€鏌ュけ璐ワ細\n`
           data.inventory_errors.forEach((error, idx) => {
-            errorMessage += `${idx + 1}. ${error.product_name}锛?{error.error}\n` +
+            errorMessage += `${idx + 1}. ${error.product_name}：{error.error}\n` +
               `   闇€瑕侊細${error.required_weight}鍏媆n` +
-              `   鍙敤锛?{error.available_weight}鍏媆n`
+              `   鍙敤：{error.available_weight}鍏媆n`
             if (error.reserved_weight !== undefined) {
               errorMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
             }
@@ -2235,7 +2235,7 @@ function App() {
       setLoading(false)
       setMessages(prev => [...prev, {
         type: 'system',
-        content: `鉂?缃戠粶閿欒锛?{error.message}`
+        content: `❌ 缃戠粶閿欒：{error.message}`
       }])
     }
   }
@@ -2811,7 +2811,7 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 蹇嵎閫€璐у崱鐗?- 鍟嗗搧涓撳憳锛堥€€缁欎緵搴斿晢锛?*/}
+                  {/* 蹇嵎閫€璐у崱鐗?- 鍟嗗搧涓撳憳锛堥€€缁欎緵搴斿晢：*/}
                   {hasPermission(userRole, 'canReturnToSupplier') && (
                     <div 
                       onClick={() => setShowQuickReturnModal(true)}
@@ -2823,7 +2823,7 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 蹇嵎閫€璐у崱鐗?- 鏌滃彴锛堥€€缁欏晢鍝侀儴锛?*/}
+                  {/* 蹇嵎閫€璐у崱鐗?- 鏌滃彴锛堥€€缁欏晢鍝侀儴：*/}
                   {hasPermission(userRole, 'canReturnToWarehouse') && (
                     <div 
                       onClick={() => setShowQuickReturnModal(true)}
@@ -2968,16 +2968,16 @@ function App() {
             )}
 
             {messages.map((msg, idx) => {
-              // 鎬濊€冭繃绋嬫秷鎭?
+              // 思考过程消息
               if (msg.type === 'thinking' && Array.isArray(msg.steps)) {
                 return (
                   <div key={msg.id || idx} className="flex justify-start">
                     <div className="bg-white rounded-3xl px-5 py-4 shadow-sm border border-gray-200/60 max-w-2xl">
-                      {/* 杩涘害鏉?*/}
+                      {/* 进度条 */}
                       {msg.steps.length > 0 && (
                         <div className="mb-3">
                           <div className="flex justify-between text-xs text-gray-600 mb-1">
-                            <span>澶勭悊杩涘害</span>
+                            <span>处理进度</span>
                             <span>{msg.steps[msg.steps.length - 1]?.progress || 0}%</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-1.5">
@@ -3042,18 +3042,18 @@ function App() {
                         {/* 閲戦淇℃伅 */}
                         <div className="bg-gray-50 rounded-xl p-4 space-y-2">
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-600">褰撳墠娆犳</span>
-                            <span className="font-medium text-gray-900">楼{pd.current_debt?.toFixed(2)}</span>
+                            <span className="text-gray-600">当前欠款</span>
+                            <span className="font-medium text-gray-900">¥{pd.current_debt?.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-600">鏈鏀舵</span>
-                            <span className="font-bold text-orange-600 text-lg">楼{pd.payment_amount?.toFixed(2)}</span>
+                            <span className="font-bold text-orange-600 text-lg">¥{pd.payment_amount?.toFixed(2)}</span>
                           </div>
                           <div className="border-t border-gray-200 pt-2 flex justify-between text-sm">
                             <span className="text-gray-600">收款后欠款</span>
                             <span className={`font-medium ${(pd.balance_after || 0) >= 0 ? 'text-orange-600' : 'text-green-600'}`}>
                               {(pd.balance_after || 0) >= 0 
-                                ? `楼${pd.balance_after?.toFixed(2)}` 
+                                ? `¥${pd.balance_after?.toFixed(2)}` 
                                 : `-¥${Math.abs(pd.balance_after || 0).toFixed(2)} (预收款)`
                               }
                             </span>
@@ -3066,7 +3066,7 @@ function App() {
                           <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded">{pd.payment_method}</span>
                         </div>
                         
-                        {/* 鎿嶄綔鎸夐挳 */}
+                        {/* 操作按钮 */}
                         <div className="flex gap-3 pt-2">
                           <button
                             onClick={async () => {
@@ -3081,11 +3081,11 @@ function App() {
                                 if (result.success) {
                                   // 鏇存柊娑堟伅涓烘垚鍔熺姸鎬?
                                   const balanceText = (pd.balance_after || 0) >= 0 
-                                    ? `楼${pd.balance_after.toFixed(2)}` 
-                                    : `-楼${Math.abs(pd.balance_after || 0).toFixed(2)} (棰勬敹娆?`
+                                    ? `¥${pd.balance_after.toFixed(2)}` 
+                                    : `-¥${Math.abs(pd.balance_after || 0).toFixed(2)} (预收款`
                                   setMessages(prev => prev.map(m => 
                                     m.id === msg.id 
-                                      ? { ...m, type: 'system', content: `鉁?鏀舵鐧昏鎴愬姛锛乗n\n客户：{pd.customer.name}\n鏀舵閲戦锛毬?{pd.payment_amount.toFixed(2)}\n鏀舵鏂瑰紡锛?{pd.payment_method}\n鏀舵鍚庢瑺娆撅細${balanceText}` }
+                                      ? { ...m, type: 'system', content: `✅ 鏀舵鐧昏鎴愬姛锛乗n\n客户：{pd.customer.name}\n鏀舵閲戦锛毬?{pd.payment_amount.toFixed(2)}\n鏀舵鏂瑰紡：{pd.payment_method}\n鏀舵鍚庢瑺娆撅細${balanceText}` }
                                       : m
                                   ))
                                 } else {
@@ -3145,7 +3145,7 @@ function App() {
                           </div>
                         </div>
                         
-                        {/* 閲戞枡淇℃伅 */}
+                        {/* 金料信息 */}
                         <div className="bg-yellow-50 rounded-xl p-4 space-y-3">
                           <div className="flex justify-between items-center">
                             <span className="text-gray-600">收料克重</span>
@@ -3163,7 +3163,7 @@ function App() {
                           )}
                         </div>
                         
-                        {/* 鎿嶄綔鎸夐挳 */}
+                        {/* 操作按钮 */}
                         <div className="flex gap-3 pt-2">
                           <button
                             onClick={async () => {
@@ -3184,7 +3184,7 @@ function App() {
                                   // 鏇存柊娑堟伅涓烘垚鍔熺姸鎬?
                                   setMessages(prev => prev.map(m => 
                                     m.id === msg.id 
-                                      ? { ...m, type: 'system', content: `鉁?鏀舵枡鍗曞垱寤烘垚鍔燂紒\n\n鍗曞彿锛?{result.data.receipt_no}\n客户：{rd.customer.name}\n克重：{rd.gold_weight.toFixed(2)}克
+                                      ? { ...m, type: 'system', content: `✅ 收料单创建成功！\n\n单号：{result.data.receipt_no}\n客户：{rd.customer.name}\n克重：{rd.gold_weight.toFixed(2)}克
 成色：{rd.gold_fineness}` }
                                       : m
                                   ))
@@ -3194,11 +3194,11 @@ function App() {
                                   }
                                 } else {
                                   const error = await response.json()
-                                  alert('鏀舵枡鍗曞垱寤哄け璐ワ細' + (error.detail || '鏈煡閿欒'))
+                                  alert('收料单创建失败：' + (error.detail || '鏈煡閿欒'))
                                 }
                               } catch (error) {
                                 console.error('Receipt order creation failed:', error)
-                                alert('鏀舵枡鍗曞垱寤哄け璐ワ細' + error.message)
+                                alert('收料单创建失败：' + error.message)
                               }
                             }}
                             className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2.5 px-4 rounded-xl transition-colors"
@@ -3272,7 +3272,7 @@ function App() {
                           )}
                         </div>
                         
-                        {/* 鎿嶄綔鎸夐挳 */}
+                        {/* 操作按钮 */}
                         <div className="flex gap-3 pt-2">
                           <button
                             onClick={async () => {
@@ -3381,7 +3381,7 @@ function App() {
                           )}
                         </div>
                         
-                        {/* 鎿嶄綔鎸夐挳 */}
+                        {/* 操作按钮 */}
                         <div className="flex gap-3 pt-2">
                           <button
                             onClick={() => window.open(wd.download_url, '_blank')}
@@ -3503,7 +3503,7 @@ function App() {
                             </div>
                           )
                         })()}
-                        {/* 閫€璐у崟鎿嶄綔鎸夐挳 - 鏀寔浠庡璞℃垨浠庡唴瀹硅В鏋?*/}
+                        {/* 閫€璐у崟操作按钮 - 鏀寔浠庡璞℃垨浠庡唴瀹硅В鏋?*/}
                         {(() => {
                           // 灏濊瘯浠庢秷鎭璞¤幏鍙栵紝鎴栦粠鍐呭涓В鏋愰殣钘忔爣璁?
                           let returnId = msg.returnOrder?.id
@@ -3567,7 +3567,7 @@ function App() {
                             </div>
                           )
                         })()}
-                        {/* 閿€鍞崟鎿嶄綔鎸夐挳 - 鏀寔浠庡璞℃垨浠庡唴瀹硅В鏋?*/}
+                        {/* 閿€鍞崟操作按钮 - 鏀寔浠庡璞℃垨浠庡唴瀹硅В鏋?*/}
                         {(() => {
                           // 灏濊瘯浠庢秷鎭璞¤幏鍙栵紝鎴栦粠鍐呭涓В鏋愰殣钘忔爣璁?
                           let salesId = msg.salesOrderId
@@ -3977,7 +3977,7 @@ function App() {
                                 }}
                                 className="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-medium hover:from-amber-600 hover:to-orange-600 transition-all shadow-md"
                               >
-                                鉁?鍏ㄩ儴纭鍏ュ簱
+                                ✅ 鍏ㄩ儴纭鍏ュ簱
                               </button>
                             </div>
                           )}
@@ -4169,7 +4169,7 @@ function App() {
                               )}
                             </div>
                   
-                            {/* 鐜舰鍥撅紙鏇夸唬楗煎浘锛屾洿鐜颁唬锛?*/}
+                            {/* 鐜舰鍥撅紙鏇夸唬楗煎浘锛屾洿鐜颁唬：*/}
                   {msg.pieData && (
                               <div className="bg-gray-50 rounded-xl p-4">
                                 <Doughnut 
@@ -4270,15 +4270,15 @@ function App() {
               return null
             })}
 
-        {/* AI鎬濊€冪姸鎬佸姩鐢?- 鐝犲疂椋庢牸 */}
+        {/* AI思考状态动画 - 珠宝风格 */}
         {(loading || uploading) && (
           <div className="flex justify-start items-start gap-3">
-            {/* AI澶村儚 + 鑴夊啿鍔ㄧ敾 */}
+            {/* AI头像 + 脉冲动画 */}
             <div className="relative flex-shrink-0">
               <img src="/ai-avatar.png" alt="AI" className="w-9 h-9 rounded-full object-cover shadow-lg" />
               <div className="absolute inset-0 bg-amber-400 rounded-full animate-ping opacity-30"></div>
             </div>
-            {/* 鎬濊€冩皵娉?*/}
+            {/* 思考气泡 */}
             <div className="bg-gradient-to-br from-white to-amber-50 rounded-3xl px-5 py-4 shadow-sm border border-amber-100">
               <div className="flex items-center gap-3">
                 <div className="flex space-x-1.5">
@@ -4287,7 +4287,7 @@ function App() {
                   <div className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
                 </div>
                 <span className="text-sm text-amber-600 font-medium">
-                  {uploading ? 'AI姝ｅ湪璇嗗埆鍥剧墖...' : 'AI姝ｅ湪鍒嗘瀽...'}
+                  {uploading ? 'AI正在识别图片...' : 'AI正在分析...'}
                 </span>
               </div>
             </div>
@@ -4335,7 +4335,7 @@ function App() {
             
             {/* 瀵硅瘽妗嗗唴瀹瑰尯鍩?*/}
             <div className="flex-1 overflow-hidden flex flex-col sm:flex-row">
-              {/* 宸︿晶锛氬浘鐗囬瑙堬紙妗岄潰绔樉绀猴紝绉诲姩绔殣钘忔垨鎶樺彔锛?*/}
+              {/* 宸︿晶锛氬浘鐗囬瑙堬紙妗岄潰绔樉绀猴紝绉诲姩绔殣钘忔垨鎶樺彔：*/}
               {uploadedImage && (
                 <div className="hidden sm:block w-80 border-r bg-gray-50 p-4 overflow-y-auto">
                   <h3 className="text-sm font-semibold text-gray-700 mb-3">鍘熷鍥剧墖</h3>
@@ -4715,21 +4715,21 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
           onSuccess={(result) => {
             // 寮€鍗曟垚鍔熷悗鍦ㄨ亰澶╂鏄剧ず閿€鍞崟鏄庣粏
             const itemsList = (Array.isArray(result?.items) ? result.items : []).map((item, idx) => 
-              `${idx + 1}. ${item.product_name}锛?{item.weight}鍏?× 楼${item.labor_cost}/鍏?= 楼${(item.weight * item.labor_cost).toFixed(2)}`
+              `${idx + 1}. ${item.product_name}：{item.weight}克 × ¥${item.labor_cost}/克 = ¥${(item.weight * item.labor_cost).toFixed(2)}`
             ).join('\n')
             
-            const salesMessage = `鉁?**閿€鍞崟鍒涘缓鎴愬姛**
+            const salesMessage = `✅ **閿€鍞崟鍒涘缓鎴愬姛**
 
-馃搵 **閿€鍞崟鍙?*锛?{result.order_no}
+馃搵 **閿€鍞崟鍙?*：{result.order_no}
 👤 **客户**：{result.customer_name}
-馃鈥嶐煉?**涓氬姟鍛?*锛?{result.salesperson}
+馃鈥嶐煉?**涓氬姟鍛?*：{result.salesperson}
 
-📦 **商品明细**锛?
+📦 **商品明细**：
 ${itemsList}
 
-馃搳 **姹囨€?*锛?
+馃搳 **姹囨€?*：
 - 鎬诲厠閲嶏細${result.total_weight.toFixed(2)}鍏?
-- 鎬诲伐璐癸細楼${result.total_labor_cost.toFixed(2)}
+- 总工费：¥${result.total_labor_cost.toFixed(2)}
 
 <!-- SALES_ORDER:${result.order_id}:${result.order_no} -->`
 
@@ -4819,7 +4819,7 @@ ${itemsList}
               } : null
             }])
             
-            // 淇濆瓨鍒板悗绔亰澶╁巻鍙诧紙鍖呭惈ID鏍囪锛?
+            // 淇濆瓨鍒板悗绔亰澶╁巻鍙诧紙鍖呭惈ID鏍囪：
             try {
               await fetch(`${API_BASE_URL}/api/chat-logs/message?session_id=${encodeURIComponent(currentSessionId)}&message_type=assistant&content=${encodeURIComponent(inboundMessage)}&user_role=${userRole}&intent=鍏ュ簱`, {
                 method: 'POST'
