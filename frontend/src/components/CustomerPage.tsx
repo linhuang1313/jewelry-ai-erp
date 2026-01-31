@@ -350,7 +350,7 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
       const data = await response.json();
       
       if (data.success) {
-        setCustomerDetail(data.detail);
+        setCustomerDetail(data.data);
       } else {
         toast.error(data.message || '获取客户详情失败');
         setCustomerDetail({
