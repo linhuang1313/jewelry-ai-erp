@@ -386,7 +386,9 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
         # 创建 Excel
         wb = Workbook()
         ws = wb.active
-        ws.title = f"{customer.name}往来账目"
+        # 工作表名称限制31字符，去除特殊字符
+        safe_name = customer.name[:15].replace("/", "-").replace("\\", "-").replace("*", "").replace("?", "").replace("[", "").replace("]", "")
+        ws.title = f"{safe_name}往来账目"
         
         # 客户信息
         ws.append([f"客户：{customer.name}"])
@@ -401,13 +403,26 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
         
         # 数据
         for tx in transactions_list:
+            # 安全格式化时间
+            created_at = tx.get("created_at")
+            if created_at:
+                try:
+                    if hasattr(created_at, 'strftime'):
+                        time_str = created_at.strftime("%Y-%m-%d %H:%M:%S")
+                    else:
+                        time_str = str(created_at)
+                except:
+                    time_str = str(created_at) if created_at else ""
+            else:
+                time_str = ""
+            
             ws.append([
-                tx["type"],
-                tx["order_no"],
-                tx["description"],
-                tx["amount"] if tx["amount"] else "",
-                tx["gold_weight"] if tx["gold_weight"] else "",
-                tx["created_at"].strftime("%Y-%m-%d %H:%M:%S") if tx["created_at"] else ""
+                tx.get("type", ""),
+                tx.get("order_no", ""),
+                tx.get("description", ""),
+                tx.get("amount") if tx.get("amount") else "",
+                tx.get("gold_weight") if tx.get("gold_weight") else "",
+                time_str
             ])
         
         auto_column_width(ws)
@@ -418,8 +433,10 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"导出客户往来账目失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        error_detail = traceback.format_exc()
+        logger.error(f"导出客户往来账目失败: {e}\n{error_detail}")
+        raise HTTPException(status_code=500, detail=f"导出失败: {str(e)}")
 
 
 @router.get("/customers")
