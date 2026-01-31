@@ -398,8 +398,8 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
       const data = await response.json();
       
       if (data.success) {
-        setDebtList(data.items || []);
-        setDebtSummary(data.summary || { total_cash_debt: 0, total_gold_balance: 0, total_gold_debt: 0, customer_count: 0 });
+        setDebtList(data.data?.items || []);
+        setDebtSummary(data.data?.summary || { total_cash_debt: 0, total_gold_balance: 0, total_gold_debt: 0, customer_count: 0 });
       } else {
         toast.error(data.message || '获取欠款列表失败');
       }
@@ -422,8 +422,8 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
       const data = await response.json();
       
       if (data.success) {
-        setDebtHistory(data.transactions || []);
-        setCustomerCurrentBalance(data.current_balance || null);
+        setDebtHistory(data.data?.transactions || []);
+        setCustomerCurrentBalance(data.data?.current_balance || null);
       } else {
         toast.error(data.message || '获取欠款历史失败');
         setDebtHistory([]);
