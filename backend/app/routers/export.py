@@ -279,9 +279,9 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
             transactions_list.append({
                 "type": "销售",
                 "order_no": order.order_no,
-                "description": f"销售单",
-                "amount": order.total_labor_cost or 0,
-                "gold_weight": order.total_weight or 0,
+                "description": f"工费",
+                "amount": order.total_labor_cost or 0,  # 正数表示客户欠款增加
+                "gold_weight": 0,
                 "created_at": order.create_time
             })
         

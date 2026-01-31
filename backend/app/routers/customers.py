@@ -964,13 +964,13 @@ async def get_customer_detail(
         # 获取往来账目
         transactions_list = []
         
-        # 销售交易
+        # 销售交易（产生工费，客户欠款增加）
         for order in sales_orders[:20]:  # 限制数量
             transactions_list.append({
                 "id": order.id,
                 "type": "sale",
-                "description": f"销售：{order.order_no}",
-                "amount": order.total_labor_cost,
+                "description": f"销售：{order.order_no}（工费）",
+                "amount": order.total_labor_cost,  # 正数表示客户欠款增加
                 "gold_weight": None,
                 "created_at": order.create_time.isoformat() if order.create_time else None
             })
