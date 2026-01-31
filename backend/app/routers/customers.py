@@ -1079,30 +1079,8 @@ async def get_customer_detail(
         except Exception as e:
             logger.warning(f"查询收款记录时出错: {e}")
         
-        # 退货记录（从ReturnOrder表获取）
-        try:
-            from ..models import ReturnOrder, ReturnOrderDetail
-            # 查找退给此客户的退货单（通过销售单关联）
-            for order in sales_orders[:20]:
-                returns = db.query(ReturnOrder).filter(
-                    ReturnOrder.related_sales_order_id == order.id,
-                    ReturnOrder.status == 'completed'
-                ).all()
-                for r in returns:
-                    # 计算退货金额
-                    return_details = db.query(ReturnOrderDetail).filter(ReturnOrderDetail.return_order_id == r.id).all()
-                    total_weight = sum(d.weight or 0 for d in return_details)
-                    
-                    transactions_list.append({
-                        "id": f"return_{r.id}",
-                        "type": "return",
-                        "description": f"退货：{r.return_no}",
-                        "amount": None,
-                        "gold_weight": -total_weight if total_weight else None,  # 退货减少
-                        "created_at": r.completed_at.isoformat() if r.completed_at else (r.created_at.isoformat() if r.created_at else None)
-                    })
-        except Exception as e:
-            logger.warning(f"查询退货记录时出错: {e}")
+        # 退货记录（注：ReturnOrder 是退给供应商的，客户往来账暂不包含）
+        # 如需添加客户退货记录，需要使用对应的销售退货模型
         
         # 按时间排序
         transactions_list.sort(key=lambda x: x["created_at"] or "", reverse=True)
