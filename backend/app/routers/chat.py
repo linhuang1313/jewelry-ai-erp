@@ -276,10 +276,14 @@ async def handle_payment_registration(ai_response, db: Session) -> Dict[str, Any
 
 
 async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
-    """处理收料 - 自动创建收料单"""
-    from ..models import Customer, CustomerGoldDeposit, CustomerGoldDepositTransaction, SettlementOrder, SalesOrder
+    """处理收料 - 自动创建收料单
+    
+    注意：由于在StreamingResponse中db会话可能失效，这里使用独立的数据库会话
+    """
+    from ..models import Customer, SettlementOrder, SalesOrder
     from ..models.finance import GoldReceipt
     from ..timezone_utils import china_now
+    from ..database import SessionLocal
     from sqlalchemy import func
     
     # 提取参数
@@ -296,16 +300,18 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
     
     gold_weight = float(gold_weight)
     
-    # 通过客户名查找客户
-    customer = db.query(Customer).filter(Customer.name == customer_name).first()
-    if not customer:
-        # 尝试模糊匹配
-        customer = db.query(Customer).filter(Customer.name.contains(customer_name)).first()
-    
-    if not customer:
-        return {"success": False, "message": f"未找到客户「{customer_name}」，请先在客户管理中创建该客户", "action": "收料"}
-    
+    # 使用独立的数据库会话，确保在StreamingResponse中也能正确提交
+    local_db = SessionLocal()
     try:
+        # 通过客户名查找客户
+        customer = local_db.query(Customer).filter(Customer.name == customer_name).first()
+        if not customer:
+            # 尝试模糊匹配
+            customer = local_db.query(Customer).filter(Customer.name.contains(customer_name)).first()
+        
+        if not customer:
+            return {"success": False, "message": f"未找到客户「{customer_name}」，请先在客户管理中创建该客户", "action": "收料"}
+        
         # 生成收料单号 SL + 时间戳
         now = china_now()
         receipt_no = f"SL{now.strftime('%Y%m%d%H%M%S')}"
@@ -322,16 +328,24 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
             received_by="AI助手",
             received_at=now
         )
-        db.add(receipt)
-        db.flush()
+        local_db.add(receipt)
+        local_db.flush()
         
-        db.commit()
+        # 立即提交，确保数据持久化
+        local_db.commit()
+        logger.info(f"[收料] 成功创建收料单: {receipt_no}, customer_id={customer.id}, weight={gold_weight}")
+        
+        # 刷新对象以获取最新的ID
+        local_db.refresh(receipt)
+        receipt_id = receipt.id
+        customer_name_final = customer.name
+        customer_id = customer.id
         
         # ========== 使用 GoldReceipt 计算方式获取最新余额（与查询/详情页一致） ==========
         # 1. 结算用料（结料支付 + 混合支付的金料部分）
         total_settlement_gold = 0.0
-        settlements = db.query(SettlementOrder).join(SalesOrder).filter(
-            SalesOrder.customer_id == customer.id,
+        settlements = local_db.query(SettlementOrder).join(SalesOrder).filter(
+            SalesOrder.customer_id == customer_id,
             SettlementOrder.status.in_(['confirmed', 'printed'])
         ).all()
         for s in settlements:
@@ -341,13 +355,15 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
                 total_settlement_gold += s.gold_payment_weight or 0
         
         # 2. 来料（GoldReceipt）
-        total_receipts_gold = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
-            GoldReceipt.customer_id == customer.id,
+        total_receipts_gold = local_db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
+            GoldReceipt.customer_id == customer_id,
             GoldReceipt.status == 'received'
         ).scalar() or 0
         
         # 3. 净金料 = 来料 - 结算用料
         net_gold = float(total_receipts_gold) - total_settlement_gold
+        
+        logger.info(f"[收料] 余额计算: receipts={total_receipts_gold}, settlements={total_settlement_gold}, net={net_gold}")
         
         # 返回成功消息（包含隐藏标记供前端解析打印按钮）
         if net_gold > 0:
@@ -360,22 +376,22 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
         message = f"""✅ **收料单已创建**
 
 📋 单号：{receipt_no}
-👤 客户：{customer.name}
+👤 客户：{customer_name_final}
 ⚖️ 克重：{gold_weight:.2f}克
 🏷️ 成色：{gold_fineness}
 💎 {balance_text}
 🕐 时间：{now.strftime('%Y-%m-%d %H:%M:%S')}
 
-<!-- GOLD_RECEIPT:{receipt.id}:{receipt_no} -->"""
+<!-- GOLD_RECEIPT:{receipt_id}:{receipt_no} -->"""
         
         return {
             "success": True,
             "action": "收料",
             "message": message,
             "data": {
-                "receipt_id": receipt.id,
+                "receipt_id": receipt_id,
                 "receipt_no": receipt_no,
-                "customer_name": customer.name,
+                "customer_name": customer_name_final,
                 "gold_weight": gold_weight,
                 "gold_fineness": gold_fineness,
                 "current_balance": net_gold
@@ -383,9 +399,11 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        db.rollback()
+        local_db.rollback()
         logger.error(f"创建收料单失败: {e}", exc_info=True)
         return {"success": False, "message": f"创建收料单失败：{str(e)}", "action": "收料"}
+    finally:
+        local_db.close()
 
 
 async def handle_gold_payment(ai_response, db: Session, user_role: str) -> Dict[str, Any]:
