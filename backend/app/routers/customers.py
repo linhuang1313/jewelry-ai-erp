@@ -1047,7 +1047,9 @@ async def get_customer_detail(
                     else:  # mixed
                         method_desc = f"混合(结料{s.gold_payment_weight or 0}克+结价{s.cash_payment_weight or 0}克)"
                         gold_change = -(s.gold_payment_weight or 0)
-                        amount_change = -(s.cash_payment_amount or 0)
+                        # 混合支付的现金部分 = 结价克重 × 金价
+                        cash_amount = (s.cash_payment_weight or 0) * (s.gold_price or 0)
+                        amount_change = -cash_amount
                     
                     transactions_list.append({
                         "id": f"settlement_{s.id}",
