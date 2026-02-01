@@ -29,15 +29,20 @@ router = APIRouter(prefix="/api/export", tags=["数据导出"])
 
 def create_excel_response(wb: Workbook, filename: str):
     """创建 Excel 文件响应"""
+    from urllib.parse import quote
+    
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
+    
+    # 对中文文件名进行 URL 编码
+    encoded_filename = quote(filename, safe='')
     
     return Response(
         content=output.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
-            "Content-Disposition": f"attachment; filename={filename}",
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
             "Access-Control-Allow-Origin": "*",
         }
     )
