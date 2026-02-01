@@ -802,7 +802,7 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                             <div className="text-right">
                               {tx.amount !== null && (
                                 <p className={`font-semibold ${tx.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {tx.amount >= 0 ? '+' : ''}¥{tx.amount.toFixed(2)}
+                                  {tx.amount >= 0 ? '+' : ''}{tx.amount.toFixed(2)}元
                                 </p>
                               )}
                               {tx.gold_weight !== null && (
