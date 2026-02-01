@@ -60,6 +60,7 @@ interface TransactionRecord {
   amount: number | null;
   gold_weight: number | null;
   created_at: string;
+  remark?: string;         // 备注信息
 }
 
 interface CustomerDetail {
@@ -794,9 +795,14 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                                 {tx.type === 'gold_withdrawal' && <TrendingDown className="w-4 h-4 text-purple-600" />}
                                 {tx.type === 'gold_receipt' && <FileText className="w-4 h-4 text-yellow-600" />}
                               </div>
-                              <div>
+                              <div className="flex-1">
                                 <p className="font-medium text-gray-900">{tx.description}</p>
                                 <p className="text-sm text-gray-500">{new Date(tx.created_at).toLocaleString()}</p>
+                                {tx.remark && (
+                                  <p className="text-sm text-gray-600 mt-1 bg-gray-100 px-2 py-1 rounded inline-block">
+                                    📝 {tx.remark}
+                                  </p>
+                                )}
                               </div>
                             </div>
                             <div className="text-right">

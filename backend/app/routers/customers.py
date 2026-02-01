@@ -985,7 +985,8 @@ async def get_customer_detail(
                 "description": f"销售：{order.order_no}（工费）",
                 "amount": -(order.total_labor_cost or 0),  # 负数表示客户产生欠款
                 "gold_weight": None,
-                "created_at": order.create_time.isoformat() if order.create_time else None
+                "created_at": order.create_time.isoformat() if order.create_time else None,
+                "remark": order.remark or ""  # 销售单备注
             })
         
         # 金料收料记录（从GoldReceipt表获取，这是核心数据源）
@@ -1002,7 +1003,8 @@ async def get_customer_detail(
                     "description": f"客户来料：{receipt.receipt_no}",
                     "amount": None,
                     "gold_weight": receipt.gold_weight,
-                    "created_at": (receipt.received_at or receipt.created_at).isoformat() if (receipt.received_at or receipt.created_at) else None
+                    "created_at": (receipt.received_at or receipt.created_at).isoformat() if (receipt.received_at or receipt.created_at) else None,
+                    "remark": receipt.remark or ""  # 来料备注
                 })
         except Exception as e:
             logger.warning(f"查询收料记录时出错: {e}")
@@ -1022,7 +1024,8 @@ async def get_customer_detail(
                     "description": f"客户提料：{withdrawal.withdrawal_no}",
                     "amount": None,
                     "gold_weight": -withdrawal.gold_weight,  # 提料为负数
-                    "created_at": (withdrawal.completed_at or withdrawal.created_at).isoformat() if (withdrawal.completed_at or withdrawal.created_at) else None
+                    "created_at": (withdrawal.completed_at or withdrawal.created_at).isoformat() if (withdrawal.completed_at or withdrawal.created_at) else None,
+                    "remark": withdrawal.remark or ""  # 提料备注
                 })
         except Exception as e:
             logger.warning(f"查询提料记录时出错: {e}")
@@ -1057,7 +1060,8 @@ async def get_customer_detail(
                         "description": f"结算：{s.settlement_no} ({method_desc})",
                         "amount": amount_change,
                         "gold_weight": gold_change,
-                        "created_at": s.created_at.isoformat() if s.created_at else None
+                        "created_at": s.created_at.isoformat() if s.created_at else None,
+                        "remark": order.remark or ""  # 显示关联销售单的备注
                     })
         except Exception as e:
             logger.warning(f"查询结算记录时出错: {e}")
@@ -1076,7 +1080,8 @@ async def get_customer_detail(
                     "description": f"收款：¥{p.amount:.2f}",
                     "amount": p.amount or 0,  # 正数表示客户给我们钱（抵消欠款）
                     "gold_weight": None,
-                    "created_at": p.create_time.isoformat() if p.create_time else None
+                    "created_at": p.create_time.isoformat() if p.create_time else None,
+                    "remark": p.remark or ""  # 收款备注
                 })
         except Exception as e:
             logger.warning(f"查询收款记录时出错: {e}")

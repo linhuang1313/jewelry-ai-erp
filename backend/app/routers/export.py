@@ -288,7 +288,8 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
                     "description": "工费",
                     "amount": -(order.total_labor_cost or 0),
                     "gold_weight": 0,
-                    "created_at": order.create_time
+                    "created_at": order.create_time,
+                    "remark": order.remark or ""  # 销售单备注
                 })
         except Exception as e:
             logger.warning(f"查询销售记录时出错: {e}")
@@ -308,7 +309,8 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
                     "description": "收料",
                     "amount": 0,
                     "gold_weight": receipt.gold_weight or 0,
-                    "created_at": receipt.received_at or receipt.created_at
+                    "created_at": receipt.received_at or receipt.created_at,
+                    "remark": receipt.remark or ""  # 来料备注
                 })
         except Exception as e:
             logger.warning(f"查询收料记录时出错: {e}")
@@ -342,7 +344,8 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
                         "description": method_desc,
                         "amount": amount_change,
                         "gold_weight": gold_change,
-                        "created_at": s.created_at
+                        "created_at": s.created_at,
+                        "remark": order.remark or ""  # 显示关联销售单的备注
                     })
         except Exception as e:
             logger.warning(f"查询结算记录时出错: {e}")
@@ -372,7 +375,7 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
         ws.append([])  # 空行
         
         # 表头
-        headers = ["类型", "单号", "说明", "金额(元)", "金重(克)", "时间"]
+        headers = ["类型", "单号", "说明", "金额(元)", "金重(克)", "时间", "备注"]
         ws.append(headers)
         style_header(ws, row=5)
         
@@ -397,7 +400,8 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
                 tx.get("description", ""),
                 tx.get("amount") if tx.get("amount") else "",
                 tx.get("gold_weight") if tx.get("gold_weight") else "",
-                time_str
+                time_str,
+                tx.get("remark", "")  # 备注列
             ])
         
         auto_column_width(ws)
