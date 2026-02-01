@@ -258,7 +258,7 @@ async def export_sales(
 @router.get("/customer-transactions/{customer_id}")
 async def export_customer_transactions(customer_id: int, db: Session = Depends(get_db)):
     """导出指定客户的往来账目为 Excel"""
-    from ..models.finance import GoldReceipt, CustomerWithdrawal
+    from ..models.finance import GoldReceipt
     from sqlalchemy import desc
     
     try:
@@ -270,33 +270,37 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
         transactions_list = []
         
         # 1. 销售记录
-        sales_orders = db.query(SalesOrder).filter(
-            SalesOrder.customer_name == customer.name,
-            SalesOrder.status != "已取消"
-        ).order_by(desc(SalesOrder.create_time)).all()
-        
-        for order in sales_orders:
-            transactions_list.append({
-                "type": "销售",
-                "order_no": order.order_no,
-                "description": f"工费",
-                "amount": -(order.total_labor_cost or 0),  # 负数表示客户产生欠款
-                "gold_weight": 0,
-                "created_at": order.create_time
-            })
+        try:
+            sales_orders = db.query(SalesOrder).filter(
+                SalesOrder.customer_name == customer.name,
+                SalesOrder.status != "已取消"
+            ).order_by(desc(SalesOrder.create_time)).limit(50).all()
+            
+            for order in sales_orders:
+                transactions_list.append({
+                    "type": "销售",
+                    "order_no": order.order_no or "",
+                    "description": "工费",
+                    "amount": -(order.total_labor_cost or 0),
+                    "gold_weight": 0,
+                    "created_at": order.create_time
+                })
+        except Exception as e:
+            logger.warning(f"查询销售记录时出错: {e}")
+            sales_orders = []
         
         # 2. 收料记录
         try:
             gold_receipts = db.query(GoldReceipt).filter(
                 GoldReceipt.customer_id == customer_id,
                 GoldReceipt.status == 'received'
-            ).order_by(desc(GoldReceipt.received_at)).all()
+            ).order_by(desc(GoldReceipt.received_at)).limit(50).all()
             
             for receipt in gold_receipts:
                 transactions_list.append({
                     "type": "客户来料",
-                    "order_no": receipt.receipt_no,
-                    "description": f"收料",
+                    "order_no": receipt.receipt_no or "",
+                    "description": "收料",
                     "amount": 0,
                     "gold_weight": receipt.gold_weight or 0,
                     "created_at": receipt.received_at or receipt.created_at
@@ -304,29 +308,10 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
         except Exception as e:
             logger.warning(f"查询收料记录时出错: {e}")
         
-        # 3. 提料记录
-        try:
-            withdrawals = db.query(CustomerWithdrawal).filter(
-                CustomerWithdrawal.customer_id == customer_id,
-                CustomerWithdrawal.status == 'completed'
-            ).order_by(desc(CustomerWithdrawal.completed_at)).all()
-            
-            for withdrawal in withdrawals:
-                transactions_list.append({
-                    "type": "客户提料",
-                    "order_no": withdrawal.withdrawal_no,
-                    "description": f"提料",
-                    "amount": 0,
-                    "gold_weight": -(withdrawal.gold_weight or 0),
-                    "created_at": withdrawal.completed_at or withdrawal.created_at
-                })
-        except Exception as e:
-            logger.warning(f"查询提料记录时出错: {e}")
-        
-        # 4. 结算记录
+        # 3. 结算记录
         try:
             from ..models import SettlementOrder
-            for order in sales_orders:
+            for order in sales_orders[:20]:
                 settlements = db.query(SettlementOrder).filter(
                     SettlementOrder.sales_order_id == order.id,
                     SettlementOrder.status.in_(['confirmed', 'printed'])
@@ -341,15 +326,14 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
                         gold_change = -(s.physical_gold_weight or 0)
                         amount_change = 0
                     else:
-                        method_desc = f"混合支付"
+                        method_desc = "混合支付"
                         gold_change = -(s.gold_payment_weight or 0)
-                        # 混合支付的现金部分 = 结价克重 × 金价
                         cash_amount = (s.cash_payment_weight or 0) * (s.gold_price or 0)
                         amount_change = -cash_amount
                     
                     transactions_list.append({
                         "type": "结算",
-                        "order_no": s.settlement_no,
+                        "order_no": s.settlement_no or "",
                         "description": method_desc,
                         "amount": amount_change,
                         "gold_weight": gold_change,
@@ -358,30 +342,16 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
         except Exception as e:
             logger.warning(f"查询结算记录时出错: {e}")
         
-        # 5. 收款记录
-        try:
-            from ..models import PaymentRecord
-            payments = db.query(PaymentRecord).filter(
-                PaymentRecord.customer_id == customer_id
-            ).order_by(desc(PaymentRecord.create_time)).all()
-            
-            for p in payments:
-                transactions_list.append({
-                    "type": "收款",
-                    "order_no": f"PY{p.id:06d}",
-                    "description": f"现金收款",
-                    "amount": p.amount or 0,  # 正数表示客户给我们钱
-                    "gold_weight": 0,
-                    "created_at": p.create_time
-                })
-        except Exception as e:
-            logger.warning(f"查询收款记录时出错: {e}")
+        # 按时间排序（使用安全的排序方式）
+        def safe_sort_key(x):
+            created = x.get("created_at")
+            if created is None:
+                return datetime.min
+            if isinstance(created, datetime):
+                return created
+            return datetime.min
         
-        # 6. 退货记录（注：ReturnOrder 是退给供应商的，客户往来账暂不包含）
-        # 如需添加客户退货记录，需要使用对应的销售退货模型
-        
-        # 按时间排序
-        transactions_list.sort(key=lambda x: x["created_at"] or datetime.min, reverse=True)
+        transactions_list.sort(key=safe_sort_key, reverse=True)
         
         # 创建 Excel
         wb = Workbook()
