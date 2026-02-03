@@ -4494,7 +4494,7 @@ ${itemsList}
           onSuccess={async (result) => {
             // Build inbound message content (with hidden ID marker for history print button)
             const productList = (Array.isArray(result?.products) ? result.products : []).slice(0, 5).map(p => {
-              let info = `  - ${p.name}: ${p.weight}g (labor \u00A5${p.labor_cost}/g)`
+              let info = `  - ${p.name}: ${p.weight}g (工费 \u00A5${p.labor_cost}/g)`
               const pieceCount = parseInt(p.piece_count) || 0
               const pieceLaborCost = parseFloat(p.piece_labor_cost) || 0
               if (pieceCount > 0) {
