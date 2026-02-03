@@ -1,14 +1,14 @@
 /**
  * 顶部导航栏组件
  */
-import React from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { hasPermission } from '../../config/permissions'
 import { USER_ROLES } from '../../constants/roles'
 import { 
   DollarSign, ArrowLeft, ChevronDown, BarChart3, Download, 
   Warehouse, Users, UserPlus, FileText, History, Building2, 
-  RotateCcw, Package, Calculator, Scale, TrendingUp 
+  RotateCcw, Package, Calculator, Scale, TrendingUp, LayoutGrid
 } from 'lucide-react'
 
 export const Header = ({
@@ -32,6 +32,27 @@ export const Header = ({
   i18n
 }) => {
   const { t } = useTranslation()
+  const [openNavMenu, setOpenNavMenu] = useState(null) // 'data' | 'business' | 'people' | 'material' | null
+  const navMenuRef = useRef(null)
+
+  // 点击外部关闭导航下拉菜单
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (navMenuRef.current && !navMenuRef.current.contains(event.target)) {
+        setOpenNavMenu(null)
+      }
+    }
+    if (openNavMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [openNavMenu])
+
+  // 导航菜单项点击后关闭下拉
+  const handleNavClick = (page) => {
+    setCurrentPage(page)
+    setOpenNavMenu(null)
+  }
 
   return (
     <header className="bg-white/80 backdrop-blur-xl border-b border-gray-200/60 px-6 py-4 
@@ -154,214 +175,228 @@ export const Header = ({
 
           {/* 导航按钮 */}
           {currentPage === 'chat' ? (
-            <>
-              {/* 仪表盘按钮 */}
-              {hasPermission(userRole, 'canViewAnalytics') && (
-                <button
-                  onClick={() => setCurrentPage('dashboard')}
-                  className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl 
-                             hover:from-blue-600 hover:to-indigo-600 transition-all duration-200 font-medium text-[15px] 
-                             shadow-sm hover:shadow-md"
-                >
-                  <TrendingUp className="w-4 h-4" />
-                  <span>仪表盘</span>
-                </button>
-              )}
-              
-              {/* 数据分析按钮 */}
-              {hasPermission(userRole, 'canViewAnalytics') && (
-                <>
-                  <button
-                    onClick={() => setCurrentPage('analytics')}
-                    className="flex items-center space-x-2 px-4 py-2 bg-purple-500 text-white rounded-xl 
-                               hover:bg-purple-600 transition-all duration-200 font-medium text-[15px] 
-                               shadow-sm hover:shadow-md"
-                  >
-                    <BarChart3 className="w-4 h-4" />
-                    <span>数据分析</span>
-                  </button>
-                  <button
-                    onClick={() => setCurrentPage('export')}
-                    className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-xl 
-                               hover:bg-green-600 transition-all duration-200 font-medium text-[15px] 
-                               shadow-sm hover:shadow-md"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>数据导出</span>
-                  </button>
-                </>
-              )}
-              
-              {/* 业务员管理按钮 */}
-              {hasPermission(userRole, 'canManageSalespersons') && (
-                <button
-                  onClick={() => setCurrentPage('salesperson')}
-                  className="flex items-center space-x-2 px-4 py-2 bg-indigo-500 text-white rounded-xl 
-                             hover:bg-indigo-600 transition-all duration-200 font-medium text-[15px] 
-                             shadow-sm hover:shadow-md"
-                >
-                  <Users className="w-4 h-4" />
-                  <span>业务员管理</span>
-                </button>
-              )}
-              
-              {/* 分仓库存按钮 */}
-              {(hasPermission(userRole, 'canReceiveTransfer') || hasPermission(userRole, 'canTransfer')) && (
-                <button
-                  onClick={() => setCurrentPage('warehouse')}
-                  className="relative flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
-                             hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
-                >
-                  <Warehouse className="w-4 h-4" />
-                  <span>{t('nav.warehouse')}</span>
-                  {pendingTransferCount > 0 && (
-                    <span className="absolute -top-2 -right-2 min-w-[20px] h-5 flex items-center justify-center 
-                                     bg-red-500 text-white text-xs font-bold rounded-full px-1.5 
-                                     shadow-lg animate-pulse">
-                      {pendingTransferCount > 99 ? '99+' : pendingTransferCount}
-                    </span>
-                  )}
-                </button>
-              )}
-              
-              {/* 结算管理按钮 */}
-              {hasPermission(userRole, 'canCreateSettlement') && (
-                <button
-                  onClick={() => setCurrentPage('settlement')}
-                  className="relative flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
-                             hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
-                >
-                  <Calculator className="w-4 h-4" />
-                  <span>{t('nav.settlement')}</span>
-                  {pendingSalesCount > 0 && (
-                    <span className="absolute -top-2 -right-2 min-w-[20px] h-5 flex items-center justify-center 
-                                     bg-red-500 text-white text-xs font-bold rounded-full px-1.5 
-                                     shadow-lg animate-pulse">
-                      {pendingSalesCount > 99 ? '99+' : pendingSalesCount}
-                    </span>
-                  )}
-                </button>
-              )}
-              
-              {/* 快捷开单按钮 */}
+            <div className="flex items-center space-x-2" ref={navMenuRef}>
+              {/* 快捷开单按钮 - 高频操作保留独立按钮 */}
               {hasPermission(userRole, 'canCreateSales') && (
                 <button
                   onClick={() => setShowQuickOrderModal(true)}
                   className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-jewelry-gold to-jewelry-gold-light text-white rounded-xl 
-                             hover:from-jewelry-gold-dark hover:to-jewelry-gold transition-all duration-200 font-medium text-[15px] 
+                             hover:from-jewelry-gold-dark hover:to-jewelry-gold transition-all duration-200 font-medium text-[14px] 
                              shadow-sm hover:shadow-md"
                 >
                   <FileText className="w-4 h-4" />
                   <span>{t('nav.quickOrder')}</span>
                 </button>
               )}
-              
-              {/* 客户管理按钮 */}
-              {(hasPermission(userRole, 'canViewCustomers') || hasPermission(userRole, 'canManageCustomers')) && (
-                <button
-                  onClick={() => setCurrentPage('customer')}
-                  className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
-                             hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  <span>{t('nav.customers')}</span>
-                </button>
+
+              {/* 数据中心下拉菜单 */}
+              {hasPermission(userRole, 'canViewAnalytics') && (
+                <div className="relative">
+                  <button
+                    onClick={() => setOpenNavMenu(openNavMenu === 'data' ? null : 'data')}
+                    className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl border transition-all duration-200 font-medium text-[14px]
+                               ${openNavMenu === 'data' 
+                                 ? 'bg-blue-500 text-white border-blue-500' 
+                                 : 'border-blue-200 text-blue-600 hover:bg-blue-50'}`}
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                    <span>数据中心</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${openNavMenu === 'data' ? 'rotate-180' : ''}`} />
+                  </button>
+                  {openNavMenu === 'data' && (
+                    <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
+                      <button onClick={() => handleNavClick('dashboard')} className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-blue-50">
+                        <TrendingUp className="w-4 h-4 text-blue-500" />
+                        <span>仪表盘</span>
+                      </button>
+                      <button onClick={() => handleNavClick('analytics')} className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-blue-50">
+                        <BarChart3 className="w-4 h-4 text-purple-500" />
+                        <span>数据分析</span>
+                      </button>
+                      <button onClick={() => handleNavClick('export')} className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-blue-50">
+                        <Download className="w-4 h-4 text-green-500" />
+                        <span>数据导出</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
-              
-              {/* 供应商管理按钮 */}
-              {hasPermission(userRole, 'canManageSuppliers') && (
-                <button
-                  onClick={() => setCurrentPage('supplier')}
-                  className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
-                             hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
-                >
-                  <Building2 className="w-4 h-4" />
-                  <span>{t('nav.suppliers')}</span>
-                </button>
+
+              {/* 业务管理下拉菜单 */}
+              {(hasPermission(userRole, 'canCreateSettlement') || 
+                hasPermission(userRole, 'canReceiveTransfer') || 
+                hasPermission(userRole, 'canTransfer') ||
+                userRole === 'product' || userRole === 'manager') && (
+                <div className="relative">
+                  <button
+                    onClick={() => setOpenNavMenu(openNavMenu === 'business' ? null : 'business')}
+                    className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl border transition-all duration-200 font-medium text-[14px]
+                               ${openNavMenu === 'business' 
+                                 ? 'bg-amber-500 text-white border-amber-500' 
+                                 : 'border-amber-200 text-amber-600 hover:bg-amber-50'}`}
+                  >
+                    <Calculator className="w-4 h-4" />
+                    <span>业务管理</span>
+                    {(pendingTransferCount > 0 || pendingSalesCount > 0) && (
+                      <span className="min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full px-1">
+                        {(pendingTransferCount + pendingSalesCount) > 99 ? '99+' : (pendingTransferCount + pendingSalesCount)}
+                      </span>
+                    )}
+                    <ChevronDown className={`w-3 h-3 transition-transform ${openNavMenu === 'business' ? 'rotate-180' : ''}`} />
+                  </button>
+                  {openNavMenu === 'business' && (
+                    <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
+                      {hasPermission(userRole, 'canCreateSettlement') && (
+                        <button onClick={() => handleNavClick('settlement')} className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-amber-50">
+                          <span className="flex items-center space-x-2">
+                            <Calculator className="w-4 h-4 text-amber-500" />
+                            <span>{t('nav.settlement')}</span>
+                          </span>
+                          {pendingSalesCount > 0 && (
+                            <span className="min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full px-1">
+                              {pendingSalesCount > 99 ? '99+' : pendingSalesCount}
+                            </span>
+                          )}
+                        </button>
+                      )}
+                      {(hasPermission(userRole, 'canReceiveTransfer') || hasPermission(userRole, 'canTransfer')) && (
+                        <button onClick={() => handleNavClick('warehouse')} className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-amber-50">
+                          <span className="flex items-center space-x-2">
+                            <Warehouse className="w-4 h-4 text-indigo-500" />
+                            <span>{t('nav.warehouse')}</span>
+                          </span>
+                          {pendingTransferCount > 0 && (
+                            <span className="min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full px-1">
+                              {pendingTransferCount > 99 ? '99+' : pendingTransferCount}
+                            </span>
+                          )}
+                        </button>
+                      )}
+                      {(userRole === 'product' || userRole === 'manager' || userRole === 'finance') && (
+                        <button onClick={() => handleNavClick('inbound-orders')} className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-amber-50">
+                          <FileText className="w-4 h-4 text-orange-500" />
+                          <span>{t('nav.inboundOrders')}</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
-              
-              {/* 退货管理按钮 */}
-              {(hasPermission(userRole, 'canReturnToSupplier') || hasPermission(userRole, 'canReturnToWarehouse')) && (
-                <button
-                  onClick={() => setCurrentPage('returns')}
-                  className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
-                             hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  <span>{t('nav.returns')}</span>
-                </button>
+
+              {/* 人员管理下拉菜单 */}
+              {(hasPermission(userRole, 'canViewCustomers') || 
+                hasPermission(userRole, 'canManageCustomers') ||
+                hasPermission(userRole, 'canManageSuppliers') ||
+                hasPermission(userRole, 'canManageSalespersons')) && (
+                <div className="relative">
+                  <button
+                    onClick={() => setOpenNavMenu(openNavMenu === 'people' ? null : 'people')}
+                    className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl border transition-all duration-200 font-medium text-[14px]
+                               ${openNavMenu === 'people' 
+                                 ? 'bg-indigo-500 text-white border-indigo-500' 
+                                 : 'border-indigo-200 text-indigo-600 hover:bg-indigo-50'}`}
+                  >
+                    <Users className="w-4 h-4" />
+                    <span>人员管理</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${openNavMenu === 'people' ? 'rotate-180' : ''}`} />
+                  </button>
+                  {openNavMenu === 'people' && (
+                    <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
+                      {(hasPermission(userRole, 'canViewCustomers') || hasPermission(userRole, 'canManageCustomers')) && (
+                        <button onClick={() => handleNavClick('customer')} className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-indigo-50">
+                          <UserPlus className="w-4 h-4 text-blue-500" />
+                          <span>{t('nav.customers')}</span>
+                        </button>
+                      )}
+                      {hasPermission(userRole, 'canManageSuppliers') && (
+                        <button onClick={() => handleNavClick('supplier')} className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-indigo-50">
+                          <Building2 className="w-4 h-4 text-purple-500" />
+                          <span>{t('nav.suppliers')}</span>
+                        </button>
+                      )}
+                      {hasPermission(userRole, 'canManageSalespersons') && (
+                        <button onClick={() => handleNavClick('salesperson')} className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-indigo-50">
+                          <Users className="w-4 h-4 text-indigo-500" />
+                          <span>业务员管理</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
-              
-              {/* 金料管理按钮 */}
-              {(hasPermission(userRole, 'canViewGoldMaterial') || hasPermission(userRole, 'canManageGoldMaterial')) && (
-                <button
-                  onClick={() => setCurrentPage('gold-material')}
-                  className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-gold text-jewelry-gold rounded-xl 
-                             hover:bg-jewelry-gold hover:text-white transition-all duration-200 font-medium text-[15px]"
-                >
-                  <Scale className="w-4 h-4" />
-                  <span>{t('nav.goldMaterial')}</span>
-                </button>
+
+              {/* 物料管理下拉菜单 */}
+              {(hasPermission(userRole, 'canViewGoldMaterial') || 
+                hasPermission(userRole, 'canManageGoldMaterial') ||
+                hasPermission(userRole, 'canManageLoan') ||
+                hasPermission(userRole, 'canReturnToSupplier') ||
+                hasPermission(userRole, 'canReturnToWarehouse') ||
+                hasPermission(userRole, 'canManageProductCodes')) && (
+                <div className="relative">
+                  <button
+                    onClick={() => setOpenNavMenu(openNavMenu === 'material' ? null : 'material')}
+                    className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl border transition-all duration-200 font-medium text-[14px]
+                               ${openNavMenu === 'material' 
+                                 ? 'bg-jewelry-gold text-white border-jewelry-gold' 
+                                 : 'border-jewelry-gold text-jewelry-gold hover:bg-amber-50'}`}
+                  >
+                    <Scale className="w-4 h-4" />
+                    <span>物料管理</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${openNavMenu === 'material' ? 'rotate-180' : ''}`} />
+                  </button>
+                  {openNavMenu === 'material' && (
+                    <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
+                      {(hasPermission(userRole, 'canViewGoldMaterial') || hasPermission(userRole, 'canManageGoldMaterial')) && (
+                        <button onClick={() => handleNavClick('gold-material')} className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-amber-50">
+                          <Scale className="w-4 h-4 text-amber-500" />
+                          <span>{t('nav.goldMaterial')}</span>
+                        </button>
+                      )}
+                      {hasPermission(userRole, 'canManageLoan') && (
+                        <button onClick={() => handleNavClick('loan')} className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-amber-50">
+                          <Package className="w-4 h-4 text-orange-500" />
+                          <span>{t('nav.loan')}</span>
+                        </button>
+                      )}
+                      {(hasPermission(userRole, 'canReturnToSupplier') || hasPermission(userRole, 'canReturnToWarehouse')) && (
+                        <button onClick={() => handleNavClick('returns')} className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-amber-50">
+                          <RotateCcw className="w-4 h-4 text-red-500" />
+                          <span>{t('nav.returns')}</span>
+                        </button>
+                      )}
+                      {hasPermission(userRole, 'canManageProductCodes') && (
+                        <button onClick={() => handleNavClick('product-codes')} className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-amber-50">
+                          <Package className="w-4 h-4 text-gray-500" />
+                          <span>{t('nav.productCodes')}</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
-              
-              {/* 暂借管理按钮 */}
-              {hasPermission(userRole, 'canManageLoan') && (
-                <button
-                  onClick={() => setCurrentPage('loan')}
-                  className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
-                             hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
-                >
-                  <Package className="w-4 h-4" />
-                  <span>{t('nav.loan')}</span>
-                </button>
-              )}
-              
-              {/* 商品编码按钮 */}
-              {hasPermission(userRole, 'canManageProductCodes') && (
-                <button
-                  onClick={() => setCurrentPage('product-codes')}
-                  className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
-                             hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
-                >
-                  <Package className="w-4 h-4" />
-                  <span>{t('nav.productCodes')}</span>
-                </button>
-              )}
-              
-              {/* 入库单据按钮 */}
-              {(userRole === 'product' || userRole === 'manager') && (
-                <button
-                  onClick={() => setCurrentPage('inbound-orders')}
-                  className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
-                             hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>{t('nav.inboundOrders')}</span>
-                </button>
-              )}
-              
-              {/* 财务对账按钮 */}
+
+              {/* 财务对账按钮 - 独立按钮 */}
               {hasPermission(userRole, 'canViewFinance') && (
                 <button
                   onClick={() => setCurrentPage('finance')}
-                  className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
-                             hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
+                  className="flex items-center space-x-1.5 px-3 py-2 rounded-xl border border-green-200 text-green-600 
+                             hover:bg-green-50 transition-all duration-200 font-medium text-[14px]"
                 >
                   <DollarSign className="w-4 h-4" />
                   <span>{t('nav.finance')}</span>
                 </button>
               )}
               
-              {/* 历史回溯按钮 */}
+              {/* 历史回溯按钮 - 独立按钮 */}
               <button
                 onClick={() => setShowHistoryPanel(true)}
-                className="flex items-center space-x-2 px-4 py-2 border-2 border-jewelry-navy text-jewelry-navy rounded-xl 
-                           hover:bg-jewelry-navy hover:text-white transition-all duration-200 font-medium text-[15px]"
+                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-600 
+                           hover:bg-gray-50 transition-all duration-200 font-medium text-[14px]"
               >
                 <History className="w-4 h-4" />
                 <span>{t('nav.history')}</span>
               </button>
-            </>
+            </div>
           ) : (
             <button
               onClick={() => setCurrentPage('chat')}

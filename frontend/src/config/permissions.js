@@ -123,7 +123,7 @@ export const ROLE_PERMISSIONS = {
   // 财务 - 权限与管理层一致
   finance: {
     canInbound: true,               // 可以查看入库单
-    canCreateSales: true,           // 可以查看销售单
+    canCreateSales: false,          // 不能开销售单（财务不需要）
     canCreateSettlement: true,      // 可以查看结算单
     canTransfer: true,              // 可以查看转移单
     canReceiveTransfer: true,
