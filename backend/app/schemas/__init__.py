@@ -162,6 +162,7 @@ class BatchInboundCreate(BaseModel):
     """批量入库请求"""
     supplier: str  # 供应商名称（所有商品共用）
     items: List[BatchInboundItem]  # 商品列表
+    operator: Optional[str] = None  # 操作员（可选）
 
 
 class InboundOrderResponse(BaseModel):

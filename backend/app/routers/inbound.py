@@ -768,7 +768,11 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
         from ..models import ProductCode as ProductCodeModel
         
         order_no = generate_inbound_order_no(db)
-        order = InboundOrder(order_no=order_no, create_time=china_now())
+        order = InboundOrder(
+            order_no=order_no,
+            create_time=china_now(),
+            operator=batch_data.operator or "系统"
+        )
         db.add(order)
         db.flush()
         
