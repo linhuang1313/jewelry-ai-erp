@@ -926,10 +926,46 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
             supplier_obj.total_supply_count += success_count
             supplier_obj.last_supply_time = datetime.now()
         
+        # ========== 自动生成采购单（应付账款） ==========
+        if supplier_id and total_cost > 0:
+            from ..models.finance import AccountPayable
+            from datetime import date, timedelta
+            
+            # 生成采购单号：CG + 日期 + 序号
+            today_str = china_now().strftime('%Y%m%d')
+            existing_count = db.query(AccountPayable).filter(
+                AccountPayable.payable_no.like(f"CG{today_str}%")
+            ).count()
+            payable_no = f"CG{today_str}{existing_count + 1:03d}"
+            
+            # 计算账期（默认30天）
+            credit_start = date.today()
+            due_date = credit_start + timedelta(days=30)
+            
+            # 创建应付账款记录
+            account_payable = AccountPayable(
+                payable_no=payable_no,
+                supplier_id=supplier_id,
+                inbound_order_id=order.id,
+                total_amount=total_cost,
+                paid_amount=0.0,
+                unpaid_amount=total_cost,
+                credit_days=30,
+                credit_start_date=credit_start,
+                due_date=due_date,
+                status="unpaid",
+                remark=f"入库单 {order.order_no} 自动生成",
+                operator=batch_data.operator or "系统"
+            )
+            db.add(account_payable)
+            logger.info(f"自动生成采购单: {payable_no}, 供应商: {supplier_name}, 金额: {total_cost}")
+        # ========== 采购单生成完成 ==========
+        
         db.commit()
         db.refresh(order)
         
-        return {
+        # 构建返回结果
+        result = {
             "success": success_count > 0,
             "message": f"批量入库成功：{success_count} 件商品已入库" if error_count == 0 else f"批量入库完成：成功 {success_count} 件，失败 {error_count} 件",
             "order_id": order.id,
@@ -940,6 +976,13 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
             "total_cost": total_cost,
             "results": results
         }
+        
+        # 如果生成了采购单，添加采购单号到返回值
+        if supplier_id and total_cost > 0:
+            result["purchase_order_no"] = payable_no
+            result["message"] += f"，已生成采购单 {payable_no}"
+        
+        return result
     except Exception as e:
         db.rollback()
         logger.error(f"批量入库失败: {e}", exc_info=True)
@@ -963,9 +1006,10 @@ async def download_inbound_order_options(order_id: int):
 async def download_inbound_order(
     order_id: int, 
     format: str = Query("pdf", pattern="^(pdf|html)$"),
+    doc_type: str = Query("inbound", pattern="^(inbound|purchase)$", description="单据类型：inbound=入库单，purchase=采购单"),
     db: Session = Depends(get_db)
 ):
-    """下载或打印入库单"""
+    """下载或打印入库单/采购单"""
     try:
         order = db.query(InboundOrder).filter(InboundOrder.id == order_id).first()
         if not order:
@@ -975,16 +1019,35 @@ async def download_inbound_order(
         if not details:
             raise HTTPException(status_code=404, detail="入库单明细不存在")
         
+        # 根据doc_type设置标题和文件名前缀
+        if doc_type == "purchase":
+            doc_title = "采购单"
+            file_prefix = "purchase_order"
+        else:
+            doc_title = "珠宝入库单"
+            file_prefix = "inbound_order"
+        
         if format == "pdf":
             from reportlab.pdfgen import canvas
             from reportlab.lib.units import mm
             from reportlab.pdfbase import pdfmetrics
             from reportlab.pdfbase.cidfonts import UnicodeCIDFont
             import io
+            import math
             from ..timezone_utils import to_china_time, format_china_time
             
             PAGE_WIDTH = 241 * mm
-            PAGE_HEIGHT = 140 * mm
+            
+            # ========== 动态高度计算 ==========
+            # 基础高度（页头+页尾）+ 每行高度 * 行数
+            base_height = 80 * mm   # 页头页尾固定部分
+            row_height = 12 * mm    # 每行明细高度（包含行间距）
+            content_height = base_height + (row_height * len(details))
+            
+            # 按140mm的倍数向上取整（最小140mm，适配针式打印机连续纸）
+            min_unit = 140 * mm
+            PAGE_HEIGHT = max(min_unit, math.ceil(content_height / min_unit) * min_unit)
+            # ========== 动态高度计算完成 ==========
             
             buffer = io.BytesIO()
             p = canvas.Canvas(buffer, pagesize=(PAGE_WIDTH, PAGE_HEIGHT))
@@ -1004,7 +1067,7 @@ async def download_inbound_order(
                 p.setFont(chinese_font, 14)
             else:
                 p.setFont("Helvetica-Bold", 14)
-            p.drawCentredString(width / 2, top_margin, "珠宝入库单")
+            p.drawCentredString(width / 2, top_margin, doc_title)
             
             y = top_margin - 18
             if chinese_font:
@@ -1100,7 +1163,7 @@ async def download_inbound_order(
             p.save()
             buffer.seek(0)
             
-            filename = f"inbound_order_{order.order_no}.pdf"
+            filename = f"{file_prefix}_{order.order_no}.pdf"
             pdf_content = buffer.getvalue()
             
             return Response(
@@ -1136,7 +1199,7 @@ async def download_inbound_order(
     </style>
 </head>
 <body>
-    <div class="header"><h1>珠宝入库单</h1></div>
+    <div class="header"><h1>{doc_title}</h1></div>
     <p>单号：{order.order_no} | 时间：{create_time_str} | 操作员：{order.operator}</p>
     <table>
         <thead><tr><th>商品名称</th><th>重量(克)</th><th>克工费</th><th>总成本</th><th>供应商</th></tr></thead>

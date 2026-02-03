@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '../config';
 import {
   FileText, Check, Clock, AlertCircle, RefreshCw, X, Package, User, Calendar, 
-  Download, Search, Filter, RotateCcw, Undo2, History, Printer
+  Download, Search, Filter, RotateCcw, Undo2, History, Printer, BarChart3
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -58,6 +58,36 @@ interface Salesperson {
   name: string;
 }
 
+// 借货统计数据
+interface LoanStatistics {
+  period: {
+    start_date: string;
+    end_date: string;
+  };
+  summary: {
+    total_borrowed_count: number;
+    total_returned_count: number;
+    outstanding_count: number;
+    pending_count: number;
+    cancelled_count: number;
+    total_borrowed_weight: number;
+    total_returned_weight: number;
+    outstanding_weight: number;
+    total_borrowed_labor: number;
+    total_returned_labor: number;
+    outstanding_labor: number;
+  };
+  daily_breakdown: Array<{
+    date: string;
+    borrowed_count: number;
+    returned_count: number;
+    borrowed_weight: number;
+    returned_weight: number;
+    borrowed_labor: number;
+    returned_labor: number;
+  }>;
+}
+
 // 状态徽章
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const config: Record<string, { bg: string; text: string; label: string }> = {
@@ -106,7 +136,7 @@ const TabButton: React.FC<{
 // 主组件
 const LoanPage: React.FC = () => {
   // 状态
-  const [activeTab, setActiveTab] = useState<'pending' | 'borrowed' | 'returned' | 'cancelled' | 'all'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'borrowed' | 'returned' | 'cancelled' | 'all' | 'statistics'>('pending');
   const [loanOrders, setLoanOrders] = useState<LoanOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -115,6 +145,14 @@ const LoanPage: React.FC = () => {
   const [selectedLoan, setSelectedLoan] = useState<LoanOrder | null>(null);
   const [logs, setLogs] = useState<LoanOrderLog[]>([]);
   const [cancelReason, setCancelReason] = useState('');
+  
+  // 统计报表相关状态
+  const [statistics, setStatistics] = useState<LoanStatistics | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsDateRange, setStatsDateRange] = useState({
+    start_date: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
+    end_date: new Date().toISOString().split('T')[0]
+  });
   
   // 客户相关状态
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -461,9 +499,49 @@ const LoanPage: React.FC = () => {
     window.open(`${API_BASE}/api/loan/orders/${loan.id}/download?format=html`, '_blank');
   };
 
+  // 加载借货统计数据
+  const loadStatistics = async () => {
+    setStatsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        start_date: statsDateRange.start_date,
+        end_date: statsDateRange.end_date
+      });
+      const response = await fetch(`${API_BASE}/api/loan/statistics?${params.toString()}`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setStatistics(result.data);
+        } else {
+          toast.error(result.error || '加载统计数据失败');
+        }
+      } else {
+        toast.error('加载统计数据失败');
+      }
+    } catch (error) {
+      console.error('加载统计数据失败:', error);
+      toast.error('网络错误');
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  // 导出统计报表Excel
+  const handleExportStatistics = () => {
+    const params = new URLSearchParams({
+      start_date: statsDateRange.start_date,
+      end_date: statsDateRange.end_date
+    });
+    window.open(`${API_BASE}/api/loan/statistics/export?${params.toString()}`, '_blank');
+  };
+
   // 效果
   useEffect(() => {
-    loadLoanOrders();
+    if (activeTab === 'statistics') {
+      loadStatistics();
+    } else {
+      loadLoanOrders();
+    }
   }, [activeTab]);
 
   useEffect(() => {
@@ -552,52 +630,204 @@ const LoanPage: React.FC = () => {
           icon={<FileText className="w-4 h-4" />}
           label="全部"
         />
+        <TabButton
+          active={activeTab === 'statistics'}
+          onClick={() => setActiveTab('statistics')}
+          icon={<BarChart3 className="w-4 h-4" />}
+          label="统计报表"
+        />
       </div>
 
-      {/* 搜索筛选 */}
-      <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-        <div className="flex items-center space-x-4 flex-wrap gap-y-2">
-          <div className="flex items-center space-x-2">
-            <User className="w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="客户姓名"
-              value={searchFilters.customer_name}
-              onChange={(e) => setSearchFilters({ ...searchFilters, customer_name: e.target.value })}
-              className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-200 focus:border-amber-400"
-            />
+      {/* 搜索筛选 - 仅在非统计报表Tab显示 */}
+      {activeTab !== 'statistics' && (
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+          <div className="flex items-center space-x-4 flex-wrap gap-y-2">
+            <div className="flex items-center space-x-2">
+              <User className="w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="客户姓名"
+                value={searchFilters.customer_name}
+                onChange={(e) => setSearchFilters({ ...searchFilters, customer_name: e.target.value })}
+                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-200 focus:border-amber-400"
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Package className="w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="产品名称"
+                value={searchFilters.product_name}
+                onChange={(e) => setSearchFilters({ ...searchFilters, product_name: e.target.value })}
+                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-200 focus:border-amber-400"
+              />
+            </div>
+            <button
+              onClick={loadLoanOrders}
+              className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors flex items-center space-x-1"
+            >
+              <Filter className="w-4 h-4" />
+              <span>搜索</span>
+            </button>
+            <button
+              onClick={() => {
+                setSearchFilters({ customer_name: '', product_name: '' });
+                loadLoanOrders();
+              }}
+              className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors flex items-center space-x-1"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>重置</span>
+            </button>
           </div>
-          <div className="flex items-center space-x-2">
-            <Package className="w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="产品名称"
-              value={searchFilters.product_name}
-              onChange={(e) => setSearchFilters({ ...searchFilters, product_name: e.target.value })}
-              className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-200 focus:border-amber-400"
-            />
-          </div>
-          <button
-            onClick={loadLoanOrders}
-            className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors flex items-center space-x-1"
-          >
-            <Filter className="w-4 h-4" />
-            <span>搜索</span>
-          </button>
-          <button
-            onClick={() => {
-              setSearchFilters({ customer_name: '', product_name: '' });
-              loadLoanOrders();
-            }}
-            className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors flex items-center space-x-1"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span>重置</span>
-          </button>
         </div>
-      </div>
+      )}
 
-      {/* 暂借单列表 */}
+      {/* 统计报表面板 */}
+      {activeTab === 'statistics' && (
+        <div className="space-y-6">
+          {/* 时间范围选择 */}
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+            <div className="flex items-center space-x-4 flex-wrap gap-y-2">
+              <div className="flex items-center space-x-2">
+                <Calendar className="w-4 h-4 text-gray-400" />
+                <span className="text-sm text-gray-600">统计周期：</span>
+              </div>
+              <input
+                type="date"
+                value={statsDateRange.start_date}
+                onChange={(e) => setStatsDateRange({ ...statsDateRange, start_date: e.target.value })}
+                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-200 focus:border-amber-400"
+              />
+              <span className="text-gray-400">至</span>
+              <input
+                type="date"
+                value={statsDateRange.end_date}
+                onChange={(e) => setStatsDateRange({ ...statsDateRange, end_date: e.target.value })}
+                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-200 focus:border-amber-400"
+              />
+              <button
+                onClick={loadStatistics}
+                className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors flex items-center space-x-1"
+              >
+                <Search className="w-4 h-4" />
+                <span>查询</span>
+              </button>
+              <button
+                onClick={handleExportStatistics}
+                disabled={!statistics}
+                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download className="w-4 h-4" />
+                <span>导出Excel</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 汇总统计卡片 */}
+          {statsLoading ? (
+            <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-100 text-center">
+              <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-amber-500" />
+              <span className="text-gray-500">加载统计数据中...</span>
+            </div>
+          ) : statistics ? (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                  <div className="text-sm text-gray-500 mb-1">借出笔数</div>
+                  <div className="text-2xl font-bold text-blue-600">{statistics.summary.total_borrowed_count}</div>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                  <div className="text-sm text-gray-500 mb-1">归还笔数</div>
+                  <div className="text-2xl font-bold text-green-600">{statistics.summary.total_returned_count}</div>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                  <div className="text-sm text-gray-500 mb-1">未归还笔数</div>
+                  <div className="text-2xl font-bold text-orange-600">{statistics.summary.outstanding_count}</div>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                  <div className="text-sm text-gray-500 mb-1">借出总克重</div>
+                  <div className="text-2xl font-bold text-blue-600">{statistics.summary.total_borrowed_weight.toFixed(2)}<span className="text-sm font-normal">克</span></div>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                  <div className="text-sm text-gray-500 mb-1">归还总克重</div>
+                  <div className="text-2xl font-bold text-green-600">{statistics.summary.total_returned_weight.toFixed(2)}<span className="text-sm font-normal">克</span></div>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                  <div className="text-sm text-gray-500 mb-1">未归还克重</div>
+                  <div className="text-2xl font-bold text-orange-600">{statistics.summary.outstanding_weight.toFixed(2)}<span className="text-sm font-normal">克</span></div>
+                </div>
+              </div>
+
+              {/* 工费统计卡片 */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-4 shadow-sm border border-blue-200">
+                  <div className="text-sm text-blue-600 mb-1">借出总工费</div>
+                  <div className="text-2xl font-bold text-blue-700">¥{statistics.summary.total_borrowed_labor.toFixed(2)}</div>
+                </div>
+                <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-xl p-4 shadow-sm border border-green-200">
+                  <div className="text-sm text-green-600 mb-1">归还总工费</div>
+                  <div className="text-2xl font-bold text-green-700">¥{statistics.summary.total_returned_labor.toFixed(2)}</div>
+                </div>
+                <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-xl p-4 shadow-sm border border-orange-200">
+                  <div className="text-sm text-orange-600 mb-1">未归还工费</div>
+                  <div className="text-2xl font-bold text-orange-700">¥{statistics.summary.outstanding_labor.toFixed(2)}</div>
+                </div>
+              </div>
+
+              {/* 每日明细表格 */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+                  <h3 className="font-medium text-gray-700 flex items-center space-x-2">
+                    <Calendar className="w-4 h-4" />
+                    <span>每日明细</span>
+                  </h3>
+                </div>
+                {statistics.daily_breakdown.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500">
+                    该时间段内暂无借货记录
+                  </div>
+                ) : (
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-100">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">日期</th>
+                        <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">借出笔数</th>
+                        <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">归还笔数</th>
+                        <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">借出克重</th>
+                        <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">归还克重</th>
+                        <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">借出工费</th>
+                        <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">归还工费</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {statistics.daily_breakdown.map((day, index) => (
+                        <tr key={index} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 text-sm font-medium text-gray-800">{day.date}</td>
+                          <td className="px-4 py-3 text-right text-sm text-blue-600">{day.borrowed_count}</td>
+                          <td className="px-4 py-3 text-right text-sm text-green-600">{day.returned_count}</td>
+                          <td className="px-4 py-3 text-right text-sm text-blue-600">{day.borrowed_weight.toFixed(2)}克</td>
+                          <td className="px-4 py-3 text-right text-sm text-green-600">{day.returned_weight.toFixed(2)}克</td>
+                          <td className="px-4 py-3 text-right text-sm text-blue-600">¥{day.borrowed_labor.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-right text-sm text-green-600">¥{day.returned_labor.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-100 text-center">
+              <BarChart3 className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+              <span className="text-gray-500">请选择时间范围后点击查询</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 暂借单列表 - 仅在非统计报表Tab显示 */}
+      {activeTab !== 'statistics' && (
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-500">
@@ -704,6 +934,7 @@ const LoanPage: React.FC = () => {
           </table>
         )}
       </div>
+      )}
 
       {/* 创建暂借单弹窗 */}
       {showCreateModal && (

@@ -28,6 +28,7 @@ import { SupplierPage } from './components/SupplierPage'
 import ReturnPage from './components/ReturnPage'
 import GoldMaterialPage from './components/GoldMaterialPage'
 import LoanPage from './components/LoanPage'
+import DocumentCenterPage from './components/DocumentCenterPage'
 import ProductCodePage from './components/ProductCodePage'
 import InboundOrdersPage from './components/InboundOrdersPage'
 import LineNumberedTextarea from './components/LineNumberedTextarea'
@@ -2640,6 +2641,17 @@ function App() {
                       <span>{t('nav.inboundOrders')}</span>
                     </button>
                   )}
+                  {/* 单据查询中心 - 商品专员、财务、管理层可见 */}
+                  {canAccessPage(userRole, 'document-center') && (
+                    <button
+                      onClick={() => setCurrentPage('document-center')}
+                      className="flex items-center space-x-2 px-4 py-2 border-2 border-amber-600 text-amber-600 rounded-xl 
+                                 hover:bg-amber-600 hover:text-white transition-all duration-200 font-medium text-[15px]"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span>单据中心</span>
+                    </button>
+                  )}
                   {/* 财务对账按钮 - 使用权限检查 */}
                   {hasPermission(userRole, 'canViewFinance') && (
                     <button
@@ -4681,6 +4693,12 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
         {currentPage === 'loan' && (
           <div className="flex-1 overflow-y-auto">
             <LoanPage />
+          </div>
+        )}
+
+        {currentPage === 'document-center' && (
+          <div className="flex-1 overflow-y-auto">
+            <DocumentCenterPage userRole={userRole} />
           </div>
         )}
 

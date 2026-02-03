@@ -551,10 +551,19 @@ async def mark_loan_printed(
 @router.get("/orders/{loan_id}/download")
 async def download_loan_order(
     loan_id: int,
-    format: str = Query("html", pattern="^(html)$"),
+    format: str = Query("html", pattern="^(html|pdf)$"),
     db: Session = Depends(get_db)
 ):
-    """下载或打印暂借单（HTML格式）"""
+    """
+    下载或打印暂借单
+    - format=html: 网页打印格式
+    - format=pdf: PDF下载格式
+    - 纸张规格：241mm x 动态高度（140mm倍数，针式打印机）
+    """
+    import io
+    import math
+    from fastapi.responses import StreamingResponse
+    
     loan_order = db.query(LoanOrder).filter(LoanOrder.id == loan_id).first()
     
     if not loan_order:
@@ -568,7 +577,146 @@ async def download_loan_order(
     # 状态标签
     status_label = get_status_label(loan_order.status)
     
-    # 生成 HTML
+    # ========== PDF 格式 ==========
+    if format == "pdf":
+        try:
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.units import mm
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+            
+            # 针式打印机纸张尺寸：241mm x 140mm（最小高度）
+            PAGE_WIDTH = 241 * mm
+            # 动态高度计算：暂借单通常只有1行明细，固定使用140mm
+            PAGE_HEIGHT = 140 * mm
+            
+            buffer = io.BytesIO()
+            p = canvas.Canvas(buffer, pagesize=(PAGE_WIDTH, PAGE_HEIGHT))
+            width, height = PAGE_WIDTH, PAGE_HEIGHT
+            
+            # 注册中文字体
+            chinese_font = None
+            try:
+                pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+                chinese_font = 'STSong-Light'
+            except Exception as e:
+                logger.warning(f"注册CID字体失败: {e}")
+            
+            # 页边距
+            left_margin = 8 * mm
+            right_margin = width - 8 * mm
+            top_margin = height - 6 * mm
+            
+            # ===== 标题 =====
+            if chinese_font:
+                p.setFont(chinese_font, 14)
+            else:
+                p.setFont("Helvetica-Bold", 14)
+            p.drawCentredString(width / 2, top_margin, "暂 借 单")
+            
+            # ===== 基本信息（紧凑两列布局） =====
+            y = top_margin - 16
+            if chinese_font:
+                p.setFont(chinese_font, 9)
+            else:
+                p.setFont("Helvetica", 9)
+            
+            # 第一行
+            p.drawString(left_margin, y, f"单号：{loan_order.loan_no}")
+            p.drawString(width/2, y, f"日期：{loan_date_str}")
+            y -= 12
+            
+            # 第二行
+            p.drawString(left_margin, y, f"客户：{loan_order.customer_name}")
+            p.drawString(width/2, y, f"业务员：{loan_order.salesperson}")
+            y -= 12
+            
+            # 第三行
+            p.drawString(left_margin, y, f"经办人：{loan_order.created_by or '-'}")
+            p.drawString(width/2, y, f"状态：{status_label}")
+            y -= 14
+            
+            # 分隔线
+            p.line(left_margin, y, right_margin, y)
+            y -= 12
+            
+            # ===== 产品信息表格 =====
+            if chinese_font:
+                p.setFont(chinese_font, 8)
+            else:
+                p.setFont("Helvetica-Bold", 8)
+            
+            # 表头
+            col_widths = [70, 45, 45, 55]  # mm: 产品品类、克重、工费、工费小计
+            col_x = [left_margin]
+            for w in col_widths[:-1]:
+                col_x.append(col_x[-1] + w * mm)
+            
+            headers = ["产品品类", "克重(克)", "工费(元/克)", "工费小计(元)"]
+            for i, header in enumerate(headers):
+                col_center = col_x[i] + (col_widths[i] * mm) / 2
+                p.drawCentredString(col_center, y, header)
+            
+            y -= 4
+            p.line(left_margin, y, left_margin + sum(col_widths) * mm, y)
+            y -= 12
+            
+            # 数据行
+            if chinese_font:
+                p.setFont(chinese_font, 9)
+            else:
+                p.setFont("Helvetica", 9)
+            
+            product_name = loan_order.product_name[:18] if len(loan_order.product_name) > 18 else loan_order.product_name
+            p.drawString(col_x[0] + 2, y, product_name)
+            p.setFont("Helvetica", 9)
+            p.drawCentredString(col_x[1] + col_widths[1] * mm / 2, y, f"{loan_order.weight:.2f}")
+            p.drawCentredString(col_x[2] + col_widths[2] * mm / 2, y, f"{loan_order.labor_cost:.2f}")
+            p.drawCentredString(col_x[3] + col_widths[3] * mm / 2, y, f"{loan_order.total_labor_cost:.2f}")
+            
+            y -= 4
+            p.line(left_margin, y, left_margin + sum(col_widths) * mm, y)
+            y -= 14
+            
+            # ===== 备注 =====
+            if loan_order.remark:
+                if chinese_font:
+                    p.setFont(chinese_font, 8)
+                remark_text = loan_order.remark[:50] if len(loan_order.remark) > 50 else loan_order.remark
+                p.drawString(left_margin, y, f"备注：{remark_text}")
+                y -= 12
+            
+            # ===== 签名区域 =====
+            y -= 8
+            if chinese_font:
+                p.setFont(chinese_font, 8)
+            p.drawString(left_margin, y, "经办人签字：____________")
+            p.drawString(width/2, y, "日期：____年____月____日")
+            
+            # ===== 页脚 =====
+            if chinese_font:
+                p.setFont(chinese_font, 7)
+            else:
+                p.setFont("Helvetica", 7)
+            p.drawString(left_margin, 5 * mm, f"打印时间：{print_time}")
+            
+            p.save()
+            buffer.seek(0)
+            
+            filename = f"loan_order_{loan_order.loan_no}.pdf"
+            return StreamingResponse(
+                buffer,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Access-Control-Allow-Origin": "*",
+                }
+            )
+        except Exception as pdf_error:
+            logger.error(f"生成暂借单PDF失败: {pdf_error}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"生成PDF失败: {str(pdf_error)}")
+    
+    # ========== HTML 格式（针式打印机 241mm 宽度） ==========
     html_content = f"""
 <!DOCTYPE html>
 <html>
@@ -579,45 +727,45 @@ async def download_loan_order(
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ 
             font-family: "Microsoft YaHei", "SimHei", Arial, sans-serif; 
-            font-size: 12px;
+            font-size: 11px;
             color: #333;
         }}
         .page {{
-            width: 210mm;
-            min-height: 148mm;
-            padding: 10mm 15mm;
+            width: 241mm;
+            min-height: 140mm;
+            padding: 6mm 8mm;
             margin: 0 auto;
             background: white;
         }}
         .header {{
             text-align: center;
-            margin-bottom: 15px;
-            border-bottom: 2px solid #333;
-            padding-bottom: 10px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 8px;
         }}
         .header h1 {{
-            font-size: 24px;
+            font-size: 16px;
             font-weight: bold;
             margin-bottom: 5px;
         }}
         .header-info {{
             display: flex;
             justify-content: space-between;
-            font-size: 11px;
-            margin-top: 10px;
+            font-size: 10px;
+            margin-top: 6px;
         }}
         .info-section {{
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }}
         .info-section h3 {{
-            font-size: 13px;
+            font-size: 11px;
             border-bottom: 1px solid #999;
-            padding-bottom: 5px;
-            margin-bottom: 10px;
+            padding-bottom: 3px;
+            margin-bottom: 6px;
         }}
         .info-row {{
             display: flex;
-            margin-bottom: 8px;
+            margin-bottom: 5px;
         }}
         .info-item {{
             flex: 1;
@@ -625,7 +773,7 @@ async def download_loan_order(
         }}
         .info-label {{
             font-weight: bold;
-            min-width: 80px;
+            min-width: 70px;
         }}
         .info-value {{
             flex: 1;
@@ -633,12 +781,13 @@ async def download_loan_order(
         .product-table {{
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }}
         .product-table th, .product-table td {{
             border: 1px solid #999;
-            padding: 8px;
+            padding: 5px;
             text-align: center;
+            font-size: 10px;
         }}
         .product-table th {{
             background: #f0f0f0;
@@ -649,28 +798,29 @@ async def download_loan_order(
             color: #c00;
         }}
         .signature-section {{
-            margin-top: 30px;
-            padding-top: 20px;
+            margin-top: 15px;
+            padding-top: 10px;
             border-top: 1px dashed #999;
+            display: flex;
+            justify-content: space-between;
         }}
         .signature-box {{
-            display: inline-block;
-            width: 200px;
             text-align: center;
         }}
         .signature-line {{
             border-bottom: 1px solid #333;
-            height: 40px;
-            margin-bottom: 5px;
+            width: 120px;
+            height: 25px;
+            display: inline-block;
         }}
         .signature-label {{
-            font-size: 11px;
+            font-size: 9px;
         }}
         .status-badge {{
             display: inline-block;
-            padding: 2px 8px;
+            padding: 1px 6px;
             border-radius: 3px;
-            font-size: 11px;
+            font-size: 9px;
             font-weight: bold;
         }}
         .status-pending {{ background: #fff3cd; color: #856404; }}
@@ -679,27 +829,34 @@ async def download_loan_order(
         .status-cancelled {{ background: #f8d7da; color: #721c24; }}
         .print-btn {{
             display: block;
-            margin: 20px auto;
-            padding: 10px 30px;
+            margin: 15px auto;
+            padding: 8px 25px;
             background: #1a4d8c;
             color: white;
             border: none;
             border-radius: 5px;
-            font-size: 14px;
+            font-size: 12px;
             cursor: pointer;
         }}
         .print-btn:hover {{ background: #0d3a6a; }}
+        .footer {{
+            margin-top: 10px;
+            text-align: center;
+            font-size: 9px;
+            color: #666;
+        }}
         @media print {{
+            @page {{ size: 241mm auto; margin: 0; }}
             body {{ background: white; }}
             .page {{ 
-                width: 210mm;
-                padding: 8mm 10mm;
+                width: 241mm;
+                padding: 5mm 8mm;
                 margin: 0;
             }}
             .print-btn {{ display: none; }}
         }}
         @media screen {{
-            body {{ background: #f0f0f0; padding: 20px; }}
+            body {{ background: #f0f0f0; padding: 15px; }}
             .page {{ box-shadow: 0 0 10px rgba(0,0,0,0.1); }}
         }}
     </style>
@@ -712,12 +869,10 @@ async def download_loan_order(
                 <span>单号：{loan_order.loan_no}</span>
                 <span>日期：{loan_date_str}</span>
                 <span>状态：<span class="status-badge status-{loan_order.status}">{status_label}</span></span>
-                <span>打印时间：{print_time}</span>
             </div>
         </div>
         
         <div class="info-section">
-            <h3>借出信息</h3>
             <div class="info-row">
                 <div class="info-item">
                     <span class="info-label">客户姓名：</span>
@@ -732,45 +887,40 @@ async def download_loan_order(
                     <span class="info-value">{loan_order.created_by or '-'}</span>
                 </div>
             </div>
-            <div class="info-row">
-                <div class="info-item">
-                    <span class="info-label">创建时间：</span>
-                    <span class="info-value">{created_at_str}</span>
-                </div>
-            </div>
         </div>
         
-        <div class="info-section">
-            <h3>产品信息</h3>
-            <table class="product-table">
-                <thead>
-                    <tr>
-                        <th>产品品类</th>
-                        <th>克重(克)</th>
-                        <th>工费(元/克)</th>
-                        <th>工费小计(元)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>{loan_order.product_name}</td>
-                        <td>{loan_order.weight:.2f}</td>
-                        <td>{loan_order.labor_cost:.2f}</td>
-                        <td class="amount">{loan_order.total_labor_cost:.2f}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+        <table class="product-table">
+            <thead>
+                <tr>
+                    <th>产品品类</th>
+                    <th>克重(克)</th>
+                    <th>工费(元/克)</th>
+                    <th>工费小计(元)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>{loan_order.product_name}</td>
+                    <td>{loan_order.weight:.2f}</td>
+                    <td>{loan_order.labor_cost:.2f}</td>
+                    <td class="amount">{loan_order.total_labor_cost:.2f}</td>
+                </tr>
+            </tbody>
+        </table>
         
-        {f'<div class="info-section"><h3>备注</h3><p>{loan_order.remark}</p></div>' if loan_order.remark else ''}
+        {f'<div class="info-section" style="font-size: 10px;"><strong>备注：</strong>{loan_order.remark}</div>' if loan_order.remark else ''}
         
         <div class="signature-section">
             <div class="signature-box">
                 <div class="signature-line"></div>
-                <div class="signature-label">经办人（签字）</div>
-                <div class="signature-label" style="margin-top: 5px;">日期：____年____月____日</div>
+                <div class="signature-label">经办人签字</div>
+            </div>
+            <div class="signature-box">
+                <div class="signature-label">日期：____年____月____日</div>
             </div>
         </div>
+        
+        <div class="footer">打印时间：{print_time}</div>
     </div>
     
     <button class="print-btn" onclick="window.print()">打印暂借单</button>
@@ -779,3 +929,225 @@ async def download_loan_order(
 """
     
     return HTMLResponse(content=html_content)
+
+
+# ============= 借货统计报表 =============
+
+@router.get("/statistics")
+async def get_loan_statistics(
+    start_date: str = Query(..., description="开始日期 YYYY-MM-DD"),
+    end_date: str = Query(..., description="结束日期 YYYY-MM-DD"),
+    db: Session = Depends(get_db)
+):
+    """获取借货统计报表（按时间范围）"""
+    try:
+        from datetime import datetime, timedelta
+        from sqlalchemy import func, and_
+        
+        # 解析日期
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)  # 包含结束日期当天
+        
+        # 基础查询：指定时间范围内的所有暂借单
+        base_query = db.query(LoanOrder).filter(
+            LoanOrder.created_at >= start_dt,
+            LoanOrder.created_at < end_dt
+        )
+        
+        all_orders = base_query.all()
+        
+        # 汇总统计
+        total_borrowed_count = len([o for o in all_orders if o.status in ['borrowed', 'returned']])
+        total_returned_count = len([o for o in all_orders if o.status == 'returned'])
+        outstanding_count = len([o for o in all_orders if o.status == 'borrowed'])
+        cancelled_count = len([o for o in all_orders if o.status == 'cancelled'])
+        pending_count = len([o for o in all_orders if o.status == 'pending'])
+        
+        total_borrowed_weight = sum(o.weight for o in all_orders if o.status in ['borrowed', 'returned'])
+        total_returned_weight = sum(o.weight for o in all_orders if o.status == 'returned')
+        outstanding_weight = sum(o.weight for o in all_orders if o.status == 'borrowed')
+        
+        total_borrowed_labor = sum(o.total_labor_cost for o in all_orders if o.status in ['borrowed', 'returned'])
+        total_returned_labor = sum(o.total_labor_cost for o in all_orders if o.status == 'returned')
+        outstanding_labor = sum(o.total_labor_cost for o in all_orders if o.status == 'borrowed')
+        
+        # 按天统计
+        daily_breakdown = {}
+        for order in all_orders:
+            if order.status in ['borrowed', 'returned', 'pending']:
+                date_key = order.created_at.strftime('%Y-%m-%d')
+                if date_key not in daily_breakdown:
+                    daily_breakdown[date_key] = {
+                        'date': date_key,
+                        'borrowed_count': 0,
+                        'returned_count': 0,
+                        'borrowed_weight': 0.0,
+                        'returned_weight': 0.0,
+                        'borrowed_labor': 0.0,
+                        'returned_labor': 0.0
+                    }
+                
+                if order.status in ['borrowed', 'returned']:
+                    daily_breakdown[date_key]['borrowed_count'] += 1
+                    daily_breakdown[date_key]['borrowed_weight'] += order.weight
+                    daily_breakdown[date_key]['borrowed_labor'] += order.total_labor_cost
+                
+                if order.status == 'returned':
+                    daily_breakdown[date_key]['returned_count'] += 1
+                    daily_breakdown[date_key]['returned_weight'] += order.weight
+                    daily_breakdown[date_key]['returned_labor'] += order.total_labor_cost
+        
+        # 转换为列表并排序
+        daily_list = sorted(daily_breakdown.values(), key=lambda x: x['date'])
+        
+        return {
+            "success": True,
+            "data": {
+                "period": {
+                    "start_date": start_date,
+                    "end_date": end_date
+                },
+                "summary": {
+                    "total_borrowed_count": total_borrowed_count,
+                    "total_returned_count": total_returned_count,
+                    "outstanding_count": outstanding_count,
+                    "pending_count": pending_count,
+                    "cancelled_count": cancelled_count,
+                    "total_borrowed_weight": round(total_borrowed_weight, 2),
+                    "total_returned_weight": round(total_returned_weight, 2),
+                    "outstanding_weight": round(outstanding_weight, 2),
+                    "total_borrowed_labor": round(total_borrowed_labor, 2),
+                    "total_returned_labor": round(total_returned_labor, 2),
+                    "outstanding_labor": round(outstanding_labor, 2)
+                },
+                "daily_breakdown": daily_list
+            }
+        }
+    except Exception as e:
+        logger.error(f"获取借货统计失败: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/statistics/export")
+async def export_loan_statistics(
+    start_date: str = Query(..., description="开始日期 YYYY-MM-DD"),
+    end_date: str = Query(..., description="结束日期 YYYY-MM-DD"),
+    db: Session = Depends(get_db)
+):
+    """导出借货统计报表（Excel格式）"""
+    try:
+        from datetime import datetime, timedelta
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        import io
+        
+        # 获取统计数据
+        stats_response = await get_loan_statistics(start_date, end_date, db)
+        if not stats_response.get("success"):
+            raise HTTPException(status_code=500, detail="获取统计数据失败")
+        
+        stats = stats_response["data"]
+        summary = stats["summary"]
+        daily_breakdown = stats["daily_breakdown"]
+        
+        # 创建Excel工作簿
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "借货统计报表"
+        
+        # 样式定义
+        header_font = Font(bold=True, size=14)
+        subheader_font = Font(bold=True, size=11)
+        header_fill = PatternFill(start_color='CCCCCC', end_color='CCCCCC', fill_type='solid')
+        center_align = Alignment(horizontal='center', vertical='center')
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        # 标题
+        ws.merge_cells('A1:G1')
+        ws['A1'] = f"借货统计报表 ({start_date} 至 {end_date})"
+        ws['A1'].font = header_font
+        ws['A1'].alignment = center_align
+        
+        # 汇总信息
+        row = 3
+        ws[f'A{row}'] = "汇总统计"
+        ws[f'A{row}'].font = subheader_font
+        row += 1
+        
+        summary_data = [
+            ("借出笔数", summary["total_borrowed_count"], "笔"),
+            ("归还笔数", summary["total_returned_count"], "笔"),
+            ("未归还笔数", summary["outstanding_count"], "笔"),
+            ("借出总克重", summary["total_borrowed_weight"], "克"),
+            ("归还总克重", summary["total_returned_weight"], "克"),
+            ("未归还克重", summary["outstanding_weight"], "克"),
+            ("借出总工费", summary["total_borrowed_labor"], "元"),
+            ("归还总工费", summary["total_returned_labor"], "元"),
+            ("未归还工费", summary["outstanding_labor"], "元"),
+        ]
+        
+        for item_name, item_value, item_unit in summary_data:
+            ws[f'A{row}'] = item_name
+            ws[f'B{row}'] = item_value
+            ws[f'C{row}'] = item_unit
+            row += 1
+        
+        # 每日明细标题
+        row += 1
+        ws[f'A{row}'] = "每日明细"
+        ws[f'A{row}'].font = subheader_font
+        row += 1
+        
+        # 表头
+        headers = ["日期", "借出笔数", "归还笔数", "借出克重", "归还克重", "借出工费", "归还工费"]
+        for col, header in enumerate(headers, start=1):
+            cell = ws.cell(row=row, column=col, value=header)
+            cell.font = Font(bold=True)
+            cell.fill = header_fill
+            cell.alignment = center_align
+            cell.border = thin_border
+        row += 1
+        
+        # 每日数据
+        for day in daily_breakdown:
+            ws.cell(row=row, column=1, value=day['date']).border = thin_border
+            ws.cell(row=row, column=2, value=day['borrowed_count']).border = thin_border
+            ws.cell(row=row, column=3, value=day['returned_count']).border = thin_border
+            ws.cell(row=row, column=4, value=round(day['borrowed_weight'], 2)).border = thin_border
+            ws.cell(row=row, column=5, value=round(day['returned_weight'], 2)).border = thin_border
+            ws.cell(row=row, column=6, value=round(day['borrowed_labor'], 2)).border = thin_border
+            ws.cell(row=row, column=7, value=round(day['returned_labor'], 2)).border = thin_border
+            row += 1
+        
+        # 调整列宽
+        ws.column_dimensions['A'].width = 15
+        for col in ['B', 'C', 'D', 'E', 'F', 'G']:
+            ws.column_dimensions[col].width = 12
+        
+        # 保存到缓冲区
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        
+        from fastapi.responses import Response
+        filename = f"loan_statistics_{start_date}_{end_date}.xlsx"
+        
+        return Response(
+            content=buffer.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Access-Control-Allow-Origin": "*",
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"导出借货统计失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"导出失败: {str(e)}")

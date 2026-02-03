@@ -406,17 +406,75 @@ async def create_return_order(
             
             logger.info(f"供应商金料账户更新: 供应商={supplier.name}, 退货={total_weight}克, "
                        f"变动前={balance_before:.2f}克, 变动后={supplier_gold_account.current_balance:.2f}克")
+            
+            # ========== 生成采购退货单（冲减应付账款） ==========
+            from ..models.finance import AccountPayable
+            from datetime import date, timedelta
+            
+            # 生成采购退货单号：CGTH + 日期 + 序号
+            today_str = china_now().strftime('%Y%m%d')
+            existing_return_count = db.query(AccountPayable).filter(
+                AccountPayable.payable_no.like(f"CGTH{today_str}%")
+            ).count()
+            purchase_return_no = f"CGTH{today_str}{existing_return_count + 1:03d}"
+            
+            # 创建采购退货单（负数金额的应付账款）
+            purchase_return = AccountPayable(
+                payable_no=purchase_return_no,
+                supplier_id=data.supplier_id,
+                total_amount=-total_labor_cost,  # 负数表示退货冲减
+                paid_amount=0.0,
+                unpaid_amount=-total_labor_cost,
+                credit_days=0,
+                credit_start_date=date.today(),
+                due_date=date.today(),
+                status="unpaid" if total_labor_cost > 0 else "paid",
+                remark=f"退货单 {return_no} 自动生成的采购退货单，退货{len(data.items)}件，共{total_weight:.2f}克",
+                operator=created_by or "系统"
+            )
+            db.add(purchase_return)
+            
+            # 尝试冲减未付的应付账款
+            unpaid_payables = db.query(AccountPayable).filter(
+                AccountPayable.supplier_id == data.supplier_id,
+                AccountPayable.unpaid_amount > 0,
+                AccountPayable.payable_no.like("CG%"),  # 只冲减采购单，不冲减其他
+                ~AccountPayable.payable_no.like("CGTH%")  # 排除采购退货单
+            ).order_by(AccountPayable.due_date.asc()).all()
+            
+            remaining_credit = total_labor_cost
+            for payable in unpaid_payables:
+                if remaining_credit <= 0:
+                    break
+                credit_amount = min(remaining_credit, payable.unpaid_amount)
+                payable.unpaid_amount -= credit_amount
+                payable.paid_amount += credit_amount
+                if payable.unpaid_amount <= 0:
+                    payable.status = "paid"
+                remaining_credit -= credit_amount
+                logger.info(f"冲减应付账款 {payable.payable_no}: 金额 {credit_amount:.2f}元")
+            
+            logger.info(f"生成采购退货单: {purchase_return_no}, 冲减金额: {total_labor_cost:.2f}元")
+            # ========== 采购退货单生成完成 ==========
         
         db.commit()
         db.refresh(return_order)
         
         logger.info(f"退货单创建并完成: {return_no}, 类型: {data.return_type}, 商品数: {len(data.items)}, 总克重: {total_weight}g, 总工费: {total_labor_cost}元")
         
-        return {
+        # 构建返回结果
+        result = {
             "success": True,
             "message": f"退货单 {return_no} 创建成功，共 {len(data.items)} 个商品，总退货 {total_weight:.2f}g，总工费 {total_labor_cost:.2f}元",
             "return_order": build_return_response(return_order, db)
         }
+        
+        # 如果是退给供应商，添加采购退货单号
+        if data.return_type == "to_supplier" and total_labor_cost > 0:
+            result["purchase_return_no"] = purchase_return_no
+            result["message"] += f"，已生成采购退货单 {purchase_return_no}"
+        
+        return result
     except Exception as e:
         logger.error(f"创建退货单失败: {e}", exc_info=True)
         db.rollback()
@@ -693,11 +751,13 @@ async def download_return_order_options(return_id: int):
 async def download_return_order(
     return_id: int,
     format: str = Query("pdf", pattern="^(pdf|html)$"),
+    doc_type: str = Query("return", pattern="^(return|stock_out|purchase_return)$", 
+                          description="单据类型：return=退货单（柜台/结算用），stock_out=退库单（商品部内部用），purchase_return=采购退货单（财务对账用）"),
     db: Session = Depends(get_db)
 ):
-    """下载或打印退货单（支持PDF和HTML格式）"""
+    """下载或打印退货单/退库单/采购退货单（支持PDF和HTML格式）"""
     try:
-        logger.info(f"下载退货单请求: return_id={return_id}, format={format}")
+        logger.info(f"下载退货单请求: return_id={return_id}, format={format}, doc_type={doc_type}")
         
         # 查询退货单
         return_order = db.query(ReturnOrder).filter(ReturnOrder.id == return_id).first()
@@ -724,6 +784,23 @@ async def download_return_order(
             if inbound:
                 inbound_order_no = inbound.order_no
         
+        # 根据doc_type设置标题和文件名前缀
+        if doc_type == "stock_out":
+            doc_title = "退库单"
+            file_prefix = "stock_out"
+        elif doc_type == "purchase_return":
+            doc_title = "采购退货单"
+            file_prefix = "purchase_return"
+        else:
+            doc_title = "退货单"
+            file_prefix = "return_order"
+        
+        # 获取退货明细用于计算动态高度
+        details = db.query(ReturnOrderDetail).filter(
+            ReturnOrderDetail.return_order_id == return_id
+        ).all()
+        detail_count = len(details) if details else 1
+        
         if format == "pdf":
             try:
                 from reportlab.pdfgen import canvas
@@ -731,11 +808,19 @@ async def download_return_order(
                 from reportlab.pdfbase import pdfmetrics
                 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
                 import io
+                import math
                 from ..timezone_utils import to_china_time, format_china_time
                 
-                # 自定义纸张尺寸：241mm × 140mm 横向（针式打印机）
+                # ========== 动态高度计算 ==========
                 PAGE_WIDTH = 241 * mm
-                PAGE_HEIGHT = 140 * mm
+                base_height = 80 * mm   # 页头页尾固定部分
+                row_height = 12 * mm    # 每行明细高度
+                content_height = base_height + (row_height * detail_count)
+                
+                # 按140mm的倍数向上取整（最小140mm）
+                min_unit = 140 * mm
+                PAGE_HEIGHT = max(min_unit, math.ceil(content_height / min_unit) * min_unit)
+                # ========== 动态高度计算完成 ==========
                 
                 buffer = io.BytesIO()
                 p = canvas.Canvas(buffer, pagesize=(PAGE_WIDTH, PAGE_HEIGHT))
@@ -759,7 +844,7 @@ async def download_return_order(
                     p.setFont(chinese_font, 12)
                 else:
                     p.setFont("Helvetica-Bold", 12)
-                p.drawCentredString(width / 2, top_margin, "退货单")
+                p.drawCentredString(width / 2, top_margin, doc_title)
                 
                 # 退货类型
                 return_type_str = "退给供应商" if return_order.return_type == "to_supplier" else "退给商品部"
@@ -850,7 +935,7 @@ async def download_return_order(
                 buffer.seek(0)
                 
                 from fastapi.responses import Response
-                filename = f"return_order_{return_order.return_no}.pdf"
+                filename = f"{file_prefix}_{return_order.return_no}.pdf"
                 return Response(
                     content=buffer.getvalue(),
                     media_type="application/pdf",
@@ -970,7 +1055,7 @@ async def download_return_order(
 <body>
     <div class="container">
         <div class="header">
-            <h1>退货单</h1>
+            <h1>{doc_title}</h1>
         </div>
         
         <div class="info-grid">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { API_ENDPOINTS } from '../config';
 import { hasPermission } from '../config/permissions';
 import { QuickReturnModal } from './QuickReturnModal';
@@ -87,6 +87,10 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
   const [filterType, setFilterType] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [keyword, setKeyword] = useState('');
+  
+  // 下载菜单
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const downloadMenuRef = useRef<HTMLDivElement>(null);
 
   // 加载数据
   useEffect(() => {
@@ -199,10 +203,21 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
     }
   };
 
+  // 点击外部关闭下载菜单
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(event.target as Node)) {
+        setShowDownloadMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // 打印退货单
-  const handlePrintReturn = async (returnOrder: ReturnOrder) => {
+  const handlePrintReturn = async (returnOrder: ReturnOrder, docType: string = 'return') => {
     try {
-      const url = `${API_ENDPOINTS.API_BASE_URL}/api/returns/${returnOrder.id}/download?format=html`;
+      const url = `${API_ENDPOINTS.API_BASE_URL}/api/returns/${returnOrder.id}/download?format=html&doc_type=${docType}`;
       const response = await fetch(url);
       const html = await response.text();
       const printWindow = window.open('', '_blank');
@@ -218,19 +233,25 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
   };
 
   // 下载退货单 PDF
-  const handleDownloadReturn = async (returnOrder: ReturnOrder) => {
+  const handleDownloadReturn = async (returnOrder: ReturnOrder, docType: string = 'return') => {
     try {
-      const url = `${API_ENDPOINTS.API_BASE_URL}/api/returns/${returnOrder.id}/download?format=pdf`;
+      const docTypeNames: Record<string, string> = {
+        return: '退货单',
+        stock_out: '退库单',
+        purchase_return: '采购退货单'
+      };
+      const url = `${API_ENDPOINTS.API_BASE_URL}/api/returns/${returnOrder.id}/download?format=pdf&doc_type=${docType}`;
       const response = await fetch(url);
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `退货单_${returnOrder.return_no}.pdf`;
+      a.download = `${docTypeNames[docType] || '退货单'}_${returnOrder.return_no}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(downloadUrl);
+      setShowDownloadMenu(false);
     } catch (error) {
       console.error('下载失败:', error);
       alert('下载失败，请重试');
@@ -581,21 +602,113 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
               )}
             </div>
             
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px', flexWrap: 'wrap' }}>
               <button
                 onClick={() => handlePrintReturn(selectedReturn)}
                 style={{ padding: '10px 20px', borderRadius: '8px', background: '#3b82f6', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
               >
-                🖨️ 打印
+                🖨️ 打印退货单
               </button>
+              {/* 下载按钮组 */}
+              <div style={{ position: 'relative' }} ref={downloadMenuRef}>
+                <button
+                  onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                  style={{ padding: '10px 20px', borderRadius: '8px', background: '#10b981', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  📥 下载单据 ▼
+                </button>
+                {showDownloadMenu && (
+                  <div style={{ 
+                    position: 'absolute', 
+                    bottom: '100%', 
+                    right: 0, 
+                    marginBottom: '8px',
+                    background: '#0f172a', 
+                    borderRadius: '8px', 
+                    border: '1px solid #475569',
+                    overflow: 'hidden',
+                    minWidth: '180px',
+                    zIndex: 1001,
+                    boxShadow: '0 -4px 20px rgba(0,0,0,0.3)'
+                  }}>
+                    <button
+                      onClick={() => handleDownloadReturn(selectedReturn, 'return')}
+                      style={{ 
+                        width: '100%', 
+                        padding: '12px 16px', 
+                        background: 'transparent', 
+                        border: 'none', 
+                        color: '#e2e8f0', 
+                        cursor: 'pointer', 
+                        textAlign: 'left',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}
+                      onMouseOver={(e) => (e.currentTarget.style.background = '#1e293b')}
+                      onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <span style={{ color: '#f59e0b' }}>📄</span>
+                      <div>
+                        <div>退货单</div>
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>柜台/结算用</div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => handleDownloadReturn(selectedReturn, 'stock_out')}
+                      style={{ 
+                        width: '100%', 
+                        padding: '12px 16px', 
+                        background: 'transparent', 
+                        border: 'none', 
+                        borderTop: '1px solid #334155',
+                        color: '#e2e8f0', 
+                        cursor: 'pointer', 
+                        textAlign: 'left',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}
+                      onMouseOver={(e) => (e.currentTarget.style.background = '#1e293b')}
+                      onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <span style={{ color: '#3b82f6' }}>📦</span>
+                      <div>
+                        <div>退库单</div>
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>商品部内部用</div>
+                      </div>
+                    </button>
+                    {selectedReturn.return_type === 'to_supplier' && (
+                      <button
+                        onClick={() => handleDownloadReturn(selectedReturn, 'purchase_return')}
+                        style={{ 
+                          width: '100%', 
+                          padding: '12px 16px', 
+                          background: 'transparent', 
+                          border: 'none', 
+                          borderTop: '1px solid #334155',
+                          color: '#e2e8f0', 
+                          cursor: 'pointer', 
+                          textAlign: 'left',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}
+                        onMouseOver={(e) => (e.currentTarget.style.background = '#1e293b')}
+                        onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        <span style={{ color: '#10b981' }}>💰</span>
+                        <div>
+                          <div>采购退货单</div>
+                          <div style={{ fontSize: '11px', color: '#64748b' }}>财务对账用</div>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
               <button
-                onClick={() => handleDownloadReturn(selectedReturn)}
-                style={{ padding: '10px 20px', borderRadius: '8px', background: '#10b981', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                📥 下载
-              </button>
-              <button
-                onClick={() => { setShowDetailModal(false); setSelectedReturn(null); }}
+                onClick={() => { setShowDetailModal(false); setSelectedReturn(null); setShowDownloadMenu(false); }}
                 style={{ padding: '10px 20px', borderRadius: '8px', background: '#475569', border: 'none', color: '#e2e8f0', cursor: 'pointer' }}
               >
                 关闭

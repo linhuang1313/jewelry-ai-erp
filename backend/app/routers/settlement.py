@@ -1082,14 +1082,24 @@ async def download_settlement_order(
         
         if format == "pdf":
             try:
+                import math
                 from reportlab.pdfgen import canvas
                 from reportlab.lib.units import mm
                 from reportlab.pdfbase import pdfmetrics
                 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
                 
-                # 自定义纸张尺寸：241mm × 140mm 横向（针式打印机）
+                # ========== 动态高度计算（针式打印机 241mm x 140mm倍数） ==========
                 PAGE_WIDTH = 241 * mm
-                PAGE_HEIGHT = 140 * mm
+                # 基础高度（页头页尾固定部分）+ 每行明细高度
+                base_height = 100 * mm   # 结算单页头页尾固定部分较多
+                row_height = 8 * mm      # 每行明细高度
+                detail_count = len(details)
+                content_height = base_height + (row_height * detail_count)
+                
+                # 按140mm倍数向上取整（最小140mm）
+                min_unit = 140 * mm
+                PAGE_HEIGHT = max(min_unit, math.ceil(content_height / min_unit) * min_unit)
+                # ========== 动态高度计算完成 ==========
                 
                 buffer = io.BytesIO()
                 p = canvas.Canvas(buffer, pagesize=(PAGE_WIDTH, PAGE_HEIGHT))
@@ -1515,9 +1525,9 @@ async def download_settlement_order(
             background: #fff;
         }}
         .page {{
-            width: 210mm;
+            width: 241mm;
             min-height: 140mm;
-            padding: 10mm 12mm;
+            padding: 6mm 8mm;
             margin: 0 auto;
             background: white;
         }}
@@ -1651,11 +1661,12 @@ async def download_settlement_order(
         }}
         .print-btn:hover {{ background: #0d3a6a; }}
         @media print {{
+            @page {{ size: 241mm auto; margin: 0; }}
             body {{ background: white; }}
             .page {{ 
-                width: 210mm;
+                width: 241mm;
                 min-height: 140mm;
-                padding: 8mm 10mm;
+                padding: 5mm 8mm;
                 margin: 0;
             }}
             .print-btn {{ display: none; }}

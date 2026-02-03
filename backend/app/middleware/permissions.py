@@ -26,6 +26,9 @@ ROLE_PERMISSIONS = {
         'can_return_to_warehouse': True,   # 可以退货给商品部
         'can_view_finance': False,         # 不能查看财务
         'can_view_supplier_gold_account': False,  # 不能查看供应商金料账户
+        # 暂借单权限
+        'can_create_loan': True,           # 可以创建暂借单
+        'can_manage_loan': True,           # 可以管理暂借单（确认借出、归还、撤销）
     },
     
     # 商品专员
@@ -47,6 +50,9 @@ ROLE_PERMISSIONS = {
         'can_view_finance': False,         # 不能查看财务
         'can_manage_product_codes': True,  # 可以管理商品编码（F/FL编码）
         'can_view_supplier_gold_account': False,  # 不能查看供应商金料账户
+        # 采购单权限
+        'can_view_purchase_orders': True,   # 可以查看采购单
+        'can_view_purchase_returns': True,  # 可以查看采购退货单
     },
     
     # 结算专员
@@ -111,26 +117,51 @@ ROLE_PERMISSIONS = {
         'can_view_supplier_gold_account': False,  # 不能查看供应商金料账户
     },
     
-    # 财务
+    # 财务 - 权限与管理层一致
     'finance': {
-        'can_inbound': False,
-        'can_create_sales': False,
-        'can_create_settlement': False,
-        'can_transfer': False,
-        'can_receive_transfer': False,
-        'can_manage_customers': False,
-        'can_view_customers': True,        # 可以查看客户（查询欠款信息）
-        'can_manage_suppliers': False,
-        'can_manage_salespersons': False,
-        'can_view_analytics': False,
-        'can_export': False,
-        'can_delete': False,
-        'can_return_to_supplier': False,
-        'can_return_to_warehouse': False,
+        'can_inbound': True,               # 可以查看入库单
+        'can_create_sales': True,          # 可以查看销售单
+        'can_create_settlement': True,     # 可以查看结算单
+        'can_transfer': True,              # 可以查看转移单
+        'can_receive_transfer': True,
+        'can_manage_customers': True,      # 可以管理客户
+        'can_view_customers': True,        # 可以查看客户
+        'can_manage_suppliers': True,      # 可以管理供应商
+        'can_view_suppliers': True,        # 可以查看供应商
+        'can_manage_salespersons': True,   # 可以管理业务员
+        'can_view_analytics': True,        # 可以看数据分析
+        'can_export': True,                # 可以导出数据
+        'can_delete': True,                # 可以删除数据
+        'can_return_to_supplier': True,    # 可以查看退货给供应商
+        'can_return_to_warehouse': True,   # 可以查看退货给商品部
         'can_view_finance': True,          # 可以查看财务
         'can_record_payment': True,        # 可以登记收款（客户）
         'can_record_supplier_payment': True,  # 可以登记供应商付款（工费）
-        'can_view_supplier_gold_account': False,  # 不能查看供应商金料账户
+        # 金料管理权限（全部）
+        'can_create_gold_receipt': True,
+        'can_view_gold_material': True,
+        'can_confirm_gold_receive': True,
+        'can_create_gold_payment': True,
+        'can_manage_gold_material': True,
+        'can_gold_payment_to_supplier': True,
+        'can_gold_refund_to_customer': True,
+        # 客户取料/转料权限（全部）
+        'can_create_withdrawal': True,
+        'can_complete_withdrawal': True,
+        'can_create_transfer': True,
+        'can_confirm_transfer': True,
+        # 商品编码管理
+        'can_manage_product_codes': True,
+        # 结算销退权限
+        'can_refund_settlement': True,
+        # 供应商金料账户权限
+        'can_view_supplier_gold_account': True,
+        # 暂借单权限
+        'can_create_loan': True,
+        'can_manage_loan': True,
+        # 采购单权限
+        'can_view_purchase_orders': True,
+        'can_view_purchase_returns': True,
     },
     
     # 料部 - 管理金料的收发
@@ -210,6 +241,9 @@ ROLE_PERMISSIONS = {
         # 暂借单权限
         'can_create_loan': True,           # 可以创建暂借单
         'can_manage_loan': True,           # 可以管理暂借单
+        # 采购单权限
+        'can_view_purchase_orders': True,   # 可以查看采购单
+        'can_view_purchase_returns': True,  # 可以查看采购退货单
     }
 }
 

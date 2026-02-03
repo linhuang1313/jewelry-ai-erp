@@ -23,9 +23,12 @@ export const ROLE_PERMISSIONS = {
     canReturnToSupplier: false,     // 不能退货给供应商
     canReturnToWarehouse: true,     // 可以退货给商品部
     canViewFinance: false,          // 不能查看财务
+    // 暂借单权限
+    canCreateLoan: true,            // 可以创建暂借单
+    canManageLoan: true,            // 可以管理暂借单（确认借出、归还、撤销）
     
     // 可访问页面
-    pages: ['chat', 'warehouse', 'customer', 'return'],
+    pages: ['chat', 'warehouse', 'customer', 'return', 'loan'],
   },
   
   // 商品专员
@@ -46,8 +49,11 @@ export const ROLE_PERMISSIONS = {
     canReturnToWarehouse: false,    // 不能退货给商品部
     canViewFinance: false,          // 不能查看财务
     canManageProductCodes: true,    // 可以管理商品编码（F/FL编码）
+    // 采购单权限
+    canViewPurchaseOrders: true,    // 可以查看采购单
+    canViewPurchaseReturns: true,   // 可以查看采购退货单
     
-    pages: ['chat', 'warehouse', 'supplier', 'return', 'product-codes'],
+    pages: ['chat', 'warehouse', 'supplier', 'return', 'product-codes', 'document-center'],
   },
   
   // 结算专员
@@ -114,25 +120,45 @@ export const ROLE_PERMISSIONS = {
     pages: ['chat', 'customer'],
   },
   
-  // 财务
+  // 财务 - 权限与管理层一致
   finance: {
-    canInbound: false,
-    canCreateSales: false,
-    canCreateSettlement: false,
-    canTransfer: false,
-    canReceiveTransfer: false,
-    canManageCustomers: false,
-    canViewCustomers: false,        // 不能查看客户
-    canManageSuppliers: false,
-    canManageSalespersons: false,
-    canViewAnalytics: false,        // 财务有自己的财务页面
-    canExport: false,
-    canDelete: false,
-    canReturnToSupplier: false,
-    canReturnToWarehouse: false,
+    canInbound: true,               // 可以查看入库单
+    canCreateSales: true,           // 可以查看销售单
+    canCreateSettlement: true,      // 可以查看结算单
+    canTransfer: true,              // 可以查看转移单
+    canReceiveTransfer: true,
+    canManageCustomers: true,       // 可以管理客户
+    canViewCustomers: true,         // 可以查看客户
+    canManageSuppliers: true,       // 可以管理供应商
+    canViewSuppliers: true,         // 可以查看供应商
+    canManageSalespersons: true,    // 可以管理业务员
+    canViewAnalytics: true,         // 可以看数据分析
+    canExport: true,                // 可以导出数据
+    canDelete: true,                // 可以删除数据
+    canReturnToSupplier: true,      // 可以查看退货给供应商
+    canReturnToWarehouse: true,     // 可以查看退货给商品部
     canViewFinance: true,           // 可以查看财务
+    // 金料管理权限（全部）
+    canCreateGoldReceipt: true,
+    canViewGoldMaterial: true,
+    canConfirmGoldReceive: true,
+    canCreateGoldPayment: true,
+    canManageGoldMaterial: true,
+    // 客户取料/转料权限（全部）
+    canCreateWithdrawal: true,
+    canCompleteWithdrawal: true,
+    canCreateTransfer: true,
+    canConfirmTransfer: true,
+    // 商品编码管理
+    canManageProductCodes: true,
+    // 暂借单权限
+    canCreateLoan: true,
+    canManageLoan: true,
+    // 采购单权限
+    canViewPurchaseOrders: true,
+    canViewPurchaseReturns: true,
     
-    pages: ['chat', 'finance'],
+    pages: ['chat', 'warehouse', 'settlement', 'finance', 'analytics', 'export', 'salesperson', 'customer', 'supplier', 'return', 'gold-material', 'product-codes', 'loan', 'document-center'],
   },
   
   // 料部 - 管理金料的收发
@@ -202,8 +228,11 @@ export const ROLE_PERMISSIONS = {
     // 暂借单权限
     canCreateLoan: true,            // 可以创建暂借单
     canManageLoan: true,            // 可以管理暂借单
+    // 采购单权限
+    canViewPurchaseOrders: true,    // 可以查看采购单
+    canViewPurchaseReturns: true,   // 可以查看采购退货单
     
-    pages: ['chat', 'warehouse', 'settlement', 'finance', 'analytics', 'export', 'salesperson', 'customer', 'supplier', 'return', 'gold-material', 'product-codes', 'loan'],
+    pages: ['chat', 'warehouse', 'settlement', 'finance', 'analytics', 'export', 'salesperson', 'customer', 'supplier', 'return', 'gold-material', 'product-codes', 'loan', 'document-center'],
   }
 };
 

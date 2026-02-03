@@ -1,4 +1,4 @@
-﻿"""
+"""
 销售单管理路由
 """
 
@@ -423,14 +423,24 @@ async def download_sales_order(
         
         if format == "pdf":
             try:
+                import math
                 from reportlab.pdfgen import canvas
                 from reportlab.lib.units import mm
                 from reportlab.pdfbase import pdfmetrics
                 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
                 
-                # 自定义纸张尺寸：241mm × 140mm 横向（针式打印机）
+                # ========== 动态高度计算（针式打印机 241mm x 140mm倍数） ==========
                 PAGE_WIDTH = 241 * mm
-                PAGE_HEIGHT = 140 * mm
+                # 基础高度（页头页尾固定部分）+ 每行明细高度
+                base_height = 80 * mm    # 页头页尾固定部分
+                row_height = 9 * mm      # 每行明细高度
+                detail_count = len(details)
+                content_height = base_height + (row_height * detail_count)
+                
+                # 按140mm倍数向上取整（最小140mm）
+                min_unit = 140 * mm
+                PAGE_HEIGHT = max(min_unit, math.ceil(content_height / min_unit) * min_unit)
+                # ========== 动态高度计算完成 ==========
                 
                 buffer = io.BytesIO()
                 p = canvas.Canvas(buffer, pagesize=(PAGE_WIDTH, PAGE_HEIGHT))
@@ -538,7 +548,8 @@ async def download_sales_order(
                 raise HTTPException(status_code=500, detail=f"生成PDF失败: {str(pdf_error)}")
         
         elif format == "html":
-            # HTML 打印格式
+            # HTML 打印格式 - 针式打印机 241mm 宽度
+            print_time = format_china_time(china_now(), '%Y/%m/%d %H:%M')
             html_content = f"""
 <!DOCTYPE html>
 <html>
@@ -547,95 +558,94 @@ async def download_sales_order(
     <title>销售单 - {order.order_no}</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: 'Microsoft YaHei', SimSun, sans-serif; padding: 20px; background: #f5f5f5; }}
-        .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-        .header {{ text-align: center; border-bottom: 2px solid #333; padding-bottom: 15px; margin-bottom: 20px; }}
-        .header h1 {{ font-size: 24px; margin-bottom: 5px; }}
-        .header .order-no {{ color: #666; font-size: 14px; }}
-        .info-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }}
-        .info-item {{ padding: 8px 0; }}
-        .info-item label {{ color: #666; font-size: 12px; display: block; }}
-        .info-item span {{ font-size: 14px; font-weight: 500; }}
-        .details-table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
-        .details-table th, .details-table td {{ border: 1px solid #ddd; padding: 10px; text-align: left; }}
-        .details-table th {{ background: #f8f8f8; font-weight: 500; }}
-        .details-table td.number {{ text-align: right; }}
-        .summary {{ background: #f9f9f9; padding: 15px; border-radius: 6px; margin-top: 20px; }}
-        .summary-row {{ display: flex; justify-content: space-between; margin: 5px 0; }}
-        .summary-row.total {{ font-size: 16px; font-weight: bold; color: #e74c3c; border-top: 1px solid #ddd; padding-top: 10px; margin-top: 10px; }}
-        .remark {{ margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 6px; }}
-        .print-btn {{ display: block; margin: 30px auto 0; padding: 12px 40px; background: #3498db; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; }}
+        body {{ font-family: 'Microsoft YaHei', 'SimHei', sans-serif; padding: 10px; background: #f5f5f5; font-size: 11px; }}
+        .container {{ width: 241mm; min-height: 140mm; margin: 0 auto; background: white; padding: 6mm 8mm; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+        .header {{ text-align: center; border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 10px; }}
+        .header h1 {{ font-size: 16px; margin-bottom: 5px; }}
+        .header-info {{ display: flex; justify-content: space-between; font-size: 10px; margin-top: 5px; }}
+        .info-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px 15px; margin-bottom: 10px; font-size: 10px; }}
+        .info-item label {{ color: #666; }}
+        .info-item span {{ font-weight: 500; }}
+        .details-table {{ width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 10px; }}
+        .details-table th, .details-table td {{ border: 1px solid #999; padding: 4px 6px; }}
+        .details-table th {{ background: #f0f0f0; font-weight: bold; text-align: center; }}
+        .details-table td {{ text-align: center; }}
+        .details-table td.left {{ text-align: left; }}
+        .details-table td.right {{ text-align: right; }}
+        .summary {{ display: flex; justify-content: flex-end; gap: 30px; margin: 10px 0; font-size: 11px; }}
+        .summary .total {{ font-weight: bold; color: #c00; }}
+        .remark {{ margin-top: 8px; padding: 6px 10px; background: #fffef0; border: 1px solid #e0d080; border-radius: 3px; font-size: 10px; }}
+        .footer {{ margin-top: 15px; display: flex; justify-content: space-between; font-size: 10px; }}
+        .signature {{ border-bottom: 1px solid #333; width: 100px; display: inline-block; margin-left: 5px; }}
+        .print-btn {{ display: block; margin: 15px auto 0; padding: 8px 25px; background: #3498db; color: white; border: none; border-radius: 5px; font-size: 12px; cursor: pointer; }}
         .print-btn:hover {{ background: #2980b9; }}
         @media print {{
+            @page {{ size: 241mm auto; margin: 0; }}
             body {{ background: white; padding: 0; }}
-            .container {{ box-shadow: none; max-width: 100%; }}
+            .container {{ box-shadow: none; width: 241mm; padding: 5mm 8mm; }}
             .print-btn {{ display: none; }}
+        }}
+        @media screen {{
+            body {{ background: #f0f0f0; padding: 15px; }}
         }}
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>销售单</h1>
-            <div class="order-no">单号：{order.order_no}</div>
+            <h1>销 售 单</h1>
+            <div class="header-info">
+                <span>单号：{order.order_no}</span>
+                <span>日期：{order_date_str}</span>
+                <span>状态：{order.status}</span>
+            </div>
         </div>
         <div class="info-grid">
             <div class="info-item">
-                <label>销售日期</label>
-                <span>{order_date_str}</span>
-            </div>
-            <div class="info-item">
-                <label>客户名称</label>
+                <label>客户：</label>
                 <span>{order.customer_name or '未知'}</span>
             </div>
             <div class="info-item">
-                <label>业务员</label>
+                <label>业务员：</label>
                 <span>{order.salesperson or '未知'}</span>
-            </div>
-            <div class="info-item">
-                <label>订单状态</label>
-                <span>{order.status}</span>
             </div>
         </div>
         <table class="details-table">
             <thead>
                 <tr>
-                    <th>序号</th>
-                    <th>商品名称</th>
-                    <th>克重(g)</th>
-                    <th>工费(元/克)</th>
-                    <th>总工费(元)</th>
+                    <th style="width:8%">序号</th>
+                    <th style="width:35%">商品名称</th>
+                    <th style="width:15%">克重(g)</th>
+                    <th style="width:17%">工费(元/克)</th>
+                    <th style="width:20%">总工费(元)</th>
                 </tr>
             </thead>
             <tbody>
                 {"".join(f'''
                 <tr>
                     <td>{idx}</td>
-                    <td>{detail.product_name}</td>
-                    <td class="number">{detail.weight:.2f}</td>
-                    <td class="number">{detail.labor_cost:.2f}</td>
-                    <td class="number">{detail.total_labor_cost:.2f}</td>
+                    <td class="left">{detail.product_name}</td>
+                    <td class="right">{detail.weight:.2f}</td>
+                    <td class="right">{detail.labor_cost:.2f}</td>
+                    <td class="right">{detail.total_labor_cost:.2f}</td>
                 </tr>
                 ''' for idx, detail in enumerate(details, 1))}
+                <tr style="font-weight: bold; background: #f8f8f8;">
+                    <td colspan="2" class="left">合计：{len(details)} 件</td>
+                    <td class="right">{order.total_weight:.2f}</td>
+                    <td></td>
+                    <td class="right" style="color: #c00;">¥{order.total_labor_cost:.2f}</td>
+                </tr>
             </tbody>
         </table>
-        <div class="summary">
-            <div class="summary-row">
-                <span>商品数量</span>
-                <span>{len(details)} 件</span>
-            </div>
-            <div class="summary-row">
-                <span>总克重</span>
-                <span>{order.total_weight:.2f} 克</span>
-            </div>
-            <div class="summary-row total">
-                <span>总工费</span>
-                <span>¥{order.total_labor_cost:.2f}</span>
-            </div>
-        </div>
         {f'<div class="remark"><strong>备注：</strong>{order.remark}</div>' if order.remark else ''}
-        <button class="print-btn" onclick="window.print()">打印销售单</button>
+        <div class="footer">
+            <span>制单人：{order.salesperson or ''}</span>
+            <span>客户签字：<span class="signature"></span></span>
+            <span>打印时间：{print_time}</span>
+        </div>
     </div>
+    <button class="print-btn" onclick="window.print()">打印销售单</button>
 </body>
 </html>
 """

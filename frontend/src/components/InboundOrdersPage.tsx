@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Package, Search, Calendar, Filter, Edit2, Save, X, 
-  ChevronDown, ChevronUp, Download, Printer, RefreshCw
+  ChevronDown, ChevronUp, Download, Printer, RefreshCw, FileText
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -67,6 +67,8 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
   });
   const [showFilters, setShowFilters] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [downloadMenuOrderId, setDownloadMenuOrderId] = useState<number | null>(null);
+  const downloadMenuRef = useRef<HTMLDivElement>(null);
   
   // 筛选选项（用于下拉框）
   const [filterOptions, setFilterOptions] = useState<{
@@ -203,13 +205,30 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
     );
   };
 
+  // 点击外部关闭下载菜单
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(event.target as Node)) {
+        setDownloadMenuOrderId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // 打印/下载
-  const handlePrint = (orderId: number) => {
-    window.open(`${API_BASE_URL}/api/inbound-orders/${orderId}/download?format=html`, '_blank');
+  const handlePrint = (orderId: number, docType: 'inbound' | 'purchase' = 'inbound') => {
+    window.open(`${API_BASE_URL}/api/inbound-orders/${orderId}/download?format=html&doc_type=${docType}`, '_blank');
   };
 
-  const handleDownload = (orderId: number) => {
-    window.open(`${API_BASE_URL}/api/inbound-orders/${orderId}/download?format=pdf`, '_blank');
+  const handleDownload = (orderId: number, docType: 'inbound' | 'purchase' = 'inbound') => {
+    window.open(`${API_BASE_URL}/api/inbound-orders/${orderId}/download?format=pdf&doc_type=${docType}`, '_blank');
+    setDownloadMenuOrderId(null);
+  };
+
+  // 切换下载菜单
+  const toggleDownloadMenu = (orderId: number) => {
+    setDownloadMenuOrderId(downloadMenuOrderId === orderId ? null : orderId);
   };
 
   // 搜索
@@ -631,19 +650,46 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                             <Edit2 className="w-5 h-5" />
                           </button>
                           <button
-                            onClick={() => handlePrint(order.id)}
+                            onClick={() => handlePrint(order.id, 'inbound')}
                             className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                            title="打印"
+                            title="打印入库单"
                           >
                             <Printer className="w-5 h-5" />
                           </button>
-                          <button
-                            onClick={() => handleDownload(order.id)}
-                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                            title="下载"
-                          >
-                            <Download className="w-5 h-5" />
-                          </button>
+                          {/* 下载按钮组 */}
+                          <div className="relative" ref={downloadMenuOrderId === order.id ? downloadMenuRef : null}>
+                            <button
+                              onClick={() => toggleDownloadMenu(order.id)}
+                              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex items-center"
+                              title="下载单据"
+                            >
+                              <Download className="w-5 h-5" />
+                              <ChevronDown className="w-3 h-3 ml-1" />
+                            </button>
+                            {downloadMenuOrderId === order.id && (
+                              <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                                <button
+                                  onClick={() => handleDownload(order.id, 'inbound')}
+                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                                >
+                                  <FileText className="w-4 h-4 text-orange-500" />
+                                  <span>下载入库单</span>
+                                </button>
+                                <button
+                                  onClick={() => handleDownload(order.id, 'purchase')}
+                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                                >
+                                  <FileText className="w-4 h-4 text-blue-500" />
+                                  <span>下载采购单</span>
+                                </button>
+                                <div className="border-t border-gray-100 my-1"></div>
+                                <div className="px-4 py-1 text-xs text-gray-400">
+                                  入库单：内部使用<br/>
+                                  采购单：供应商对账
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </>
                       )}
                     </div>
