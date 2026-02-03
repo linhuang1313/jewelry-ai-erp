@@ -261,12 +261,31 @@ async def export_sales(
 
 
 @router.get("/customer-transactions/{customer_id}")
-async def export_customer_transactions(customer_id: int, db: Session = Depends(get_db)):
+async def export_customer_transactions(
+    customer_id: int, 
+    date_start: Optional[str] = None,
+    date_end: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
     """导出指定客户的往来账目为 Excel"""
     from ..models.finance import GoldReceipt
     from sqlalchemy import desc
     
     try:
+        # 解析日期参数
+        filter_start = None
+        filter_end = None
+        if date_start:
+            try:
+                filter_start = datetime.strptime(date_start, "%Y-%m-%d")
+            except:
+                pass
+        if date_end:
+            try:
+                filter_end = datetime.strptime(date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            except:
+                pass
+        
         # 获取客户信息
         customer = db.query(Customer).filter(Customer.id == customer_id).first()
         if not customer:
@@ -276,20 +295,25 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
         
         # 1. 销售记录
         try:
-            sales_orders = db.query(SalesOrder).filter(
+            sales_query = db.query(SalesOrder).filter(
                 SalesOrder.customer_name == customer.name,
                 SalesOrder.status != "已取消"
-            ).order_by(desc(SalesOrder.create_time)).limit(50).all()
+            )
+            if filter_start:
+                sales_query = sales_query.filter(SalesOrder.create_time >= filter_start)
+            if filter_end:
+                sales_query = sales_query.filter(SalesOrder.create_time <= filter_end)
+            sales_orders = sales_query.order_by(desc(SalesOrder.create_time)).limit(100).all()
             
             for order in sales_orders:
                 transactions_list.append({
-                    "type": "销售",
+                    "type": "销售结算",
                     "order_no": order.order_no or "",
                     "description": "工费",
                     "amount": -(order.total_labor_cost or 0),
                     "gold_weight": 0,
                     "created_at": order.create_time,
-                    "remark": order.remark or ""  # 销售单备注
+                    "remark": order.remark or ""
                 })
         except Exception as e:
             logger.warning(f"查询销售记录时出错: {e}")
@@ -297,20 +321,25 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
         
         # 2. 收料记录
         try:
-            gold_receipts = db.query(GoldReceipt).filter(
+            receipts_query = db.query(GoldReceipt).filter(
                 GoldReceipt.customer_id == customer_id,
                 GoldReceipt.status == 'received'
-            ).order_by(desc(GoldReceipt.received_at)).limit(50).all()
+            )
+            if filter_start:
+                receipts_query = receipts_query.filter(GoldReceipt.received_at >= filter_start)
+            if filter_end:
+                receipts_query = receipts_query.filter(GoldReceipt.received_at <= filter_end)
+            gold_receipts = receipts_query.order_by(desc(GoldReceipt.received_at)).limit(100).all()
             
             for receipt in gold_receipts:
                 transactions_list.append({
                     "type": "客户来料",
                     "order_no": receipt.receipt_no or "",
-                    "description": "收料",
+                    "description": f"收料 {receipt.gold_weight or 0}克",
                     "amount": 0,
                     "gold_weight": receipt.gold_weight or 0,
                     "created_at": receipt.received_at or receipt.created_at,
-                    "remark": receipt.remark or ""  # 来料备注
+                    "remark": receipt.remark or ""
                 })
         except Exception as e:
             logger.warning(f"查询收料记录时出错: {e}")
@@ -318,37 +347,97 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
         # 3. 结算记录
         try:
             from ..models import SettlementOrder
-            for order in sales_orders[:20]:
-                settlements = db.query(SettlementOrder).filter(
+            for order in sales_orders[:50]:
+                settlement_query = db.query(SettlementOrder).filter(
                     SettlementOrder.sales_order_id == order.id,
                     SettlementOrder.status.in_(['confirmed', 'printed'])
-                ).all()
+                )
+                if filter_start:
+                    settlement_query = settlement_query.filter(SettlementOrder.created_at >= filter_start)
+                if filter_end:
+                    settlement_query = settlement_query.filter(SettlementOrder.created_at <= filter_end)
+                settlements = settlement_query.all()
+                
                 for s in settlements:
                     if s.payment_method == 'cash_price':
+                        type_label = "欠料结价"
                         method_desc = f"结价 ¥{s.gold_price or 0}/克"
                         gold_change = 0
                         amount_change = -(s.total_amount or 0)
                     elif s.payment_method == 'physical_gold':
+                        type_label = "欠料结料"
                         method_desc = f"结料 {s.physical_gold_weight or 0}克"
                         gold_change = -(s.physical_gold_weight or 0)
                         amount_change = 0
                     else:
-                        method_desc = "混合支付"
+                        type_label = "混合结算"
+                        method_desc = f"结料{s.gold_payment_weight or 0}克+结价{s.cash_payment_weight or 0}克"
                         gold_change = -(s.gold_payment_weight or 0)
                         cash_amount = (s.cash_payment_weight or 0) * (s.gold_price or 0)
                         amount_change = -cash_amount
                     
                     transactions_list.append({
-                        "type": "结算",
+                        "type": type_label,
                         "order_no": s.settlement_no or "",
                         "description": method_desc,
                         "amount": amount_change,
                         "gold_weight": gold_change,
                         "created_at": s.created_at,
-                        "remark": order.remark or ""  # 显示关联销售单的备注
+                        "remark": order.remark or ""
                     })
         except Exception as e:
             logger.warning(f"查询结算记录时出错: {e}")
+        
+        # 4. 收款记录
+        try:
+            from ..models import PaymentRecord
+            payments_query = db.query(PaymentRecord).filter(
+                PaymentRecord.customer_id == customer_id
+            )
+            if filter_start:
+                payments_query = payments_query.filter(PaymentRecord.create_time >= filter_start)
+            if filter_end:
+                payments_query = payments_query.filter(PaymentRecord.create_time <= filter_end)
+            payments = payments_query.order_by(desc(PaymentRecord.create_time)).limit(100).all()
+            
+            for p in payments:
+                transactions_list.append({
+                    "type": "客户来款",
+                    "order_no": f"PY{p.id:06d}",
+                    "description": f"收款 ¥{p.amount:.2f}",
+                    "amount": p.amount or 0,
+                    "gold_weight": 0,
+                    "created_at": p.create_time,
+                    "remark": p.remark or ""
+                })
+        except Exception as e:
+            logger.warning(f"查询收款记录时出错: {e}")
+        
+        # 5. 提料记录
+        try:
+            from ..models.finance import CustomerWithdrawal
+            withdrawals_query = db.query(CustomerWithdrawal).filter(
+                CustomerWithdrawal.customer_id == customer_id,
+                CustomerWithdrawal.status == 'completed'
+            )
+            if filter_start:
+                withdrawals_query = withdrawals_query.filter(CustomerWithdrawal.completed_at >= filter_start)
+            if filter_end:
+                withdrawals_query = withdrawals_query.filter(CustomerWithdrawal.completed_at <= filter_end)
+            withdrawals = withdrawals_query.order_by(desc(CustomerWithdrawal.completed_at)).limit(100).all()
+            
+            for w in withdrawals:
+                transactions_list.append({
+                    "type": "客户提料",
+                    "order_no": w.withdrawal_no or "",
+                    "description": f"提料 {w.gold_weight or 0}克",
+                    "amount": 0,
+                    "gold_weight": -(w.gold_weight or 0),
+                    "created_at": w.completed_at or w.created_at,
+                    "remark": w.remark or ""
+                })
+        except Exception as e:
+            logger.warning(f"查询提料记录时出错: {e}")
         
         # 按时间排序（使用安全的排序方式）
         def safe_sort_key(x):
@@ -359,8 +448,6 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
                 return created
             return datetime.min
         
-        transactions_list.sort(key=safe_sort_key, reverse=True)
-        
         # 创建 Excel
         wb = Workbook()
         ws = wb.active
@@ -368,40 +455,84 @@ async def export_customer_transactions(customer_id: int, db: Session = Depends(g
         safe_name = customer.name[:15].replace("/", "-").replace("\\", "-").replace("*", "").replace("?", "").replace("[", "").replace("]", "")
         ws.title = f"{safe_name}往来账目"
         
-        # 客户信息
-        ws.append([f"客户：{customer.name}"])
-        ws.append([f"客户编号：{customer.customer_no}"])
+        # ===== 完整表头 =====
+        # 第1行：公司名称
+        ws.append(["深圳市梵贝琳珠宝有限公司"])
+        ws.merge_cells('A1:G1')
+        ws['A1'].font = Font(bold=True, size=16)
+        ws['A1'].alignment = Alignment(horizontal='center')
+        
+        # 第2行：报表标题
+        ws.append(["客户往来账明细表"])
+        ws.merge_cells('A2:G2')
+        ws['A2'].font = Font(bold=True, size=14)
+        ws['A2'].alignment = Alignment(horizontal='center')
+        
+        # 第3行：日期范围
+        date_range_text = "统计日期："
+        if date_start and date_end:
+            date_range_text += f"{date_start} 至 {date_end}"
+        elif date_start:
+            date_range_text += f"{date_start} 起"
+        elif date_end:
+            date_range_text += f"截至 {date_end}"
+        else:
+            date_range_text += "全部"
+        ws.append([date_range_text])
+        ws.merge_cells('A3:G3')
+        ws['A3'].alignment = Alignment(horizontal='center')
+        
+        # 第4行：客户信息
+        ws.append([f"往来客户：{customer.name}（{customer.customer_no}）"])
+        ws.merge_cells('A4:G4')
+        ws['A4'].alignment = Alignment(horizontal='center')
+        
+        # 第5行：导出时间
         ws.append([f"导出时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"])
-        ws.append([])  # 空行
+        ws.merge_cells('A5:G5')
+        ws['A5'].alignment = Alignment(horizontal='center')
         
-        # 表头
-        headers = ["类型", "单号", "说明", "金额(元)", "金重(克)", "时间", "备注"]
+        # 第6行：空行
+        ws.append([])
+        
+        # 第7行：表头
+        headers = ["序号", "发生日期", "往来类型", "往来单号", "足金(克)", "欠款金额(元)", "单据备注"]
         ws.append(headers)
-        style_header(ws, row=5)
+        style_header(ws, row=7)
         
-        # 数据
-        for tx in transactions_list:
-            # 安全格式化时间
+        # 数据（按时间正序排列，从早到晚）
+        transactions_list.sort(key=safe_sort_key, reverse=False)
+        
+        for idx, tx in enumerate(transactions_list, 1):
+            # 安全格式化时间（只显示日期）
             created_at = tx.get("created_at")
             if created_at:
                 try:
                     if hasattr(created_at, 'strftime'):
-                        time_str = created_at.strftime("%Y-%m-%d %H:%M:%S")
+                        time_str = created_at.strftime("%Y-%m-%d")
                     else:
-                        time_str = str(created_at)
+                        time_str = str(created_at)[:10]
                 except:
-                    time_str = str(created_at) if created_at else ""
+                    time_str = str(created_at)[:10] if created_at else ""
             else:
                 time_str = ""
             
+            # 金重和金额处理：0显示为空
+            gold_weight = tx.get("gold_weight")
+            if gold_weight == 0:
+                gold_weight = ""
+            amount = tx.get("amount")
+            if amount == 0:
+                amount = ""
+            
             ws.append([
-                tx.get("type", ""),
-                tx.get("order_no", ""),
-                tx.get("description", ""),
-                tx.get("amount") if tx.get("amount") else "",
-                tx.get("gold_weight") if tx.get("gold_weight") else "",
-                time_str,
-                tx.get("remark", "")  # 备注列
+                idx,  # 序号
+                time_str,  # 发生日期
+                tx.get("type", ""),  # 往来类型
+                tx.get("order_no", ""),  # 往来单号
+                gold_weight,  # 足金(克)
+                amount,  # 欠款金额(元)
+                tx.get("remark", "")  # 单据备注
             ])
         
         auto_column_width(ws)

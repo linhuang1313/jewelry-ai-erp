@@ -240,12 +240,17 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'quick' | 'batch' | null>(null);
 
-  // 加载数据
+  // 加载数据 - 使用 Promise.all 并行加载提升性能
   useEffect(() => {
-    loadLocations();
-    loadInventorySummary();
-    loadTransfers();
-    loadRecentInboundOrders();
+    const loadAllData = async () => {
+      await Promise.all([
+        loadLocations(),
+        loadInventorySummary(),
+        loadTransfers(),
+        loadRecentInboundOrders()
+      ]);
+    };
+    loadAllData();
   }, []);
 
   const loadLocations = async () => {

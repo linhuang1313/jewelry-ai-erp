@@ -170,18 +170,24 @@ async def get_location_inventory(
 @router.get("/inventory/summary", response_model=List[LocationInventorySummary])
 async def get_inventory_summary(
     product_name: Optional[str] = None,
+    limit: Optional[int] = Query(default=200, description="返回记录数限制"),
     db: Session = Depends(get_db)
 ):
     """获取库存汇总（按商品分组，显示各位置库存、件数、金额）"""
     from sqlalchemy import func
+    from sqlalchemy.orm import joinedload
     from ..models import InboundDetail
     
-    query = db.query(LocationInventory).join(Location).filter(LocationInventory.weight > 0)
+    # 使用 joinedload 预加载 Location 避免 N+1 查询
+    query = db.query(LocationInventory).options(
+        joinedload(LocationInventory.location)
+    ).filter(LocationInventory.weight > 0)
     
     if product_name:
         query = query.filter(LocationInventory.product_name.contains(product_name))
     
-    items = query.order_by(LocationInventory.product_name, Location.id).all()
+    # 添加 limit 限制返回数量，提升性能
+    items = query.order_by(LocationInventory.product_name, LocationInventory.location_id).limit(limit).all()
     
     # 获取所有商品名称
     product_names = list(set(item.product_name for item in items))

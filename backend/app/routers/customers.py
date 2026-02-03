@@ -845,11 +845,14 @@ async def delete_customer(
 async def get_customer_detail(
     customer_id: int,
     user_role: str = Query(default="manager", description="用户角色"),
+    date_start: Optional[str] = Query(default=None, description="开始日期 YYYY-MM-DD"),
+    date_end: Optional[str] = Query(default=None, description="结束日期 YYYY-MM-DD"),
     db: Session = Depends(get_db)
 ):
     """
     获取客户详情（销售记录、退货记录、欠款/存料余额、往来账目）
     业务员角色可以查看客户的完整往来信息
+    支持日期范围筛选往来账目
     """
     # 权限检查 - 需要查看客户或查询客户销售权限
     from ..middleware.permissions import has_permission
@@ -974,15 +977,36 @@ async def get_customer_detail(
             "net_gold": net_gold  # 净金料值（核心字段）
         }
         
-        # 获取往来账目
+        # 获取往来账目（支持日期范围筛选）
         transactions_list = []
         
+        # 解析日期参数
+        from datetime import datetime as dt
+        filter_start = None
+        filter_end = None
+        if date_start:
+            try:
+                filter_start = dt.strptime(date_start, "%Y-%m-%d")
+            except:
+                pass
+        if date_end:
+            try:
+                filter_end = dt.strptime(date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            except:
+                pass
+        
         # 销售交易（产生工费，客户欠款增加，从客户角度是负数）
-        for order in sales_orders[:20]:  # 限制数量
+        for order in sales_orders[:50]:  # 增加限制数量
+            # 日期过滤
+            if filter_start and order.create_time and order.create_time < filter_start:
+                continue
+            if filter_end and order.create_time and order.create_time > filter_end:
+                continue
             transactions_list.append({
                 "id": order.id,
-                "type": "sale",
-                "description": f"销售：{order.order_no}（工费）",
+                "type": "sales_labor",
+                "type_label": "销售结算",
+                "description": f"销售结算：{order.order_no}",
                 "amount": -(order.total_labor_cost or 0),  # 负数表示客户产生欠款
                 "gold_weight": None,
                 "created_at": order.create_time.isoformat() if order.create_time else None,
@@ -991,15 +1015,21 @@ async def get_customer_detail(
         
         # 金料收料记录（从GoldReceipt表获取，这是核心数据源）
         try:
-            gold_receipts = db.query(GoldReceipt).filter(
+            receipts_query = db.query(GoldReceipt).filter(
                 GoldReceipt.customer_id == customer_id,
                 GoldReceipt.status == 'received'
-            ).order_by(desc(GoldReceipt.received_at)).limit(20).all()
+            )
+            if filter_start:
+                receipts_query = receipts_query.filter(GoldReceipt.received_at >= filter_start)
+            if filter_end:
+                receipts_query = receipts_query.filter(GoldReceipt.received_at <= filter_end)
+            gold_receipts = receipts_query.order_by(desc(GoldReceipt.received_at)).limit(50).all()
             
             for receipt in gold_receipts:
                 transactions_list.append({
                     "id": receipt.id,
-                    "type": "gold_receipt",
+                    "type": "customer_receipt",
+                    "type_label": "客户来料",
                     "description": f"客户来料：{receipt.receipt_no}",
                     "amount": None,
                     "gold_weight": receipt.gold_weight,
@@ -1012,15 +1042,21 @@ async def get_customer_detail(
         # 金料提料记录（从CustomerWithdrawal表获取）
         try:
             from ..models.finance import CustomerWithdrawal
-            withdrawals = db.query(CustomerWithdrawal).filter(
+            withdrawals_query = db.query(CustomerWithdrawal).filter(
                 CustomerWithdrawal.customer_id == customer_id,
                 CustomerWithdrawal.status == 'completed'
-            ).order_by(desc(CustomerWithdrawal.completed_at)).limit(20).all()
+            )
+            if filter_start:
+                withdrawals_query = withdrawals_query.filter(CustomerWithdrawal.completed_at >= filter_start)
+            if filter_end:
+                withdrawals_query = withdrawals_query.filter(CustomerWithdrawal.completed_at <= filter_end)
+            withdrawals = withdrawals_query.order_by(desc(CustomerWithdrawal.completed_at)).limit(50).all()
             
             for withdrawal in withdrawals:
                 transactions_list.append({
                     "id": withdrawal.id,
-                    "type": "gold_withdrawal",
+                    "type": "customer_withdrawal",
+                    "type_label": "客户提料",
                     "description": f"客户提料：{withdrawal.withdrawal_no}",
                     "amount": None,
                     "gold_weight": -withdrawal.gold_weight,  # 提料为负数
@@ -1032,22 +1068,34 @@ async def get_customer_detail(
         
         # 结算记录（从SettlementOrder表获取）
         try:
-            for order in sales_orders[:20]:
-                settlements = db.query(SettlementOrder).filter(
+            for order in sales_orders[:50]:
+                settlement_query = db.query(SettlementOrder).filter(
                     SettlementOrder.sales_order_id == order.id,
                     SettlementOrder.status.in_(['confirmed', 'printed'])
-                ).all()
+                )
+                if filter_start:
+                    settlement_query = settlement_query.filter(SettlementOrder.created_at >= filter_start)
+                if filter_end:
+                    settlement_query = settlement_query.filter(SettlementOrder.created_at <= filter_end)
+                settlements = settlement_query.all()
+                
                 for s in settlements:
-                    # 根据支付方式生成描述
+                    # 根据支付方式生成描述和类型
                     if s.payment_method == 'cash_price':
+                        type_code = "settle_cash"
+                        type_label = "欠料结价"
                         method_desc = f"结价 ¥{s.gold_price or 0}/克"
                         gold_change = None
                         amount_change = -(s.total_amount or 0)  # 结算后减少欠款
                     elif s.payment_method == 'physical_gold':
+                        type_code = "settle_gold"
+                        type_label = "欠料结料"
                         method_desc = f"结料 {s.physical_gold_weight or 0}克"
                         gold_change = -(s.physical_gold_weight or 0)  # 结料扣减存料
                         amount_change = None
                     else:  # mixed
+                        type_code = "settle_mixed"
+                        type_label = "混合结算"
                         method_desc = f"混合(结料{s.gold_payment_weight or 0}克+结价{s.cash_payment_weight or 0}克)"
                         gold_change = -(s.gold_payment_weight or 0)
                         # 混合支付的现金部分 = 结价克重 × 金价
@@ -1056,8 +1104,9 @@ async def get_customer_detail(
                     
                     transactions_list.append({
                         "id": f"settlement_{s.id}",
-                        "type": "settlement",
-                        "description": f"结算：{s.settlement_no} ({method_desc})",
+                        "type": type_code,
+                        "type_label": type_label,
+                        "description": f"{type_label}：{s.settlement_no} ({method_desc})",
                         "amount": amount_change,
                         "gold_weight": gold_change,
                         "created_at": s.created_at.isoformat() if s.created_at else None,
@@ -1069,15 +1118,21 @@ async def get_customer_detail(
         # 收款记录（从PaymentRecord表获取）
         try:
             from ..models import PaymentRecord
-            payments = db.query(PaymentRecord).filter(
+            payments_query = db.query(PaymentRecord).filter(
                 PaymentRecord.customer_id == customer_id
-            ).order_by(desc(PaymentRecord.create_time)).limit(20).all()
+            )
+            if filter_start:
+                payments_query = payments_query.filter(PaymentRecord.create_time >= filter_start)
+            if filter_end:
+                payments_query = payments_query.filter(PaymentRecord.create_time <= filter_end)
+            payments = payments_query.order_by(desc(PaymentRecord.create_time)).limit(50).all()
             
             for p in payments:
                 transactions_list.append({
                     "id": f"payment_{p.id}",
-                    "type": "payment",
-                    "description": f"收款：¥{p.amount:.2f}",
+                    "type": "customer_payment",
+                    "type_label": "客户来款",
+                    "description": f"客户来款：¥{p.amount:.2f}",
                     "amount": p.amount or 0,  # 正数表示客户给我们钱（抵消欠款）
                     "gold_weight": None,
                     "created_at": p.create_time.isoformat() if p.create_time else None,
@@ -1092,13 +1147,81 @@ async def get_customer_detail(
         # 按时间排序
         transactions_list.sort(key=lambda x: x["created_at"] or "", reverse=True)
         
+        # 计算期初余额（如果有日期筛选）
+        opening_balance = None
+        if filter_start:
+            # 计算开始日期之前的累计余额
+            opening_cash = 0.0  # 现金欠款
+            opening_gold = 0.0  # 金料余额
+            
+            # 查询开始日期前的销售工费（增加欠款）
+            for order in sales_orders:
+                if order.create_time and order.create_time < filter_start:
+                    opening_cash -= (order.total_labor_cost or 0)
+            
+            # 查询开始日期前的来料（增加存料）
+            try:
+                prev_receipts = db.query(GoldReceipt).filter(
+                    GoldReceipt.customer_id == customer_id,
+                    GoldReceipt.status == 'received',
+                    GoldReceipt.received_at < filter_start
+                ).all()
+                for r in prev_receipts:
+                    opening_gold += (r.gold_weight or 0)
+            except:
+                pass
+            
+            # 查询开始日期前的结算
+            try:
+                for order in sales_orders:
+                    if order.create_time and order.create_time < filter_start:
+                        prev_settlements = db.query(SettlementOrder).filter(
+                            SettlementOrder.sales_order_id == order.id,
+                            SettlementOrder.status.in_(['confirmed', 'printed']),
+                            SettlementOrder.created_at < filter_start
+                        ).all()
+                        for s in prev_settlements:
+                            if s.payment_method == 'cash_price':
+                                opening_cash -= (s.total_amount or 0)
+                            elif s.payment_method == 'physical_gold':
+                                opening_gold -= (s.physical_gold_weight or 0)
+                            else:  # mixed
+                                opening_gold -= (s.gold_payment_weight or 0)
+                                cash_amount = (s.cash_payment_weight or 0) * (s.gold_price or 0)
+                                opening_cash -= cash_amount
+            except:
+                pass
+            
+            # 查询开始日期前的收款
+            try:
+                prev_payments = db.query(PaymentRecord).filter(
+                    PaymentRecord.customer_id == customer_id,
+                    PaymentRecord.create_time < filter_start
+                ).all()
+                for p in prev_payments:
+                    opening_cash += (p.amount or 0)
+            except:
+                pass
+            
+            opening_balance = {
+                "id": "opening_balance",
+                "type": "opening_balance",
+                "description": f"期初余额（{date_start}之前）",
+                "amount": opening_cash if opening_cash != 0 else None,
+                "gold_weight": opening_gold if opening_gold != 0 else None,
+                "created_at": date_start,
+                "remark": ""
+            }
+        
         return success_response(
             data={
                 "customer": CustomerResponse.model_validate(customer).model_dump(mode='json'),
                 "sales": sales_list,
                 "returns": returns_list,
                 "balance": balance,
-                "transactions": transactions_list[:30]
+                "transactions": transactions_list[:50],
+                "opening_balance": opening_balance,
+                "date_range": {"start": date_start, "end": date_end} if (date_start or date_end) else None
             }
         )
     except Exception as e:

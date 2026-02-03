@@ -57,9 +57,9 @@ export default function InventoryOverview({ userRole }: InventoryOverviewProps) 
     fetchOverview();
   }, [fetchOverview]);
 
-  // 自动刷新（每30秒）
+  // 自动刷新（每60秒）- 减少服务器负载
   useEffect(() => {
-    const interval = setInterval(fetchOverview, 30000);
+    const interval = setInterval(fetchOverview, 60000);
     return () => clearInterval(interval);
   }, [fetchOverview]);
 

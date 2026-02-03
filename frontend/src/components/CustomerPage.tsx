@@ -54,8 +54,9 @@ interface CustomerBalance {
 }
 
 interface TransactionRecord {
-  id: number;
-  type: string;            // 'sale', 'return', 'payment', 'gold_receipt'
+  id: number | string;
+  type: string;            // 'sales_labor', 'customer_receipt', 'customer_withdrawal', 'settle_cash', 'settle_gold', 'settle_mixed', 'customer_payment'
+  type_label?: string;     // 类型标签：销售结算、客户来料、客户提料、欠料结价、欠料结料、客户来款等
   description: string;
   amount: number | null;
   gold_weight: number | null;
@@ -69,6 +70,8 @@ interface CustomerDetail {
   returns: ReturnRecord[];
   balance: CustomerBalance;
   transactions: TransactionRecord[];
+  opening_balance?: TransactionRecord | null;  // 期初余额
+  date_range?: { start: string | null; end: string | null } | null;
 }
 
 // 欠款汇总数据类型
@@ -146,6 +149,10 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
   const [customerDetail, setCustomerDetail] = useState<CustomerDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailTab, setDetailTab] = useState<'sales' | 'returns' | 'balance' | 'transactions'>('sales');
+  
+  // 往来账目日期筛选
+  const [transDateStart, setTransDateStart] = useState<string>('');
+  const [transDateEnd, setTransDateEnd] = useState<string>('');
   
   // 欠款查询相关状态
   const [debtList, setDebtList] = useState<DebtSummaryItem[]>([]);
@@ -354,13 +361,22 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
   };
 
   // 获取客户详情
-  const fetchCustomerDetail = async (customer: Customer) => {
+  const fetchCustomerDetail = async (customer: Customer, dateStart?: string, dateEnd?: string) => {
     setSelectedCustomer(customer);
     setDetailLoading(true);
-    setDetailTab('sales');
+    if (!dateStart && !dateEnd) {
+      setDetailTab('sales');
+      // 清空日期筛选
+      setTransDateStart('');
+      setTransDateEnd('');
+    }
     
     try {
-      const response = await fetch(`${API_BASE_URL}/api/customers/${customer.id}/detail?user_role=${encodeURIComponent(userRole)}`);
+      let url = `${API_BASE_URL}/api/customers/${customer.id}/detail?user_role=${encodeURIComponent(userRole)}`;
+      if (dateStart) url += `&date_start=${dateStart}`;
+      if (dateEnd) url += `&date_end=${dateEnd}`;
+      
+      const response = await fetch(url);
       const data = await response.json();
       
       if (data.success) {
@@ -386,6 +402,13 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
       });
     } finally {
       setDetailLoading(false);
+    }
+  };
+  
+  // 筛选往来账目（按日期）
+  const filterTransactions = () => {
+    if (selectedCustomer) {
+      fetchCustomerDetail(selectedCustomer, transDateStart || undefined, transDateEnd || undefined);
     }
   };
 
@@ -766,7 +789,11 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                       <button
                         onClick={() => {
                           if (selectedCustomer) {
-                            window.open(`${API_BASE_URL}/api/export/customer-transactions/${selectedCustomer.id}`, '_blank');
+                            let url = `${API_BASE_URL}/api/export/customer-transactions/${selectedCustomer.id}`;
+                            if (transDateStart || transDateEnd) {
+                              url += `?date_start=${transDateStart || ''}&date_end=${transDateEnd || ''}`;
+                            }
+                            window.open(url, '_blank');
                           }
                         }}
                         className="flex items-center gap-2 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
@@ -775,28 +802,102 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                         <span>导出Excel</span>
                       </button>
                     </div>
-                    {customerDetail?.transactions && customerDetail.transactions.length > 0 ? (
+                    
+                    {/* 日期筛选 */}
+                    <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg">
+                      <span className="text-sm text-gray-600">日期范围：</span>
+                      <input
+                        type="date"
+                        value={transDateStart}
+                        onChange={(e) => setTransDateStart(e.target.value)}
+                        className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-400">至</span>
+                      <input
+                        type="date"
+                        value={transDateEnd}
+                        onChange={(e) => setTransDateEnd(e.target.value)}
+                        className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        onClick={filterTransactions}
+                        className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        查询
+                      </button>
+                      {(transDateStart || transDateEnd) && (
+                        <button
+                          onClick={() => {
+                            setTransDateStart('');
+                            setTransDateEnd('');
+                            if (selectedCustomer) {
+                              fetchCustomerDetail(selectedCustomer);
+                            }
+                          }}
+                          className="px-3 py-1.5 text-sm bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300 transition-colors"
+                        >
+                          清除
+                        </button>
+                      )}
+                    </div>
+                    {(customerDetail?.transactions && customerDetail.transactions.length > 0) || customerDetail?.opening_balance ? (
                       <div className="space-y-3">
-                        {customerDetail.transactions.map((tx) => (
+                        {/* 期初余额行 */}
+                        {customerDetail?.opening_balance && (
+                          <div className="p-4 bg-gray-200 rounded-xl border border-gray-300 flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <div className="p-2 rounded-lg bg-gray-300">
+                                <Clock className="w-4 h-4 text-gray-600" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-medium text-gray-700">{customerDetail.opening_balance.description}</p>
+                                <p className="text-sm text-gray-500">统计起始点</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              {customerDetail.opening_balance.amount !== null && customerDetail.opening_balance.amount !== undefined && (
+                                <p className={`font-semibold ${customerDetail.opening_balance.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {customerDetail.opening_balance.amount >= 0 ? '+' : ''}{customerDetail.opening_balance.amount.toFixed(2)}元
+                                </p>
+                              )}
+                              {customerDetail.opening_balance.gold_weight !== null && customerDetail.opening_balance.gold_weight !== undefined && (
+                                <p className={`text-sm ${customerDetail.opening_balance.gold_weight >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {customerDetail.opening_balance.gold_weight >= 0 ? '+' : ''}{customerDetail.opening_balance.gold_weight.toFixed(2)}g
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* 往来记录 */}
+                        {customerDetail?.transactions?.map((tx) => (
                           <div key={tx.id} className="p-4 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between">
                             <div className="flex items-center space-x-3">
                               <div className={`p-2 rounded-lg ${
-                                tx.type === 'sale' ? 'bg-green-100' :
-                                tx.type === 'return' ? 'bg-orange-100' :
-                                tx.type === 'payment' ? 'bg-blue-100' :
-                                tx.type === 'settlement' ? 'bg-cyan-100' :
-                                tx.type === 'gold_withdrawal' ? 'bg-purple-100' :
-                                'bg-yellow-100'
+                                tx.type === 'sales_labor' ? 'bg-green-100' :
+                                tx.type === 'customer_receipt' ? 'bg-yellow-100' :
+                                tx.type === 'customer_withdrawal' ? 'bg-purple-100' :
+                                tx.type === 'settle_cash' ? 'bg-cyan-100' :
+                                tx.type === 'settle_gold' ? 'bg-orange-100' :
+                                tx.type === 'settle_mixed' ? 'bg-pink-100' :
+                                tx.type === 'customer_payment' ? 'bg-blue-100' :
+                                'bg-gray-100'
                               }`}>
-                                {tx.type === 'sale' && <ShoppingBag className="w-4 h-4 text-green-600" />}
-                                {tx.type === 'return' && <RotateCcw className="w-4 h-4 text-orange-600" />}
-                                {tx.type === 'payment' && <Wallet className="w-4 h-4 text-blue-600" />}
-                                {tx.type === 'settlement' && <Calculator className="w-4 h-4 text-cyan-600" />}
-                                {tx.type === 'gold_withdrawal' && <TrendingDown className="w-4 h-4 text-purple-600" />}
-                                {tx.type === 'gold_receipt' && <FileText className="w-4 h-4 text-yellow-600" />}
+                                {tx.type === 'sales_labor' && <ShoppingBag className="w-4 h-4 text-green-600" />}
+                                {tx.type === 'customer_receipt' && <Diamond className="w-4 h-4 text-yellow-600" />}
+                                {tx.type === 'customer_withdrawal' && <TrendingDown className="w-4 h-4 text-purple-600" />}
+                                {tx.type === 'settle_cash' && <Calculator className="w-4 h-4 text-cyan-600" />}
+                                {tx.type === 'settle_gold' && <Diamond className="w-4 h-4 text-orange-600" />}
+                                {tx.type === 'settle_mixed' && <Calculator className="w-4 h-4 text-pink-600" />}
+                                {tx.type === 'customer_payment' && <Wallet className="w-4 h-4 text-blue-600" />}
                               </div>
                               <div className="flex-1">
-                                <p className="font-medium text-gray-900">{tx.description}</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-gray-900">{tx.description}</p>
+                                  {tx.type_label && (
+                                    <span className="text-xs px-2 py-0.5 bg-gray-200 text-gray-600 rounded">{tx.type_label}</span>
+                                  )}
+                                </div>
                                 <p className="text-sm text-gray-500">{new Date(tx.created_at).toLocaleString()}</p>
                                 {tx.remark && (
                                   <p className="text-sm text-gray-600 mt-1 bg-gray-100 px-2 py-1 rounded inline-block">
