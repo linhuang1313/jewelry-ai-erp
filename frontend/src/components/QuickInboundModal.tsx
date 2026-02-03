@@ -640,71 +640,73 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                   </td>
                   <td className="px-3 py-2 relative dropdown-container">
                     <div className="relative">
-                      <input
-                        type="text"
-                        value={openDropdownId === `name-${row.id}` ? nameSearchKeyword : row.productName}
-                        onChange={(e) => {
-                          // 只更新搜索关键词，不直接修改 productName
-                          setNameSearchKeyword(e.target.value);
-                          // 如果用户开始输入，清除已选择的商品名称
-                          if (row.productName && e.target.value !== row.productName) {
-                            setRows(prev => prev.map(r => 
-                              r.id === row.id ? { ...r, productName: '', productCode: '' } : r
-                            ));
-                          }
-                        }}
-                        onFocus={() => {
-                          setOpenDropdownId(`name-${row.id}`);
-                          setNameSearchKeyword(row.productName);
-                        }}
-                        placeholder="点击选择商品"
-                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500 cursor-pointer"
-                      />
-                      {/* 下拉箭头 */}
-                      <button
+                      {/* 只读显示框，点击打开下拉选择 */}
+                      <div
                         onClick={() => {
-                          if (openDropdownId === `name-${row.id}`) {
-                            setOpenDropdownId(null);
-                            setNameSearchKeyword('');
-                          } else {
-                            setOpenDropdownId(`name-${row.id}`);
-                            setNameSearchKeyword(row.productName);
-                          }
+                          setOpenDropdownId(`name-${row.id}`);
+                          setNameSearchKeyword('');
                         }}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
+                        className={`w-full px-2 py-1.5 text-sm border border-gray-300 rounded cursor-pointer bg-gray-50 hover:bg-gray-100 flex items-center justify-between ${
+                          row.productName ? 'text-gray-900' : 'text-gray-400'
+                        }`}
                       >
-                        <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <span className="truncate">{row.productName || '点击选择（编码管理新建）'}</span>
+                        <svg className="w-3 h-3 text-gray-400 flex-shrink-0 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
-                      </button>
+                      </div>
                     </div>
                     {/* 商品名称下拉选择框 */}
                     {openDropdownId === `name-${row.id}` && (
-                      <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-auto min-w-[200px]">
-                        {(nameSearchKeyword.trim() 
-                          ? productCodes.filter(pc => 
+                      <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-72 overflow-hidden min-w-[200px]">
+                        {/* 搜索框 */}
+                        <div className="p-2 border-b border-gray-100 sticky top-0 bg-white">
+                          <input
+                            type="text"
+                            value={nameSearchKeyword}
+                            onChange={(e) => setNameSearchKeyword(e.target.value)}
+                            placeholder="搜索商品名称或编码..."
+                            className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                            autoFocus
+                          />
+                        </div>
+                        {/* 选项列表 */}
+                        <div className="max-h-52 overflow-auto">
+                          {(nameSearchKeyword.trim() 
+                            ? productCodes.filter(pc => 
+                                pc.name.includes(nameSearchKeyword) ||
+                                pc.code.toUpperCase().includes(nameSearchKeyword.toUpperCase())
+                              )
+                            : productCodes
+                          ).slice(0, 20).map((pc) => (
+                            <button
+                              key={pc.code}
+                              onClick={() => {
+                                selectProductCode(row.id, pc);
+                                setOpenDropdownId(null);
+                                setNameSearchKeyword('');
+                              }}
+                              className="w-full px-3 py-2 text-left text-sm hover:bg-amber-50 flex items-center gap-2 border-b border-gray-50 last:border-b-0"
+                            >
+                              <span className="text-gray-700">{pc.name}</span>
+                              <span className="font-mono text-amber-600 text-xs">({pc.code})</span>
+                            </button>
+                          ))}
+                          {productCodes.length === 0 && (
+                            <div className="px-3 py-4 text-center text-gray-400 text-sm">
+                              暂无商品编码，请在编码管理中新建
+                            </div>
+                          )}
+                          {productCodes.length > 0 && nameSearchKeyword.trim() && 
+                            productCodes.filter(pc => 
                               pc.name.includes(nameSearchKeyword) ||
                               pc.code.toUpperCase().includes(nameSearchKeyword.toUpperCase())
-                            )
-                          : productCodes
-                        ).slice(0, 20).map((pc) => (
-                          <button
-                            key={pc.code}
-                            onClick={() => {
-                              selectProductCode(row.id, pc);
-                              setOpenDropdownId(null);
-                            }}
-                            className="w-full px-3 py-2 text-left text-sm hover:bg-amber-50 flex items-center gap-2 border-b border-gray-50 last:border-b-0"
-                          >
-                            <span className="text-gray-700">{pc.name}</span>
-                            <span className="font-mono text-amber-600 text-xs">({pc.code})</span>
-                          </button>
-                        ))}
-                        {productCodes.length === 0 && (
-                          <div className="px-3 py-4 text-center text-gray-400 text-sm">
-                            暂无商品编码
-                          </div>
-                        )}
+                            ).length === 0 && (
+                            <div className="px-3 py-4 text-center text-gray-400 text-sm">
+                              未找到匹配的商品
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </td>

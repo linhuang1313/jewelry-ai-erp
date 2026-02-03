@@ -444,38 +444,44 @@ export const FinancePage: React.FC = () => {
         {/* 统计卡片 */}
         <FinanceStatsCards statistics={mockStatistics} />
 
-        {/* Tab标签页 - 珠宝风格 */}
+        {/* Tab标签页 - 下拉选择风格 */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100/50 mb-6 overflow-hidden">
-          <div className="border-b border-gray-100 bg-gradient-to-r from-gray-50 to-amber-50/30">
-            <nav className="flex space-x-1 p-2 overflow-x-auto" aria-label="Tabs">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`
-                    py-2.5 px-4 rounded-xl font-medium text-sm transition-all whitespace-nowrap
-                    ${
-                      activeTab === tab.id
-                        ? 'bg-white text-amber-700 shadow-sm border border-amber-100'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-                    }
-                  `}
-                >
-                  {tab.label}
-                  {tab.count !== null && (
-                    <span
-                      className={`ml-2 py-0.5 px-2 rounded-full text-xs ${
-                        activeTab === tab.id
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-gray-200 text-gray-600'
-                      }`}
-                    >
-                      {tab.count}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </nav>
+          <div className="border-b border-gray-100 bg-gradient-to-r from-gray-50 to-amber-50/30 p-4">
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium text-gray-600 whitespace-nowrap">功能模块:</label>
+              <select
+                value={activeTab}
+                onChange={(e) => setActiveTab(e.target.value as typeof activeTab)}
+                className="flex-1 max-w-xs px-4 py-2.5 rounded-xl border border-amber-200 bg-white text-amber-700 
+                           font-medium text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer
+                           appearance-none bg-no-repeat bg-right pr-10"
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23d97706'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                  backgroundSize: '1.5rem',
+                  backgroundPosition: 'right 0.5rem center'
+                }}
+              >
+                {tabs.map(tab => (
+                  <option key={tab.id} value={tab.id}>
+                    {tab.label} {tab.count !== null ? `(${tab.count})` : ''}
+                  </option>
+                ))}
+              </select>
+              {/* 显示当前选中模块的图标 */}
+              {(() => {
+                const currentTab = tabs.find(t => t.id === activeTab);
+                if (currentTab) {
+                  const IconComponent = currentTab.icon;
+                  return (
+                    <div className="flex items-center gap-2 text-amber-600">
+                      <IconComponent className="w-5 h-5" />
+                      <span className="text-sm font-medium hidden sm:inline">{currentTab.label}</span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+            </div>
           </div>
 
           {/* Tab内容 */}
