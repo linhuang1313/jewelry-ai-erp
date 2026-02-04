@@ -941,79 +941,6 @@ async def get_customer_detail(
             logger.warning(f"查询客户退货记录时出错: {e}")
             returns_list = []
         
-        # 获取欠款/存料余额
-        # 现金账户净额（正数=欠款，负数=预收款）
-        cash_debt = 0.0
-        try:
-            total_settlement_cash = 0.0
-            settlements = db.query(SettlementOrder).join(SalesOrder).filter(
-                SalesOrder.customer_id == customer_id,
-                SettlementOrder.status.in_(['confirmed', 'printed'])
-            ).all()
-            for s in settlements:
-                if s.payment_method == 'cash_price':
-                    total_settlement_cash += s.total_amount or 0
-                elif s.payment_method == 'mixed':
-                    if s.cash_payment_weight and s.gold_price:
-                        total_settlement_cash += s.cash_payment_weight * s.gold_price
-                    total_settlement_cash += s.labor_amount or 0
-
-            total_payments = db.query(func.coalesce(func.sum(PaymentRecord.amount), 0)).filter(
-                PaymentRecord.customer_id == customer_id
-            ).scalar() or 0.0
-
-            cash_debt = float(total_settlement_cash) - float(total_payments)
-        except Exception as e:
-            logger.warning(f"查询现金账户净额时出错: {e}")
-        
-        # 金料账户净额（正数=欠料，负数=存料）
-        gold_deposit = 0.0
-        gold_debt = 0.0
-        net_gold = 0.0
-        try:
-            # 1. 来料（GoldReceipt）
-            total_receipts = db.query(func.coalesce(func.sum(GoldReceipt.gold_weight), 0)).filter(
-                GoldReceipt.customer_id == customer_id,
-                GoldReceipt.status == 'received'
-            ).scalar() or 0
-            
-            # 2. 结算用料（结料支付 + 混合支付的金料部分）
-            total_settlement_gold = 0.0
-            settlements = db.query(SettlementOrder).join(SalesOrder).filter(
-                SalesOrder.customer_id == customer_id,
-                SettlementOrder.status.in_(['confirmed', 'printed'])
-            ).all()
-            for s in settlements:
-                if s.payment_method == 'physical_gold':
-                    total_settlement_gold += s.physical_gold_weight or 0
-                elif s.payment_method == 'mixed':
-                    total_settlement_gold += s.gold_payment_weight or 0
-            
-            # 3. 提料（CustomerWithdrawal）
-            from ..models import CustomerWithdrawal
-            total_withdrawals = db.query(func.coalesce(func.sum(CustomerWithdrawal.gold_weight), 0)).filter(
-                CustomerWithdrawal.customer_id == customer_id,
-                CustomerWithdrawal.status.in_(['pending', 'completed'])  # 创建时即扣减
-            ).scalar() or 0
-            
-            # 4. 净金料 = 结算用料 + 提料 - 来料（正数=欠料，负数=存料）
-            net_gold = float(total_settlement_gold) + float(total_withdrawals) - float(total_receipts)
-            
-            # 从净值计算兼容字段
-            gold_debt = max(0, net_gold)      # 欠料
-            gold_deposit = max(0, -net_gold)  # 存料
-            
-            logger.info(f"[客户详情] customer_id={customer_id}, 来料={total_receipts}, 结算用料={total_settlement_gold}, 提料={total_withdrawals}, 净金料={net_gold}")
-        except Exception as e:
-            logger.warning(f"查询金料账户时出错: {e}")
-        
-        balance = {
-            "cash_debt": cash_debt,
-            "gold_debt": gold_debt,
-            "gold_deposit": gold_deposit,
-            "net_gold": net_gold  # 净金料值（核心字段）
-        }
-        
         # 获取往来账目（支持日期范围筛选）
         transactions_list = []
         
@@ -1261,6 +1188,29 @@ async def get_customer_detail(
                 "created_at": date_start,
                 "remark": ""
             }
+
+        # 账户状态：按“往来账目口径”汇总（默认全量历史）
+        cash_total = 0.0
+        gold_total = 0.0
+        for tx in transactions_list:
+            if tx.get("amount") is not None:
+                cash_total += float(tx["amount"])
+            if tx.get("gold_weight") is not None:
+                gold_total += float(tx["gold_weight"])
+
+        # 日期筛选时叠加期初余额
+        if opening_balance:
+            if opening_balance.get("amount") is not None:
+                cash_total += float(opening_balance["amount"])
+            if opening_balance.get("gold_weight") is not None:
+                gold_total += float(opening_balance["gold_weight"])
+
+        balance = {
+            "cash_debt": cash_total,
+            "gold_debt": max(0, gold_total),
+            "gold_deposit": max(0, -gold_total),
+            "net_gold": gold_total  # 净金料值（核心字段）
+        }
         
         return success_response(
             data={
