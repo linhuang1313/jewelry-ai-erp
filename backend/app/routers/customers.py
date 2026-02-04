@@ -460,11 +460,41 @@ async def chat_debt_query(
         if True:  # 原条件: query_type in ["all", "cash_debt"]
             cash_debt = 0.0
             cash_transactions = []
+            use_name_fallback = False
             try:
+                # 优先用 customer_id 关联；若无记录则用 customer_name 兜底
+                if customer.name:
+                    has_id_sales = db.query(SalesOrder.id).filter(
+                        SalesOrder.customer_id == customer_id,
+                        SalesOrder.status != "已取消"
+                    ).first()
+                    if not has_id_sales:
+                        use_name_fallback = True
+
+                sales_orders_query = db.query(SalesOrder).filter(
+                    SalesOrder.status != "已取消"
+                )
+                if use_name_fallback:
+                    sales_orders_query = sales_orders_query.filter(
+                        SalesOrder.customer_name == customer.name
+                    )
+                else:
+                    sales_orders_query = sales_orders_query.filter(
+                        SalesOrder.customer_id == customer_id
+                    )
+
+                if start_date:
+                    sales_orders_query = sales_orders_query.filter(SalesOrder.create_time >= start_date)
+                if end_date:
+                    sales_orders_query = sales_orders_query.filter(SalesOrder.create_time <= end_date)
+
+                sales_orders = sales_orders_query.all()
+                total_sales_labor = sum(o.total_labor_cost or 0 for o in sales_orders)
+
                 # 计算结算金额（cash_price + mixed的现金部分 + labor_amount）
                 total_settlement_cash = 0.0
                 settlements_query = db.query(SettlementOrder).join(SalesOrder).filter(
-                    SalesOrder.customer_id == customer_id,
+                    SalesOrder.customer_name == customer.name if use_name_fallback else SalesOrder.customer_id == customer_id,
                     SettlementOrder.status.in_(['confirmed', 'printed'])
                 )
                 
@@ -512,7 +542,8 @@ async def chat_debt_query(
                 total_payments = total_payments.scalar() or 0
                 
                 # 净欠款 = 结算现金 - 收款（正数=欠款，负数=预收款）
-                cash_debt = float(total_settlement_cash) - float(total_payments)
+                # 往来账目口径：销售工费 + 结算现金 - 收款
+                cash_debt = float(total_sales_labor) + float(total_settlement_cash) - float(total_payments)
                 
                 # 获取交易明细用于展示
                 payments = payments_query.order_by(desc(PaymentRecord.create_time)).limit(20).all()
@@ -534,6 +565,16 @@ async def chat_debt_query(
                         "created_at": p.create_time.isoformat() if p.create_time else None
                     })
                 
+                # 添加销售工费明细（按销售单汇总）
+                for order in sales_orders[:20]:
+                    cash_transactions.append({
+                        "id": f"sales_{order.id}",
+                        "type": "sales_labor",
+                        "description": f"销售结算（销售单号: {order.order_no}）",
+                        "amount": order.total_labor_cost or 0,
+                        "created_at": order.create_time.isoformat() if order.create_time else None
+                    })
+
                 # 添加结算单明细
                 for s in settlements[:20]:
                     cash_transactions.append({
@@ -561,7 +602,7 @@ async def chat_debt_query(
                 # 计算结算金料（physical_gold + mixed的金料部分）
                 total_settlement_gold = 0.0
                 settlements_query = db.query(SettlementOrder).join(SalesOrder).filter(
-                    SalesOrder.customer_id == customer_id,
+                    SalesOrder.customer_name == customer.name if use_name_fallback else SalesOrder.customer_id == customer_id,
                     SettlementOrder.status.in_(['confirmed', 'printed'])
                 )
                 
