@@ -1032,7 +1032,7 @@ async def get_customer_detail(
             except:
                 pass
         
-        # 销售交易（产生工费，客户欠款增加，从客户角度是负数）
+        # 销售交易（产生工费，客户欠款增加，正数=客户欠我们）
         for order in sales_orders[:50]:  # 增加限制数量
             # 日期过滤
             if filter_start and order.create_time and order.create_time < filter_start:
@@ -1044,13 +1044,13 @@ async def get_customer_detail(
                 "type": "sales_labor",
                 "type_label": "销售结算",
                 "description": f"销售结算：{order.order_no}",
-                "amount": -(order.total_labor_cost or 0),  # 负数表示客户产生欠款
+                "amount": (order.total_labor_cost or 0),  # 正数表示客户欠款增加
                 "gold_weight": None,
                 "created_at": order.create_time.isoformat() if order.create_time else None,
                 "remark": order.remark or ""  # 销售单备注
             })
         
-        # 金料收料记录（从GoldReceipt表获取，这是核心数据源）
+        # 金料收料记录（客户来料=我们欠客户，负数）
         try:
             receipts_query = db.query(GoldReceipt).filter(
                 GoldReceipt.customer_id == customer_id,
@@ -1069,14 +1069,14 @@ async def get_customer_detail(
                     "type_label": "客户来料",
                     "description": f"客户来料：{receipt.receipt_no}",
                     "amount": None,
-                    "gold_weight": receipt.gold_weight,
+                    "gold_weight": -(receipt.gold_weight or 0),
                     "created_at": (receipt.received_at or receipt.created_at).isoformat() if (receipt.received_at or receipt.created_at) else None,
                     "remark": receipt.remark or ""  # 来料备注
                 })
         except Exception as e:
             logger.warning(f"查询收料记录时出错: {e}")
         
-        # 金料提料记录（从CustomerWithdrawal表获取）
+        # 金料提料记录（客户提料=客户欠我们，正数）
         try:
             from ..models.finance import CustomerWithdrawal
             withdrawals_query = db.query(CustomerWithdrawal).filter(
@@ -1096,7 +1096,7 @@ async def get_customer_detail(
                     "type_label": "客户提料",
                     "description": f"客户提料：{withdrawal.withdrawal_no}",
                     "amount": None,
-                    "gold_weight": -withdrawal.gold_weight,  # 提料为负数
+                    "gold_weight": (withdrawal.gold_weight or 0),
                     "created_at": (withdrawal.completed_at or withdrawal.created_at).isoformat() if (withdrawal.completed_at or withdrawal.created_at) else None,
                     "remark": withdrawal.remark or ""  # 提料备注
                 })
@@ -1123,21 +1123,21 @@ async def get_customer_detail(
                         type_label = "欠料结价"
                         method_desc = f"结价 ¥{s.gold_price or 0}/克"
                         gold_change = None
-                        amount_change = -(s.total_amount or 0)  # 结算后减少欠款
+                        amount_change = (s.total_amount or 0)  # 正数=客户欠款
                     elif s.payment_method == 'physical_gold':
                         type_code = "settle_gold"
                         type_label = "欠料结料"
                         method_desc = f"结料 {s.physical_gold_weight or 0}克"
-                        gold_change = -(s.physical_gold_weight or 0)  # 结料扣减存料
+                        gold_change = (s.physical_gold_weight or 0)
                         amount_change = None
                     else:  # mixed
                         type_code = "settle_mixed"
                         type_label = "混合结算"
                         method_desc = f"混合(结料{s.gold_payment_weight or 0}克+结价{s.cash_payment_weight or 0}克)"
-                        gold_change = -(s.gold_payment_weight or 0)
+                        gold_change = (s.gold_payment_weight or 0)
                         # 混合支付的现金部分 = 结价克重 × 金价
                         cash_amount = (s.cash_payment_weight or 0) * (s.gold_price or 0)
-                        amount_change = -cash_amount
+                        amount_change = cash_amount
                     
                     transactions_list.append({
                         "id": f"settlement_{s.id}",
@@ -1152,7 +1152,7 @@ async def get_customer_detail(
         except Exception as e:
             logger.warning(f"查询结算记录时出错: {e}")
         
-        # 收款记录（从PaymentRecord表获取）
+        # 收款记录（客户来款=我们欠客户，负数）
         try:
             from ..models import PaymentRecord
             payments_query = db.query(PaymentRecord).filter(
@@ -1170,7 +1170,7 @@ async def get_customer_detail(
                     "type": "customer_payment",
                     "type_label": "客户来款",
                     "description": f"客户来款：¥{p.amount:.2f}",
-                    "amount": p.amount or 0,  # 正数表示客户给我们钱（抵消欠款）
+                    "amount": -(p.amount or 0),
                     "gold_weight": None,
                     "created_at": p.create_time.isoformat() if p.create_time else None,
                     "remark": p.remark or ""  # 收款备注
@@ -1194,9 +1194,9 @@ async def get_customer_detail(
             # 查询开始日期前的销售工费（增加欠款）
             for order in sales_orders:
                 if order.create_time and order.create_time < filter_start:
-                    opening_cash -= (order.total_labor_cost or 0)
+                    opening_cash += (order.total_labor_cost or 0)
             
-            # 查询开始日期前的来料（增加存料）
+            # 查询开始日期前的来料（我们欠客户，负数）
             try:
                 prev_receipts = db.query(GoldReceipt).filter(
                     GoldReceipt.customer_id == customer_id,
@@ -1204,11 +1204,11 @@ async def get_customer_detail(
                     GoldReceipt.received_at < filter_start
                 ).all()
                 for r in prev_receipts:
-                    opening_gold += (r.gold_weight or 0)
+                    opening_gold -= (r.gold_weight or 0)
             except:
                 pass
             
-            # 查询开始日期前的结算
+            # 查询开始日期前的结算（正数=客户欠我们）
             try:
                 for order in sales_orders:
                     if order.create_time and order.create_time < filter_start:
@@ -1219,24 +1219,36 @@ async def get_customer_detail(
                         ).all()
                         for s in prev_settlements:
                             if s.payment_method == 'cash_price':
-                                opening_cash -= (s.total_amount or 0)
+                                opening_cash += (s.total_amount or 0)
                             elif s.payment_method == 'physical_gold':
-                                opening_gold -= (s.physical_gold_weight or 0)
+                                opening_gold += (s.physical_gold_weight or 0)
                             else:  # mixed
-                                opening_gold -= (s.gold_payment_weight or 0)
+                                opening_gold += (s.gold_payment_weight or 0)
                                 cash_amount = (s.cash_payment_weight or 0) * (s.gold_price or 0)
-                                opening_cash -= cash_amount
+                                opening_cash += cash_amount
             except:
                 pass
             
-            # 查询开始日期前的收款
+            # 查询开始日期前的收款（我们欠客户，负数）
             try:
                 prev_payments = db.query(PaymentRecord).filter(
                     PaymentRecord.customer_id == customer_id,
                     PaymentRecord.create_time < filter_start
                 ).all()
                 for p in prev_payments:
-                    opening_cash += (p.amount or 0)
+                    opening_cash -= (p.amount or 0)
+            except:
+                pass
+
+            # 查询开始日期前的提料（客户欠我们，正数）
+            try:
+                prev_withdrawals = db.query(CustomerWithdrawal).filter(
+                    CustomerWithdrawal.customer_id == customer_id,
+                    CustomerWithdrawal.status.in_(['pending', 'completed']),
+                    CustomerWithdrawal.created_at < filter_start
+                ).all()
+                for w in prev_withdrawals:
+                    opening_gold += (w.gold_weight or 0)
             except:
                 pass
             
@@ -1583,7 +1595,7 @@ async def get_customer_debt_history(
         except Exception as e:
             logger.warning(f"查询收款记录出错: {e}")
         
-        # 4. 金料存取记录
+        # 4. 金料存取记录（正数=客户欠我们，负数=我们欠客户）
         try:
             gold_txs = db.query(CustomerGoldDepositTransaction).filter(
                 CustomerGoldDepositTransaction.customer_id == customer_id
@@ -1597,8 +1609,12 @@ async def get_customer_debt_history(
                 }.get(tx.transaction_type, tx.transaction_type)
                 
                 amount = tx.amount or 0
-                if tx.transaction_type == "use":
-                    amount = -amount  # 用料为负数
+                if tx.transaction_type == "deposit":
+                    amount = -abs(amount)  # 存料=我们欠客户
+                elif tx.transaction_type == "use":
+                    amount = abs(amount)   # 用料=客户欠我们
+                elif tx.transaction_type == "refund":
+                    amount = -abs(amount)  # 退料=我们欠客户
                 
                 transactions.append({
                     "id": f"gold_deposit_{tx.id}",

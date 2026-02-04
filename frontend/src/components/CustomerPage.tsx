@@ -868,12 +868,12 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                             </div>
                             <div className="text-right">
                               {customerDetail.opening_balance.amount !== null && customerDetail.opening_balance.amount !== undefined && (
-                                <p className={`font-semibold ${customerDetail.opening_balance.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                <p className={`font-semibold ${customerDetail.opening_balance.amount >= 0 ? 'text-red-600' : 'text-green-600'}`}>
                                   {customerDetail.opening_balance.amount >= 0 ? '+' : ''}{customerDetail.opening_balance.amount.toFixed(2)}元
                                 </p>
                               )}
                               {customerDetail.opening_balance.gold_weight !== null && customerDetail.opening_balance.gold_weight !== undefined && (
-                                <p className={`text-sm ${customerDetail.opening_balance.gold_weight >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                <p className={`text-sm ${customerDetail.opening_balance.gold_weight >= 0 ? 'text-red-600' : 'text-green-600'}`}>
                                   {customerDetail.opening_balance.gold_weight >= 0 ? '+' : ''}{customerDetail.opening_balance.gold_weight.toFixed(2)}g
                                 </p>
                               )}
@@ -920,12 +920,12 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                             </div>
                             <div className="text-right">
                               {tx.amount !== null && (
-                                <p className={`font-semibold ${tx.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                <p className={`font-semibold ${tx.amount >= 0 ? 'text-red-600' : 'text-green-600'}`}>
                                   {tx.amount >= 0 ? '+' : ''}{tx.amount.toFixed(2)}元
                                 </p>
                               )}
                               {tx.gold_weight !== null && (
-                                <p className={`text-sm ${tx.gold_weight >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                <p className={`text-sm ${tx.gold_weight >= 0 ? 'text-red-600' : 'text-green-600'}`}>
                                   {tx.gold_weight >= 0 ? '+' : ''}{tx.gold_weight.toFixed(2)}g
                                 </p>
                               )}
