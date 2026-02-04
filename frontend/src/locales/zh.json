@@ -48,6 +48,7 @@
     "productCodes": "商品编码",
     "inboundOrders": "入库单据",
     "finance": "财务对账",
+    "vouchers": "凭证管理",
     "history": "历史回溯",
     "salesperson": "业务员管理",
     "backToChat": "返回聊天"

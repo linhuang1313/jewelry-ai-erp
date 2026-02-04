@@ -386,6 +386,20 @@ export const Header = ({
                   <span>{t('nav.finance')}</span>
                 </button>
               )}
+
+              {/* 凭证管理按钮 - 占位入口 */}
+              {hasPermission(userRole, 'canViewFinance') && (
+                <button
+                  type="button"
+                  disabled
+                  title={currentLanguage === 'en' ? 'Coming soon' : '功能建设中'}
+                  className="flex items-center space-x-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-500 
+                             opacity-70 cursor-not-allowed font-medium text-[14px]"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>{t('nav.vouchers')}</span>
+                </button>
+              )}
               
               {/* 历史回溯按钮 - 独立按钮 */}
               <button
