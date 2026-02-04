@@ -20,6 +20,7 @@ from ..models import (
     Supplier, ChatLog, Location, LocationInventory, InventoryTransferOrder
 )
 from ..ai_parser import parse_user_message
+from .customers import chat_debt_query
 from .. import context_manager as ctx
 
 logger = logging.getLogger(__name__)
@@ -1001,6 +1002,31 @@ async def chat(request: AIRequest, db: Session = Depends(get_db)):
         # 查询和分析操作
         else:
             from ..ai_analyzer import ai_analyzer
+            customer_debt_payload = None
+            if ai_response.action == "查询客户账务":
+                debt_name = ai_response.debt_customer_name or ai_response.customer_name
+                debt_query_type = ai_response.debt_query_type or "all"
+                if debt_name:
+                    debt_response = await chat_debt_query(
+                        customer_name=debt_name,
+                        query_type=debt_query_type,
+                        date_start=ai_response.date_start,
+                        date_end=ai_response.date_end,
+                        db=db
+                    )
+                    if debt_response.get("success"):
+                        debt_data = debt_response.get("data") or {}
+                        customer_debt_payload = {
+                            "success": True,
+                            "message": debt_response.get("message"),
+                            **debt_data
+                        }
+                    else:
+                        customer_debt_payload = {
+                            "success": False,
+                            "message": debt_response.get("message"),
+                            "customer_name": debt_name
+                        }
             
             data = ai_analyzer.collect_all_data(
                 ai_response.action,
@@ -1018,6 +1044,8 @@ async def chat(request: AIRequest, db: Session = Depends(get_db)):
                 transfer_date_start=ai_response.transfer_date_start,
                 transfer_date_end=ai_response.transfer_date_end
             )
+            if customer_debt_payload is not None:
+                data["customer_debt"] = customer_debt_payload
             
             analysis_result = ai_analyzer.analyze(
                 request.message,
@@ -1363,6 +1391,31 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
             await asyncio.sleep(0.05)
             
             from ..ai_analyzer import ai_analyzer
+            customer_debt_payload = None
+            if ai_response.action == "查询客户账务":
+                debt_name = ai_response.debt_customer_name or ai_response.customer_name
+                debt_query_type = ai_response.debt_query_type or "all"
+                if debt_name:
+                    debt_response = await chat_debt_query(
+                        customer_name=debt_name,
+                        query_type=debt_query_type,
+                        date_start=ai_response.date_start,
+                        date_end=ai_response.date_end,
+                        db=db
+                    )
+                    if debt_response.get("success"):
+                        debt_data = debt_response.get("data") or {}
+                        customer_debt_payload = {
+                            "success": True,
+                            "message": debt_response.get("message"),
+                            **debt_data
+                        }
+                    else:
+                        customer_debt_payload = {
+                            "success": False,
+                            "message": debt_response.get("message"),
+                            "customer_name": debt_name
+                        }
             
             # 收集数据
             data = ai_analyzer.collect_all_data(
@@ -1373,6 +1426,8 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 sales_order_no=getattr(ai_response, 'sales_order_no', None),
                 user_role=user_role
             )
+            if customer_debt_payload is not None:
+                data["customer_debt"] = customer_debt_payload
             
             yield f"data: {json.dumps({'type': 'thinking', 'step': '数据收集', 'message': '已加载数据', 'progress': 70, 'status': 'complete'}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0.05)
