@@ -51,6 +51,7 @@ interface CustomerBalance {
   cash_debt: number;       // 现金欠款
   gold_debt: number;       // 金料欠款（克）
   gold_deposit: number;    // 存料余额（克）
+  net_gold?: number;       // 金料净额（正数=欠料，负数=存料）
 }
 
 interface TransactionRecord {
@@ -80,7 +81,9 @@ interface DebtSummaryItem {
   customer_no: string;
   customer_name: string;
   phone: string | null;
+  salesperson?: string;
   cash_debt: number;
+  net_gold?: number;
   gold_balance: number;    // 金料净额：正数=客人欠我们，负数=客人有存料
   gold_debt: number;       // 兼容旧字段
   gold_deposit: number;    // 兼容旧字段
@@ -680,15 +683,17 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                       const cashDebt = customerDetail?.balance?.cash_debt || 0;
                       const goldDebt = customerDetail?.balance?.gold_debt || 0;
                       const goldDeposit = customerDetail?.balance?.gold_deposit || 0;
-                      const netGold = goldDeposit - goldDebt;
+                      const netGold = customerDetail?.balance?.net_gold ?? (goldDebt - goldDeposit);
                       
                       return (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           {/* 现金账户卡片 - 使用金色主题 */}
-                          <div className={`p-6 rounded-xl border-2 transition-all duration-200 ${
+                            <div className={`p-6 rounded-xl border-2 transition-all duration-200 ${
                             cashDebt > 0 
                               ? 'bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 border-amber-300 shadow-md hover:shadow-lg' 
-                              : 'bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 border-emerald-300 shadow-sm hover:shadow-md'
+                              : cashDebt < 0
+                                ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-blue-300 shadow-sm hover:shadow-md'
+                                : 'bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 border-emerald-300 shadow-sm hover:shadow-md'
                           }`}>
                             <div className="flex items-center justify-between mb-4">
                               <div className="flex items-center gap-3">
@@ -716,10 +721,17 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                                     ¥{cashDebt.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                   </p>
                                 </div>
+                              ) : cashDebt < 0 ? (
+                                <div>
+                                  <p className="text-xs text-blue-700 mb-1 font-medium">预收款金额</p>
+                                  <p className="text-2xl font-bold text-blue-900 font-mono">
+                                    ¥{Math.abs(cashDebt).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </p>
+                                </div>
                               ) : (
                                 <div className="flex items-center gap-2">
                                   <CheckCircle className="w-6 h-6 text-emerald-600" />
-                                  <p className="text-xl font-bold text-emerald-700">无欠款</p>
+                                  <p className="text-xl font-bold text-emerald-700">已结清</p>
                                 </div>
                               )}
                             </div>
@@ -728,18 +740,18 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                           {/* 金料账户卡片 - 使用蓝色/金色主题 */}
                           <div className={`p-6 rounded-xl border-2 transition-all duration-200 ${
                             netGold > 0 
-                              ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-blue-300 shadow-sm hover:shadow-md' 
+                              ? 'bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 border-amber-300 shadow-md hover:shadow-lg' 
                               : netGold < 0 
-                                ? 'bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 border-amber-300 shadow-md hover:shadow-lg'
+                                ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-blue-300 shadow-sm hover:shadow-md'
                                 : 'bg-gray-50 border-gray-200 shadow-sm'
                           }`}>
                             <div className="flex items-center justify-between mb-4">
                               <div className="flex items-center gap-3">
                                 <div className={`p-3 rounded-lg ${
-                                  netGold > 0 ? 'bg-blue-100' : netGold < 0 ? 'bg-amber-100' : 'bg-gray-100'
+                                  netGold > 0 ? 'bg-amber-100' : netGold < 0 ? 'bg-blue-100' : 'bg-gray-100'
                                 }`}>
                                   <Diamond className={`w-5 h-5 ${
-                                    netGold > 0 ? 'text-blue-600' : netGold < 0 ? 'text-amber-600' : 'text-gray-400'
+                                    netGold > 0 ? 'text-amber-600' : netGold < 0 ? 'text-blue-600' : 'text-gray-400'
                                   }`} />
                                 </div>
                                 <span className="text-sm font-medium text-gray-700">金料账户</span>
@@ -753,16 +765,16 @@ export const CustomerPage: React.FC<CustomerPageProps> = ({ userRole = 'manager'
                             <div className="mt-2">
                               {netGold > 0 ? (
                                 <div>
-                                  <p className="text-xs text-blue-700 mb-1 font-medium">净存料</p>
-                                  <p className="text-2xl font-bold text-blue-900 font-mono">
-                                    +{netGold.toFixed(2)}<span className="text-sm ml-1 font-normal">克</span>
+                                  <p className="text-xs text-amber-700 mb-1 font-medium">净欠料</p>
+                                  <p className="text-2xl font-bold text-amber-900 font-mono">
+                                    {netGold.toFixed(2)}<span className="text-sm ml-1 font-normal">克</span>
                                   </p>
                                 </div>
                               ) : netGold < 0 ? (
                                 <div>
-                                  <p className="text-xs text-amber-700 mb-1 font-medium">净欠料</p>
-                                  <p className="text-2xl font-bold text-amber-900 font-mono">
-                                    {netGold.toFixed(2)}<span className="text-sm ml-1 font-normal">克</span>
+                                  <p className="text-xs text-blue-700 mb-1 font-medium">净存料</p>
+                                  <p className="text-2xl font-bold text-blue-900 font-mono">
+                                    {Math.abs(netGold).toFixed(2)}<span className="text-sm ml-1 font-normal">克</span>
                                   </p>
                                 </div>
                               ) : (
