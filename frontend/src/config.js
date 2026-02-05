@@ -37,6 +37,9 @@ export const API_ENDPOINTS = {
   SETTLEMENT_CONFIRM: (id) => `${API_BASE_URL}/api/settlement/orders/${id}/confirm`,  // 确认结算
   SETTLEMENT_PRINT: (id) => `${API_BASE_URL}/api/settlement/orders/${id}/print`,  // 标记已打印
   
+  // 退货管理相关
+  RETURNS: `${API_BASE_URL}/api/returns`,  // 退货单列表/操作
+  
   // 导出 API_BASE_URL 供服务使用
   API_BASE_URL,
 };
