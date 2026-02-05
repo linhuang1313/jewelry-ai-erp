@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Plus, Trash2, Package, Search } from 'lucide-react';
+import { X, Plus, Trash2, Package, Search, Gem } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { API_BASE_URL } from '../config';
 import { parseInboundFile } from '../utils/excelImport';
+import { parseInlayInboundFile } from '../utils/inlayExcelImport';
 
 interface InboundRow {
   id: string;
@@ -12,6 +13,23 @@ interface InboundRow {
   laborCost: string;
   pieceCount: string;
   pieceLaborCost: string;
+  // 镶嵌入库相关字段
+  mainStoneWeight?: string;
+  mainStoneCount?: string;
+  mainStonePrice?: string;
+  mainStoneAmount?: string;
+  subStoneWeight?: string;
+  subStoneCount?: string;
+  subStonePrice?: string;
+  subStoneAmount?: string;
+  stoneSettingFee?: string;
+  totalAmount?: string;
+  mainStoneMark?: string;
+  subStoneMark?: string;
+  pearlWeight?: string;
+  bearingWeight?: string;
+  saleLaborCost?: string;
+  salePieceLaborCost?: string;
   errors?: Partial<Record<'productCode' | 'productName' | 'weight' | 'laborCost' | 'pieceCount' | 'pieceLaborCost', string>>;
 }
 
@@ -113,7 +131,9 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null); // 当前打开的下拉框
   const [nameSearchKeyword, setNameSearchKeyword] = useState<string>(''); // 商品名称搜索关键词
   const [isImporting, setIsImporting] = useState(false);
+  const [isImportingInlay, setIsImportingInlay] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const inlayFileInputRef = useRef<HTMLInputElement | null>(null);
   
   // 珐琅产品批量生成状态
   const [showEnamelGenerator, setShowEnamelGenerator] = useState(false);
@@ -426,6 +446,83 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
     }
   };
 
+  // 镶嵌入库导入
+  const handleInlayImportClick = () => {
+    if (!selectedSupplier) {
+      toast.error('请先选择供应商');
+      return;
+    }
+    inlayFileInputRef.current?.click();
+  };
+
+  const handleInlayImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImportingInlay(true);
+    try {
+      const { rows: imported, errors } = await parseInlayInboundFile(file);
+      const newRows = imported.map(item => {
+        // 如果没有商品编码但有商品名称，尝试根据名称匹配编码
+        let productCode = item.data.productCode || '';
+        if (!productCode && item.data.productName) {
+          const matchedCode = productCodes.find(
+            pc => pc.name === item.data.productName.trim()
+          );
+          if (matchedCode) {
+            productCode = matchedCode.code;
+          }
+        }
+        return {
+          id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          productCode,
+          productName: item.data.productName || '',
+          weight: String(item.data.weight ?? ''),
+          laborCost: String(item.data.laborCost ?? ''),
+          pieceCount: item.data.pieceCount !== undefined ? String(item.data.pieceCount) : '',
+          pieceLaborCost: item.data.pieceLaborCost !== undefined ? String(item.data.pieceLaborCost) : '',
+          // 镶嵌相关字段
+          mainStoneWeight: item.data.mainStoneWeight !== undefined ? String(item.data.mainStoneWeight) : undefined,
+          mainStoneCount: item.data.mainStoneCount !== undefined ? String(item.data.mainStoneCount) : undefined,
+          mainStonePrice: item.data.mainStonePrice !== undefined ? String(item.data.mainStonePrice) : undefined,
+          mainStoneAmount: item.data.mainStoneAmount !== undefined ? String(item.data.mainStoneAmount) : undefined,
+          subStoneWeight: item.data.subStoneWeight !== undefined ? String(item.data.subStoneWeight) : undefined,
+          subStoneCount: item.data.subStoneCount !== undefined ? String(item.data.subStoneCount) : undefined,
+          subStonePrice: item.data.subStonePrice !== undefined ? String(item.data.subStonePrice) : undefined,
+          subStoneAmount: item.data.subStoneAmount !== undefined ? String(item.data.subStoneAmount) : undefined,
+          stoneSettingFee: item.data.stoneSettingFee !== undefined ? String(item.data.stoneSettingFee) : undefined,
+          totalAmount: item.data.totalAmount !== undefined ? String(item.data.totalAmount) : undefined,
+          mainStoneMark: item.data.mainStoneMark,
+          subStoneMark: item.data.subStoneMark,
+          pearlWeight: item.data.pearlWeight !== undefined ? String(item.data.pearlWeight) : undefined,
+          bearingWeight: item.data.bearingWeight !== undefined ? String(item.data.bearingWeight) : undefined,
+          saleLaborCost: item.data.saleLaborCost !== undefined ? String(item.data.saleLaborCost) : undefined,
+          salePieceLaborCost: item.data.salePieceLaborCost !== undefined ? String(item.data.salePieceLaborCost) : undefined,
+          errors: item.errors,
+        };
+      });
+
+      setRows(prev => {
+        const baseRows = prev.length === 1 && isRowEmpty(prev[0]) ? [] : prev;
+        return [...baseRows, ...newRows];
+      });
+
+      if (newRows.length > 0) {
+        toast.success(`镶嵌入库导入成功 ${newRows.length} 行`);
+      }
+      if (errors.length > 0) {
+        console.warn('镶嵌入库导入错误:', errors);
+        toast.error(`导入发现 ${errors.length} 个表头问题，请在预览中修正`);
+      }
+    } catch (error) {
+      console.error('镶嵌入库导入失败:', error);
+      toast.error('导入失败，请检查文件格式');
+    } finally {
+      setIsImportingInlay(false);
+      event.target.value = '';
+    }
+  };
+
   // 批量生成珐琅产品编码
   const generateEnamelProducts = async () => {
     const count = parseInt(enamelCount) || 0;
@@ -620,6 +717,23 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
           labor_cost: parseFloat(row.laborCost),
           piece_count: row.pieceCount ? parseInt(row.pieceCount) : undefined,
           piece_labor_cost: row.pieceLaborCost ? parseFloat(row.pieceLaborCost) : undefined,
+          // 镶嵌入库相关字段
+          main_stone_weight: row.mainStoneWeight ? parseFloat(row.mainStoneWeight) : undefined,
+          main_stone_count: row.mainStoneCount ? parseInt(row.mainStoneCount) : undefined,
+          main_stone_price: row.mainStonePrice ? parseFloat(row.mainStonePrice) : undefined,
+          main_stone_amount: row.mainStoneAmount ? parseFloat(row.mainStoneAmount) : undefined,
+          sub_stone_weight: row.subStoneWeight ? parseFloat(row.subStoneWeight) : undefined,
+          sub_stone_count: row.subStoneCount ? parseInt(row.subStoneCount) : undefined,
+          sub_stone_price: row.subStonePrice ? parseFloat(row.subStonePrice) : undefined,
+          sub_stone_amount: row.subStoneAmount ? parseFloat(row.subStoneAmount) : undefined,
+          stone_setting_fee: row.stoneSettingFee ? parseFloat(row.stoneSettingFee) : undefined,
+          total_amount: row.totalAmount ? parseFloat(row.totalAmount) : undefined,
+          main_stone_mark: row.mainStoneMark || undefined,
+          sub_stone_mark: row.subStoneMark || undefined,
+          pearl_weight: row.pearlWeight ? parseFloat(row.pearlWeight) : undefined,
+          bearing_weight: row.bearingWeight ? parseFloat(row.bearingWeight) : undefined,
+          sale_labor_cost: row.saleLaborCost ? parseFloat(row.saleLaborCost) : undefined,
+          sale_piece_labor_cost: row.salePieceLaborCost ? parseFloat(row.salePieceLaborCost) : undefined,
         }))
       };
       
@@ -1043,6 +1157,33 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                 }`}
               >
                 {isImporting ? '导入中...' : '导入Excel/CSV'}
+              </button>
+            </div>
+
+            {/* 分隔线 */}
+            <div className="h-6 w-px bg-gray-300"></div>
+
+            {/* 镶嵌入库导入 */}
+            <div className="flex items-center gap-2">
+              <input
+                ref={inlayFileInputRef}
+                type="file"
+                accept=".xlsx,.csv"
+                className="hidden"
+                onChange={handleInlayImportFile}
+              />
+              <button
+                onClick={handleInlayImportClick}
+                disabled={isImportingInlay}
+                title="镶嵌入库模板：品名(可拼接)/件数/重量/克工费/件工费/主石重/主石粒数/主石单价/主石额/副石重/副石粒数/副石单价/副石额/镶石费/总金额等"
+                className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg transition-colors border ${
+                  isImportingInlay
+                    ? 'text-gray-400 border-gray-200 cursor-not-allowed'
+                    : 'text-emerald-600 border-emerald-300 hover:bg-emerald-50'
+                }`}
+              >
+                <Gem className="w-4 h-4" />
+                {isImportingInlay ? '导入中...' : '镶嵌入库'}
               </button>
             </div>
 

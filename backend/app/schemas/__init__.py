@@ -156,6 +156,23 @@ class BatchInboundItem(BaseModel):
     labor_cost: float  # 克工费（元/克）
     piece_count: Optional[int] = None  # 件数（可选）
     piece_labor_cost: Optional[float] = None  # 件工费（元/件，可选）
+    # 镶嵌入库相关字段
+    main_stone_weight: Optional[float] = None  # 主石重
+    main_stone_count: Optional[int] = None  # 主石粒数
+    main_stone_price: Optional[float] = None  # 主石单价
+    main_stone_amount: Optional[float] = None  # 主石额
+    sub_stone_weight: Optional[float] = None  # 副石重
+    sub_stone_count: Optional[int] = None  # 副石粒数
+    sub_stone_price: Optional[float] = None  # 副石单价
+    sub_stone_amount: Optional[float] = None  # 副石额
+    stone_setting_fee: Optional[float] = None  # 镶石费
+    total_amount: Optional[float] = None  # 总金额
+    main_stone_mark: Optional[str] = None  # 主石字印
+    sub_stone_mark: Optional[str] = None  # 副石字印
+    pearl_weight: Optional[float] = None  # 珍珠重
+    bearing_weight: Optional[float] = None  # 轴承重
+    sale_labor_cost: Optional[float] = None  # 销售克工费
+    sale_piece_labor_cost: Optional[float] = None  # 销售件工费
 
 
 class BatchInboundCreate(BaseModel):

@@ -59,6 +59,24 @@ class InboundDetail(Base):
     craft = Column(String(50), nullable=True)  # 工艺（3D硬金、古法、珐琅等）
     style = Column(String(50), nullable=True)  # 款式（吊坠、手镯、戒指等）
     
+    # 镶嵌入库相关字段
+    main_stone_weight = Column(Float, nullable=True)  # 主石重
+    main_stone_count = Column(Integer, nullable=True)  # 主石粒数
+    main_stone_price = Column(Float, nullable=True)  # 主石单价
+    main_stone_amount = Column(Float, nullable=True)  # 主石额
+    sub_stone_weight = Column(Float, nullable=True)  # 副石重
+    sub_stone_count = Column(Integer, nullable=True)  # 副石粒数
+    sub_stone_price = Column(Float, nullable=True)  # 副石单价
+    sub_stone_amount = Column(Float, nullable=True)  # 副石额
+    stone_setting_fee = Column(Float, nullable=True)  # 镶石费
+    total_amount = Column(Float, nullable=True)  # 总金额
+    main_stone_mark = Column(String(50), nullable=True)  # 主石字印
+    sub_stone_mark = Column(String(50), nullable=True)  # 副石字印
+    pearl_weight = Column(Float, nullable=True)  # 珍珠重
+    bearing_weight = Column(Float, nullable=True)  # 轴承重
+    sale_labor_cost = Column(Float, nullable=True)  # 销售克工费
+    sale_piece_labor_cost = Column(Float, nullable=True)  # 销售件工费
+    
     order = relationship("InboundOrder", backref="details")
 
 

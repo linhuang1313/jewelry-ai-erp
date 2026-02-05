@@ -359,7 +359,24 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
             supplier=supplier_name,
             supplier_id=supplier_id,
             total_cost=total_cost,
-            craft=craft if craft else None
+            craft=craft if craft else None,
+            # 镶嵌入库相关字段
+            main_stone_weight=card_data.get("main_stone_weight"),
+            main_stone_count=card_data.get("main_stone_count"),
+            main_stone_price=card_data.get("main_stone_price"),
+            main_stone_amount=card_data.get("main_stone_amount"),
+            sub_stone_weight=card_data.get("sub_stone_weight"),
+            sub_stone_count=card_data.get("sub_stone_count"),
+            sub_stone_price=card_data.get("sub_stone_price"),
+            sub_stone_amount=card_data.get("sub_stone_amount"),
+            stone_setting_fee=card_data.get("stone_setting_fee"),
+            total_amount=card_data.get("total_amount"),
+            main_stone_mark=card_data.get("main_stone_mark"),
+            sub_stone_mark=card_data.get("sub_stone_mark"),
+            pearl_weight=card_data.get("pearl_weight"),
+            bearing_weight=card_data.get("bearing_weight"),
+            sale_labor_cost=card_data.get("sale_labor_cost"),
+            sale_piece_labor_cost=card_data.get("sale_piece_labor_cost"),
         )
         db.add(detail)
         
@@ -696,7 +713,24 @@ async def get_inbound_orders(
                     "total_cost": d.total_cost,
                     "fineness": d.fineness,
                     "craft": d.craft,
-                    "style": d.style
+                    "style": d.style,
+                    # 镶嵌入库相关字段
+                    "main_stone_weight": d.main_stone_weight,
+                    "main_stone_count": d.main_stone_count,
+                    "main_stone_price": d.main_stone_price,
+                    "main_stone_amount": d.main_stone_amount,
+                    "sub_stone_weight": d.sub_stone_weight,
+                    "sub_stone_count": d.sub_stone_count,
+                    "sub_stone_price": d.sub_stone_price,
+                    "sub_stone_amount": d.sub_stone_amount,
+                    "stone_setting_fee": d.stone_setting_fee,
+                    "total_amount": d.total_amount,
+                    "main_stone_mark": d.main_stone_mark,
+                    "sub_stone_mark": d.sub_stone_mark,
+                    "pearl_weight": d.pearl_weight,
+                    "bearing_weight": d.bearing_weight,
+                    "sale_labor_cost": d.sale_labor_cost,
+                    "sale_piece_labor_cost": d.sale_piece_labor_cost,
                 } for d in details]
             })
         
@@ -955,7 +989,24 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
                     piece_labor_cost=piece_labor_cost if piece_labor_cost > 0 else None,
                     supplier=supplier_name,
                     supplier_id=supplier_id,
-                    total_cost=item_total_cost
+                    total_cost=item_total_cost,
+                    # 镶嵌入库相关字段
+                    main_stone_weight=getattr(item, 'main_stone_weight', None),
+                    main_stone_count=getattr(item, 'main_stone_count', None),
+                    main_stone_price=getattr(item, 'main_stone_price', None),
+                    main_stone_amount=getattr(item, 'main_stone_amount', None),
+                    sub_stone_weight=getattr(item, 'sub_stone_weight', None),
+                    sub_stone_count=getattr(item, 'sub_stone_count', None),
+                    sub_stone_price=getattr(item, 'sub_stone_price', None),
+                    sub_stone_amount=getattr(item, 'sub_stone_amount', None),
+                    stone_setting_fee=getattr(item, 'stone_setting_fee', None),
+                    total_amount=getattr(item, 'total_amount', None),
+                    main_stone_mark=getattr(item, 'main_stone_mark', None),
+                    sub_stone_mark=getattr(item, 'sub_stone_mark', None),
+                    pearl_weight=getattr(item, 'pearl_weight', None),
+                    bearing_weight=getattr(item, 'bearing_weight', None),
+                    sale_labor_cost=getattr(item, 'sale_labor_cost', None),
+                    sale_piece_labor_cost=getattr(item, 'sale_piece_labor_cost', None),
                 )
                 db.add(detail)
                 
