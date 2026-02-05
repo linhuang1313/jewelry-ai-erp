@@ -34,6 +34,9 @@ class InboundOrder(Base):
     create_time = Column(DateTime(timezone=True), server_default=func.now())
     operator = Column(String(50), default="系统管理员")
     status = Column(String(20), default="已入库", index=True)
+    is_audited = Column(Boolean, default=False, index=True)
+    audited_by = Column(String(50), nullable=True)
+    audited_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class InboundDetail(Base):
@@ -55,6 +58,24 @@ class InboundDetail(Base):
     fineness = Column(String(50), nullable=True)  # 成色（足金999、足金9999等）
     craft = Column(String(50), nullable=True)  # 工艺（3D硬金、古法、珐琅等）
     style = Column(String(50), nullable=True)  # 款式（吊坠、手镯、戒指等）
+    
+    # 镶嵌入库相关字段
+    main_stone_weight = Column(Float, nullable=True)  # 主石重
+    main_stone_count = Column(Integer, nullable=True)  # 主石粒数
+    main_stone_price = Column(Float, nullable=True)  # 主石单价
+    main_stone_amount = Column(Float, nullable=True)  # 主石额
+    sub_stone_weight = Column(Float, nullable=True)  # 副石重
+    sub_stone_count = Column(Integer, nullable=True)  # 副石粒数
+    sub_stone_price = Column(Float, nullable=True)  # 副石单价
+    sub_stone_amount = Column(Float, nullable=True)  # 副石额
+    stone_setting_fee = Column(Float, nullable=True)  # 镶石费
+    total_amount = Column(Float, nullable=True)  # 总金额
+    main_stone_mark = Column(String(50), nullable=True)  # 主石字印
+    sub_stone_mark = Column(String(50), nullable=True)  # 副石字印
+    pearl_weight = Column(Float, nullable=True)  # 珍珠重
+    bearing_weight = Column(Float, nullable=True)  # 轴承重
+    sale_labor_cost = Column(Float, nullable=True)  # 销售克工费
+    sale_piece_labor_cost = Column(Float, nullable=True)  # 销售件工费
     
     order = relationship("InboundOrder", backref="details")
 
@@ -432,6 +453,11 @@ class ReturnOrder(Base):
     total_weight = Column(Float, default=0.0)  # 总退货克重（汇总）
     total_labor_cost = Column(Float, default=0.0)  # 总工费（汇总）
     item_count = Column(Integer, default=1)  # 商品数量
+    
+    # 财务审核字段（与入库单审核逻辑一致）
+    is_audited = Column(Boolean, default=False, index=True)  # 是否已审核
+    audited_by = Column(String(50), nullable=True)  # 审核人
+    audited_at = Column(DateTime(timezone=True), nullable=True)  # 审核时间
     
     # 关系
     from_location = relationship("Location", foreign_keys=[from_location_id])

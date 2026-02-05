@@ -15,9 +15,10 @@ from ..database import get_db
 from ..schemas import InboundOrderCreate, BatchInboundCreate
 from ..models import (
     InboundOrder, InboundDetail, Inventory, Supplier,
-    Location, LocationInventory
+    Location, LocationInventory, InventoryTransferOrder, InventoryTransferItem
 )
 from ..schemas import InboundOrderResponse, InboundDetailResponse, InventoryResponse
+from ..middleware.permissions import has_permission
 
 logger = logging.getLogger(__name__)
 
@@ -358,7 +359,24 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
             supplier=supplier_name,
             supplier_id=supplier_id,
             total_cost=total_cost,
-            craft=craft if craft else None
+            craft=craft if craft else None,
+            # 镶嵌入库相关字段
+            main_stone_weight=card_data.get("main_stone_weight"),
+            main_stone_count=card_data.get("main_stone_count"),
+            main_stone_price=card_data.get("main_stone_price"),
+            main_stone_amount=card_data.get("main_stone_amount"),
+            sub_stone_weight=card_data.get("sub_stone_weight"),
+            sub_stone_count=card_data.get("sub_stone_count"),
+            sub_stone_price=card_data.get("sub_stone_price"),
+            sub_stone_amount=card_data.get("sub_stone_amount"),
+            stone_setting_fee=card_data.get("stone_setting_fee"),
+            total_amount=card_data.get("total_amount"),
+            main_stone_mark=card_data.get("main_stone_mark"),
+            sub_stone_mark=card_data.get("sub_stone_mark"),
+            pearl_weight=card_data.get("pearl_weight"),
+            bearing_weight=card_data.get("bearing_weight"),
+            sale_labor_cost=card_data.get("sale_labor_cost"),
+            sale_piece_labor_cost=card_data.get("sale_piece_labor_cost"),
         )
         db.add(detail)
         
@@ -634,6 +652,29 @@ async def get_inbound_orders(
                                   weight_min, weight_max, labor_cost_min, labor_cost_max,
                                   total_cost_min, total_cost_max, fineness, craft, style])
         
+        # 预先计算所有入库单的已转移重量
+        # 查询所有转移单及其明细，根据remark字段匹配入库单号
+        order_nos = [order.order_no for order in orders]
+        transferred_weight_map = {}
+        
+        if order_nos:
+            # 查询remark中包含入库单号的转移单（状态为 pending_confirm, received, pending 都算已转移）
+            transfer_orders = db.query(InventoryTransferOrder).filter(
+                InventoryTransferOrder.status.in_(['pending', 'pending_confirm', 'received'])
+            ).all()
+            
+            for transfer_order in transfer_orders:
+                if not transfer_order.remark:
+                    continue
+                # 检查remark中是否包含任何入库单号
+                for order_no in order_nos:
+                    if order_no in transfer_order.remark:
+                        # 计算该转移单的总重量
+                        transfer_weight = sum(item.weight or 0 for item in transfer_order.items)
+                        if order_no not in transferred_weight_map:
+                            transferred_weight_map[order_no] = 0
+                        transferred_weight_map[order_no] += transfer_weight
+        
         result = []
         for order in orders:
             details = details_by_order.get(order.id, [])
@@ -644,6 +685,7 @@ async def get_inbound_orders(
             item_count = len(details)
             total_weight = sum(d.weight or 0 for d in details)
             suppliers_list = list(set(d.supplier for d in details if d.supplier))
+            transferred_weight = transferred_weight_map.get(order.order_no, 0)
             
             result.append({
                 "id": order.id,
@@ -651,8 +693,12 @@ async def get_inbound_orders(
                 "create_time": order.create_time.isoformat() if order.create_time else None,
                 "operator": order.operator,
                 "status": order.status,
+                "is_audited": bool(order.is_audited),
+                "audited_by": order.audited_by,
+                "audited_at": order.audited_at.isoformat() if order.audited_at else None,
                 "item_count": item_count,
                 "total_weight": round(total_weight, 2),
+                "transferred_weight": round(transferred_weight, 2),
                 "suppliers": suppliers_list,
                 "details": [{
                     "id": d.id,
@@ -667,7 +713,24 @@ async def get_inbound_orders(
                     "total_cost": d.total_cost,
                     "fineness": d.fineness,
                     "craft": d.craft,
-                    "style": d.style
+                    "style": d.style,
+                    # 镶嵌入库相关字段
+                    "main_stone_weight": d.main_stone_weight,
+                    "main_stone_count": d.main_stone_count,
+                    "main_stone_price": d.main_stone_price,
+                    "main_stone_amount": d.main_stone_amount,
+                    "sub_stone_weight": d.sub_stone_weight,
+                    "sub_stone_count": d.sub_stone_count,
+                    "sub_stone_price": d.sub_stone_price,
+                    "sub_stone_amount": d.sub_stone_amount,
+                    "stone_setting_fee": d.stone_setting_fee,
+                    "total_amount": d.total_amount,
+                    "main_stone_mark": d.main_stone_mark,
+                    "sub_stone_mark": d.sub_stone_mark,
+                    "pearl_weight": d.pearl_weight,
+                    "bearing_weight": d.bearing_weight,
+                    "sale_labor_cost": d.sale_labor_cost,
+                    "sale_piece_labor_cost": d.sale_piece_labor_cost,
                 } for d in details]
             })
         
@@ -689,6 +752,7 @@ async def get_inbound_orders(
 async def update_inbound_order(
     order_id: int,
     updates: dict,
+    user_role: str = Query(default="product", description="用户角色"),
     db: Session = Depends(get_db)
 ):
     """修改入库单"""
@@ -696,6 +760,12 @@ async def update_inbound_order(
         order = db.query(InboundOrder).filter(InboundOrder.id == order_id).first()
         if not order:
             return {"success": False, "error": "入库单不存在"}
+
+        if order.is_audited:
+            return {"success": False, "error": "该入库单已审核，无法编辑，请先反审"}
+
+        if not has_permission(user_role, 'can_inbound'):
+            raise HTTPException(status_code=403, detail="权限不足：无法编辑入库单")
         
         if "operator" in updates:
             order.operator = updates["operator"]
@@ -733,6 +803,56 @@ async def update_inbound_order(
         db.rollback()
         logger.error(f"更新入库单失败: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
+
+
+@router.post("/{order_id}/audit")
+async def audit_inbound_order(
+    order_id: int,
+    user_role: str = Query(default="finance", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """审核入库单（财务）"""
+    if not has_permission(user_role, 'can_audit_inbound'):
+        raise HTTPException(status_code=403, detail="权限不足：无法审核入库单")
+
+    order = db.query(InboundOrder).filter(InboundOrder.id == order_id).first()
+    if not order:
+        return {"success": False, "error": "入库单不存在"}
+
+    if order.is_audited:
+        return {"success": False, "error": "入库单已审核"}
+
+    order.is_audited = True
+    order.audited_by = user_role
+    order.audited_at = china_now()
+    db.commit()
+
+    return {"success": True, "message": "审核成功", "order_id": order_id}
+
+
+@router.post("/{order_id}/unaudit")
+async def unaudit_inbound_order(
+    order_id: int,
+    user_role: str = Query(default="finance", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """反审入库单（财务）"""
+    if not has_permission(user_role, 'can_audit_inbound'):
+        raise HTTPException(status_code=403, detail="权限不足：无法反审入库单")
+
+    order = db.query(InboundOrder).filter(InboundOrder.id == order_id).first()
+    if not order:
+        return {"success": False, "error": "入库单不存在"}
+
+    if not order.is_audited:
+        return {"success": False, "error": "入库单未审核"}
+
+    order.is_audited = False
+    order.audited_by = None
+    order.audited_at = None
+    db.commit()
+
+    return {"success": True, "message": "反审成功", "order_id": order_id}
 
 
 @router.post("")
@@ -841,19 +961,30 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
                     })
                     continue
                 
-                valid_product = db.query(ProductCodeModel).filter(
-                    ProductCodeModel.name == product_name,
-                    ProductCodeModel.code_type == 'predefined'
-                ).first()
-                if not valid_product:
-                    error_count += 1
-                    results.append({
-                        "index": idx + 1,
-                        "product_name": product_name,
-                        "success": False,
-                        "error": f"商品名称 '{product_name}' 不在预定义列表中"
-                    })
-                    continue
+                # 检查是否是镶嵌产品（有镶嵌相关字段）
+                is_inlay_product = any([
+                    getattr(item, 'main_stone_weight', None),
+                    getattr(item, 'main_stone_amount', None),
+                    getattr(item, 'sub_stone_amount', None),
+                    getattr(item, 'stone_setting_fee', None),
+                    getattr(item, 'total_amount', None),
+                ])
+                
+                # 非镶嵌产品需要验证是否在预定义列表中
+                if not is_inlay_product:
+                    valid_product = db.query(ProductCodeModel).filter(
+                        ProductCodeModel.name == product_name,
+                        ProductCodeModel.code_type == 'predefined'
+                    ).first()
+                    if not valid_product:
+                        error_count += 1
+                        results.append({
+                            "index": idx + 1,
+                            "product_name": product_name,
+                            "success": False,
+                            "error": f"商品名称 '{product_name}' 不在预定义列表中"
+                        })
+                        continue
                 
                 gram_cost = labor_cost * weight
                 piece_cost = piece_count * piece_labor_cost
@@ -869,7 +1000,24 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
                     piece_labor_cost=piece_labor_cost if piece_labor_cost > 0 else None,
                     supplier=supplier_name,
                     supplier_id=supplier_id,
-                    total_cost=item_total_cost
+                    total_cost=item_total_cost,
+                    # 镶嵌入库相关字段
+                    main_stone_weight=getattr(item, 'main_stone_weight', None),
+                    main_stone_count=getattr(item, 'main_stone_count', None),
+                    main_stone_price=getattr(item, 'main_stone_price', None),
+                    main_stone_amount=getattr(item, 'main_stone_amount', None),
+                    sub_stone_weight=getattr(item, 'sub_stone_weight', None),
+                    sub_stone_count=getattr(item, 'sub_stone_count', None),
+                    sub_stone_price=getattr(item, 'sub_stone_price', None),
+                    sub_stone_amount=getattr(item, 'sub_stone_amount', None),
+                    stone_setting_fee=getattr(item, 'stone_setting_fee', None),
+                    total_amount=getattr(item, 'total_amount', None),
+                    main_stone_mark=getattr(item, 'main_stone_mark', None),
+                    sub_stone_mark=getattr(item, 'sub_stone_mark', None),
+                    pearl_weight=getattr(item, 'pearl_weight', None),
+                    bearing_weight=getattr(item, 'bearing_weight', None),
+                    sale_labor_cost=getattr(item, 'sale_labor_cost', None),
+                    sale_piece_labor_cost=getattr(item, 'sale_piece_labor_cost', None),
                 )
                 db.add(detail)
                 
@@ -1145,7 +1293,9 @@ async def download_inbound_order(
                     p.drawString(col_x[5], y, f"{detail.total_cost:.2f}")
                     p.drawString(col_x[6], y, supplier_name)
                 
-                total_cost += detail.total_cost
+                # 镶嵌产品使用 total_amount，普通产品使用 total_cost
+                item_cost = detail.total_amount if detail.total_amount else detail.total_cost
+                total_cost += item_cost
                 total_weight += detail.weight
                 total_piece_count += piece_count
                 y -= 12
@@ -1212,8 +1362,10 @@ async def download_inbound_order(
             total_cost = 0
             total_weight = 0
             for detail in details:
-                html_content += f"""<tr><td>{detail.product_name}</td><td>{detail.weight:.2f}</td><td>{detail.labor_cost:.2f}</td><td>{detail.total_cost:.2f}</td><td>{detail.supplier or '-'}</td></tr>"""
-                total_cost += detail.total_cost
+                # 镶嵌产品使用 total_amount，普通产品使用 total_cost
+                item_cost = detail.total_amount if detail.total_amount else detail.total_cost
+                html_content += f"""<tr><td>{detail.product_name}</td><td>{detail.weight:.2f}</td><td>{detail.labor_cost:.2f}</td><td>{item_cost:.2f}</td><td>{detail.supplier or '-'}</td></tr>"""
+                total_cost += item_cost
                 total_weight += detail.weight
             
             html_content += f"""</tbody></table><p>合计：重量 {total_weight:.2f}克 | 总成本 ¥{total_cost:.2f}</p></body></html>"""

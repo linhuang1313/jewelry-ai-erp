@@ -957,7 +957,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                   {renderTabButton('receipts', '收料单管理', (Array.isArray(pendingGoldReceipts) ? pendingGoldReceipts : []).filter((r: any) => r && r.status === 'pending').length)}
                   {renderTabButton('payments', '付料单')}
                   {renderTabButton('withdrawals', '待取料', (Array.isArray(withdrawals) ? withdrawals : []).filter(w => w && w.status === 'pending').length)}
-                  {renderTabButton('supplier-debt', '供应商欠料')}
+                  {renderTabButton('supplier-debt', '供应商款料查询')}
                   {renderTabButton('balance', '金料库存')}
                 </>
               )}
@@ -1494,7 +1494,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
         {activeTab === 'supplier-debt' && userRole === 'material' && (
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-semibold">供应商欠料统计</h2>
+              <h2 className="text-xl font-semibold">供应商款料查询</h2>
               <div className="flex gap-2">
                 <button
                   onClick={() => {
@@ -1578,7 +1578,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
             
             {/* 汇总卡片 */}
             {supplierDebt && (
-              <div className="grid grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-5 gap-4 mb-6">
                 <div className="bg-blue-50 rounded-lg p-4">
                   <div className="text-sm text-gray-600 mb-1">入库总重量</div>
                   <div className="text-xl font-bold text-blue-600">{supplierDebt.summary.total_inbound_weight.toFixed(2)} 克</div>
@@ -1590,6 +1590,10 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                 <div className="bg-red-50 rounded-lg p-4">
                   <div className="text-sm text-gray-600 mb-1">欠料总重量</div>
                   <div className="text-xl font-bold text-red-600">{supplierDebt.summary.total_debt_weight.toFixed(2)} 克</div>
+                </div>
+                <div className="bg-orange-50 rounded-lg p-4">
+                  <div className="text-sm text-gray-600 mb-1">工费欠款</div>
+                  <div className="text-xl font-bold text-orange-600">¥{(supplierDebt.summary.total_labor_debt || 0).toFixed(2)}</div>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-4">
                   <div className="text-sm text-gray-600 mb-1">供应商数量</div>
@@ -1684,7 +1688,7 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
               </div>
             )}
             
-            {/* 供应商欠料列表 */}
+            {/* 供应商款料列表 */}
             {supplierDebtLoading ? renderLoading() : supplierDebt && Array.isArray(supplierDebt.suppliers) && supplierDebt.suppliers.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -1694,12 +1698,13 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                       <th className="px-4 py-3 text-right font-medium text-gray-600">入库重量 (克)</th>
                       <th className="px-4 py-3 text-right font-medium text-gray-600">已付料 (克)</th>
                       <th className="px-4 py-3 text-right font-medium text-gray-600">欠料 (克)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-600">工费欠款 (元)</th>
                       <th className="px-4 py-3 text-center font-medium text-gray-600">状态</th>
                       <th className="px-4 py-3 text-center font-medium text-gray-600">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {supplierDebt.suppliers.map((s) => (
+                    {supplierDebt.suppliers.map((s: any) => (
                       <tr key={s.supplier_id} className="hover:bg-gray-50 cursor-pointer">
                         <td className="px-4 py-3" onClick={() => openSupplierDetail(s.supplier_id)}>
                           <div className="font-medium text-gray-900">{s.supplier_name}</div>
@@ -1712,9 +1717,14 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
                             {s.debt_weight > 0 ? '+' : ''}{s.debt_weight.toFixed(2)}
                           </span>
                         </td>
+                        <td className="px-4 py-3 text-right font-semibold">
+                          <span className={(s.labor_debt || 0) > 0 ? 'text-orange-600' : 'text-gray-600'}>
+                            ¥{(s.labor_debt || 0).toFixed(2)}
+                          </span>
+                        </td>
                         <td className="px-4 py-3 text-center">
-                          {s.debt_weight > 0 ? (
-                            <span className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-full">欠料</span>
+                          {s.debt_weight > 0 || (s.labor_debt || 0) > 0 ? (
+                            <span className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-full">欠款</span>
                           ) : s.debt_weight < 0 ? (
                             <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">多付</span>
                           ) : (

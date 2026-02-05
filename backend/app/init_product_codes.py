@@ -4,7 +4,8 @@
 """
 
 from sqlalchemy.orm import Session
-from .models import ProductCode
+from .models import ProductCode, ProductAttribute
+from .utils.pinyin_utils import to_pinyin_initials_keep_alnum
 
 # 预定义编码数据
 PREDEFINED_CODES = [
@@ -78,6 +79,65 @@ def init_product_codes(db: Session):
         print(f"已初始化 {count} 个预定义商品编码")
     
     return count
+
+
+def init_predefined_combinations(db: Session):
+    """根据商品属性配置生成预定义编码（成色×工艺×款式）"""
+    fineness_list = [
+        a.value for a in db.query(ProductAttribute)
+        .filter(ProductAttribute.category == "fineness", ProductAttribute.is_active == True)
+        .order_by(ProductAttribute.sort_order)
+        .all()
+    ]
+    craft_list = [
+        a.value for a in db.query(ProductAttribute)
+        .filter(ProductAttribute.category == "craft", ProductAttribute.is_active == True)
+        .order_by(ProductAttribute.sort_order)
+        .all()
+    ]
+    style_list = [
+        a.value for a in db.query(ProductAttribute)
+        .filter(ProductAttribute.category == "style", ProductAttribute.is_active == True)
+        .order_by(ProductAttribute.sort_order)
+        .all()
+    ]
+    
+    if not fineness_list or not craft_list or not style_list:
+        return {"added": 0, "skipped": 0, "message": "属性配置不完整，未生成预定义编码"}
+    
+    existing_codes = {c.code for c in db.query(ProductCode.code).all()}
+    existing_names = {n.name for n in db.query(ProductCode.name).all()}
+    
+    added = 0
+    skipped = 0
+    
+    for fineness in fineness_list:
+        for craft in craft_list:
+            for style in style_list:
+                name = f"{fineness}{craft}{style}"
+                code = to_pinyin_initials_keep_alnum(name)
+                
+                if not code or code in existing_codes or name in existing_names:
+                    skipped += 1
+                    continue
+                
+                product_code = ProductCode(
+                    code=code,
+                    name=name,
+                    code_type="predefined",
+                    is_unique=0,
+                    is_used=0,
+                    created_by="系统生成"
+                )
+                db.add(product_code)
+                existing_codes.add(code)
+                existing_names.add(name)
+                added += 1
+    
+    if added > 0:
+        db.commit()
+    
+    return {"added": added, "skipped": skipped}
 
 
 def get_next_f_code(db: Session) -> str:

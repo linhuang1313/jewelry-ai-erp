@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from datetime import datetime
+from time import time
 import logging
 import json
 from typing import List, Optional
@@ -17,6 +18,22 @@ from .. import context_manager as ctx
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chat-history"])
+
+CHAT_SESSION_CACHE_TTL = 10
+_CHAT_SESSION_CACHE: dict[str, dict] = {}
+
+
+def _get_chat_session_cache_key(user_role: Optional[str], user_id: Optional[str], limit: int) -> str:
+    return f"{user_role or ''}|{user_id or ''}|{limit}"
+
+
+def _get_cached_chat_sessions(cache_key: str):
+    cached = _CHAT_SESSION_CACHE.get(cache_key)
+    if not cached:
+        return None
+    if time() - cached["timestamp"] > CHAT_SESSION_CACHE_TTL:
+        return None
+    return cached["data"]
 
 
 def log_chat_message(
@@ -65,6 +82,11 @@ async def get_chat_sessions(
 ):
     """获取对话会话列表（按会话分组）"""
     try:
+        cache_key = _get_chat_session_cache_key(user_role, user_id, limit)
+        cached = _get_cached_chat_sessions(cache_key)
+        if cached is not None:
+            return cached
+
         subquery = db.query(
             ChatLog.session_id,
             func.min(ChatLog.created_at).label('start_time'),
@@ -80,26 +102,66 @@ async def get_chat_sessions(
         
         subquery = subquery.order_by(desc(func.max(ChatLog.created_at))).limit(limit)
         sessions = subquery.all()
+        session_ids = [s.session_id for s in sessions]
+        if not session_ids:
+            result = {"success": True, "sessions": [], "total": 0}
+            _CHAT_SESSION_CACHE[cache_key] = {"timestamp": time(), "data": result}
+            return result
+
+        first_user_sub = db.query(
+            ChatLog.session_id,
+            func.min(ChatLog.created_at).label('first_time')
+        ).filter(
+            ChatLog.session_id.in_(session_ids),
+            ChatLog.message_type == "user"
+        )
+        last_msg_sub = db.query(
+            ChatLog.session_id,
+            func.max(ChatLog.created_at).label('last_time')
+        ).filter(
+            ChatLog.session_id.in_(session_ids)
+        )
+
+        if user_role:
+            first_user_sub = first_user_sub.filter(ChatLog.user_role == user_role)
+            last_msg_sub = last_msg_sub.filter(ChatLog.user_role == user_role)
+        if user_id:
+            first_user_sub = first_user_sub.filter(ChatLog.user_id == user_id)
+            last_msg_sub = last_msg_sub.filter(ChatLog.user_id == user_id)
+
+        first_user_sub = first_user_sub.group_by(ChatLog.session_id).subquery()
+        last_msg_sub = last_msg_sub.group_by(ChatLog.session_id).subquery()
+
+        first_msgs = db.query(ChatLog).join(
+            first_user_sub,
+            (ChatLog.session_id == first_user_sub.c.session_id) &
+            (ChatLog.created_at == first_user_sub.c.first_time)
+        ).all()
+        last_msgs = db.query(ChatLog).join(
+            last_msg_sub,
+            (ChatLog.session_id == last_msg_sub.c.session_id) &
+            (ChatLog.created_at == last_msg_sub.c.last_time)
+        ).all()
+
+        first_msg_map = {msg.session_id: msg for msg in first_msgs}
+        last_msg_map = {msg.session_id: msg for msg in last_msgs}
+        session_meta_map = {
+            meta.session_id: meta
+            for meta in db.query(ChatSessionMeta).filter(
+                ChatSessionMeta.session_id.in_(session_ids)
+            ).all()
+        }
         
         result = []
         for session in sessions:
-            first_msg = db.query(ChatLog).filter(
-                ChatLog.session_id == session.session_id,
-                ChatLog.message_type == "user"
-            ).order_by(ChatLog.created_at).first()
-            
-            last_msg = db.query(ChatLog).filter(
-                ChatLog.session_id == session.session_id
-            ).order_by(desc(ChatLog.created_at)).first()
+            first_msg = first_msg_map.get(session.session_id)
+            last_msg = last_msg_map.get(session.session_id)
             
             summary = ""
             if first_msg and first_msg.content:
                 summary = first_msg.content[:60] + "..." if len(first_msg.content) > 60 else first_msg.content
             
-            session_meta = db.query(ChatSessionMeta).filter(
-                ChatSessionMeta.session_id == session.session_id
-            ).first()
-            
+            session_meta = session_meta_map.get(session.session_id)
             custom_name = session_meta.custom_name if session_meta else None
             is_pinned = session_meta.is_pinned if session_meta else 0
             
@@ -118,7 +180,9 @@ async def get_chat_sessions(
         result.sort(key=lambda x: (-x.get('is_pinned', 0), x.get('start_time', '') or ''), reverse=False)
         result.sort(key=lambda x: -x.get('is_pinned', 0))
         
-        return {"success": True, "sessions": result, "total": len(result)}
+        response = {"success": True, "sessions": result, "total": len(result)}
+        _CHAT_SESSION_CACHE[cache_key] = {"timestamp": time(), "data": response}
+        return response
     except Exception as e:
         logger.error(f"获取会话列表失败: {e}", exc_info=True)
         return {"success": False, "message": str(e), "sessions": []}

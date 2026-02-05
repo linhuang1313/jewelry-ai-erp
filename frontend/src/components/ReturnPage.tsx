@@ -45,6 +45,10 @@ interface ReturnOrder {
   completed_at: string | null;
   images: string | null;
   remark: string | null;
+  // 财务审核字段
+  is_audited?: boolean;
+  audited_by?: string | null;
+  audited_at?: string | null;
 }
 
 interface ReturnStats {
@@ -262,6 +266,46 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
   const canApprove = hasPermission(userRole, 'canDelete') || hasPermission(userRole, 'canReturnToSupplier');
   // 创建权限：任何有退货权限的角色
   const canCreate = hasPermission(userRole, 'canReturnToSupplier') || hasPermission(userRole, 'canReturnToWarehouse');
+  // 财务审核权限：财务和管理层
+  const canAuditReturn = hasPermission(userRole, 'canAuditReturn');
+  
+  // 财务审核退货单
+  const handleAuditReturn = async (returnId: number) => {
+    try {
+      const response = await fetch(`${API_ENDPOINTS.RETURNS}/${returnId}/audit?user_role=${encodeURIComponent(userRole)}`, {
+        method: 'POST',
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert('审核成功');
+        fetchReturns();
+      } else {
+        alert(data.error || '审核失败');
+      }
+    } catch (error) {
+      console.error('审核失败:', error);
+      alert('审核失败，请重试');
+    }
+  };
+
+  // 财务反审退货单
+  const handleUnauditReturn = async (returnId: number) => {
+    try {
+      const response = await fetch(`${API_ENDPOINTS.RETURNS}/${returnId}/unaudit?user_role=${encodeURIComponent(userRole)}`, {
+        method: 'POST',
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert('反审成功');
+        fetchReturns();
+      } else {
+        alert(data.error || '反审失败');
+      }
+    } catch (error) {
+      console.error('反审失败:', error);
+      alert('反审失败，请重试');
+    }
+  };
   
   // 退货单创建成功后的回调
   const handleReturnSuccess = () => {
@@ -362,6 +406,7 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
               <th style={{ padding: '14px', textAlign: 'right', color: '#94a3b8', fontWeight: '500' }}>克重</th>
               <th style={{ padding: '14px', textAlign: 'left', color: '#94a3b8', fontWeight: '500' }}>退货原因</th>
               <th style={{ padding: '14px', textAlign: 'left', color: '#94a3b8', fontWeight: '500' }}>状态</th>
+              <th style={{ padding: '14px', textAlign: 'left', color: '#94a3b8', fontWeight: '500' }}>财务审核</th>
               <th style={{ padding: '14px', textAlign: 'left', color: '#94a3b8', fontWeight: '500' }}>创建时间</th>
               <th style={{ padding: '14px', textAlign: 'center', color: '#94a3b8', fontWeight: '500' }}>操作</th>
             </tr>
@@ -369,11 +414,11 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>加载中...</td>
+                <td colSpan={9} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>加载中...</td>
               </tr>
             ) : returns.length === 0 ? (
               <tr>
-                <td colSpan={8} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>暂无退货记录</td>
+                <td colSpan={9} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>暂无退货记录</td>
               </tr>
             ) : (
               returns.map((r) => (
@@ -394,6 +439,19 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
                       border: `1px solid ${STATUS_MAP[r.status]?.color || '#64748b'}`
                     }}>
                       {STATUS_MAP[r.status]?.label || r.status}
+                    </span>
+                  </td>
+                  <td style={{ padding: '14px' }}>
+                    <span style={{
+                      padding: '4px 10px',
+                      borderRadius: '20px',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      backgroundColor: r.is_audited ? '#3b82f620' : '#64748b20',
+                      color: r.is_audited ? '#3b82f6' : '#64748b',
+                      border: `1px solid ${r.is_audited ? '#3b82f6' : '#64748b'}`
+                    }}>
+                      {r.is_audited ? '已审核' : '未审核'}
                     </span>
                   </td>
                   <td style={{ padding: '14px', color: '#94a3b8', fontSize: '13px' }}>
@@ -429,6 +487,23 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
                           style={{ padding: '6px 12px', borderRadius: '6px', background: '#3b82f6', border: 'none', color: 'white', cursor: 'pointer', fontSize: '12px' }}
                         >
                           完成
+                        </button>
+                      )}
+                      {/* 财务审核按钮 */}
+                      {canAuditReturn && !r.is_audited && (
+                        <button
+                          onClick={() => handleAuditReturn(r.id)}
+                          style={{ padding: '6px 12px', borderRadius: '6px', background: '#6366f1', border: 'none', color: 'white', cursor: 'pointer', fontSize: '12px' }}
+                        >
+                          审核
+                        </button>
+                      )}
+                      {canAuditReturn && r.is_audited && (
+                        <button
+                          onClick={() => handleUnauditReturn(r.id)}
+                          style={{ padding: '6px 12px', borderRadius: '6px', background: '#64748b', border: 'none', color: 'white', cursor: 'pointer', fontSize: '12px' }}
+                        >
+                          反审
                         </button>
                       )}
                     </div>
@@ -598,6 +673,25 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#0f172a', borderRadius: '8px' }}>
                   <span style={{ color: '#94a3b8' }}>完成时间</span>
                   <span style={{ color: '#10b981' }}>{new Date(selectedReturn.completed_at).toLocaleString('zh-CN')}</span>
+                </div>
+              )}
+              {/* 财务审核信息 */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#0f172a', borderRadius: '8px' }}>
+                <span style={{ color: '#94a3b8' }}>财务审核</span>
+                <span style={{ color: selectedReturn.is_audited ? '#3b82f6' : '#64748b' }}>
+                  {selectedReturn.is_audited ? '已审核' : '未审核'}
+                </span>
+              </div>
+              {selectedReturn.is_audited && selectedReturn.audited_by && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#0f172a', borderRadius: '8px' }}>
+                  <span style={{ color: '#94a3b8' }}>审核人</span>
+                  <span style={{ color: '#f8fafc' }}>{selectedReturn.audited_by}</span>
+                </div>
+              )}
+              {selectedReturn.is_audited && selectedReturn.audited_at && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#0f172a', borderRadius: '8px' }}>
+                  <span style={{ color: '#94a3b8' }}>审核时间</span>
+                  <span style={{ color: '#3b82f6' }}>{new Date(selectedReturn.audited_at).toLocaleString('zh-CN')}</span>
                 </div>
               )}
             </div>

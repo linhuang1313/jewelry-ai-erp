@@ -278,13 +278,41 @@ export const Header = ({
                           <span>{t('nav.inboundOrders')}</span>
                         </button>
                       )}
+                      {/* 商品专员专用 - 供应商管理 */}
+                      {userRole === 'product' && (
+                        <button onClick={() => handleNavClick('supplier')} className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-amber-50">
+                          <Building2 className="w-4 h-4 text-purple-500" />
+                          <span>{t('nav.suppliers')}</span>
+                        </button>
+                      )}
+                      {/* 商品专员专用 - 退货管理 */}
+                      {userRole === 'product' && (
+                        <button onClick={() => handleNavClick('returns')} className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-amber-50">
+                          <RotateCcw className="w-4 h-4 text-red-500" />
+                          <span>{t('nav.returns')}</span>
+                        </button>
+                      )}
+                      {/* 商品专员专用 - 商品编码 */}
+                      {userRole === 'product' && (
+                        <button onClick={() => handleNavClick('product-codes')} className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-amber-50">
+                          <Package className="w-4 h-4 text-gray-500" />
+                          <span>{t('nav.productCodes')}</span>
+                        </button>
+                      )}
+                      {/* 商品专员专用 - 历史回溯 */}
+                      {userRole === 'product' && (
+                        <button onClick={() => { setShowHistoryPanel(true); setOpenNavMenu(null); }} className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-amber-50">
+                          <History className="w-4 h-4 text-gray-500" />
+                          <span>{t('nav.history')}</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
               )}
 
-              {/* 人员管理下拉菜单 */}
-              {(hasPermission(userRole, 'canViewCustomers') || 
+              {/* 人员管理下拉菜单 - 商品专员不显示 */}
+              {userRole !== 'product' && (hasPermission(userRole, 'canViewCustomers') || 
                 hasPermission(userRole, 'canManageCustomers') ||
                 hasPermission(userRole, 'canManageSuppliers') ||
                 hasPermission(userRole, 'canManageSalespersons')) && (
@@ -325,8 +353,8 @@ export const Header = ({
                 </div>
               )}
 
-              {/* 物料管理下拉菜单 */}
-              {(hasPermission(userRole, 'canViewGoldMaterial') || 
+              {/* 物料管理下拉菜单 - 商品专员不显示 */}
+              {userRole !== 'product' && (hasPermission(userRole, 'canViewGoldMaterial') || 
                 hasPermission(userRole, 'canManageGoldMaterial') ||
                 hasPermission(userRole, 'canManageLoan') ||
                 hasPermission(userRole, 'canReturnToSupplier') ||
@@ -401,15 +429,17 @@ export const Header = ({
                 </button>
               )}
               
-              {/* 历史回溯按钮 - 独立按钮 */}
-              <button
-                onClick={() => setShowHistoryPanel(true)}
-                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-600 
-                           hover:bg-gray-50 transition-all duration-200 font-medium text-[14px]"
-              >
-                <History className="w-4 h-4" />
-                <span>{t('nav.history')}</span>
-              </button>
+              {/* 历史回溯按钮 - 独立按钮，商品专员不显示（已整合到业务管理中） */}
+              {userRole !== 'product' && (
+                <button
+                  onClick={() => setShowHistoryPanel(true)}
+                  className="flex items-center space-x-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-600 
+                             hover:bg-gray-50 transition-all duration-200 font-medium text-[14px]"
+                >
+                  <History className="w-4 h-4" />
+                  <span>{t('nav.history')}</span>
+                </button>
+              )}
             </div>
           ) : (
             <button

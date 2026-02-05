@@ -40,6 +40,8 @@ const ProductCodePage: React.FC<ProductCodePageProps> = ({ userRole }) => {
   const [codes, setCodes] = useState<ProductCode[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [predefinedCount, setPredefinedCount] = useState(0);
+  const [generatingPredefined, setGeneratingPredefined] = useState(false);
   
   // 新增/编辑表单
   const [showModal, setShowModal] = useState(false);
@@ -67,15 +69,31 @@ const ProductCodePage: React.FC<ProductCodePageProps> = ({ userRole }) => {
   // 权限检查
   const canManage = hasPermission(userRole, 'canManageProductCodes');
   
+  const fetchPredefinedCount = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/product-codes?code_type=predefined&limit=1000`);
+      if (response.ok) {
+        const data = await response.json();
+        setPredefinedCount(data.length);
+      }
+    } catch (error) {
+      console.error('加载预定义编码数量失败:', error);
+    }
+  }, []);
+  
   // 加载编码列表
   const loadCodes = useCallback(async () => {
     if (activeTab === 'attributes') return;
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/api/product-codes?code_type=${activeTab}`);
+      const limit = activeTab === 'predefined' ? 1000 : 100;
+      const response = await fetch(`${API_BASE}/api/product-codes?code_type=${activeTab}&limit=${limit}`);
       if (response.ok) {
         const data = await response.json();
         setCodes(data);
+        if (activeTab === 'predefined') {
+          setPredefinedCount(data.length);
+        }
       } else {
         toast.error('加载商品编码失败');
       }
@@ -170,6 +188,33 @@ const ProductCodePage: React.FC<ProductCodePageProps> = ({ userRole }) => {
     } catch (error) {
       console.error('初始化属性失败:', error);
       toast.error('初始化失败');
+    }
+  };
+  
+  // 生成预定义编码（成色×工艺×款式）
+  const handleInitPredefinedCombinations = async () => {
+    setGeneratingPredefined(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/product-codes/init-predefined-combinations`, {
+        method: 'POST'
+      });
+      if (response.ok) {
+        const data = await response.json();
+        toast.success(data.message || '生成完成');
+        if (activeTab === 'predefined') {
+          loadCodes();
+        } else {
+          fetchPredefinedCount();
+        }
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || '生成失败');
+      }
+    } catch (error) {
+      console.error('生成预定义编码失败:', error);
+      toast.error('生成失败');
+    } finally {
+      setGeneratingPredefined(false);
     }
   };
   
@@ -371,7 +416,7 @@ const ProductCodePage: React.FC<ProductCodePageProps> = ({ userRole }) => {
                     : 'bg-white text-gray-600 hover:bg-amber-50 border border-gray-200'
                 }`}
               >
-                预定义编码（35个）
+                预定义编码（{predefinedCount}个）
               </button>
               <button
                 onClick={() => setActiveTab('f_single')}
@@ -703,6 +748,31 @@ const ProductCodePage: React.FC<ProductCodePageProps> = ({ userRole }) => {
               <li>这些属性将在快速入库的珐琅产品批量生成中作为下拉选项使用</li>
             </ul>
           </div>
+          
+          {/* 生成预定义编码 */}
+          {canManage && (
+            <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#fff8e1', borderRadius: '5px' }}>
+              <h4 style={{ margin: '0 0 10px 0', color: '#e65100' }}>生成预定义编码</h4>
+              <p style={{ margin: '0 0 12px 0', color: '#666' }}>
+                根据成色 × 工艺 × 款式组合自动生成预定义编码（已存在的会跳过）。
+              </p>
+              <button
+                onClick={handleInitPredefinedCombinations}
+                disabled={generatingPredefined}
+                style={{
+                  padding: '10px 18px',
+                  backgroundColor: generatingPredefined ? '#ccc' : '#e65100',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: generatingPredefined ? 'not-allowed' : 'pointer',
+                  fontWeight: 'bold'
+                }}
+              >
+                {generatingPredefined ? '生成中...' : '生成预定义编码'}
+              </button>
+            </div>
+          )}
         </div>
       )}
       
@@ -822,7 +892,7 @@ const ProductCodePage: React.FC<ProductCodePageProps> = ({ userRole }) => {
         <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#fff3e0', borderRadius: '5px' }}>
           <h4 style={{ margin: '0 0 10px 0', color: '#e65100' }}>编码规则说明</h4>
           <ul style={{ margin: 0, paddingLeft: '20px', color: '#666' }}>
-            <li><strong>预定义编码</strong>：35个固定编码，对应足金999精品、古法、3D硬金、5D硬金等商品类型，不可修改删除</li>
+            <li><strong>预定义编码</strong>：根据属性组合自动生成的固定编码，不可修改删除</li>
             <li><strong>F编码（一码一件）</strong>：格式为 F + 8位数字（如 F00000001），用于珐琅产品，每个编码对应唯一商品</li>
             <li><strong>FL编码（批量）</strong>：格式为 FL + 4位数字（如 FL0001），用于批量珐琅产品，如直营电商，无需一码一件</li>
           </ul>

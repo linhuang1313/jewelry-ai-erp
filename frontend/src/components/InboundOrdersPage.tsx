@@ -4,6 +4,7 @@ import {
   ChevronDown, ChevronUp, Download, Printer, RefreshCw, FileText
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { hasPermission } from '../config/permissions';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -21,6 +22,19 @@ interface InboundDetail {
   fineness?: string;
   craft?: string;
   style?: string;
+  // 镶嵌入库相关字段
+  main_stone_weight?: number;
+  main_stone_count?: number;
+  main_stone_price?: number;
+  main_stone_amount?: number;
+  sub_stone_weight?: number;
+  sub_stone_count?: number;
+  sub_stone_price?: number;
+  sub_stone_amount?: number;
+  stone_setting_fee?: number;
+  total_amount?: number;
+  main_stone_mark?: string;
+  sub_stone_mark?: string;
 }
 
 interface InboundOrder {
@@ -29,6 +43,9 @@ interface InboundOrder {
   create_time: string;
   operator: string;
   status: string;
+  is_audited?: boolean;
+  audited_by?: string | null;
+  audited_at?: string | null;
   item_count: number;
   total_weight: number;
   suppliers: string[];
@@ -69,6 +86,8 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [downloadMenuOrderId, setDownloadMenuOrderId] = useState<number | null>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
+  const canAuditInbound = hasPermission(userRole, 'canAuditInbound');
+  const canEditInbound = hasPermission(userRole, 'canInbound');
   
   // 筛选选项（用于下拉框）
   const [filterOptions, setFilterOptions] = useState<{
@@ -164,6 +183,10 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
 
   // 开始编辑
   const startEdit = (order: InboundOrder) => {
+    if (order.is_audited) {
+      toast.error('该入库单已审核，无法编辑');
+      return;
+    }
     setEditingOrderId(order.id);
     setEditingDetails([...order.details]);
     setExpandedOrderId(order.id);
@@ -178,7 +201,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
   // 保存编辑
   const saveEdit = async (orderId: number) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/inbound-orders/${orderId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/inbound-orders/${orderId}?user_role=${encodeURIComponent(userRole)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ details: editingDetails })
@@ -224,6 +247,42 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
   const handleDownload = (orderId: number, docType: 'inbound' | 'purchase' = 'inbound') => {
     window.open(`${API_BASE_URL}/api/inbound-orders/${orderId}/download?format=pdf&doc_type=${docType}`, '_blank');
     setDownloadMenuOrderId(null);
+  };
+  
+  const handleAudit = async (orderId: number) => {
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/inbound-orders/${orderId}/audit?user_role=${encodeURIComponent(userRole)}`,
+        { method: 'POST' }
+      );
+      const data = await res.json();
+      if (data.success) {
+        toast.success('审核成功');
+        loadOrders();
+      } else {
+        toast.error(data.error || '审核失败');
+      }
+    } catch (error) {
+      toast.error('审核失败');
+    }
+  };
+  
+  const handleUnaudit = async (orderId: number) => {
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/inbound-orders/${orderId}/unaudit?user_role=${encodeURIComponent(userRole)}`,
+        { method: 'POST' }
+      );
+      const data = await res.json();
+      if (data.success) {
+        toast.success('反审成功');
+        loadOrders();
+      } else {
+        toast.error(data.error || '反审失败');
+      }
+    } catch (error) {
+      toast.error('反审失败');
+    }
   };
 
   // 切换下载菜单
@@ -621,6 +680,16 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                         {order.status}
                       </span>
                     </div>
+                    <div className="text-center">
+                      <div className="text-sm text-gray-500">审核</div>
+                      <span className={`px-2 py-0.5 text-sm rounded-full ${
+                        order.is_audited
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {order.is_audited ? '已审核' : '未审核'}
+                      </span>
+                    </div>
                     
                     <div className="flex items-center space-x-2">
                       {editingOrderId === order.id ? (
@@ -644,11 +713,34 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                         <>
                           <button
                             onClick={() => startEdit(order)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="编辑"
+                            className={`p-2 rounded-lg transition-colors ${
+                              order.is_audited || !canEditInbound
+                                ? 'text-gray-300 cursor-not-allowed'
+                                : 'text-blue-600 hover:bg-blue-50'
+                            }`}
+                            title={order.is_audited ? '已审核不可编辑' : '编辑'}
+                            disabled={order.is_audited || !canEditInbound}
                           >
                             <Edit2 className="w-5 h-5" />
                           </button>
+                          {canAuditInbound && !order.is_audited && (
+                            <button
+                              onClick={() => handleAudit(order.id)}
+                              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                              title="审核"
+                            >
+                              审核
+                            </button>
+                          )}
+                          {canAuditInbound && order.is_audited && (
+                            <button
+                              onClick={() => handleUnaudit(order.id)}
+                              className="px-3 py-1.5 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                              title="反审"
+                            >
+                              反审
+                            </button>
+                          )}
                           <button
                             onClick={() => handlePrint(order.id, 'inbound')}
                             className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
@@ -697,123 +789,197 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                 </div>
 
                 {/* 明细展开 */}
-                {expandedOrderId === order.id && (
-                  <div className="bg-gray-50 px-6 py-4 border-t border-gray-100">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-gray-500">
-                          <th className="pb-2 font-medium">条码</th>
-                          <th className="pb-2 font-medium">商品名称</th>
-                          <th className="pb-2 font-medium">重量(克)</th>
-                          <th className="pb-2 font-medium">克工费</th>
-                          <th className="pb-2 font-medium">件数</th>
-                          <th className="pb-2 font-medium">件工费</th>
-                          <th className="pb-2 font-medium">供应商</th>
-                          <th className="pb-2 font-medium">总成本</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {(editingOrderId === order.id ? editingDetails : order.details).map((detail) => (
-                          <tr key={detail.id}>
-                            <td className="py-2">
-                              <span className="font-mono text-xs text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
-                                {detail.product_code || '-'}
-                              </span>
-                            </td>
-                            <td className="py-2">
-                              {editingOrderId === order.id ? (
-                                <input
-                                  type="text"
-                                  value={detail.product_name}
-                                  onChange={(e) => updateEditingDetail(detail.id, 'product_name', e.target.value)}
-                                  className="w-full px-2 py-1 border border-gray-300 rounded"
-                                />
-                              ) : (
-                                detail.product_name
-                              )}
-                            </td>
-                            <td className="py-2">
-                              {editingOrderId === order.id ? (
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={detail.weight}
-                                  onChange={(e) => updateEditingDetail(detail.id, 'weight', e.target.value)}
-                                  className="w-24 px-2 py-1 border border-gray-300 rounded"
-                                />
-                              ) : (
-                                detail.weight
-                              )}
-                            </td>
-                            <td className="py-2">
-                              {editingOrderId === order.id ? (
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={detail.labor_cost}
-                                  onChange={(e) => updateEditingDetail(detail.id, 'labor_cost', e.target.value)}
-                                  className="w-20 px-2 py-1 border border-gray-300 rounded"
-                                />
-                              ) : (
-                                detail.labor_cost
-                              )}
-                            </td>
-                            <td className="py-2">
-                              {editingOrderId === order.id ? (
-                                <input
-                                  type="number"
-                                  value={detail.piece_count || ''}
-                                  onChange={(e) => updateEditingDetail(detail.id, 'piece_count', e.target.value)}
-                                  className="w-16 px-2 py-1 border border-gray-300 rounded"
-                                />
-                              ) : (
-                                detail.piece_count || '-'
-                              )}
-                            </td>
-                            <td className="py-2">
-                              {editingOrderId === order.id ? (
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={detail.piece_labor_cost || ''}
-                                  onChange={(e) => updateEditingDetail(detail.id, 'piece_labor_cost', e.target.value)}
-                                  className="w-20 px-2 py-1 border border-gray-300 rounded"
-                                />
-                              ) : (
-                                detail.piece_labor_cost || '-'
-                              )}
-                            </td>
-                            <td className="py-2">
-                              {editingOrderId === order.id ? (
-                                <input
-                                  type="text"
-                                  value={detail.supplier || ''}
-                                  onChange={(e) => updateEditingDetail(detail.id, 'supplier', e.target.value)}
-                                  className="w-28 px-2 py-1 border border-gray-300 rounded"
-                                />
-                              ) : (
-                                detail.supplier || '-'
-                              )}
-                            </td>
-                            <td className="py-2 text-orange-600 font-medium">
-                              {detail.total_cost?.toFixed(2) || '-'}
-                            </td>
+                {expandedOrderId === order.id && (() => {
+                  // 判断是否为镶嵌入库（任一明细有镶嵌相关字段）
+                  const isInlayOrder = order.details.some(d => 
+                    d.main_stone_amount || d.sub_stone_amount || d.stone_setting_fee || d.total_amount
+                  );
+                  const currentDetails = editingOrderId === order.id ? editingDetails : order.details;
+                  
+                  return (
+                    <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-gray-500">
+                            <th className="pb-2 font-medium whitespace-nowrap">条码</th>
+                            <th className="pb-2 font-medium whitespace-nowrap">商品名称</th>
+                            <th className="pb-2 font-medium whitespace-nowrap">重量(克)</th>
+                            <th className="pb-2 font-medium whitespace-nowrap">克工费</th>
+                            <th className="pb-2 font-medium whitespace-nowrap">件数</th>
+                            <th className="pb-2 font-medium whitespace-nowrap">件工费</th>
+                            {isInlayOrder && (
+                              <>
+                                <th className="pb-2 font-medium whitespace-nowrap">主石重</th>
+                                <th className="pb-2 font-medium whitespace-nowrap">主石粒数</th>
+                                <th className="pb-2 font-medium whitespace-nowrap">主石单价</th>
+                                <th className="pb-2 font-medium whitespace-nowrap">主石额</th>
+                                <th className="pb-2 font-medium whitespace-nowrap">副石额</th>
+                                <th className="pb-2 font-medium whitespace-nowrap">镶石费</th>
+                              </>
+                            )}
+                            <th className="pb-2 font-medium whitespace-nowrap">供应商</th>
+                            <th className="pb-2 font-medium whitespace-nowrap">{isInlayOrder ? '总金额' : '总成本'}</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {currentDetails.map((detail) => (
+                            <tr key={detail.id}>
+                              <td className="py-2">
+                                <span className="font-mono text-xs text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
+                                  {detail.product_code || '-'}
+                                </span>
+                              </td>
+                              <td className="py-2">
+                                {editingOrderId === order.id ? (
+                                  <input
+                                    type="text"
+                                    value={detail.product_name}
+                                    onChange={(e) => updateEditingDetail(detail.id, 'product_name', e.target.value)}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded"
+                                  />
+                                ) : (
+                                  detail.product_name
+                                )}
+                              </td>
+                              <td className="py-2">
+                                {editingOrderId === order.id ? (
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={detail.weight}
+                                    onChange={(e) => updateEditingDetail(detail.id, 'weight', e.target.value)}
+                                    className="w-24 px-2 py-1 border border-gray-300 rounded"
+                                  />
+                                ) : (
+                                  detail.weight
+                                )}
+                              </td>
+                              <td className="py-2">
+                                {editingOrderId === order.id ? (
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={detail.labor_cost}
+                                    onChange={(e) => updateEditingDetail(detail.id, 'labor_cost', e.target.value)}
+                                    className="w-20 px-2 py-1 border border-gray-300 rounded"
+                                  />
+                                ) : (
+                                  detail.labor_cost
+                                )}
+                              </td>
+                              <td className="py-2">
+                                {editingOrderId === order.id ? (
+                                  <input
+                                    type="number"
+                                    value={detail.piece_count || ''}
+                                    onChange={(e) => updateEditingDetail(detail.id, 'piece_count', e.target.value)}
+                                    className="w-16 px-2 py-1 border border-gray-300 rounded"
+                                  />
+                                ) : (
+                                  detail.piece_count || '-'
+                                )}
+                              </td>
+                              <td className="py-2">
+                                {editingOrderId === order.id ? (
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={detail.piece_labor_cost || ''}
+                                    onChange={(e) => updateEditingDetail(detail.id, 'piece_labor_cost', e.target.value)}
+                                    className="w-20 px-2 py-1 border border-gray-300 rounded"
+                                  />
+                                ) : (
+                                  detail.piece_labor_cost || '-'
+                                )}
+                              </td>
+                              {isInlayOrder && (
+                                <>
+                                  <td className="py-2">{detail.main_stone_weight || '-'}</td>
+                                  <td className="py-2">{detail.main_stone_count || '-'}</td>
+                                  <td className="py-2">{detail.main_stone_price || '-'}</td>
+                                  <td className="py-2">{detail.main_stone_amount?.toFixed(2) || '-'}</td>
+                                  <td className="py-2">{detail.sub_stone_amount?.toFixed(2) || '-'}</td>
+                                  <td className="py-2">{detail.stone_setting_fee?.toFixed(2) || '-'}</td>
+                                </>
+                              )}
+                              <td className="py-2">
+                                {editingOrderId === order.id ? (
+                                  <input
+                                    type="text"
+                                    value={detail.supplier || ''}
+                                    onChange={(e) => updateEditingDetail(detail.id, 'supplier', e.target.value)}
+                                    className="w-28 px-2 py-1 border border-gray-300 rounded"
+                                  />
+                                ) : (
+                                  detail.supplier || '-'
+                                )}
+                              </td>
+                              <td className="py-2 text-orange-600 font-medium">
+                                {isInlayOrder 
+                                  ? (detail.total_amount?.toFixed(2) || detail.total_cost?.toFixed(2) || '-')
+                                  : (detail.total_cost?.toFixed(2) || '-')
+                                }
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* 统计信息 */}
-      <div className="mt-4 text-sm text-gray-500 text-right">
-        共 {orders.length} 条入库单据
-      </div>
+      {/* 统计汇总 */}
+      {orders.length > 0 && (
+        <div className="mt-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border border-orange-200 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Package className="w-5 h-5 text-orange-500" />
+              <span className="font-medium text-gray-700">
+                {hasActiveFilters ? '筛选结果汇总' : '全部数据汇总'}
+              </span>
+            </div>
+            <div className="flex items-center space-x-8">
+              <div className="text-center">
+                <div className="text-xs text-gray-500">入库单数</div>
+                <div className="text-lg font-bold text-gray-900">{orders.length}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs text-gray-500">商品总数</div>
+                <div className="text-lg font-bold text-gray-900">
+                  {orders.reduce((sum, order) => sum + order.item_count, 0)}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs text-gray-500">入库总克重</div>
+                <div className="text-lg font-bold text-orange-600">
+                  {orders.reduce((sum, order) => sum + order.total_weight, 0).toFixed(2)} 克
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs text-gray-500">总工费</div>
+                <div className="text-lg font-bold text-green-600">
+                  ¥{orders.reduce((sum, order) => {
+                    const orderTotalCost = order.details.reduce((detailSum, d) => detailSum + (d.total_cost || 0), 0);
+                    return sum + orderTotalCost;
+                  }, 0).toFixed(2)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 无数据时的统计 */}
+      {orders.length === 0 && !loading && (
+        <div className="mt-4 text-sm text-gray-500 text-center">
+          暂无符合条件的数据
+        </div>
+      )}
     </div>
   );
 };

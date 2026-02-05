@@ -53,6 +53,7 @@ ROLE_PERMISSIONS = {
         # 采购单权限
         'can_view_purchase_orders': True,   # 可以查看采购单
         'can_view_purchase_returns': True,  # 可以查看采购退货单
+        'can_audit_inbound': False,         # 不能审核入库单
     },
     
     # 结算专员
@@ -162,6 +163,7 @@ ROLE_PERMISSIONS = {
         # 采购单权限
         'can_view_purchase_orders': True,
         'can_view_purchase_returns': True,
+        'can_audit_inbound': True,          # 可以审核入库单
     },
     
     # 料部 - 管理金料的收发
@@ -244,6 +246,7 @@ ROLE_PERMISSIONS = {
         # 采购单权限
         'can_view_purchase_orders': True,   # 可以查看采购单
         'can_view_purchase_returns': True,  # 可以查看采购退货单
+        'can_audit_inbound': True,          # 可以审核入库单
     }
 }
 
@@ -291,6 +294,7 @@ PERMISSION_NAMES = {
     # 财务付款权限
     'can_record_payment': '登记客户收款',
     'can_record_supplier_payment': '登记供应商付款',
+    'can_audit_inbound': '审核入库单',
 }
 
 # AI操作到权限的映射

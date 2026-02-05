@@ -1273,6 +1273,7 @@ async def get_customer_detail(
 async def batch_import_customers(
     file: UploadFile = File(...),
     user_role: str = Query(default="manager", description="用户角色"),
+    encoding: Optional[str] = Query(default=None, description="文件编码（可选）"),
     db: Session = Depends(get_db)
 ):
     """
@@ -1302,6 +1303,33 @@ async def batch_import_customers(
         
         customers_data = []
         
+        def _score_text(text: str) -> int:
+            if not text:
+                return -1
+            chinese = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
+            alnum = sum(1 for c in text if c.isalnum())
+            bad = text.count('\ufffd')
+            return chinese * 2 + alnum - bad * 5
+
+        def _decode_with_auto_detect(raw: bytes) -> tuple[str, str]:
+            candidates = ['utf-8-sig', 'gb18030', 'gbk', 'big5']
+            best_text = None
+            best_encoding = None
+            best_score = -1
+            for enc in candidates:
+                try:
+                    text = raw.decode(enc, errors='replace')
+                except Exception:
+                    continue
+                score = _score_text(text)
+                if score > best_score:
+                    best_text = text
+                    best_encoding = enc
+                    best_score = score
+            if best_text is None or best_encoding is None:
+                raise ValueError("无法识别文件编码，请尝试手动指定 encoding 参数")
+            return best_text, best_encoding
+
         if file_extension in ['xlsx', 'xls']:
             # Excel 文件处理
             try:
@@ -1338,52 +1366,62 @@ async def batch_import_customers(
         elif file_extension == 'csv':
             # CSV 文件处理
             try:
-                content_str = content.decode('utf-8-sig')  # 处理 BOM
-            except:
-                try:
-                    content_str = content.decode('gbk')  # 尝试 GBK 编码
-                except:
-                    content_str = content.decode('utf-8', errors='ignore')
+                if encoding:
+                    try:
+                        content_str = content.decode(encoding, errors='strict')
+                        results["encoding"] = encoding
+                    except Exception:
+                        return error_response(message=f"指定编码解析失败：{encoding}")
+                else:
+                    content_str, used_encoding = _decode_with_auto_detect(content)
+                    results["encoding"] = used_encoding
             
-            csv_reader = csv.reader(io.StringIO(content_str))
-            
-            # 跳过表头
-            next(csv_reader, None)
-            
-            for row in csv_reader:
-                if row and row[0]:
-                    name = str(row[0]).strip()
-                    if name:
-                        customers_data.append({
-                            "name": name,
-                            "phone": row[1].strip() if len(row) > 1 and row[1] else None,
-                            "wechat": row[2].strip() if len(row) > 2 and row[2] else None,
-                            "address": row[3].strip() if len(row) > 3 and row[3] else None,
-                            "customer_type": row[4].strip() if len(row) > 4 and row[4] else "个人",
-                            "remark": row[5].strip() if len(row) > 5 and row[5] else None,
-                        })
+                csv_reader = csv.reader(io.StringIO(content_str))
+                
+                # 跳过表头
+                next(csv_reader, None)
+                
+                for row in csv_reader:
+                    if row and row[0]:
+                        name = str(row[0]).strip()
+                        if name:
+                            customers_data.append({
+                                "name": name,
+                                "phone": row[1].strip() if len(row) > 1 and row[1] else None,
+                                "wechat": row[2].strip() if len(row) > 2 and row[2] else None,
+                                "address": row[3].strip() if len(row) > 3 and row[3] else None,
+                                "customer_type": row[4].strip() if len(row) > 4 and row[4] else "个人",
+                                "remark": row[5].strip() if len(row) > 5 and row[5] else None,
+                            })
+            except Exception as e:
+                return error_response(message=f"CSV 文件解析失败: {str(e)[:200]}")
         
         elif file_extension == 'txt':
             # 纯文本文件（每行一个姓名）
             try:
-                content_str = content.decode('utf-8')
-            except:
-                try:
-                    content_str = content.decode('gbk')
-                except:
-                    content_str = content.decode('utf-8', errors='ignore')
+                if encoding:
+                    try:
+                        content_str = content.decode(encoding, errors='strict')
+                        results["encoding"] = encoding
+                    except Exception:
+                        return error_response(message=f"指定编码解析失败：{encoding}")
+                else:
+                    content_str, used_encoding = _decode_with_auto_detect(content)
+                    results["encoding"] = used_encoding
             
-            for line in content_str.split('\n'):
-                name = line.strip()
-                if name:
-                    customers_data.append({
-                        "name": name,
-                        "phone": None,
-                        "wechat": None,
-                        "address": None,
-                        "customer_type": "个人",
-                        "remark": None,
-                    })
+                for line in content_str.split('\n'):
+                    name = line.strip()
+                    if name:
+                        customers_data.append({
+                            "name": name,
+                            "phone": None,
+                            "wechat": None,
+                            "address": None,
+                            "customer_type": "个人",
+                            "remark": None,
+                        })
+            except Exception as e:
+                return error_response(message=f"文本文件解析失败: {str(e)[:200]}")
         else:
             return error_response(
                 message=f"不支持的文件格式：{file_extension}。支持格式：.xlsx, .xls, .csv, .txt"

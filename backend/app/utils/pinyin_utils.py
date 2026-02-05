@@ -74,3 +74,25 @@ def to_pinyin_initials(text: str) -> str:
     return ''.join(result)
 
 
+def to_pinyin_initials_keep_alnum(text: str) -> str:
+    """
+    中文取拼音首字母；数字/英文字母原样保留并转为大写。
+    例如：足金3D硬金吊坠 -> ZJ3DYJDZ
+    """
+    if not text or not isinstance(text, str):
+        return text
+    
+    result = []
+    for char in text:
+        if '\u4e00' <= char <= '\u9fff':
+            pinyin = lazy_pinyin(char)
+            if pinyin and pinyin[0]:
+                result.append(pinyin[0][0].upper())
+        elif char.isalnum():
+            result.append(char.upper())
+        else:
+            continue
+    
+    return ''.join(result)
+
+

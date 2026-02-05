@@ -34,4 +34,41 @@ describe('parseInboundTable', () => {
     expect(result.rows.length).toBe(1)
     expect(result.rows[0].errors.productName).toBe('商品名称不能为空')
   })
+
+  it('parses alias headers for required fields', () => {
+    const table = [
+      ['商品名', '重量', '克工费'],
+      ['足金', '0.5', '9'],
+    ]
+
+    const result = parseInboundTable(table)
+
+    expect(result.errors.length).toBe(0)
+    expect(result.rows[0].errors).toEqual({})
+    expect(result.rows[0].data).toEqual({
+      productCode: undefined,
+      productName: '足金',
+      weight: 0.5,
+      laborCost: 9,
+      pieceCount: undefined,
+      pieceLaborCost: undefined,
+      remark: undefined,
+    })
+  })
+
+  it('merges multi-column product name without spaces', () => {
+    const table = [
+      ['品名', '', '', '件数', '重量', '克工费'],
+      ['足金', '钻石', '挂坠', '1', '0.55', '9'],
+    ]
+
+    const result = parseInboundTable(table)
+
+    expect(result.errors.length).toBe(0)
+    expect(result.rows[0].errors).toEqual({})
+    expect(result.rows[0].data.productName).toBe('足金钻石挂坠')
+    expect(result.rows[0].data.weight).toBe(0.55)
+    expect(result.rows[0].data.laborCost).toBe(9)
+    expect(result.rows[0].data.pieceCount).toBe(1)
+  })
 })

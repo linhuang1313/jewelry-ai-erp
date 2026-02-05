@@ -498,7 +498,8 @@ async def receive_transfer(
     
     if not transfer:
         raise HTTPException(status_code=404, detail="转移单不存在")
-    if transfer.status != "pending":
+    # 支持 pending 和 pending_confirm 两种状态的接收
+    if transfer.status not in ["pending", "pending_confirm"]:
         raise HTTPException(status_code=400, detail=f"转移单状态为 {transfer.status}，无法接收")
     
     # 计算重量差异
@@ -954,12 +955,22 @@ async def create_transfer_order(
     data: TransferOrderCreate,
     created_by: str = Query(default="系统管理员", description="创建人"),
     user_role: str = Query(default="manager", description="用户角色"),
+    initial_status: str = Query(default="pending", description="初始状态: pending(待接收) 或 pending_confirm(待确认)"),
     db: Session = Depends(get_db)
 ):
-    """创建转移单（支持多商品）"""
+    """创建转移单（支持多商品）
+    
+    initial_status 参数:
+    - pending: 默认状态，目标位置人员需要接收
+    - pending_confirm: 待确认状态，直接出现在"待确认"标签页，用于批量转移场景
+    """
     from ..middleware.permissions import has_permission
     if not has_permission(user_role, 'can_transfer'):
         raise HTTPException(status_code=403, detail="权限不足：您没有【发起库存转移】的权限")
+    
+    # 验证初始状态
+    if initial_status not in ["pending", "pending_confirm"]:
+        initial_status = "pending"
     
     # 验证位置
     from_location = db.query(Location).filter(Location.id == data.from_location_id).first()
@@ -1002,7 +1013,7 @@ async def create_transfer_order(
         transfer_no=transfer_no,
         from_location_id=data.from_location_id,
         to_location_id=data.to_location_id,
-        status="pending",
+        status=initial_status,
         created_by=created_by,
         created_at=china_now(),
         remark=data.remark
@@ -1202,7 +1213,8 @@ async def receive_transfer_order(
     
     if not order:
         raise HTTPException(status_code=404, detail="转移单不存在")
-    if order.status != "pending":
+    # 支持 pending 和 pending_confirm 两种状态的接收（统一流程：商品专员创建的单是pending_confirm）
+    if order.status not in ["pending", "pending_confirm"]:
         raise HTTPException(status_code=400, detail=f"转移单状态为 {order.status}，无法接收")
     
     # 构建 item_id -> receive_data 的映射
@@ -1343,9 +1355,9 @@ async def confirm_transfer_order(
     user_role: str = Query(default="manager", description="用户角色"),
     db: Session = Depends(get_db)
 ):
-    """商品部确认转移单（同意柜台填写的实际重量）"""
-    if user_role not in ['product', 'manager']:
-        raise HTTPException(status_code=403, detail="权限不足：只有商品专员可以确认转移单")
+    """商品部确认转移单（同意柜台填写的实际重量，或确认批量转移）"""
+    if user_role not in ['product', 'manager', 'counter']:
+        raise HTTPException(status_code=403, detail="权限不足：只有商品专员、柜台或管理层可以确认转移单")
     
     order = db.query(InventoryTransferOrder).filter(InventoryTransferOrder.id == order_id).first()
     
@@ -1354,24 +1366,34 @@ async def confirm_transfer_order(
     if order.status != "pending_confirm":
         raise HTTPException(status_code=400, detail=f"转移单状态为 {order.status}，无法确认")
     
-    # 按实际重量更新目标位置库存
+    # 按实际重量（或原始重量）更新目标位置库存
+    # 如果actual_weight未设置（批量转移场景），使用原始weight
     for item in order.items:
+        transfer_weight = item.actual_weight if item.actual_weight is not None else item.weight
+        
         to_inventory = db.query(LocationInventory).filter(
             LocationInventory.location_id == order.to_location_id,
             LocationInventory.product_name == item.product_name
         ).first()
         
         if to_inventory:
-            to_inventory.weight += item.actual_weight
+            to_inventory.weight += transfer_weight
         else:
             to_inventory = LocationInventory(
                 product_name=item.product_name,
                 location_id=order.to_location_id,
-                weight=item.actual_weight
+                weight=transfer_weight
             )
             db.add(to_inventory)
+        
+        # 如果actual_weight未设置，设置为weight（保持一致性）
+        if item.actual_weight is None:
+            item.actual_weight = item.weight
+            item.weight_diff = 0
     
     order.status = "received"
+    order.received_by = order.received_by or confirmed_by
+    order.received_at = order.received_at or china_now()
     
     db.commit()
     db.refresh(order)
@@ -1661,6 +1683,244 @@ async def resubmit_transfer_order(
 
 
 # ============= 数据迁移 API =============
+
+@router.options("/transfer-orders/{order_id}/download")
+async def download_transfer_order_options(order_id: int):
+    """处理CORS预检请求"""
+    from fastapi.responses import Response
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+
+
+@router.get("/transfer-orders/{order_id}/download")
+async def download_transfer_order(
+    order_id: int,
+    format: str = Query("html", pattern="^(pdf|html)$"),
+    db: Session = Depends(get_db)
+):
+    """下载转移单进货单（饰品分销进货单样式）"""
+    from fastapi.responses import HTMLResponse
+    from ..timezone_utils import to_china_time, format_china_time
+    
+    # 查询转移单
+    order = db.query(InventoryTransferOrder).filter(InventoryTransferOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="转移单不存在")
+    
+    # 获取位置信息
+    from_location = db.query(Location).filter(Location.id == order.from_location_id).first()
+    to_location = db.query(Location).filter(Location.id == order.to_location_id).first()
+    
+    from_location_name = from_location.name if from_location else "未知"
+    to_location_name = to_location.name if to_location else "未知"
+    
+    # 生成进货单号（PFH + 日期 + 序号）
+    purchase_no = order.transfer_no.replace("TR", "PFH")
+    
+    # 格式化时间
+    create_time_str = "未知"
+    create_date_str = "未知"
+    if order.created_at:
+        china_time = to_china_time(order.created_at)
+        create_time_str = format_china_time(china_time, '%Y-%m-%d %H:%M:%S')
+        create_date_str = format_china_time(china_time, '%Y/%m/%d')
+    
+    # 从remark中提取入库单号
+    inbound_order_no = ""
+    if order.remark and "入库单" in order.remark:
+        # 尝试提取入库单号（格式：来自入库单 RK20260205001）
+        import re
+        match = re.search(r'(RK\d+)', order.remark)
+        if match:
+            inbound_order_no = match.group(1).replace("RK", "PRK")
+    
+    # 获取商品明细
+    items = order.items
+    
+    # 计算总重量
+    total_weight = sum(item.weight or 0 for item in items)
+    
+    # 生成HTML
+    items_html = ""
+    for idx, item in enumerate(items, 1):
+        # 尝试从商品名称中提取条码号（如果名称中有GFJZ等编码）
+        barcode = ""
+        if item.product_name:
+            # 简单提取前4个字母作为条码
+            import re
+            code_match = re.match(r'^([A-Z]{2,4})', item.product_name.upper())
+            if code_match:
+                barcode = code_match.group(1)
+        
+        items_html += f"""
+            <tr>
+                <td style="border: 1px solid #000; padding: 8px; text-align: center;">{idx}</td>
+                <td style="border: 1px solid #000; padding: 8px; text-align: center;">{barcode}</td>
+                <td style="border: 1px solid #000; padding: 8px;">{item.product_name}</td>
+                <td style="border: 1px solid #000; padding: 8px; text-align: center;"></td>
+                <td style="border: 1px solid #000; padding: 8px; text-align: right;">{item.weight:.3f}</td>
+            </tr>
+        """
+    
+    html_content = f"""
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>进货单 - {purchase_no}</title>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        body {{
+            font-family: 'Microsoft YaHei', 'SimHei', 'SimSun', Arial, sans-serif;
+            padding: 20px;
+            background: #fff;
+        }}
+        .container {{
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+        }}
+        .header {{
+            text-align: right;
+            margin-bottom: 20px;
+        }}
+        .header h1 {{
+            font-size: 24px;
+            color: #d63384;
+            font-weight: bold;
+        }}
+        .info-section {{
+            margin-bottom: 20px;
+            font-size: 14px;
+            line-height: 1.8;
+        }}
+        .info-row {{
+            display: flex;
+            justify-content: space-between;
+        }}
+        .info-left {{
+            flex: 1;
+        }}
+        .info-right {{
+            flex: 1;
+            text-align: right;
+        }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }}
+        th {{
+            border: 1px solid #000;
+            padding: 8px;
+            background: #f0f0f0;
+            font-weight: bold;
+            text-align: center;
+        }}
+        .summary-row td {{
+            border: 1px solid #000;
+            padding: 8px;
+            font-weight: bold;
+        }}
+        .footer {{
+            margin-top: 40px;
+            padding-top: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+        }}
+        @media print {{
+            body {{
+                padding: 0;
+            }}
+            .container {{
+                padding: 10px;
+            }}
+            .no-print {{
+                display: none;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>饰品分销进货单</h1>
+        </div>
+        
+        <div class="info-section">
+            <div class="info-row">
+                <div class="info-left">
+                    <div>进货单号：{purchase_no}</div>
+                    <div>进货分商：{to_location_name}</div>
+                    <div>调拨分销：</div>
+                    <div>调拨备注：{inbound_order_no}</div>
+                </div>
+                <div class="info-right">
+                    <div>进货日期：{create_date_str}</div>
+                    <div>进货柜组：</div>
+                    <div>调拨柜组：{from_location_name}</div>
+                </div>
+            </div>
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 60px;">序号</th>
+                    <th style="width: 100px;">条码号</th>
+                    <th>饰品名称</th>
+                    <th style="width: 80px;">数量</th>
+                    <th style="width: 100px;">重量</th>
+                </tr>
+            </thead>
+            <tbody>
+                {items_html}
+            </tbody>
+            <tfoot>
+                <tr class="summary-row">
+                    <td colspan="3" style="text-align: right; border: 1px solid #000; padding: 8px;">小计</td>
+                    <td style="text-align: center; border: 1px solid #000; padding: 8px;">{len(items)}</td>
+                    <td style="text-align: right; border: 1px solid #000; padding: 8px;">{total_weight:.3f}</td>
+                </tr>
+                <tr class="summary-row">
+                    <td colspan="3" style="text-align: right; border: 1px solid #000; padding: 8px;">合计</td>
+                    <td style="text-align: center; border: 1px solid #000; padding: 8px;">{len(items)}</td>
+                    <td style="text-align: right; border: 1px solid #000; padding: 8px;">{total_weight:.3f}</td>
+                </tr>
+            </tfoot>
+        </table>
+        
+        <div class="footer no-print">
+            <p>转移单号：{order.transfer_no} | 创建人：{order.created_by or '系统'} | 创建时间：{create_time_str}</p>
+            <button onclick="window.print()" style="margin-top: 20px; padding: 10px 30px; font-size: 16px; cursor: pointer; background: #d63384; color: white; border: none; border-radius: 5px;">
+                打印进货单
+            </button>
+        </div>
+    </div>
+</body>
+</html>
+"""
+    
+    return HTMLResponse(
+        content=html_content,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+        }
+    )
+
 
 @router.post("/migrate-old-transfers")
 async def migrate_old_transfers(

@@ -3,7 +3,7 @@ import { API_ENDPOINTS } from '../config';
 import {
   Package, MapPin, ArrowRight, ArrowLeft, Check, X, Clock, RefreshCw,
   Plus, Send, Inbox, AlertTriangle, ChevronDown, Search, Filter, FileText,
-  AlertCircle
+  AlertCircle, Printer
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -166,6 +166,8 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
   const [transferOrders, setTransferOrders] = useState<TransferOrder[]>([]);
   const [pendingTransferOrders, setPendingTransferOrders] = useState<TransferOrder[]>([]);
   const [pendingConfirmTransferOrders, setPendingConfirmTransferOrders] = useState<TransferOrder[]>([]);
+  const [confirmedTransferOrders, setConfirmedTransferOrders] = useState<TransferOrder[]>([]);  // 已确认的转移单（商品专员）
+  const [receivedTransferOrders, setReceivedTransferOrders] = useState<TransferOrder[]>([]);  // 已接收的转移单（柜台）
   const [loading, setLoading] = useState(false);
   // 独立的加载状态和错误状态（渐进式加载）
   const [inventoryLoading, setInventoryLoading] = useState(true);
@@ -366,25 +368,49 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
         const data = await response.json();
         setTransferOrders(data);
         
-        // 根据角色过滤待接收的转移单
+        // 根据角色过滤待接收的转移单（柜台看到的"待接收" = 商品专员看到的"待确认"）
         const myResponsibleLocation = ROLE_LOCATION_MAP[userRole];
         if (myResponsibleLocation) {
           setPendingTransferOrders(
             data.filter((t: TransferOrder) => 
-              t.status === 'pending' && t.to_location_name === myResponsibleLocation
+              t.status === 'pending_confirm' && t.to_location_name === myResponsibleLocation
             )
           );
         } else {
-          setPendingTransferOrders(data.filter((t: TransferOrder) => t.status === 'pending'));
+          setPendingTransferOrders(data.filter((t: TransferOrder) => t.status === 'pending_confirm'));
         }
         
-        // 待确认转移单
+        // 待确认转移单（商品专员和管理员）
         if (userRole === 'product' || userRole === 'manager') {
           setPendingConfirmTransferOrders(
             data.filter((t: TransferOrder) => t.status === 'pending_confirm')
           );
+          // 已确认的转移单（状态为 received）
+          setConfirmedTransferOrders(
+            data.filter((t: TransferOrder) => t.status === 'received')
+          );
         } else {
           setPendingConfirmTransferOrders([]);
+          setConfirmedTransferOrders([]);
+        }
+        
+        // 已接收的转移单（柜台和管理员）
+        if (userRole === 'counter' || userRole === 'manager') {
+          // 柜台只看目标是展厅的已接收单
+          const myResponsibleLocation = userRole === 'counter' ? '展厅' : null;
+          if (myResponsibleLocation) {
+            setReceivedTransferOrders(
+              data.filter((t: TransferOrder) => 
+                t.status === 'received' && t.to_location_name === myResponsibleLocation
+              )
+            );
+          } else {
+            setReceivedTransferOrders(
+              data.filter((t: TransferOrder) => t.status === 'received')
+            );
+          }
+        } else {
+          setReceivedTransferOrders([]);
         }
       } else {
         setTransfersError('加载转移单失败，请重试');
@@ -583,7 +609,8 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     
     setBatchLoading(true);
     try {
-      const response = await fetch(`${API_ENDPOINTS.TRANSFERS_BATCH}?user_role=${userRole}`, {
+      // 使用 /transfer-orders 端点，initial_status=pending_confirm 使转移单直接进入"待确认"状态
+      const response = await fetch(`${API_ENDPOINTS.TRANSFER_ORDERS}?user_role=${userRole}&created_by=${userRole}&initial_status=pending_confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -599,18 +626,27 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       
       const result = await response.json();
       
-      if (result.success) {
-        toast.success(result.message);
+      // 检查成功响应 - 支持多种返回格式
+      const isSuccess = response.ok && (result.id || result.data?.id || result.success);
+      const transferNo = result.transfer_no || result.data?.transfer_no;
+      
+      if (isSuccess && (result.id || result.data?.id)) {
+        // 成功创建转移单
+        toast.success(`批量转移成功，已创建转移单 ${transferNo}，请在"待确认"中查看`);
         setSelectedOrderIds(new Set());
         setBatchItems([]);
         loadTransfers();
         loadInventorySummary();
         loadRecentInboundOrders();
       } else {
-        toast.error(result.detail || '批量转移失败');
+        // 显示后端返回的具体错误信息 - 支持多种错误格式
+        const errorMsg = result.message || result.detail || result.error || '批量转移失败';
+        toast.error(errorMsg, { duration: 6000 });
+        console.error('转移失败:', response.status, result);
       }
-    } catch (error) {
-      toast.error('批量转移失败');
+    } catch (error: any) {
+      console.error('转移请求失败:', error);
+      toast.error(`批量转移失败: ${error.message || '网络错误'}`);
     } finally {
       setBatchLoading(false);
     }
@@ -717,7 +753,8 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     
     setBatchLoading(true);
     try {
-      const response = await fetch(`${API_ENDPOINTS.TRANSFERS_BATCH}?user_role=${userRole}`, {
+      // 使用 /transfer-orders 端点，initial_status=pending_confirm 使转移单直接进入"待确认"状态
+      const response = await fetch(`${API_ENDPOINTS.TRANSFER_ORDERS}?user_role=${userRole}&created_by=${userRole}&initial_status=pending_confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -733,8 +770,13 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       
       const result = await response.json();
       
-      if (result.success) {
-        toast.success(result.message);
+      // 检查成功响应 - 支持多种返回格式
+      const isSuccess = response.ok && (result.id || result.data?.id || result.success);
+      const transferNo = result.transfer_no || result.data?.transfer_no;
+      
+      if (isSuccess && (result.id || result.data?.id)) {
+        // 成功创建转移单
+        toast.success(`批量转移成功，已创建转移单 ${transferNo}，请在"待确认"中查看`);
         setBatchOrderNo('');
         setBatchItems([]);
         setSelectedOrderIds(new Set());
@@ -742,10 +784,14 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
         loadInventorySummary();
         loadRecentInboundOrders();
       } else {
-        toast.error(result.detail || '批量转移失败');
+        // 显示后端返回的具体错误信息 - 支持多种错误格式
+        const errorMsg = result.message || result.detail || result.error || '批量转移失败';
+        toast.error(errorMsg, { duration: 6000 });
+        console.error('转移失败:', response.status, result);
       }
-    } catch (error) {
-      toast.error('批量转移失败');
+    } catch (error: any) {
+      console.error('转移请求失败:', error);
+      toast.error(`批量转移失败: ${error.message || '网络错误'}`);
     } finally {
       setBatchLoading(false);
     }
@@ -819,8 +865,8 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     }
 
     try {
-      // 使用新版转移单 API（支持多商品）
-      const response = await fetch(`${API_ENDPOINTS.TRANSFER_ORDERS}?user_role=${userRole}`, {
+      // 使用新版转移单 API（支持多商品），商品专员创建的转移单进入"待确认"状态
+      const response = await fetch(`${API_ENDPOINTS.TRANSFER_ORDERS}?user_role=${userRole}&created_by=${userRole}&initial_status=pending_confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -834,7 +880,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       if (response.ok) {
         const result = await response.json();
         const totalWeight = result.total_weight || itemsToTransfer.reduce((sum: number, item: { weight: number }) => sum + item.weight, 0);
-        toast.success(`成功创建转移单 ${result.transfer_no}，共 ${result.items.length} 个商品，${totalWeight.toFixed(2)}g`);
+        toast.success(`成功创建转移单 ${result.transfer_no}，共 ${result.items.length} 个商品，${totalWeight.toFixed(2)}g，请在"待确认"中查看`);
         setShowTransferForm(false);
         setTransferItems([]);
         // 重置表单但保留默认位置
@@ -1178,6 +1224,16 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
               count={pendingTransferOrders.length}
             />
           )}
+          {/* 已接收 - 仅柜台和管理员可见 */}
+          {(userRole === 'counter' || userRole === 'manager') && (
+            <TabButton
+              active={activeTab === 'received'}
+              onClick={() => setActiveTab('received')}
+              icon={<Check className="w-4 h-4" />}
+              label="已接收"
+              count={receivedTransferOrders.length}
+            />
+          )}
           {/* 待确认标签页 - 仅商品专员和管理员可见 */}
           {(userRole === 'product' || userRole === 'manager') && (
             <TabButton
@@ -1186,6 +1242,16 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
               icon={<Check className="w-4 h-4" />}
               label="待确认"
               count={pendingConfirmTransferOrders.length}
+            />
+          )}
+          {/* 已确认标签页 - 仅商品专员和管理员可见 */}
+          {(userRole === 'product' || userRole === 'manager') && (
+            <TabButton
+              active={activeTab === 'confirmed'}
+              onClick={() => setActiveTab('confirmed')}
+              icon={<FileText className="w-4 h-4" />}
+              label="已确认"
+              count={confirmedTransferOrders.length}
             />
           )}
         </div>
@@ -2272,6 +2338,121 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
             </div>
           )}
 
+          {/* 已接收（柜台查看已确认接收的进货单） */}
+          {activeTab === 'received' && (
+            <div>
+              {transfersLoading ? (
+                <div className="text-center py-12 text-gray-500">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                  加载中...
+                </div>
+              ) : transfersError ? (
+                <div className="text-center py-12">
+                  <AlertCircle className="w-12 h-12 mx-auto text-red-400 mb-4" />
+                  <p className="text-red-500 mb-4">{transfersError}</p>
+                  <button
+                    onClick={loadTransfers}
+                    className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                  >
+                    点击重试
+                  </button>
+                </div>
+              ) : receivedTransferOrders.length === 0 ? (
+                <div className="text-center py-12">
+                  <Inbox className="w-12 h-12 mx-auto text-gray-300 mb-4" />
+                  <p className="text-gray-500">暂无已接收的进货单</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                    <div className="flex items-center text-green-700">
+                      <Check className="w-5 h-5 mr-2" />
+                      <span className="font-medium">以下进货单已确认接收</span>
+                    </div>
+                  </div>
+                  
+                  {/* 已接收转移单列表 */}
+                  {receivedTransferOrders.map(order => (
+                    <div key={order.id} className="border border-green-200 bg-green-50 rounded-lg overflow-hidden">
+                      <div className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3 mb-2">
+                              <span className="font-mono text-sm text-gray-500">{order.transfer_no}</span>
+                              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">已接收</span>
+                              <span className="text-sm bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                                {order.items.length} 个商品
+                              </span>
+                            </div>
+                            <div className="flex items-center text-gray-600 mb-2">
+                              <MapPin className="w-4 h-4 mr-1" />
+                              <span>{order.from_location_name}</span>
+                              <ArrowRight className="w-4 h-4 mx-2" />
+                              <span className="font-semibold">{order.to_location_name}</span>
+                            </div>
+                            <div className="flex items-center space-x-4 text-sm text-gray-500 mt-3">
+                              <span>发货人: {order.created_by || '-'}</span>
+                              <span>创建时间: {order.created_at ? new Date(order.created_at).toLocaleString('zh-CN') : '-'}</span>
+                              {order.received_by && <span>接收人: {order.received_by}</span>}
+                              {order.received_at && <span>接收时间: {new Date(order.received_at).toLocaleString('zh-CN')}</span>}
+                            </div>
+                            {order.remark && (
+                              <div className="text-sm text-gray-500 mt-2">
+                                备注: {order.remark}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-col space-y-2 ml-4">
+                            <button
+                              onClick={() => window.open(API_ENDPOINTS.TRANSFER_ORDER_DOWNLOAD(order.id, 'html'), '_blank')}
+                              className="flex items-center justify-center space-x-1 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors"
+                            >
+                              <Printer className="w-4 h-4" />
+                              <span>打印进货单</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      {/* 商品明细 */}
+                      <div className="border-t border-green-200 bg-white/50">
+                        <table className="w-full text-sm">
+                          <thead className="bg-green-100/50">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-gray-600">商品名称</th>
+                              <th className="px-4 py-2 text-right text-gray-600">预期重量</th>
+                              <th className="px-4 py-2 text-right text-gray-600">实收重量</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-green-100">
+                            {order.items.map(item => (
+                              <tr key={item.id}>
+                                <td className="px-4 py-2">{item.product_name}</td>
+                                <td className="px-4 py-2 text-right">{item.weight}g</td>
+                                <td className="px-4 py-2 text-right font-medium text-green-600">{item.actual_weight || item.weight}g</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-green-100/50">
+                            <tr>
+                              <td className="px-4 py-2 text-right font-semibold">合计</td>
+                              <td className="px-4 py-2 text-right font-semibold">
+                                {order.total_weight || order.items.reduce((sum, item) => sum + item.weight, 0)}g
+                              </td>
+                              <td className="px-4 py-2 text-right font-semibold text-green-700">
+                                {order.total_actual_weight || order.items.reduce((sum, item) => sum + (item.actual_weight || item.weight), 0)}g
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                  
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 待确认（商品专员审批） */}
           {activeTab === 'confirm' && (
             <div>
@@ -2330,6 +2511,13 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                             </div>
                           </div>
                           <div className="flex flex-col space-y-2 ml-4">
+                            <button
+                              onClick={() => window.open(API_ENDPOINTS.TRANSFER_ORDER_DOWNLOAD(order.id, 'html'), '_blank')}
+                              className="flex items-center justify-center space-x-1 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors"
+                            >
+                              <Printer className="w-4 h-4" />
+                              <span>打印进货单</span>
+                            </button>
                             {userRole === 'product' ? (
                               editOrderId === order.id ? (
                                 <>
@@ -2449,6 +2637,115 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                               );
                             })}
                           </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                  
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 已确认（商品专员查看已接收的进货单） */}
+          {activeTab === 'confirmed' && (
+            <div>
+              {transfersLoading ? (
+                <div className="text-center py-12 text-gray-500">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                  加载中...
+                </div>
+              ) : transfersError ? (
+                <div className="text-center py-12">
+                  <AlertCircle className="w-12 h-12 mx-auto text-red-400 mb-4" />
+                  <p className="text-red-500 mb-4">{transfersError}</p>
+                  <button
+                    onClick={loadTransfers}
+                    className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                  >
+                    点击重试
+                  </button>
+                </div>
+              ) : confirmedTransferOrders.length === 0 ? (
+                <div className="text-center py-12">
+                  <FileText className="w-12 h-12 mx-auto text-gray-300 mb-4" />
+                  <p className="text-gray-500">暂无已确认的进货单</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                    <div className="flex items-center text-green-700">
+                      <Check className="w-5 h-5 mr-2" />
+                      <span className="font-medium">以下进货单已被展厅确认接收</span>
+                    </div>
+                  </div>
+                  
+                  {/* 已确认转移单列表 */}
+                  {confirmedTransferOrders.map(order => (
+                    <div key={order.id} className="border border-green-200 bg-green-50 rounded-lg overflow-hidden">
+                      <div className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3 mb-2">
+                              <span className="font-mono text-sm text-gray-500">{order.transfer_no}</span>
+                              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">已确认</span>
+                              <span className="text-sm bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                                {order.items.length} 个商品
+                              </span>
+                            </div>
+                            <div className="flex items-center text-gray-600 mb-2">
+                              <MapPin className="w-4 h-4 mr-1" />
+                              <span>{order.from_location_name}</span>
+                              <ArrowRight className="w-4 h-4 mx-2" />
+                              <span className="font-semibold">{order.to_location_name}</span>
+                            </div>
+                            <div className="flex items-center space-x-4 text-sm text-gray-500 mt-3">
+                              <span>创建人: {order.created_by || '-'}</span>
+                              <span>创建时间: {order.created_at ? new Date(order.created_at).toLocaleString('zh-CN') : '-'}</span>
+                              {order.received_by && <span>接收人: {order.received_by}</span>}
+                            </div>
+                            {order.remark && (
+                              <div className="text-sm text-gray-500 mt-2">
+                                备注: {order.remark}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-col space-y-2 ml-4">
+                            <button
+                              onClick={() => window.open(API_ENDPOINTS.TRANSFER_ORDER_DOWNLOAD(order.id, 'html'), '_blank')}
+                              className="flex items-center justify-center space-x-1 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors"
+                            >
+                              <Printer className="w-4 h-4" />
+                              <span>打印进货单</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      {/* 商品明细 */}
+                      <div className="border-t border-green-200 bg-white/50">
+                        <table className="w-full text-sm">
+                          <thead className="bg-green-100/50">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-gray-600">商品名称</th>
+                              <th className="px-4 py-2 text-right text-gray-600">重量</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-green-100">
+                            {order.items.map(item => (
+                              <tr key={item.id}>
+                                <td className="px-4 py-2">{item.product_name}</td>
+                                <td className="px-4 py-2 text-right font-medium">{item.actual_weight || item.weight}g</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-green-100/50">
+                            <tr>
+                              <td className="px-4 py-2 text-right font-semibold">合计</td>
+                              <td className="px-4 py-2 text-right font-semibold text-green-700">
+                                {order.total_actual_weight || order.total_weight || order.items.reduce((sum, item) => sum + (item.actual_weight || item.weight), 0)}g
+                              </td>
+                            </tr>
+                          </tfoot>
                         </table>
                       </div>
                     </div>
