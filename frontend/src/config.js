@@ -29,6 +29,7 @@ export const API_ENDPOINTS = {
   TRANSFER_ORDER_CONFIRM: (id) => `${API_BASE_URL}/api/warehouse/transfer-orders/${id}/confirm`,  // 商品部确认（同意）
   TRANSFER_ORDER_REJECT_CONFIRM: (id) => `${API_BASE_URL}/api/warehouse/transfer-orders/${id}/reject-confirm`,  // 商品部拒绝确认
   TRANSFER_ORDER_RESUBMIT: (id) => `${API_BASE_URL}/api/warehouse/transfer-orders/${id}/resubmit`,  // 重新发起退回的转移单
+  TRANSFER_ORDER_DOWNLOAD: (id, format = 'html') => `${API_BASE_URL}/api/warehouse/transfer-orders/${id}/download?format=${format}`,  // 下载进货单
   
   INIT_DEFAULT_LOCATIONS: `${API_BASE_URL}/api/warehouse/init-default-locations`,  // 初始化默认位置
   

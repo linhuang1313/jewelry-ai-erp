@@ -3,7 +3,7 @@ import { API_ENDPOINTS } from '../config';
 import {
   Package, MapPin, ArrowRight, ArrowLeft, Check, X, Clock, RefreshCw,
   Plus, Send, Inbox, AlertTriangle, ChevronDown, Search, Filter, FileText,
-  AlertCircle
+  AlertCircle, Printer
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -2265,6 +2265,13 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                             </div>
                           </div>
                           <div className="flex flex-col space-y-2 ml-4">
+                            <button
+                              onClick={() => window.open(API_ENDPOINTS.TRANSFER_ORDER_DOWNLOAD(order.id, 'html'), '_blank')}
+                              className="flex items-center justify-center space-x-1 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors"
+                            >
+                              <Printer className="w-4 h-4" />
+                              <span>打印进货单</span>
+                            </button>
                             <button
                               onClick={() => handleConfirmTransferOrder(order)}
                               className="flex items-center justify-center space-x-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
