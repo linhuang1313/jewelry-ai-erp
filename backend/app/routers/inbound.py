@@ -961,19 +961,30 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
                     })
                     continue
                 
-                valid_product = db.query(ProductCodeModel).filter(
-                    ProductCodeModel.name == product_name,
-                    ProductCodeModel.code_type == 'predefined'
-                ).first()
-                if not valid_product:
-                    error_count += 1
-                    results.append({
-                        "index": idx + 1,
-                        "product_name": product_name,
-                        "success": False,
-                        "error": f"商品名称 '{product_name}' 不在预定义列表中"
-                    })
-                    continue
+                # 检查是否是镶嵌产品（有镶嵌相关字段）
+                is_inlay_product = any([
+                    getattr(item, 'main_stone_weight', None),
+                    getattr(item, 'main_stone_amount', None),
+                    getattr(item, 'sub_stone_amount', None),
+                    getattr(item, 'stone_setting_fee', None),
+                    getattr(item, 'total_amount', None),
+                ])
+                
+                # 非镶嵌产品需要验证是否在预定义列表中
+                if not is_inlay_product:
+                    valid_product = db.query(ProductCodeModel).filter(
+                        ProductCodeModel.name == product_name,
+                        ProductCodeModel.code_type == 'predefined'
+                    ).first()
+                    if not valid_product:
+                        error_count += 1
+                        results.append({
+                            "index": idx + 1,
+                            "product_name": product_name,
+                            "success": False,
+                            "error": f"商品名称 '{product_name}' 不在预定义列表中"
+                        })
+                        continue
                 
                 gram_cost = labor_cost * weight
                 piece_cost = piece_count * piece_labor_cost

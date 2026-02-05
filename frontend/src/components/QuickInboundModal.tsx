@@ -880,7 +880,30 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
         
         onClose();
       } else {
-        toast.error(result.message || '入库失败，请检查数据');
+        // 显示详细错误信息
+        let errorMsg = result.message || '入库失败，请检查数据';
+        
+        // 如果有详细结果，提取错误原因
+        if (result.results && Array.isArray(result.results)) {
+          const errors = result.results.filter((r: { success: boolean; error?: string }) => !r.success);
+          if (errors.length > 0) {
+            // 统计错误类型
+            const errorTypes: Record<string, number> = {};
+            errors.forEach((e: { error?: string }) => {
+              const errMsg = e.error || '未知错误';
+              errorTypes[errMsg] = (errorTypes[errMsg] || 0) + 1;
+            });
+            
+            // 构建错误摘要
+            const errorSummary = Object.entries(errorTypes)
+              .map(([msg, count]) => `${msg} (${count}条)`)
+              .join('；');
+            errorMsg = `入库失败：${errorSummary}`;
+          }
+        }
+        
+        toast.error(errorMsg, { duration: 8000 });
+        console.error('入库失败详情:', result);
       }
     } catch (error) {
       console.error('入库失败:', error);
@@ -952,7 +975,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                 <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-12">
                   序号
                 </th>
-                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-28">
+                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-36">
                   商品编码
                 </th>
                 <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider min-w-[150px]">
