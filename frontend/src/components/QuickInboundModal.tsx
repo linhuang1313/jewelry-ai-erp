@@ -132,6 +132,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
   const [nameSearchKeyword, setNameSearchKeyword] = useState<string>(''); // 商品名称搜索关键词
   const [isImporting, setIsImporting] = useState(false);
   const [isImportingInlay, setIsImportingInlay] = useState(false);
+  const [isInlayMode, setIsInlayMode] = useState(false); // 镶嵌入库模式
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const inlayFileInputRef = useRef<HTMLInputElement | null>(null);
   
@@ -346,7 +347,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
 
     const weight = parseFloat(row.weight);
     if (Number.isNaN(weight) || weight <= 0) {
-      errors.weight = '重量必须大于 0';
+      errors.weight = isInlayMode ? '重量必须大于 0' : '克重必须大于 0';
     }
 
     const laborCost = parseFloat(row.laborCost);
@@ -508,6 +509,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       });
 
       if (newRows.length > 0) {
+        setIsInlayMode(true); // 切换到镶嵌入库模式
         toast.success(`镶嵌入库导入成功 ${newRows.length} 行`);
       }
       if (errors.length > 0) {
@@ -778,6 +780,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
         // 重置表单
         setRows([createEmptyRow()]);
         setSelectedSupplier('');
+        setIsInlayMode(false);
         
         onClose();
       } else {
@@ -796,6 +799,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
     setRows([createEmptyRow()]);
     setSelectedSupplier('');
     setSearchResults([]);
+    setIsInlayMode(false);
     onClose();
   };
 
@@ -859,7 +863,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                   商品名称
                 </th>
                 <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-24">
-                  重量
+                  {isInlayMode ? '重量' : '克重(g)'}
                 </th>
                 <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-24">
                   克工费(元)
@@ -870,6 +874,27 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                 <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-24">
                   件工费(元)
                 </th>
+                {/* 镶嵌入库模式额外列 */}
+                {isInlayMode && (
+                  <>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider w-20">主石重</th>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider w-20">主石粒数</th>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider w-20">主石单价</th>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider w-20">主石额</th>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider w-20">副石重</th>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider w-20">副石粒数</th>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider w-20">副石单价</th>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider w-20">副石额</th>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider w-20">镶石费</th>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider w-20">总金额</th>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider w-20">主石字印</th>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider w-20">副石字印</th>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider w-20">珍珠重</th>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider w-20">轴承重</th>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider w-24">销售克工费</th>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 tracking-wider w-24">销售件工费</th>
+                  </>
+                )}
                 <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-28">
                   总工费
                 </th>
@@ -1076,6 +1101,59 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                       }`}
                     />
                   </td>
+                  {/* 镶嵌入库模式额外数据列 */}
+                  {isInlayMode && (
+                    <>
+                      <td className="px-2 py-2">
+                        <span className="text-sm text-gray-600">{row.mainStoneWeight || '-'}</span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-sm text-gray-600">{row.mainStoneCount || '-'}</span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-sm text-gray-600">{row.mainStonePrice || '-'}</span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-sm text-gray-600">{row.mainStoneAmount || '-'}</span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-sm text-gray-600">{row.subStoneWeight || '-'}</span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-sm text-gray-600">{row.subStoneCount || '-'}</span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-sm text-gray-600">{row.subStonePrice || '-'}</span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-sm text-gray-600">{row.subStoneAmount || '-'}</span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-sm text-gray-600">{row.stoneSettingFee || '-'}</span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-sm text-gray-600">{row.totalAmount || '-'}</span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-sm text-gray-600">{row.mainStoneMark || '-'}</span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-sm text-gray-600">{row.subStoneMark || '-'}</span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-sm text-gray-600">{row.pearlWeight || '-'}</span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-sm text-gray-600">{row.bearingWeight || '-'}</span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-sm text-gray-600">{row.saleLaborCost || '-'}</span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-sm text-gray-600">{row.salePieceLaborCost || '-'}</span>
+                      </td>
+                    </>
+                  )}
                   <td className="px-3 py-2 text-right">
                     <span className="text-sm font-semibold text-amber-600">
                       ¥{calculateRowTotal(row).toFixed(2)}
