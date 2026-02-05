@@ -49,7 +49,7 @@ export const useConversationHistory = (userRole) => {
     // 3. 后台静默同步 API 数据
     setTimeout(async () => {
       try {
-        const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-sessions?user_role=${role}&limit=50`)
+        const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-sessions?user_role=${role}&limit=20`)
         const data = await response.json()
         
         if (data.success && Array.isArray(data.sessions)) {

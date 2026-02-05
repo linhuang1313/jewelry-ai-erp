@@ -6,15 +6,34 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional
+from time import time
 from ..database import get_db
 from ..models import ProductCode, ProductAttribute, InboundDetail
 from ..schemas import (
     ProductCodeCreate, ProductCodeUpdate, 
     ProductCodeResponse, ProductCodeSearchResponse
 )
-from ..init_product_codes import get_next_f_code, get_next_fl_code, init_product_codes
+from ..init_product_codes import get_next_f_code, get_next_fl_code, init_product_codes, init_predefined_combinations
 
 router = APIRouter(prefix="/api/product-codes", tags=["商品编码"])
+
+PRODUCT_CODE_CACHE_TTL = 60
+PRODUCT_ATTR_CACHE_TTL = 120
+_PRODUCT_CODE_CACHE: dict[str, dict] = {}
+_PRODUCT_ATTR_CACHE: dict[str, dict] = {}
+
+
+def _get_cache(cache: dict, key: str, ttl: int):
+    cached = cache.get(key)
+    if not cached:
+        return None
+    if time() - cached["timestamp"] > ttl:
+        return None
+    return cached["data"]
+
+
+def _set_cache(cache: dict, key: str, data: dict):
+    cache[key] = {"timestamp": time(), "data": data}
 
 
 @router.get("/init", response_model=dict)
@@ -22,6 +41,18 @@ def initialize_product_codes(db: Session = Depends(get_db)):
     """初始化预定义商品编码"""
     count = init_product_codes(db)
     return {"message": f"已初始化 {count} 个预定义商品编码", "count": count}
+
+
+@router.post("/init-predefined-combinations", response_model=dict)
+def initialize_predefined_combinations(db: Session = Depends(get_db)):
+    """根据商品属性配置生成预定义编码"""
+    result = init_predefined_combinations(db)
+    _PRODUCT_CODE_CACHE.clear()
+    return {
+        "message": f"新增 {result.get('added', 0)} 个，跳过 {result.get('skipped', 0)} 个",
+        "added": result.get("added", 0),
+        "skipped": result.get("skipped", 0)
+    }
 
 
 @router.get("/next-f-code", response_model=dict)
@@ -139,6 +170,11 @@ def get_product_codes(
     - 默认情况下，已使用的 F 编码不会返回（因为 F 编码是一次性的）
     - 如需查看所有编码（包括已使用的），请传 include_used=true
     """
+    cache_key = f"{code_type or ''}|{int(include_used)}|{skip}|{limit}"
+    cached = _get_cache(_PRODUCT_CODE_CACHE, cache_key, PRODUCT_CODE_CACHE_TTL)
+    if cached is not None:
+        return cached
+
     query = db.query(ProductCode)
     
     if code_type:
@@ -157,6 +193,18 @@ def get_product_codes(
     
     # 对于 F 编码，关联查询供应商信息
     result = []
+    supplier_map: dict[str, str] = {}
+    f_codes = [code.code for code in codes if code.code_type == "f_single"]
+    if f_codes:
+        inbound_details = db.query(
+            InboundDetail.product_code, InboundDetail.supplier
+        ).filter(
+            InboundDetail.product_code.in_(f_codes)
+        ).all()
+        for product_code, supplier in inbound_details:
+            if supplier and product_code not in supplier_map:
+                supplier_map[product_code] = supplier
+
     for code in codes:
         code_dict = {
             "id": code.id,
@@ -174,14 +222,11 @@ def get_product_codes(
         
         # 查询入库记录中的供应商信息
         if code.code_type == "f_single":
-            inbound_detail = db.query(InboundDetail).filter(
-                InboundDetail.product_code == code.code
-            ).first()
-            if inbound_detail and inbound_detail.supplier:
-                code_dict["supplier_name"] = inbound_detail.supplier
+            code_dict["supplier_name"] = supplier_map.get(code.code)
         
         result.append(ProductCodeResponse(**code_dict))
     
+    _set_cache(_PRODUCT_CODE_CACHE, cache_key, result)
     return result
 
 
@@ -230,6 +275,11 @@ def get_product_attributes(
     db: Session = Depends(get_db)
 ):
     """获取商品属性列表"""
+    cache_key = f"{category or 'all'}"
+    cached = _get_cache(_PRODUCT_ATTR_CACHE, cache_key, PRODUCT_ATTR_CACHE_TTL)
+    if cached is not None:
+        return cached
+
     query = db.query(ProductAttribute).filter(ProductAttribute.is_active == True)
     
     if category:
@@ -247,6 +297,7 @@ def get_product_attributes(
                 "sort_order": attr.sort_order
             })
     
+    _set_cache(_PRODUCT_ATTR_CACHE, cache_key, result)
     return result
 
 
@@ -282,6 +333,7 @@ def create_product_attribute(
     db.add(attr)
     db.commit()
     db.refresh(attr)
+    _PRODUCT_ATTR_CACHE.clear()
     
     return {
         "id": attr.id,
@@ -323,6 +375,7 @@ def update_product_attribute(
     
     db.commit()
     db.refresh(attr)
+    _PRODUCT_ATTR_CACHE.clear()
     
     return {
         "id": attr.id,
@@ -342,6 +395,7 @@ def delete_product_attribute(id: int, db: Session = Depends(get_db)):
     
     db.delete(attr)
     db.commit()
+    _PRODUCT_ATTR_CACHE.clear()
     
     return {"message": f"属性 '{attr.value}' 已删除"}
 
@@ -417,6 +471,7 @@ def create_product_code(
     db.add(product_code)
     db.commit()
     db.refresh(product_code)
+    _PRODUCT_CODE_CACHE.clear()
     
     return ProductCodeResponse.model_validate(product_code)
 
@@ -444,6 +499,7 @@ def update_product_code(
     
     db.commit()
     db.refresh(product_code)
+    _PRODUCT_CODE_CACHE.clear()
     
     return ProductCodeResponse.model_validate(product_code)
 
@@ -468,6 +524,7 @@ def delete_product_code(id: int, db: Session = Depends(get_db)):
     
     db.delete(product_code)
     db.commit()
+    _PRODUCT_CODE_CACHE.clear()
     
     return {"message": f"商品编码 {product_code.code} 已删除"}
 
@@ -483,6 +540,7 @@ def mark_code_as_used(code: str, db: Session = Depends(get_db)):
     if product_code.code_type == "f_single":
         product_code.is_used = 1
         db.commit()
+        _PRODUCT_CODE_CACHE.clear()
     
     return {"message": f"商品编码 {code} 已标记为已使用"}
 

@@ -62,6 +62,35 @@ const FALLBACK_FINENESS = ['足金', '板料', 'S925银', '足银', '18K金', '�
 const FALLBACK_CRAFT = ['3D硬金', '古法珐琅', '5D镶嵌', '999.9精品', '5G珐琅'];
 const FALLBACK_STYLE = ['戒指', '项链', '挂坠', '手链', '手镯', '耳饰'];
 
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const SUPPLIER_CACHE_KEY = 'quick_inbound_suppliers_cache_v1';
+const PRODUCT_CODE_CACHE_KEY = 'quick_inbound_product_codes_cache_v1';
+const PRODUCT_ATTR_CACHE_KEY = 'quick_inbound_product_attrs_cache_v1';
+
+const getCachedData = (key: string) => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.timestamp || Date.now() - parsed.timestamp > CACHE_TTL_MS) {
+      return null;
+    }
+    return parsed.data;
+  } catch {
+    return null;
+  }
+};
+
+const setCachedData = (key: string, data: unknown) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(key, JSON.stringify({ timestamp: Date.now(), data }));
+  } catch {
+    // 忽略缓存写入失败
+  }
+};
+
 const createEmptyRow = (): InboundRow => ({
   id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
   productCode: '',
@@ -126,8 +155,11 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
   useEffect(() => {
     if (isOpen) {
       fetchSuppliers();
-      fetchProductCodes();
-      fetchProductAttributes();
+      const delayedLoad = setTimeout(() => {
+        fetchProductCodes();
+        fetchProductAttributes();
+      }, 300);
+      return () => clearTimeout(delayedLoad);
     }
   }, [isOpen]);
   
@@ -149,12 +181,19 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
   }, [isOpen]);
   
   // 获取商品属性配置
-  const fetchProductAttributes = async () => {
+  const fetchProductAttributes = async (force = false) => {
+    if (!force) {
+      const cached = getCachedData(PRODUCT_ATTR_CACHE_KEY);
+      if (cached) {
+        setProductAttributes(cached as ProductAttributes);
+      }
+    }
     try {
       const response = await fetch(`${API_BASE_URL}/api/product-codes/attributes`);
       if (response.ok) {
         const data = await response.json();
         setProductAttributes(data);
+        setCachedData(PRODUCT_ATTR_CACHE_KEY, data);
       }
     } catch (error) {
       console.error('加载商品属性失败:', error);
@@ -177,21 +216,35 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
     }
   }, [openDropdownId]);
 
-  const fetchSuppliers = async () => {
+  const fetchSuppliers = async (force = false) => {
+    if (!force) {
+      const cached = getCachedData(SUPPLIER_CACHE_KEY);
+      if (cached) {
+        setSuppliers(cached as Supplier[]);
+      }
+    }
     try {
       const response = await fetch(`${API_BASE_URL}/api/suppliers`);
       if (response.ok) {
         const data = await response.json();
         // API 返回格式是 { success: true, suppliers: [...] }
         const supplierList = data.suppliers || data || [];
-        setSuppliers(supplierList.filter((s: Supplier & { status: string }) => s.status === 'active'));
+        const activeSuppliers = supplierList.filter((s: Supplier & { status: string }) => s.status === 'active');
+        setSuppliers(activeSuppliers);
+        setCachedData(SUPPLIER_CACHE_KEY, activeSuppliers);
       }
     } catch (error) {
       console.error('加载供应商失败:', error);
     }
   };
 
-  const fetchProductCodes = async () => {
+  const fetchProductCodes = async (force = false) => {
+    if (!force) {
+      const cached = getCachedData(PRODUCT_CODE_CACHE_KEY);
+      if (cached) {
+        setProductCodes(cached as ProductCode[]);
+      }
+    }
     try {
       const response = await fetch(`${API_BASE_URL}/api/product-codes`);
       if (response.ok) {
@@ -199,6 +252,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
         // API 可能返回数组或 { codes: [...] } 格式
         const codeList = Array.isArray(data) ? data : (data.codes || []);
         setProductCodes(codeList);
+        setCachedData(PRODUCT_CODE_CACHE_KEY, codeList);
       }
     } catch (error) {
       console.error('加载商品编码失败:', error);
