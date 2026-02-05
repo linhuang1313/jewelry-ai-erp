@@ -18,6 +18,7 @@ from ..models import (
     Location, LocationInventory
 )
 from ..schemas import InboundOrderResponse, InboundDetailResponse, InventoryResponse
+from ..middleware.permissions import has_permission
 
 logger = logging.getLogger(__name__)
 
@@ -651,6 +652,9 @@ async def get_inbound_orders(
                 "create_time": order.create_time.isoformat() if order.create_time else None,
                 "operator": order.operator,
                 "status": order.status,
+                "is_audited": bool(order.is_audited),
+                "audited_by": order.audited_by,
+                "audited_at": order.audited_at.isoformat() if order.audited_at else None,
                 "item_count": item_count,
                 "total_weight": round(total_weight, 2),
                 "suppliers": suppliers_list,
@@ -689,6 +693,7 @@ async def get_inbound_orders(
 async def update_inbound_order(
     order_id: int,
     updates: dict,
+    user_role: str = Query(default="product", description="用户角色"),
     db: Session = Depends(get_db)
 ):
     """修改入库单"""
@@ -696,6 +701,12 @@ async def update_inbound_order(
         order = db.query(InboundOrder).filter(InboundOrder.id == order_id).first()
         if not order:
             return {"success": False, "error": "入库单不存在"}
+
+        if order.is_audited:
+            return {"success": False, "error": "该入库单已审核，无法编辑，请先反审"}
+
+        if not has_permission(user_role, 'can_inbound'):
+            raise HTTPException(status_code=403, detail="权限不足：无法编辑入库单")
         
         if "operator" in updates:
             order.operator = updates["operator"]
@@ -733,6 +744,56 @@ async def update_inbound_order(
         db.rollback()
         logger.error(f"更新入库单失败: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
+
+
+@router.post("/{order_id}/audit")
+async def audit_inbound_order(
+    order_id: int,
+    user_role: str = Query(default="finance", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """审核入库单（财务）"""
+    if not has_permission(user_role, 'can_audit_inbound'):
+        raise HTTPException(status_code=403, detail="权限不足：无法审核入库单")
+
+    order = db.query(InboundOrder).filter(InboundOrder.id == order_id).first()
+    if not order:
+        return {"success": False, "error": "入库单不存在"}
+
+    if order.is_audited:
+        return {"success": False, "error": "入库单已审核"}
+
+    order.is_audited = True
+    order.audited_by = user_role
+    order.audited_at = china_now()
+    db.commit()
+
+    return {"success": True, "message": "审核成功", "order_id": order_id}
+
+
+@router.post("/{order_id}/unaudit")
+async def unaudit_inbound_order(
+    order_id: int,
+    user_role: str = Query(default="finance", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """反审入库单（财务）"""
+    if not has_permission(user_role, 'can_audit_inbound'):
+        raise HTTPException(status_code=403, detail="权限不足：无法反审入库单")
+
+    order = db.query(InboundOrder).filter(InboundOrder.id == order_id).first()
+    if not order:
+        return {"success": False, "error": "入库单不存在"}
+
+    if not order.is_audited:
+        return {"success": False, "error": "入库单未审核"}
+
+    order.is_audited = False
+    order.audited_by = None
+    order.audited_at = None
+    db.commit()
+
+    return {"success": True, "message": "反审成功", "order_id": order_id}
 
 
 @router.post("")

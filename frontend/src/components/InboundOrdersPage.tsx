@@ -4,6 +4,7 @@ import {
   ChevronDown, ChevronUp, Download, Printer, RefreshCw, FileText
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { hasPermission } from '../config/permissions';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -29,6 +30,9 @@ interface InboundOrder {
   create_time: string;
   operator: string;
   status: string;
+  is_audited?: boolean;
+  audited_by?: string | null;
+  audited_at?: string | null;
   item_count: number;
   total_weight: number;
   suppliers: string[];
@@ -69,6 +73,8 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [downloadMenuOrderId, setDownloadMenuOrderId] = useState<number | null>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
+  const canAuditInbound = hasPermission(userRole, 'canAuditInbound');
+  const canEditInbound = hasPermission(userRole, 'canInbound');
   
   // 筛选选项（用于下拉框）
   const [filterOptions, setFilterOptions] = useState<{
@@ -164,6 +170,10 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
 
   // 开始编辑
   const startEdit = (order: InboundOrder) => {
+    if (order.is_audited) {
+      toast.error('该入库单已审核，无法编辑');
+      return;
+    }
     setEditingOrderId(order.id);
     setEditingDetails([...order.details]);
     setExpandedOrderId(order.id);
@@ -178,7 +188,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
   // 保存编辑
   const saveEdit = async (orderId: number) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/inbound-orders/${orderId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/inbound-orders/${orderId}?user_role=${encodeURIComponent(userRole)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ details: editingDetails })
@@ -224,6 +234,42 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
   const handleDownload = (orderId: number, docType: 'inbound' | 'purchase' = 'inbound') => {
     window.open(`${API_BASE_URL}/api/inbound-orders/${orderId}/download?format=pdf&doc_type=${docType}`, '_blank');
     setDownloadMenuOrderId(null);
+  };
+  
+  const handleAudit = async (orderId: number) => {
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/inbound-orders/${orderId}/audit?user_role=${encodeURIComponent(userRole)}`,
+        { method: 'POST' }
+      );
+      const data = await res.json();
+      if (data.success) {
+        toast.success('审核成功');
+        loadOrders();
+      } else {
+        toast.error(data.error || '审核失败');
+      }
+    } catch (error) {
+      toast.error('审核失败');
+    }
+  };
+  
+  const handleUnaudit = async (orderId: number) => {
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/inbound-orders/${orderId}/unaudit?user_role=${encodeURIComponent(userRole)}`,
+        { method: 'POST' }
+      );
+      const data = await res.json();
+      if (data.success) {
+        toast.success('反审成功');
+        loadOrders();
+      } else {
+        toast.error(data.error || '反审失败');
+      }
+    } catch (error) {
+      toast.error('反审失败');
+    }
   };
 
   // 切换下载菜单
@@ -621,6 +667,16 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                         {order.status}
                       </span>
                     </div>
+                    <div className="text-center">
+                      <div className="text-sm text-gray-500">审核</div>
+                      <span className={`px-2 py-0.5 text-sm rounded-full ${
+                        order.is_audited
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {order.is_audited ? '已审核' : '未审核'}
+                      </span>
+                    </div>
                     
                     <div className="flex items-center space-x-2">
                       {editingOrderId === order.id ? (
@@ -644,11 +700,34 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                         <>
                           <button
                             onClick={() => startEdit(order)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="编辑"
+                            className={`p-2 rounded-lg transition-colors ${
+                              order.is_audited || !canEditInbound
+                                ? 'text-gray-300 cursor-not-allowed'
+                                : 'text-blue-600 hover:bg-blue-50'
+                            }`}
+                            title={order.is_audited ? '已审核不可编辑' : '编辑'}
+                            disabled={order.is_audited || !canEditInbound}
                           >
                             <Edit2 className="w-5 h-5" />
                           </button>
+                          {canAuditInbound && !order.is_audited && (
+                            <button
+                              onClick={() => handleAudit(order.id)}
+                              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                              title="审核"
+                            >
+                              审核
+                            </button>
+                          )}
+                          {canAuditInbound && order.is_audited && (
+                            <button
+                              onClick={() => handleUnaudit(order.id)}
+                              className="px-3 py-1.5 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                              title="反审"
+                            >
+                              反审
+                            </button>
+                          )}
                           <button
                             onClick={() => handlePrint(order.id, 'inbound')}
                             className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"

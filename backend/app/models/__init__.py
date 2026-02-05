@@ -34,6 +34,9 @@ class InboundOrder(Base):
     create_time = Column(DateTime(timezone=True), server_default=func.now())
     operator = Column(String(50), default="系统管理员")
     status = Column(String(20), default="已入库", index=True)
+    is_audited = Column(Boolean, default=False, index=True)
+    audited_by = Column(String(50), nullable=True)
+    audited_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class InboundDetail(Base):
