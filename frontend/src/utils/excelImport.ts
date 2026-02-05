@@ -10,6 +10,18 @@ export interface InboundImportRow {
   remark?: string
 }
 
+export type FieldErrors = Partial<
+  Record<
+    'productCode' | 'productName' | 'weight' | 'laborCost' | 'pieceCount' | 'pieceLaborCost' | 'remark',
+    string
+  >
+>
+
+export interface ParsedInboundRow {
+  data: InboundImportRow
+  errors: FieldErrors
+}
+
 export interface ImportError {
   row: number
   message: string
@@ -35,7 +47,7 @@ const normalizeHeader = (value: unknown): string => {
 
 const toNumber = (value: unknown): number | null => {
   if (value === null || value === undefined || value === '') return null
-  const num = Number(String(value).trim())
+  const num = Number(String(value).trim().replace(/,/g, ''))
   return Number.isFinite(num) ? num : null
 }
 
@@ -44,11 +56,11 @@ const isEmptyRow = (row: unknown[]): boolean => {
 }
 
 export const parseInboundTable = (table: unknown[][]): {
-  rows: InboundImportRow[]
+  rows: ParsedInboundRow[]
   errors: ImportError[]
 } => {
   const errors: ImportError[] = []
-  const rows: InboundImportRow[] = []
+  const rows: ParsedInboundRow[] = []
 
   if (!table || table.length === 0) {
     return {
@@ -73,7 +85,6 @@ export const parseInboundTable = (table: unknown[][]): {
       row: 1,
       message: `缺少表头: ${missingHeaders.join('、')}`,
     })
-    return { rows, errors }
   }
 
   for (let i = 1; i < table.length; i += 1) {
@@ -82,6 +93,7 @@ export const parseInboundTable = (table: unknown[][]): {
 
     const rowNumber = i + 1
     const rowData: Partial<InboundImportRow> = {}
+    const rowErrors: FieldErrors = {}
 
     headerIndexMap.forEach((index, header) => {
       const key = HEADER_MAP[header]
@@ -97,35 +109,33 @@ export const parseInboundTable = (table: unknown[][]): {
     const pieceCount = toNumber(rowData.pieceCount ?? '')
     const pieceLaborCost = toNumber(rowData.pieceLaborCost ?? '')
 
-    if (!productName) {
-      errors.push({ row: rowNumber, message: '商品名称不能为空' })
-      continue
+    if (!headerIndexMap.has('商品名称') || !productName) {
+      rowErrors.productName = headerIndexMap.has('商品名称') ? '商品名称不能为空' : '缺少表头'
     }
-    if (weight === null || weight <= 0) {
-      errors.push({ row: rowNumber, message: '克重必须大于 0' })
-      continue
+    if (!headerIndexMap.has('克重(g)') || weight === null || weight <= 0) {
+      rowErrors.weight = headerIndexMap.has('克重(g)') ? '克重必须大于 0' : '缺少表头'
     }
-    if (laborCost === null || laborCost < 0) {
-      errors.push({ row: rowNumber, message: '克工费必须大于等于 0' })
-      continue
+    if (!headerIndexMap.has('克工费(元)') || laborCost === null || laborCost < 0) {
+      rowErrors.laborCost = headerIndexMap.has('克工费(元)') ? '克工费必须大于等于 0' : '缺少表头'
     }
     if (pieceCount !== null && pieceCount < 0) {
-      errors.push({ row: rowNumber, message: '件数必须大于等于 0' })
-      continue
+      rowErrors.pieceCount = '件数必须大于等于 0'
     }
     if (pieceLaborCost !== null && pieceLaborCost < 0) {
-      errors.push({ row: rowNumber, message: '件工费必须大于等于 0' })
-      continue
+      rowErrors.pieceLaborCost = '件工费必须大于等于 0'
     }
 
     rows.push({
-      productCode: rowData.productCode ? String(rowData.productCode).trim() : undefined,
-      productName,
-      weight,
-      laborCost,
-      pieceCount: pieceCount === null ? undefined : Math.trunc(pieceCount),
-      pieceLaborCost: pieceLaborCost === null ? undefined : pieceLaborCost,
-      remark: rowData.remark ? String(rowData.remark).trim() : undefined,
+      data: {
+        productCode: rowData.productCode ? String(rowData.productCode).trim() : undefined,
+        productName,
+        weight: weight ?? 0,
+        laborCost: laborCost ?? 0,
+        pieceCount: pieceCount === null ? undefined : Math.trunc(pieceCount),
+        pieceLaborCost: pieceLaborCost === null ? undefined : pieceLaborCost,
+        remark: rowData.remark ? String(rowData.remark).trim() : undefined,
+      },
+      errors: rowErrors,
     })
   }
 
@@ -133,7 +143,7 @@ export const parseInboundTable = (table: unknown[][]): {
 }
 
 export const parseInboundFile = (file: File): Promise<{
-  rows: InboundImportRow[]
+  rows: ParsedInboundRow[]
   errors: ImportError[]
 }> => {
   return new Promise((resolve, reject) => {

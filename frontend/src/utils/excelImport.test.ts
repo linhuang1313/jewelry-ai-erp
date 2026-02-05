@@ -12,7 +12,8 @@ describe('parseInboundTable', () => {
 
     expect(result.errors.length).toBe(0)
     expect(result.rows.length).toBe(1)
-    expect(result.rows[0]).toEqual({
+    expect(result.rows[0].errors).toEqual({})
+    expect(result.rows[0].data).toEqual({
       productCode: 'JPJZ',
       productName: '精品金镯',
       weight: 10.5,
@@ -30,7 +31,7 @@ describe('parseInboundTable', () => {
     ]
 
     const result = parseInboundTable(table)
-    expect(result.rows.length).toBe(0)
-    expect(result.errors.length).toBe(1)
+    expect(result.rows.length).toBe(1)
+    expect(result.rows[0].errors.productName).toBe('商品名称不能为空')
   })
 })

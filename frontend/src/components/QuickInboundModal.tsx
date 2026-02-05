@@ -12,6 +12,7 @@ interface InboundRow {
   laborCost: string;
   pieceCount: string;
   pieceLaborCost: string;
+  errors?: Partial<Record<'productCode' | 'productName' | 'weight' | 'laborCost' | 'pieceCount' | 'pieceLaborCost', string>>;
 }
 
 interface Supplier {
@@ -69,6 +70,7 @@ const createEmptyRow = (): InboundRow => ({
   laborCost: '',
   pieceCount: '',
   pieceLaborCost: '',
+  errors: {},
 });
 
 export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole }: QuickInboundModalProps) {
@@ -260,6 +262,41 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
     return !row.productCode && !row.productName && !row.weight && !row.laborCost && !row.pieceCount && !row.pieceLaborCost;
   };
 
+  const getRowErrors = (row: InboundRow) => {
+    const errors: InboundRow['errors'] = {};
+    if (isRowEmpty(row)) return errors;
+
+    if (!row.productName.trim()) {
+      errors.productName = '商品名称不能为空';
+    }
+
+    const weight = parseFloat(row.weight);
+    if (Number.isNaN(weight) || weight <= 0) {
+      errors.weight = '克重必须大于 0';
+    }
+
+    const laborCost = parseFloat(row.laborCost);
+    if (Number.isNaN(laborCost) || laborCost < 0) {
+      errors.laborCost = '克工费必须大于等于 0';
+    }
+
+    if (row.pieceCount) {
+      const pieceCount = parseFloat(row.pieceCount);
+      if (Number.isNaN(pieceCount) || pieceCount < 0) {
+        errors.pieceCount = '件数必须大于等于 0';
+      }
+    }
+
+    if (row.pieceLaborCost) {
+      const pieceLaborCost = parseFloat(row.pieceLaborCost);
+      if (Number.isNaN(pieceLaborCost) || pieceLaborCost < 0) {
+        errors.pieceLaborCost = '件工费必须大于等于 0';
+      }
+    }
+
+    return errors;
+  };
+
   // 批量添加多行
   const addMultipleRows = () => {
     const count = parseInt(batchAddCount) || 0;
@@ -293,12 +330,13 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       const { rows: imported, errors } = await parseInboundFile(file);
       const newRows = imported.map(item => ({
         id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        productCode: item.productCode || '',
-        productName: item.productName || '',
-        weight: String(item.weight ?? ''),
-        laborCost: String(item.laborCost ?? ''),
-        pieceCount: item.pieceCount !== undefined ? String(item.pieceCount) : '',
-        pieceLaborCost: item.pieceLaborCost !== undefined ? String(item.pieceLaborCost) : '',
+        productCode: item.data.productCode || '',
+        productName: item.data.productName || '',
+        weight: String(item.data.weight ?? ''),
+        laborCost: String(item.data.laborCost ?? ''),
+        pieceCount: item.data.pieceCount !== undefined ? String(item.data.pieceCount) : '',
+        pieceLaborCost: item.data.pieceLaborCost !== undefined ? String(item.data.pieceLaborCost) : '',
+        errors: item.errors,
       }));
 
       setRows(prev => {
@@ -311,7 +349,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       }
       if (errors.length > 0) {
         console.warn('Excel 导入错误:', errors);
-        toast.error(`有 ${errors.length} 行数据不符合要求，已跳过`);
+        toast.error(`导入发现 ${errors.length} 个表头问题，请在预览中修正`);
       }
     } catch (error) {
       console.error('导入失败:', error);
@@ -425,56 +463,64 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       
       if (matchedCode) {
         // 完全匹配，同时更新编码和名称
-        setRows(prev => prev.map(row => 
-          row.id === id ? { ...row, productCode: matchedCode.code, productName: matchedCode.name } : row
-        ));
+        setRows(prev => prev.map(row => {
+          if (row.id !== id) return row;
+          const next = { ...row, productCode: matchedCode.code, productName: matchedCode.name };
+          return { ...next, errors: getRowErrors(next) };
+        }));
       } else {
         // 不匹配，只更新编码
-        setRows(prev => prev.map(row => 
-          row.id === id ? { ...row, [field]: value } : row
-        ));
+        setRows(prev => prev.map(row => {
+          if (row.id !== id) return row;
+          const next = { ...row, [field]: value } as InboundRow;
+          return { ...next, errors: getRowErrors(next) };
+        }));
       }
       searchProductCode(id, value);
     } else {
-      setRows(prev => prev.map(row => 
-        row.id === id ? { ...row, [field]: value } : row
-      ));
+      setRows(prev => prev.map(row => {
+        if (row.id !== id) return row;
+        const next = { ...row, [field]: value } as InboundRow;
+        return { ...next, errors: getRowErrors(next) };
+      }));
     }
   };
 
   // 验证数据
-  const validateRows = (): boolean => {
+  const validateRows = (): { ok: boolean; validRows: InboundRow[] } => {
     if (!selectedSupplier) {
       toast.error('请选择供应商');
-      return false;
+      return { ok: false, validRows: [] };
     }
-    
-    const validRows = rows.filter(row => 
-      row.productName.trim() && 
-      parseFloat(row.weight) > 0 && 
-      parseFloat(row.laborCost) >= 0
-    );
-    
+
+    const updatedRows = rows.map(row => ({ ...row, errors: getRowErrors(row) }));
+    setRows(updatedRows);
+
+    const hasErrors = updatedRows.some(row => row.errors && Object.keys(row.errors).length > 0);
+    const validRows = updatedRows.filter(row => !isRowEmpty(row) && (!row.errors || Object.keys(row.errors).length === 0));
+
+    if (hasErrors) {
+      toast.error('请先修正标红项后再提交');
+      return { ok: false, validRows: [] };
+    }
+
     if (validRows.length === 0) {
       toast.error('请至少填写一个有效的商品信息');
-      return false;
+      return { ok: false, validRows: [] };
     }
-    
-    return true;
+
+    return { ok: true, validRows };
   };
 
   // 提交入库
   const handleSubmit = async () => {
-    if (!validateRows()) return;
+    const validation = validateRows();
+    if (!validation.ok) return;
     
     setIsSubmitting(true);
     
     try {
-      const validRows = rows.filter(row => 
-        row.productName.trim() && 
-        parseFloat(row.weight) > 0 && 
-        parseFloat(row.laborCost) >= 0
-      );
+      const validRows = validation.validRows;
       
       // 使用批量入库 API
       // 注意：selectedSupplier 已经是供应商名称了（select 的 value 是 supplier.name）
@@ -648,7 +694,11 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                         }}
                         onFocus={() => setOpenDropdownId(row.id)}
                         placeholder="点击选择"
-                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500 cursor-pointer"
+                        className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-1 cursor-pointer ${
+                          row.errors?.productCode
+                            ? 'border-red-400 focus:ring-red-200 focus:border-red-400'
+                            : 'border-gray-300 focus:ring-amber-500 focus:border-amber-500'
+                        }`}
                       />
                       {/* 下拉箭头 */}
                       <button
@@ -703,7 +753,11 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                         }}
                         onFocus={() => setOpenDropdownId(`name-${row.id}`)}
                         placeholder="输入筛选或点击选择"
-                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-gray-900 placeholder:text-gray-400"
+                        className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-1 text-gray-900 placeholder:text-gray-400 ${
+                          row.errors?.productName
+                            ? 'border-red-400 focus:ring-red-200 focus:border-red-400'
+                            : 'border-gray-300 focus:ring-amber-500 focus:border-amber-500'
+                        }`}
                       />
                       {/* 下拉箭头 */}
                       <button
@@ -770,7 +824,11 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                       placeholder="0"
                       min="0"
                       step="0.01"
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                      className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-1 ${
+                        row.errors?.weight
+                          ? 'border-red-400 focus:ring-red-200 focus:border-red-400'
+                          : 'border-gray-300 focus:ring-amber-500 focus:border-amber-500'
+                      }`}
                     />
                   </td>
                   <td className="px-3 py-2">
@@ -781,7 +839,11 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                       placeholder="0"
                       min="0"
                       step="0.01"
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                      className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-1 ${
+                        row.errors?.laborCost
+                          ? 'border-red-400 focus:ring-red-200 focus:border-red-400'
+                          : 'border-gray-300 focus:ring-amber-500 focus:border-amber-500'
+                      }`}
                     />
                   </td>
                   <td className="px-3 py-2">
@@ -791,7 +853,11 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                       onChange={(e) => updateRow(row.id, 'pieceCount', e.target.value)}
                       placeholder="-"
                       min="0"
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                      className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-1 ${
+                        row.errors?.pieceCount
+                          ? 'border-red-400 focus:ring-red-200 focus:border-red-400'
+                          : 'border-gray-300 focus:ring-amber-500 focus:border-amber-500'
+                      }`}
                     />
                   </td>
                   <td className="px-3 py-2">
@@ -802,7 +868,11 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                       placeholder="-"
                       min="0"
                       step="0.01"
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                      className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-1 ${
+                        row.errors?.pieceLaborCost
+                          ? 'border-red-400 focus:ring-red-200 focus:border-red-400'
+                          : 'border-gray-300 focus:ring-amber-500 focus:border-amber-500'
+                      }`}
                     />
                   </td>
                   <td className="px-3 py-2 text-right">
@@ -818,6 +888,11 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
+                    {row.errors && Object.keys(row.errors).length > 0 && (
+                      <div className="mt-1 text-xs text-red-500 text-left">
+                        {Object.values(row.errors).filter(Boolean).join('；')}
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
