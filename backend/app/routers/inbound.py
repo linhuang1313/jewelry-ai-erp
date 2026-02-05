@@ -1293,7 +1293,9 @@ async def download_inbound_order(
                     p.drawString(col_x[5], y, f"{detail.total_cost:.2f}")
                     p.drawString(col_x[6], y, supplier_name)
                 
-                total_cost += detail.total_cost
+                # 镶嵌产品使用 total_amount，普通产品使用 total_cost
+                item_cost = detail.total_amount if detail.total_amount else detail.total_cost
+                total_cost += item_cost
                 total_weight += detail.weight
                 total_piece_count += piece_count
                 y -= 12
@@ -1360,8 +1362,10 @@ async def download_inbound_order(
             total_cost = 0
             total_weight = 0
             for detail in details:
-                html_content += f"""<tr><td>{detail.product_name}</td><td>{detail.weight:.2f}</td><td>{detail.labor_cost:.2f}</td><td>{detail.total_cost:.2f}</td><td>{detail.supplier or '-'}</td></tr>"""
-                total_cost += detail.total_cost
+                # 镶嵌产品使用 total_amount，普通产品使用 total_cost
+                item_cost = detail.total_amount if detail.total_amount else detail.total_cost
+                html_content += f"""<tr><td>{detail.product_name}</td><td>{detail.weight:.2f}</td><td>{detail.labor_cost:.2f}</td><td>{item_cost:.2f}</td><td>{detail.supplier or '-'}</td></tr>"""
+                total_cost += item_cost
                 total_weight += detail.weight
             
             html_content += f"""</tbody></table><p>合计：重量 {total_weight:.2f}克 | 总成本 ¥{total_cost:.2f}</p></body></html>"""

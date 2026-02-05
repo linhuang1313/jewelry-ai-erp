@@ -22,6 +22,19 @@ interface InboundDetail {
   fineness?: string;
   craft?: string;
   style?: string;
+  // 镶嵌入库相关字段
+  main_stone_weight?: number;
+  main_stone_count?: number;
+  main_stone_price?: number;
+  main_stone_amount?: number;
+  sub_stone_weight?: number;
+  sub_stone_count?: number;
+  sub_stone_price?: number;
+  sub_stone_amount?: number;
+  stone_setting_fee?: number;
+  total_amount?: number;
+  main_stone_mark?: string;
+  sub_stone_mark?: string;
 }
 
 interface InboundOrder {
@@ -776,113 +789,144 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                 </div>
 
                 {/* 明细展开 */}
-                {expandedOrderId === order.id && (
-                  <div className="bg-gray-50 px-6 py-4 border-t border-gray-100">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-gray-500">
-                          <th className="pb-2 font-medium">条码</th>
-                          <th className="pb-2 font-medium">商品名称</th>
-                          <th className="pb-2 font-medium">重量(克)</th>
-                          <th className="pb-2 font-medium">克工费</th>
-                          <th className="pb-2 font-medium">件数</th>
-                          <th className="pb-2 font-medium">件工费</th>
-                          <th className="pb-2 font-medium">供应商</th>
-                          <th className="pb-2 font-medium">总成本</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {(editingOrderId === order.id ? editingDetails : order.details).map((detail) => (
-                          <tr key={detail.id}>
-                            <td className="py-2">
-                              <span className="font-mono text-xs text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
-                                {detail.product_code || '-'}
-                              </span>
-                            </td>
-                            <td className="py-2">
-                              {editingOrderId === order.id ? (
-                                <input
-                                  type="text"
-                                  value={detail.product_name}
-                                  onChange={(e) => updateEditingDetail(detail.id, 'product_name', e.target.value)}
-                                  className="w-full px-2 py-1 border border-gray-300 rounded"
-                                />
-                              ) : (
-                                detail.product_name
-                              )}
-                            </td>
-                            <td className="py-2">
-                              {editingOrderId === order.id ? (
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={detail.weight}
-                                  onChange={(e) => updateEditingDetail(detail.id, 'weight', e.target.value)}
-                                  className="w-24 px-2 py-1 border border-gray-300 rounded"
-                                />
-                              ) : (
-                                detail.weight
-                              )}
-                            </td>
-                            <td className="py-2">
-                              {editingOrderId === order.id ? (
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={detail.labor_cost}
-                                  onChange={(e) => updateEditingDetail(detail.id, 'labor_cost', e.target.value)}
-                                  className="w-20 px-2 py-1 border border-gray-300 rounded"
-                                />
-                              ) : (
-                                detail.labor_cost
-                              )}
-                            </td>
-                            <td className="py-2">
-                              {editingOrderId === order.id ? (
-                                <input
-                                  type="number"
-                                  value={detail.piece_count || ''}
-                                  onChange={(e) => updateEditingDetail(detail.id, 'piece_count', e.target.value)}
-                                  className="w-16 px-2 py-1 border border-gray-300 rounded"
-                                />
-                              ) : (
-                                detail.piece_count || '-'
-                              )}
-                            </td>
-                            <td className="py-2">
-                              {editingOrderId === order.id ? (
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={detail.piece_labor_cost || ''}
-                                  onChange={(e) => updateEditingDetail(detail.id, 'piece_labor_cost', e.target.value)}
-                                  className="w-20 px-2 py-1 border border-gray-300 rounded"
-                                />
-                              ) : (
-                                detail.piece_labor_cost || '-'
-                              )}
-                            </td>
-                            <td className="py-2">
-                              {editingOrderId === order.id ? (
-                                <input
-                                  type="text"
-                                  value={detail.supplier || ''}
-                                  onChange={(e) => updateEditingDetail(detail.id, 'supplier', e.target.value)}
-                                  className="w-28 px-2 py-1 border border-gray-300 rounded"
-                                />
-                              ) : (
-                                detail.supplier || '-'
-                              )}
-                            </td>
-                            <td className="py-2 text-orange-600 font-medium">
-                              {detail.total_cost?.toFixed(2) || '-'}
-                            </td>
+                {expandedOrderId === order.id && (() => {
+                  // 判断是否为镶嵌入库（任一明细有镶嵌相关字段）
+                  const isInlayOrder = order.details.some(d => 
+                    d.main_stone_amount || d.sub_stone_amount || d.stone_setting_fee || d.total_amount
+                  );
+                  const currentDetails = editingOrderId === order.id ? editingDetails : order.details;
+                  
+                  return (
+                    <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-gray-500">
+                            <th className="pb-2 font-medium whitespace-nowrap">条码</th>
+                            <th className="pb-2 font-medium whitespace-nowrap">商品名称</th>
+                            <th className="pb-2 font-medium whitespace-nowrap">重量(克)</th>
+                            <th className="pb-2 font-medium whitespace-nowrap">克工费</th>
+                            <th className="pb-2 font-medium whitespace-nowrap">件数</th>
+                            <th className="pb-2 font-medium whitespace-nowrap">件工费</th>
+                            {isInlayOrder && (
+                              <>
+                                <th className="pb-2 font-medium whitespace-nowrap">主石重</th>
+                                <th className="pb-2 font-medium whitespace-nowrap">主石粒数</th>
+                                <th className="pb-2 font-medium whitespace-nowrap">主石单价</th>
+                                <th className="pb-2 font-medium whitespace-nowrap">主石额</th>
+                                <th className="pb-2 font-medium whitespace-nowrap">副石额</th>
+                                <th className="pb-2 font-medium whitespace-nowrap">镶石费</th>
+                              </>
+                            )}
+                            <th className="pb-2 font-medium whitespace-nowrap">供应商</th>
+                            <th className="pb-2 font-medium whitespace-nowrap">{isInlayOrder ? '总金额' : '总成本'}</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {currentDetails.map((detail) => (
+                            <tr key={detail.id}>
+                              <td className="py-2">
+                                <span className="font-mono text-xs text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
+                                  {detail.product_code || '-'}
+                                </span>
+                              </td>
+                              <td className="py-2">
+                                {editingOrderId === order.id ? (
+                                  <input
+                                    type="text"
+                                    value={detail.product_name}
+                                    onChange={(e) => updateEditingDetail(detail.id, 'product_name', e.target.value)}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded"
+                                  />
+                                ) : (
+                                  detail.product_name
+                                )}
+                              </td>
+                              <td className="py-2">
+                                {editingOrderId === order.id ? (
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={detail.weight}
+                                    onChange={(e) => updateEditingDetail(detail.id, 'weight', e.target.value)}
+                                    className="w-24 px-2 py-1 border border-gray-300 rounded"
+                                  />
+                                ) : (
+                                  detail.weight
+                                )}
+                              </td>
+                              <td className="py-2">
+                                {editingOrderId === order.id ? (
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={detail.labor_cost}
+                                    onChange={(e) => updateEditingDetail(detail.id, 'labor_cost', e.target.value)}
+                                    className="w-20 px-2 py-1 border border-gray-300 rounded"
+                                  />
+                                ) : (
+                                  detail.labor_cost
+                                )}
+                              </td>
+                              <td className="py-2">
+                                {editingOrderId === order.id ? (
+                                  <input
+                                    type="number"
+                                    value={detail.piece_count || ''}
+                                    onChange={(e) => updateEditingDetail(detail.id, 'piece_count', e.target.value)}
+                                    className="w-16 px-2 py-1 border border-gray-300 rounded"
+                                  />
+                                ) : (
+                                  detail.piece_count || '-'
+                                )}
+                              </td>
+                              <td className="py-2">
+                                {editingOrderId === order.id ? (
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={detail.piece_labor_cost || ''}
+                                    onChange={(e) => updateEditingDetail(detail.id, 'piece_labor_cost', e.target.value)}
+                                    className="w-20 px-2 py-1 border border-gray-300 rounded"
+                                  />
+                                ) : (
+                                  detail.piece_labor_cost || '-'
+                                )}
+                              </td>
+                              {isInlayOrder && (
+                                <>
+                                  <td className="py-2">{detail.main_stone_weight || '-'}</td>
+                                  <td className="py-2">{detail.main_stone_count || '-'}</td>
+                                  <td className="py-2">{detail.main_stone_price || '-'}</td>
+                                  <td className="py-2">{detail.main_stone_amount?.toFixed(2) || '-'}</td>
+                                  <td className="py-2">{detail.sub_stone_amount?.toFixed(2) || '-'}</td>
+                                  <td className="py-2">{detail.stone_setting_fee?.toFixed(2) || '-'}</td>
+                                </>
+                              )}
+                              <td className="py-2">
+                                {editingOrderId === order.id ? (
+                                  <input
+                                    type="text"
+                                    value={detail.supplier || ''}
+                                    onChange={(e) => updateEditingDetail(detail.id, 'supplier', e.target.value)}
+                                    className="w-28 px-2 py-1 border border-gray-300 rounded"
+                                  />
+                                ) : (
+                                  detail.supplier || '-'
+                                )}
+                              </td>
+                              <td className="py-2 text-orange-600 font-medium">
+                                {isInlayOrder 
+                                  ? (detail.total_amount?.toFixed(2) || detail.total_cost?.toFixed(2) || '-')
+                                  : (detail.total_cost?.toFixed(2) || '-')
+                                }
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
               </div>
             ))}
           </div>

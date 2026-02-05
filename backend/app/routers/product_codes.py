@@ -86,19 +86,21 @@ def get_batch_f_codes(
     if count > 500:
         count = 500  # 限制最多500个
     
-    # 查找当前最大的F编码
-    last_f_code = db.query(ProductCode).filter(
+    # 查找当前最大的F编码（使用数字排序而非字符串排序）
+    all_f_codes = db.query(ProductCode.code).filter(
         ProductCode.code_type == "f_single",
         ProductCode.code.like("F%")
-    ).order_by(ProductCode.code.desc()).first()
+    ).all()
     
-    if last_f_code:
+    max_num = 0
+    for code_obj in all_f_codes:
         try:
-            start_num = int(last_f_code.code[1:]) + 1
+            num = int(code_obj.code[1:])
+            max_num = max(max_num, num)
         except ValueError:
-            start_num = 1
-    else:
-        start_num = 1
+            continue
+    
+    start_num = max_num + 1
     
     # 生成编码列表
     codes = [f"F{start_num + i:08d}" for i in range(count)]
