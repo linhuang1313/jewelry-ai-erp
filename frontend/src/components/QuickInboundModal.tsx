@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Plus, Trash2, Package, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { API_BASE_URL } from '../config';
+import { parseInboundFile } from '../utils/excelImport';
 
 interface InboundRow {
   id: string;
@@ -80,6 +81,8 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
   const [batchAddCount, setBatchAddCount] = useState<string>('10'); // 批量添加行数
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null); // 当前打开的下拉框
   const [nameSearchKeyword, setNameSearchKeyword] = useState<string>(''); // 商品名称搜索关键词
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   
   // 珐琅产品批量生成状态
   const [showEnamelGenerator, setShowEnamelGenerator] = useState(false);
@@ -253,6 +256,10 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
     setRows(prev => [...prev, createEmptyRow()]);
   };
 
+  const isRowEmpty = (row: InboundRow) => {
+    return !row.productCode && !row.productName && !row.weight && !row.laborCost && !row.pieceCount && !row.pieceLaborCost;
+  };
+
   // 批量添加多行
   const addMultipleRows = () => {
     const count = parseInt(batchAddCount) || 0;
@@ -267,6 +274,52 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
     const newRows = Array.from({ length: count }, () => createEmptyRow());
     setRows(prev => [...prev, ...newRows]);
     toast.success(`已添加 ${count} 行`);
+  };
+
+  const handleImportClick = () => {
+    if (!selectedSupplier) {
+      toast.error('请先选择供应商');
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      const { rows: imported, errors } = await parseInboundFile(file);
+      const newRows = imported.map(item => ({
+        id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        productCode: item.productCode || '',
+        productName: item.productName || '',
+        weight: String(item.weight ?? ''),
+        laborCost: String(item.laborCost ?? ''),
+        pieceCount: item.pieceCount !== undefined ? String(item.pieceCount) : '',
+        pieceLaborCost: item.pieceLaborCost !== undefined ? String(item.pieceLaborCost) : '',
+      }));
+
+      setRows(prev => {
+        const baseRows = prev.length === 1 && isRowEmpty(prev[0]) ? [] : prev;
+        return [...baseRows, ...newRows];
+      });
+
+      if (newRows.length > 0) {
+        toast.success(`导入成功 ${newRows.length} 行`);
+      }
+      if (errors.length > 0) {
+        console.warn('Excel 导入错误:', errors);
+        toast.error(`有 ${errors.length} 行数据不符合要求，已跳过`);
+      }
+    } catch (error) {
+      console.error('导入失败:', error);
+      toast.error('导入失败，请检查文件格式');
+    } finally {
+      setIsImporting(false);
+      event.target.value = '';
+    }
   };
 
   // 批量生成珐琅产品编码
@@ -808,6 +861,32 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
             {/* 分隔线 */}
             <div className="h-6 w-px bg-gray-300"></div>
             
+            {/* Excel/CSV 导入 */}
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.csv"
+                className="hidden"
+                onChange={handleImportFile}
+              />
+              <button
+                onClick={handleImportClick}
+                disabled={isImporting}
+                title="模板表头：商品编码/商品名称/克重(g)/克工费(元)/件数/件工费(元)/备注"
+                className={`px-3 py-1.5 text-sm rounded-lg transition-colors border ${
+                  isImporting
+                    ? 'text-gray-400 border-gray-200 cursor-not-allowed'
+                    : 'text-blue-600 border-blue-300 hover:bg-blue-50'
+                }`}
+              >
+                {isImporting ? '导入中...' : '导入Excel/CSV'}
+              </button>
+            </div>
+
+            {/* 分隔线 */}
+            <div className="h-6 w-px bg-gray-300"></div>
+
             {/* 珐琅产品批量生成按钮 */}
             <button
               onClick={() => setShowEnamelGenerator(!showEnamelGenerator)}
