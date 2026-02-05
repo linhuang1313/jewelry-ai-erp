@@ -159,6 +159,7 @@ export const ROLE_PERMISSIONS = {
     canViewPurchaseOrders: true,
     canViewPurchaseReturns: true,
     canAuditInbound: true,          // 可以审核入库单
+    canAuditReturn: true,           // 可以审核退货单
     
     pages: ['chat', 'warehouse', 'settlement', 'finance', 'analytics', 'export', 'salesperson', 'customer', 'supplier', 'return', 'gold-material', 'product-codes', 'loan', 'document-center'],
   },
@@ -234,6 +235,7 @@ export const ROLE_PERMISSIONS = {
     canViewPurchaseOrders: true,    // 可以查看采购单
     canViewPurchaseReturns: true,   // 可以查看采购退货单
     canAuditInbound: true,          // 可以审核入库单
+    canAuditReturn: true,           // 可以审核退货单
     
     pages: ['chat', 'warehouse', 'settlement', 'finance', 'analytics', 'export', 'salesperson', 'customer', 'supplier', 'return', 'gold-material', 'product-codes', 'loan', 'document-center'],
   }

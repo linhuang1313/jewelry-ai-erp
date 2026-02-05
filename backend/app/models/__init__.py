@@ -436,6 +436,11 @@ class ReturnOrder(Base):
     total_labor_cost = Column(Float, default=0.0)  # 总工费（汇总）
     item_count = Column(Integer, default=1)  # 商品数量
     
+    # 财务审核字段（与入库单审核逻辑一致）
+    is_audited = Column(Boolean, default=False, index=True)  # 是否已审核
+    audited_by = Column(String(50), nullable=True)  # 审核人
+    audited_at = Column(DateTime(timezone=True), nullable=True)  # 审核时间
+    
     # 关系
     from_location = relationship("Location", foreign_keys=[from_location_id])
     supplier = relationship("Supplier", foreign_keys=[supplier_id])

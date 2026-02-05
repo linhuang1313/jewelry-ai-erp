@@ -112,7 +112,11 @@ def build_return_response_from_maps(
         "completed_by": return_order.completed_by,
         "completed_at": format_time_china(return_order.completed_at),
         "images": return_order.images,
-        "remark": return_order.remark
+        "remark": return_order.remark,
+        # 财务审核字段
+        "is_audited": bool(return_order.is_audited) if return_order.is_audited is not None else False,
+        "audited_by": return_order.audited_by,
+        "audited_at": format_time_china(return_order.audited_at)
     }
 
 
@@ -1119,4 +1123,104 @@ async def download_return_order(
     except Exception as e:
         logger.error(f"生成退货单失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"生成退货单失败: {str(e)}")
+
+
+# ============= 财务审核相关端点 =============
+
+# 权限检查函数
+def has_audit_permission(user_role: str) -> bool:
+    """检查是否有审核退货单的权限"""
+    # 财务和管理层可以审核
+    return user_role in ['finance', 'manager']
+
+
+@router.post("/{return_id}/audit")
+async def audit_return(
+    return_id: int,
+    user_role: str = Query(..., description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    审核退货单（财务审核）
+    - 仅财务和管理层可以审核
+    - 审核后不影响退货单的业务状态
+    """
+    try:
+        # 权限检查
+        if not has_audit_permission(user_role):
+            return {"success": False, "error": "权限不足：只有财务和管理层可以审核退货单"}
+        
+        # 查询退货单
+        return_order = db.query(ReturnOrder).filter(ReturnOrder.id == return_id).first()
+        if not return_order:
+            return {"success": False, "error": "退货单不存在"}
+        
+        # 检查是否已审核
+        if return_order.is_audited:
+            return {"success": False, "error": "退货单已审核"}
+        
+        # 执行审核
+        return_order.is_audited = True
+        return_order.audited_by = user_role
+        return_order.audited_at = china_now()
+        db.commit()
+        
+        logger.info(f"退货单 {return_order.return_no} 已审核，审核人: {user_role}")
+        
+        return {
+            "success": True,
+            "message": "审核成功",
+            "return_id": return_id,
+            "return_no": return_order.return_no
+        }
+    
+    except Exception as e:
+        logger.error(f"审核退货单失败: {e}", exc_info=True)
+        db.rollback()
+        return {"success": False, "error": f"审核失败: {str(e)}"}
+
+
+@router.post("/{return_id}/unaudit")
+async def unaudit_return(
+    return_id: int,
+    user_role: str = Query(..., description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    反审退货单（取消财务审核）
+    - 仅财务和管理层可以反审
+    """
+    try:
+        # 权限检查
+        if not has_audit_permission(user_role):
+            return {"success": False, "error": "权限不足：只有财务和管理层可以反审退货单"}
+        
+        # 查询退货单
+        return_order = db.query(ReturnOrder).filter(ReturnOrder.id == return_id).first()
+        if not return_order:
+            return {"success": False, "error": "退货单不存在"}
+        
+        # 检查是否已审核
+        if not return_order.is_audited:
+            return {"success": False, "error": "退货单未审核"}
+        
+        # 执行反审
+        return_order.is_audited = False
+        return_order.audited_by = None
+        return_order.audited_at = None
+        db.commit()
+        
+        logger.info(f"退货单 {return_order.return_no} 已反审，操作人: {user_role}")
+        
+        return {
+            "success": True,
+            "message": "反审成功",
+            "return_id": return_id,
+            "return_no": return_order.return_no
+        }
+    
+    except Exception as e:
+        logger.error(f"反审退货单失败: {e}", exc_info=True)
+        db.rollback()
+        return {"success": False, "error": f"反审失败: {str(e)}"}
 
