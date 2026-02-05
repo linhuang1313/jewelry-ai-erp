@@ -215,6 +215,11 @@ export const parseInlayInboundTable = (table: unknown[][]): {
     const rowData: Partial<InlayInboundRow> = {}
     const rowErrors: InlayFieldErrors = {}
 
+    // 调试：打印第一行数据
+    if (i === headerRowIndex + 1) {
+      console.log('镶嵌入库解析 - 第一行原始数据:', rawRow)
+    }
+
     // 解析品名（拼接多列）
     const productNameParts: string[] = []
     for (const index of productNameIndexes) {
@@ -224,14 +229,30 @@ export const parseInlayInboundTable = (table: unknown[][]): {
     }
     const productName = productNameParts.join('')
 
+    // 调试：打印品名解析结果
+    if (i === headerRowIndex + 1) {
+      console.log('镶嵌入库解析 - 品名解析:', { productNameIndexes, productNameParts, productName })
+    }
+
     // 解析其他字段
     headerIndexMap.forEach((index, header) => {
       const key = HEADER_MAP[header]
       if (!key || key === 'productName') return // 品名已单独处理
       const value = rawRow[index]
+      
+      // 调试：打印字段映射（仅第一行的前几个字段）
+      if (i === headerRowIndex + 1 && ['weight', 'laborCost', 'pieceCount', 'pieceLaborCost'].includes(key)) {
+        console.log(`镶嵌入库解析 - 字段映射: header=${header}, index=${index}, key=${key}, value=${value}`)
+      }
+      
       if (value === null || value === undefined || String(value).trim() === '') return
       rowData[key] = String(value).trim() as never
     })
+
+    // 调试：打印解析后的 rowData
+    if (i === headerRowIndex + 1) {
+      console.log('镶嵌入库解析 - rowData对象:', rowData)
+    }
 
     // 转换数值字段
     const weight = toNumber(rowData.weight ?? '')
