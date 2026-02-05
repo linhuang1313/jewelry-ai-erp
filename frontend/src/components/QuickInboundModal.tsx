@@ -314,7 +314,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
     setNameSearchKeyword(''); // 清除搜索关键词
   };
 
-  // 计算单行总工费
+  // 计算单行总工费（普通模式）
   const calculateRowTotal = (row: InboundRow): number => {
     const weight = parseFloat(row.weight) || 0;
     const laborCost = parseFloat(row.laborCost) || 0;
@@ -324,11 +324,23 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
     return weight * laborCost + pieceCount * pieceLaborCost;
   };
 
+  // 计算单行总工费（镶嵌模式）：重量*克工费 + 件工费 + 主石额 + 副石额 + 镶石费
+  const calculateInlayRowTotal = (row: InboundRow): number => {
+    const weight = parseFloat(row.weight) || 0;
+    const laborCost = parseFloat(row.laborCost) || 0;
+    const pieceLaborCost = parseFloat(row.pieceLaborCost) || 0;
+    const mainStoneAmount = parseFloat(row.mainStoneAmount || '0') || 0;
+    const subStoneAmount = parseFloat(row.subStoneAmount || '0') || 0;
+    const stoneSettingFee = parseFloat(row.stoneSettingFee || '0') || 0;
+    
+    return weight * laborCost + pieceLaborCost + mainStoneAmount + subStoneAmount + stoneSettingFee;
+  };
+
   // 计算合计
   const calculateTotal = (): number => {
     if (isInlayMode) {
-      // 镶嵌模式：使用手动输入的总工费
-      return rows.reduce((sum, row) => sum + (parseFloat(row.manualLaborCostTotal || '0') || 0), 0);
+      // 镶嵌模式：自动计算
+      return rows.reduce((sum, row) => sum + calculateInlayRowTotal(row), 0);
     }
     // 普通模式：自动计算
     return rows.reduce((sum, row) => sum + calculateRowTotal(row), 0);
@@ -1239,21 +1251,9 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                     </>
                   )}
                   <td className="px-3 py-2 text-right">
-                    {isInlayMode ? (
-                      <input
-                        type="number"
-                        value={row.manualLaborCostTotal || ''}
-                        onChange={(e) => updateRow(row.id, 'manualLaborCostTotal', e.target.value)}
-                        placeholder="0"
-                        min="0"
-                        step="0.01"
-                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-right"
-                      />
-                    ) : (
-                      <span className="text-sm font-semibold text-amber-600">
-                        ¥{calculateRowTotal(row).toFixed(2)}
-                      </span>
-                    )}
+                    <span className="text-sm font-semibold text-amber-600">
+                      ¥{isInlayMode ? calculateInlayRowTotal(row).toFixed(2) : calculateRowTotal(row).toFixed(2)}
+                    </span>
                   </td>
                   <td className="px-3 py-2 text-center">
                     <button
