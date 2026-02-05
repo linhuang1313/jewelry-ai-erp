@@ -204,6 +204,10 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
   const [receivingOrder, setReceivingOrder] = useState<TransferOrder | null>(null);
   const [receiveItemForms, setReceiveItemForms] = useState<Record<number, { actual_weight: string; diff_reason: string }>>({});
 
+  // 待确认编辑模式
+  const [editOrderId, setEditOrderId] = useState<number | null>(null);
+  const [editItemForms, setEditItemForms] = useState<Record<number, { actual_weight: string; diff_reason: string }>>({});
+
   // 批量转移相关状态
   const [batchOrderNo, setBatchOrderNo] = useState('');
   const [batchItems, setBatchItems] = useState<Array<{
@@ -950,6 +954,71 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     }
   };
   
+  const startEditConfirmOrder = (order: TransferOrder) => {
+    const forms: Record<number, { actual_weight: string; diff_reason: string }> = {};
+    order.items.forEach(item => {
+      forms[item.id] = {
+        actual_weight: String(item.actual_weight ?? item.weight ?? ''),
+        diff_reason: item.diff_reason || ''
+      };
+    });
+    setEditItemForms(forms);
+    setEditOrderId(order.id);
+  };
+
+  const cancelEditConfirmOrder = () => {
+    setEditOrderId(null);
+    setEditItemForms({});
+  };
+
+  const handleSaveConfirmOrder = async (order: TransferOrder) => {
+    const payloadItems = order.items.map(item => {
+      const form = editItemForms[item.id];
+      const actualWeight = parseFloat(form?.actual_weight || '');
+      return {
+        item_id: item.id,
+        actual_weight: actualWeight,
+        diff_reason: form?.diff_reason || ''
+      };
+    });
+
+    for (const item of order.items) {
+      const form = editItemForms[item.id];
+      const actualWeight = parseFloat(form?.actual_weight || '');
+      if (Number.isNaN(actualWeight) || actualWeight <= 0) {
+        toast.error(`商品 ${item.product_name} 实际重量必须大于 0`);
+        return;
+      }
+      const diff = actualWeight - item.weight;
+      if (Math.abs(diff) >= 0.01 && !form?.diff_reason?.trim()) {
+        toast.error(`商品 ${item.product_name} 重量不符，请填写原因`);
+        return;
+      }
+    }
+
+    try {
+      const response = await fetch(
+        `${API_ENDPOINTS.TRANSFER_ORDER_UPDATE_ACTUAL(order.id)}?user_role=${userRole}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: payloadItems })
+        }
+      );
+
+      if (response.ok) {
+        toast.success('已保存实际重量');
+        cancelEditConfirmOrder();
+        loadTransfers();
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || '保存失败');
+      }
+    } catch (error) {
+      toast.error('保存失败');
+    }
+  };
+
   // 商品部确认转移单（同意）
   const handleConfirmTransferOrder = async (order: TransferOrder) => {
     try {
@@ -2261,20 +2330,51 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                             </div>
                           </div>
                           <div className="flex flex-col space-y-2 ml-4">
-                            <button
-                              onClick={() => handleConfirmTransferOrder(order)}
-                              className="flex items-center justify-center space-x-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                            >
-                              <Check className="w-4 h-4" />
-                              <span>同意</span>
-                            </button>
-                            <button
-                              onClick={() => handleRejectConfirmTransferOrder(order)}
-                              className="flex items-center justify-center space-x-1 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                            >
-                              <X className="w-4 h-4" />
-                              <span>拒绝</span>
-                            </button>
+                            {userRole === 'product' ? (
+                              editOrderId === order.id ? (
+                                <>
+                                  <button
+                                    onClick={() => handleSaveConfirmOrder(order)}
+                                    className="flex items-center justify-center space-x-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                    <span>保存</span>
+                                  </button>
+                                  <button
+                                    onClick={cancelEditConfirmOrder}
+                                    className="flex items-center justify-center space-x-1 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                                  >
+                                    <X className="w-4 h-4" />
+                                    <span>取消</span>
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => startEditConfirmOrder(order)}
+                                  className="flex items-center justify-center space-x-1 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                                >
+                                  <FileText className="w-4 h-4" />
+                                  <span>编辑</span>
+                                </button>
+                              )
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => handleConfirmTransferOrder(order)}
+                                  className="flex items-center justify-center space-x-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                                >
+                                  <Check className="w-4 h-4" />
+                                  <span>同意</span>
+                                </button>
+                                <button
+                                  onClick={() => handleRejectConfirmTransferOrder(order)}
+                                  className="flex items-center justify-center space-x-1 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                                >
+                                  <X className="w-4 h-4" />
+                                  <span>拒绝</span>
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -2292,17 +2392,59 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                           </thead>
                           <tbody className="divide-y divide-orange-100">
                             {order.items.map(item => {
-                              const diff = (item.actual_weight || 0) - item.weight;
+                              const editForm = editItemForms[item.id] || { actual_weight: String(item.actual_weight ?? ''), diff_reason: item.diff_reason || '' };
+                              const editing = editOrderId === order.id;
+                              const actualWeightValue = editing ? editForm.actual_weight : String(item.actual_weight ?? '');
+                              const actualWeightNum = parseFloat(actualWeightValue || '0');
+                              const diff = (editing ? actualWeightNum : (item.actual_weight || 0)) - item.weight;
                               const hasDiff = Math.abs(diff) >= 0.01;
                               return (
                                 <tr key={item.id} className={hasDiff ? 'bg-orange-50' : ''}>
                                   <td className="px-4 py-2">{item.product_name}</td>
                                   <td className="px-4 py-2 text-right">{item.weight}g</td>
-                                  <td className="px-4 py-2 text-right font-medium text-blue-600">{item.actual_weight}g</td>
+                                  <td className="px-4 py-2 text-right">
+                                    {editing ? (
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        value={editForm.actual_weight}
+                                        onChange={(e) => setEditItemForms(prev => ({
+                                          ...prev,
+                                          [item.id]: { ...editForm, actual_weight: e.target.value }
+                                        }))}
+                                        className={`w-24 px-2 py-1 border rounded text-right ${
+                                          Number.isNaN(actualWeightNum) || actualWeightNum <= 0
+                                            ? 'border-red-400'
+                                            : 'border-gray-200'
+                                        }`}
+                                      />
+                                    ) : (
+                                      <span className="font-medium text-blue-600">{item.actual_weight ?? '-'}g</span>
+                                    )}
+                                  </td>
                                   <td className={`px-4 py-2 text-right font-medium ${diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : ''}`}>
                                     {hasDiff ? `${diff > 0 ? '+' : ''}${diff.toFixed(2)}g` : '-'}
                                   </td>
-                                  <td className="px-4 py-2 text-gray-600">{item.diff_reason || '-'}</td>
+                                  <td className="px-4 py-2 text-gray-600">
+                                    {editing ? (
+                                      <input
+                                        type="text"
+                                        value={editForm.diff_reason}
+                                        onChange={(e) => setEditItemForms(prev => ({
+                                          ...prev,
+                                          [item.id]: { ...editForm, diff_reason: e.target.value }
+                                        }))}
+                                        className={`w-full px-2 py-1 border rounded ${
+                                          hasDiff && !editForm.diff_reason?.trim()
+                                            ? 'border-red-400'
+                                            : 'border-gray-200'
+                                        }`}
+                                        placeholder={hasDiff ? '差异原因（必填）' : '可选'}
+                                      />
+                                    ) : (
+                                      item.diff_reason || '-'
+                                    )}
+                                  </td>
                                 </tr>
                               );
                             })}

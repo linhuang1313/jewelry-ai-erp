@@ -23,6 +23,7 @@ from ..schemas import (
     InventoryTransferResponse,
     TransferOrderCreate,
     TransferOrderReceive,
+    TransferOrderActualUpdate,
     TransferOrderResponse,
     TransferItemResponse,
 )
@@ -1376,6 +1377,75 @@ async def confirm_transfer_order(
     db.refresh(order)
     
     logger.info(f"确认转移单: {order.transfer_no}, 确认人: {confirmed_by}")
+    
+    total_weight = sum(item.weight for item in order.items)
+    total_actual_weight = sum(item.actual_weight or 0 for item in order.items)
+    
+    return TransferOrderResponse(
+        id=order.id,
+        transfer_no=order.transfer_no,
+        from_location_id=order.from_location_id,
+        to_location_id=order.to_location_id,
+        from_location_name=order.from_location.name if order.from_location else None,
+        to_location_name=order.to_location.name if order.to_location else None,
+        status=order.status,
+        created_by=order.created_by,
+        created_at=order.created_at,
+        remark=order.remark,
+        received_by=order.received_by,
+        received_at=order.received_at,
+        items=[TransferItemResponse(
+            id=item.id,
+            product_name=item.product_name,
+            weight=item.weight,
+            actual_weight=item.actual_weight,
+            weight_diff=item.weight_diff,
+            diff_reason=item.diff_reason
+        ) for item in order.items],
+        total_weight=total_weight,
+        total_actual_weight=total_actual_weight
+    )
+
+
+@router.post("/transfer-orders/{order_id}/update-actual", response_model=TransferOrderResponse)
+async def update_transfer_order_actual(
+    order_id: int,
+    update_data: TransferOrderActualUpdate,
+    user_role: str = Query(default="product", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """更新待确认转移单的实际重量（商品专员预览编辑）"""
+    from ..middleware.permissions import has_permission
+    if not has_permission(user_role, 'can_transfer'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有编辑转移单的权限")
+    
+    order = db.query(InventoryTransferOrder).filter(InventoryTransferOrder.id == order_id).first()
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="转移单不存在")
+    if order.status != "pending_confirm":
+        raise HTTPException(status_code=400, detail=f"转移单状态为 {order.status}，无法编辑")
+    
+    update_map = {item.item_id: item for item in update_data.items}
+    
+    for item in order.items:
+        if item.id not in update_map:
+            raise HTTPException(status_code=400, detail=f"缺少商品 {item.product_name} 的实际重量")
+    
+    for item in order.items:
+        update_item = update_map[item.id]
+        if update_item.actual_weight <= 0:
+            raise HTTPException(status_code=400, detail=f"商品 {item.product_name} 实际重量必须大于 0")
+        
+        item.actual_weight = update_item.actual_weight
+        item.weight_diff = update_item.actual_weight - item.weight
+        item.diff_reason = update_item.diff_reason
+        
+        if abs(item.weight_diff) >= 0.01 and not update_item.diff_reason:
+            raise HTTPException(status_code=400, detail=f"商品 {item.product_name} 重量不符，必须填写差异原因")
+    
+    db.commit()
+    db.refresh(order)
     
     total_weight = sum(item.weight for item in order.items)
     total_actual_weight = sum(item.actual_weight or 0 for item in order.items)

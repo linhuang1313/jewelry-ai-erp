@@ -506,6 +506,11 @@ class TransferOrderReceive(BaseModel):
     items: List[TransferItemReceive]
 
 
+class TransferOrderActualUpdate(BaseModel):
+    """更新待确认转移单实际重量"""
+    items: List[TransferItemReceive]
+
+
 class TransferItemResponse(BaseModel):
     """转移单明细响应"""
     model_config = ConfigDict(from_attributes=True)
