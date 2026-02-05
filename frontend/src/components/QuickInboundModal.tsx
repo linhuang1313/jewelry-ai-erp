@@ -463,6 +463,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
     setIsImportingInlay(true);
     try {
       const { rows: imported, errors } = await parseInlayInboundFile(file);
+      console.log('镶嵌入库 - 解析器返回的数据:', imported.slice(0, 2));
       const newRows = imported.map(item => {
         // 如果没有商品编码但有商品名称，尝试根据名称匹配编码
         let productCode = item.data.productCode || '';
@@ -503,9 +504,13 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
         };
       });
 
+      console.log('镶嵌入库 - 转换后的newRows:', newRows.slice(0, 2));
+
       setRows(prev => {
         const baseRows = prev.length === 1 && isRowEmpty(prev[0]) ? [] : prev;
-        return [...baseRows, ...newRows];
+        const result = [...baseRows, ...newRows];
+        console.log('镶嵌入库 - setRows结果:', result.slice(0, 2));
+        return result;
       });
 
       if (newRows.length > 0) {
