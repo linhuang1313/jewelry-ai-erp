@@ -364,16 +364,16 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
         const data = await response.json();
         setTransferOrders(data);
         
-        // 根据角色过滤待接收的转移单
+        // 根据角色过滤待接收的转移单（柜台看到的"待接收" = 商品专员看到的"待确认"）
         const myResponsibleLocation = ROLE_LOCATION_MAP[userRole];
         if (myResponsibleLocation) {
           setPendingTransferOrders(
             data.filter((t: TransferOrder) => 
-              t.status === 'pending' && t.to_location_name === myResponsibleLocation
+              t.status === 'pending_confirm' && t.to_location_name === myResponsibleLocation
             )
           );
         } else {
-          setPendingTransferOrders(data.filter((t: TransferOrder) => t.status === 'pending'));
+          setPendingTransferOrders(data.filter((t: TransferOrder) => t.status === 'pending_confirm'));
         }
         
         // 待确认转移单（商品专员和管理员）

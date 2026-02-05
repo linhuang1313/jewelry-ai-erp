@@ -497,7 +497,8 @@ async def receive_transfer(
     
     if not transfer:
         raise HTTPException(status_code=404, detail="转移单不存在")
-    if transfer.status != "pending":
+    # 支持 pending 和 pending_confirm 两种状态的接收
+    if transfer.status not in ["pending", "pending_confirm"]:
         raise HTTPException(status_code=400, detail=f"转移单状态为 {transfer.status}，无法接收")
     
     # 计算重量差异
@@ -1211,7 +1212,8 @@ async def receive_transfer_order(
     
     if not order:
         raise HTTPException(status_code=404, detail="转移单不存在")
-    if order.status != "pending":
+    # 支持 pending 和 pending_confirm 两种状态的接收（统一流程：商品专员创建的单是pending_confirm）
+    if order.status not in ["pending", "pending_confirm"]:
         raise HTTPException(status_code=400, detail=f"转移单状态为 {order.status}，无法接收")
     
     # 构建 item_id -> receive_data 的映射
