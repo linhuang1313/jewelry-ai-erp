@@ -5,6 +5,7 @@ export const API_ENDPOINTS = {
   CHAT: `${API_BASE_URL}/api/chat`,
   CHAT_STREAM: `${API_BASE_URL}/api/chat-stream`,  // 流式聊天端点
   RECOGNIZE_INBOUND_SHEET: `${API_BASE_URL}/api/recognize-inbound-sheet`,
+  OCR: `${API_BASE_URL}/api/recognize-inbound-sheet`,  // OCR 别名
   // 入库相关
   INBOUND_ORDERS: `${API_BASE_URL}/api/inbound-orders`,  // 入库单列表
   INBOUND_ORDER: (id) => `${API_BASE_URL}/api/inbound-orders/${id}`,  // 入库单详情
