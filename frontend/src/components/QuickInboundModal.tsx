@@ -30,6 +30,7 @@ interface InboundRow {
   bearingWeight?: string;
   saleLaborCost?: string;
   salePieceLaborCost?: string;
+  manualLaborCostTotal?: string; // 手动输入的总工费（镶嵌模式用）
   errors?: Partial<Record<'productCode' | 'productName' | 'weight' | 'laborCost' | 'pieceCount' | 'pieceLaborCost', string>>;
 }
 
@@ -325,6 +326,11 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
 
   // 计算合计
   const calculateTotal = (): number => {
+    if (isInlayMode) {
+      // 镶嵌模式：使用手动输入的总工费
+      return rows.reduce((sum, row) => sum + (parseFloat(row.manualLaborCostTotal || '0') || 0), 0);
+    }
+    // 普通模式：自动计算
     return rows.reduce((sum, row) => sum + calculateRowTotal(row), 0);
   };
 
@@ -499,6 +505,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
           bearingWeight: item.data.bearingWeight !== undefined ? String(item.data.bearingWeight) : undefined,
           saleLaborCost: item.data.saleLaborCost !== undefined ? String(item.data.saleLaborCost) : undefined,
           salePieceLaborCost: item.data.salePieceLaborCost !== undefined ? String(item.data.salePieceLaborCost) : undefined,
+          manualLaborCostTotal: '', // 总工费留空，用户手动输入
           errors: item.errors,
         };
       });
@@ -1155,9 +1162,21 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                     </>
                   )}
                   <td className="px-3 py-2 text-right">
-                    <span className="text-sm font-semibold text-amber-600">
-                      ¥{calculateRowTotal(row).toFixed(2)}
-                    </span>
+                    {isInlayMode ? (
+                      <input
+                        type="number"
+                        value={row.manualLaborCostTotal || ''}
+                        onChange={(e) => updateRow(row.id, 'manualLaborCostTotal', e.target.value)}
+                        placeholder="0"
+                        min="0"
+                        step="0.01"
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-right"
+                      />
+                    ) : (
+                      <span className="text-sm font-semibold text-amber-600">
+                        ¥{calculateRowTotal(row).toFixed(2)}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-center">
                     <button
