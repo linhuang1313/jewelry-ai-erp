@@ -145,12 +145,14 @@ export const parseInlayInboundTable = (table: unknown[][]): {
   console.log('镶嵌入库解析 - 原始表头:', headerRow)
 
   // 解析表头
+  let foundProductName = false
   for (let index = 0; index < headerRow.length; index += 1) {
     const header = normalizeHeader(headerRow[index])
     if (header && !SKIP_HEADERS.includes(header)) {
       headerIndexMap.set(header, index)
-      // 记录品名列的位置（可能有多列需要拼接）
-      if (PRODUCT_NAME_HEADERS.includes(header)) {
+      // 记录品名列的位置（可能有多列需要拼接）- 只处理第一个品名列
+      if (!foundProductName && PRODUCT_NAME_HEADERS.includes(header)) {
+        foundProductName = true
         productNameIndexes.push(index)
         // 检查后续空白列（可能是品名的延续列，如 B, C, D 列）
         let nextIndex = index + 1
@@ -164,7 +166,7 @@ export const parseInlayInboundTable = (table: unknown[][]): {
             break
           }
         }
-        break // 只处理第一个品名列
+        // 不要 break，继续处理其他表头
       }
     }
   }
