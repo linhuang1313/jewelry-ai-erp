@@ -889,10 +889,53 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
         )}
       </div>
 
-      {/* 统计信息 */}
-      <div className="mt-4 text-sm text-gray-500 text-right">
-        共 {orders.length} 条入库单据
-      </div>
+      {/* 统计汇总 */}
+      {orders.length > 0 && (
+        <div className="mt-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border border-orange-200 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Package className="w-5 h-5 text-orange-500" />
+              <span className="font-medium text-gray-700">
+                {hasActiveFilters ? '筛选结果汇总' : '全部数据汇总'}
+              </span>
+            </div>
+            <div className="flex items-center space-x-8">
+              <div className="text-center">
+                <div className="text-xs text-gray-500">入库单数</div>
+                <div className="text-lg font-bold text-gray-900">{orders.length}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs text-gray-500">商品总数</div>
+                <div className="text-lg font-bold text-gray-900">
+                  {orders.reduce((sum, order) => sum + order.item_count, 0)}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs text-gray-500">入库总克重</div>
+                <div className="text-lg font-bold text-orange-600">
+                  {orders.reduce((sum, order) => sum + order.total_weight, 0).toFixed(2)} 克
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs text-gray-500">总工费</div>
+                <div className="text-lg font-bold text-green-600">
+                  ¥{orders.reduce((sum, order) => {
+                    const orderTotalCost = order.details.reduce((detailSum, d) => detailSum + (d.total_cost || 0), 0);
+                    return sum + orderTotalCost;
+                  }, 0).toFixed(2)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 无数据时的统计 */}
+      {orders.length === 0 && !loading && (
+        <div className="mt-4 text-sm text-gray-500 text-center">
+          暂无符合条件的数据
+        </div>
+      )}
     </div>
   );
 };
