@@ -13,7 +13,7 @@ from ..schemas import (
     ProductCodeCreate, ProductCodeUpdate, 
     ProductCodeResponse, ProductCodeSearchResponse
 )
-from ..init_product_codes import get_next_f_code, get_next_fl_code, init_product_codes
+from ..init_product_codes import get_next_f_code, get_next_fl_code, init_product_codes, init_predefined_combinations
 
 router = APIRouter(prefix="/api/product-codes", tags=["商品编码"])
 
@@ -41,6 +41,18 @@ def initialize_product_codes(db: Session = Depends(get_db)):
     """初始化预定义商品编码"""
     count = init_product_codes(db)
     return {"message": f"已初始化 {count} 个预定义商品编码", "count": count}
+
+
+@router.post("/init-predefined-combinations", response_model=dict)
+def initialize_predefined_combinations(db: Session = Depends(get_db)):
+    """根据商品属性配置生成预定义编码"""
+    result = init_predefined_combinations(db)
+    _PRODUCT_CODE_CACHE.clear()
+    return {
+        "message": f"新增 {result.get('added', 0)} 个，跳过 {result.get('skipped', 0)} 个",
+        "added": result.get("added", 0),
+        "skipped": result.get("skipped", 0)
+    }
 
 
 @router.get("/next-f-code", response_model=dict)
