@@ -402,6 +402,7 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
             <tr style={{ background: '#0f172a' }}>
               <th style={{ padding: '14px', textAlign: 'left', color: '#94a3b8', fontWeight: '500' }}>退货单号</th>
               <th style={{ padding: '14px', textAlign: 'left', color: '#94a3b8', fontWeight: '500' }}>类型</th>
+              <th style={{ padding: '14px', textAlign: 'left', color: '#94a3b8', fontWeight: '500' }}>供应商</th>
               <th style={{ padding: '14px', textAlign: 'left', color: '#94a3b8', fontWeight: '500' }}>商品名称</th>
               <th style={{ padding: '14px', textAlign: 'right', color: '#94a3b8', fontWeight: '500' }}>克重</th>
               <th style={{ padding: '14px', textAlign: 'left', color: '#94a3b8', fontWeight: '500' }}>退货原因</th>
@@ -414,17 +415,18 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>加载中...</td>
+                <td colSpan={10} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>加载中...</td>
               </tr>
             ) : returns.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>暂无退货记录</td>
+                <td colSpan={10} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>暂无退货记录</td>
               </tr>
             ) : (
               returns.map((r) => (
                 <tr key={r.id} style={{ borderTop: '1px solid #334155' }}>
                   <td style={{ padding: '14px', color: '#f8fafc', fontFamily: 'monospace' }}>{r.return_no}</td>
                   <td style={{ padding: '14px', color: '#e2e8f0' }}>{TYPE_MAP[r.return_type] || r.return_type}</td>
+                  <td style={{ padding: '14px', color: '#e2e8f0' }}>{r.supplier_name || '-'}</td>
                   <td style={{ padding: '14px', color: '#e2e8f0' }}>{r.product_name}</td>
                   <td style={{ padding: '14px', textAlign: 'right', color: '#fbbf24', fontWeight: '600' }}>{r.return_weight}g</td>
                   <td style={{ padding: '14px', color: '#e2e8f0' }}>{r.return_reason}</td>
@@ -580,7 +582,7 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
                         <div style={{ flex: 1 }}>
                           <div style={{ color: '#f8fafc', fontWeight: '500' }}>{item.product_name}</div>
                           <div style={{ color: '#94a3b8', fontSize: '12px', marginTop: '2px' }}>
-                            工费: ¥{item.total_labor_cost?.toFixed(2) || '0.00'}
+                            工费: ¥{item.labor_cost?.toFixed(2) || '0.00'}/g
                             {item.piece_count ? ` | ${item.piece_count}件` : ''}
                           </div>
                         </div>
