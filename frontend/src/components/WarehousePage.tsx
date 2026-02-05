@@ -861,8 +861,8 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     }
 
     try {
-      // 使用新版转移单 API（支持多商品）
-      const response = await fetch(`${API_ENDPOINTS.TRANSFER_ORDERS}?user_role=${userRole}`, {
+      // 使用新版转移单 API（支持多商品），商品专员创建的转移单进入"待确认"状态
+      const response = await fetch(`${API_ENDPOINTS.TRANSFER_ORDERS}?user_role=${userRole}&created_by=${userRole}&initial_status=pending_confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -876,7 +876,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       if (response.ok) {
         const result = await response.json();
         const totalWeight = result.total_weight || itemsToTransfer.reduce((sum: number, item: { weight: number }) => sum + item.weight, 0);
-        toast.success(`成功创建转移单 ${result.transfer_no}，共 ${result.items.length} 个商品，${totalWeight.toFixed(2)}g`);
+        toast.success(`成功创建转移单 ${result.transfer_no}，共 ${result.items.length} 个商品，${totalWeight.toFixed(2)}g，请在"待确认"中查看`);
         setShowTransferForm(false);
         setTransferItems([]);
         // 重置表单但保留默认位置
