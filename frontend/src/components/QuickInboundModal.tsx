@@ -346,7 +346,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
 
     const weight = parseFloat(row.weight);
     if (Number.isNaN(weight) || weight <= 0) {
-      errors.weight = '克重必须大于 0';
+      errors.weight = '重量必须大于 0';
     }
 
     const laborCost = parseFloat(row.laborCost);
@@ -859,7 +859,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                   商品名称
                 </th>
                 <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-24">
-                  克重(g)
+                  重量
                 </th>
                 <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-24">
                   克工费(元)
