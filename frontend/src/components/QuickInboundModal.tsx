@@ -409,20 +409,56 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
     setIsImporting(true);
     try {
       const { rows: imported, errors } = await parseInboundFile(file);
-      const newRows = imported.map(item => {
-        // 如果没有商品编码但有商品名称，尝试根据名称匹配编码
+      
+      // 第一步：处理每行数据，标记需要生成新编码的行
+      const rowsWithCodeStatus = imported.map(item => {
         let productCode = item.data.productCode || '';
+        let needsNewCode = false;
+        
         if (!productCode && item.data.productName) {
           const matchedCode = productCodes.find(
             pc => pc.name === item.data.productName.trim()
           );
           if (matchedCode) {
             productCode = matchedCode.code;
+          } else {
+            needsNewCode = true;
           }
+        } else if (!productCode) {
+          needsNewCode = true;
         }
+        
+        return { item, productCode, needsNewCode };
+      });
+      
+      // 第二步：批量获取新编码
+      const needNewCodeCount = rowsWithCodeStatus.filter(r => r.needsNewCode).length;
+      let newCodes: string[] = [];
+      
+      if (needNewCodeCount > 0) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/product-codes/batch-f-codes?count=${needNewCodeCount}&save=true&product_name=${encodeURIComponent('快捷入库产品')}`);
+          if (response.ok) {
+            const data = await response.json();
+            newCodes = data.codes || [];
+          }
+        } catch (err) {
+          console.error('获取新编码失败:', err);
+        }
+      }
+      
+      // 第三步：分配新编码并创建行数据
+      let newCodeIndex = 0;
+      const newRows = rowsWithCodeStatus.map(({ item, productCode, needsNewCode }) => {
+        let finalCode = productCode;
+        if (needsNewCode && newCodeIndex < newCodes.length) {
+          finalCode = newCodes[newCodeIndex];
+          newCodeIndex++;
+        }
+        
         return {
           id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          productCode,
+          productCode: finalCode,
           productName: item.data.productName || '',
           weight: String(item.data.weight ?? ''),
           laborCost: String(item.data.laborCost ?? ''),
@@ -438,7 +474,8 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       });
 
       if (newRows.length > 0) {
-        toast.success(`导入成功 ${newRows.length} 行`);
+        const newCodeMsg = needNewCodeCount > 0 ? `（自动生成 ${newCodes.length} 个新编码）` : '';
+        toast.success(`导入成功 ${newRows.length} 行${newCodeMsg}`);
       }
       if (errors.length > 0) {
         console.warn('Excel 导入错误:', errors);
@@ -469,20 +506,59 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
     setIsImportingInlay(true);
     try {
       const { rows: imported, errors } = await parseInlayInboundFile(file);
-      const newRows = imported.map(item => {
-        // 如果没有商品编码但有商品名称，尝试根据名称匹配编码
+      
+      // 第一步：处理每行数据，标记需要生成新编码的行
+      const rowsWithCodeStatus = imported.map(item => {
         let productCode = item.data.productCode || '';
+        let needsNewCode = false;
+        
         if (!productCode && item.data.productName) {
+          // 尝试根据商品名称匹配已有编码
           const matchedCode = productCodes.find(
             pc => pc.name === item.data.productName.trim()
           );
           if (matchedCode) {
             productCode = matchedCode.code;
+          } else {
+            // 没有匹配到，需要生成新编码
+            needsNewCode = true;
           }
+        } else if (!productCode) {
+          // 没有编码也没有名称，也需要生成新编码
+          needsNewCode = true;
         }
+        
+        return { item, productCode, needsNewCode };
+      });
+      
+      // 第二步：统计需要生成新编码的数量，批量获取
+      const needNewCodeCount = rowsWithCodeStatus.filter(r => r.needsNewCode).length;
+      let newCodes: string[] = [];
+      
+      if (needNewCodeCount > 0) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/product-codes/batch-f-codes?count=${needNewCodeCount}&save=true&product_name=${encodeURIComponent('镶嵌产品')}`);
+          if (response.ok) {
+            const data = await response.json();
+            newCodes = data.codes || [];
+          }
+        } catch (err) {
+          console.error('获取新编码失败:', err);
+        }
+      }
+      
+      // 第三步：分配新编码并创建行数据
+      let newCodeIndex = 0;
+      const newRows = rowsWithCodeStatus.map(({ item, productCode, needsNewCode }) => {
+        let finalCode = productCode;
+        if (needsNewCode && newCodeIndex < newCodes.length) {
+          finalCode = newCodes[newCodeIndex];
+          newCodeIndex++;
+        }
+        
         return {
           id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          productCode,
+          productCode: finalCode,
           productName: item.data.productName || '',
           weight: String(item.data.weight ?? ''),
           laborCost: String(item.data.laborCost ?? ''),
@@ -517,7 +593,8 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
 
       if (newRows.length > 0) {
         setIsInlayMode(true); // 切换到镶嵌入库模式
-        toast.success(`镶嵌入库导入成功 ${newRows.length} 行`);
+        const newCodeMsg = needNewCodeCount > 0 ? `（自动生成 ${newCodes.length} 个新编码）` : '';
+        toast.success(`镶嵌入库导入成功 ${newRows.length} 行${newCodeMsg}`);
       }
       if (errors.length > 0) {
         console.warn('镶嵌入库导入错误:', errors);
