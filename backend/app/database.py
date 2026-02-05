@@ -1,8 +1,9 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 import os
 from dotenv import load_dotenv
+from .utils.text_sanitizer import sanitize_session_instances
 
 load_dotenv()
 
@@ -31,6 +32,13 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
+
+
+def _sanitize_before_flush(session: Session, flush_context, instances) -> None:
+    sanitize_session_instances(session)
+
+
+event.listen(Session, "before_flush", _sanitize_before_flush)
 
 def get_db():
     db = SessionLocal()
