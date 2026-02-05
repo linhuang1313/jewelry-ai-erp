@@ -10,7 +10,7 @@ from ..timezone_utils import china_now
 import logging
 
 from ..database import get_db
-from ..models import Supplier, InboundDetail, GoldMaterialTransaction, InboundOrder
+from ..models import Supplier, InboundDetail, GoldMaterialTransaction, InboundOrder, AccountPayable
 from ..schemas import SupplierCreate, SupplierResponse
 from ..utils.response import success_response
 from ..utils.pinyin_utils import to_pinyin_initials
@@ -249,12 +249,13 @@ async def get_supplier_debt_summary(
     db: Session = Depends(get_db)
 ):
     """
-    获取供应商欠料统计（已优化：批量查询避免 N+1）
+    获取供应商款料查询（已优化：批量查询避免 N+1）
     
     计算逻辑：
     - 入库重量：从 InboundDetail 按 supplier_id 汇总
     - 已付料重量：从 GoldMaterialTransaction (expense 类型，已确认) 按 supplier_id 汇总
     - 欠料 = 入库重量 - 已付料重量
+    - 工费欠款：从 AccountPayable (未付/部分付) 按 supplier_id 汇总 unpaid_amount
     """
     try:
         # ========== 批量查询优化：避免 N+1 问题 ==========
@@ -276,9 +277,18 @@ async def get_supplier_debt_summary(
             GoldMaterialTransaction.status == 'confirmed'
         ).group_by(GoldMaterialTransaction.supplier_id).all()
         
+        # 批量查询所有供应商的工费欠款（1 次查询）
+        labor_debts = db.query(
+            AccountPayable.supplier_id,
+            func.sum(AccountPayable.unpaid_amount).label('total_unpaid')
+        ).filter(
+            AccountPayable.status.in_(["unpaid", "partial"])
+        ).group_by(AccountPayable.supplier_id).all()
+        
         # 构建映射字典
         inbound_map = {row.supplier_id: float(row.total_weight or 0) for row in inbound_weights}
         paid_map = {row.supplier_id: float(row.total_weight or 0) for row in paid_weights}
+        labor_debt_map = {row.supplier_id: float(row.total_unpaid or 0) for row in labor_debts}
         
         # 获取所有活跃供应商（1 次查询）
         suppliers = db.query(Supplier).filter(Supplier.status == "active").all()
@@ -287,27 +297,31 @@ async def get_supplier_debt_summary(
         total_inbound = 0.0
         total_paid = 0.0
         total_debt = 0.0
+        total_labor_debt = 0.0
         
         for supplier in suppliers:
             # 从映射中获取数据（O(1) 查找，无数据库查询）
             inbound_weight = inbound_map.get(supplier.id, 0.0)
             paid_weight = paid_map.get(supplier.id, 0.0)
             debt_weight = inbound_weight - paid_weight
+            labor_debt = labor_debt_map.get(supplier.id, 0.0)
             
-            # 只显示有入库记录的供应商
-            if inbound_weight > 0 or paid_weight > 0:
+            # 只显示有入库记录或有工费欠款的供应商
+            if inbound_weight > 0 or paid_weight > 0 or labor_debt > 0:
                 result.append({
                     "supplier_id": supplier.id,
                     "supplier_name": supplier.name,
                     "supplier_no": supplier.supplier_no,
                     "inbound_weight": round(inbound_weight, 2),
                     "paid_weight": round(paid_weight, 2),
-                    "debt_weight": round(debt_weight, 2)
+                    "debt_weight": round(debt_weight, 2),
+                    "labor_debt": round(labor_debt, 2)
                 })
                 
                 total_inbound += inbound_weight
                 total_paid += paid_weight
                 total_debt += debt_weight
+                total_labor_debt += labor_debt
         
         # 按欠料重量降序排列
         result.sort(key=lambda x: x["debt_weight"], reverse=True)
@@ -318,12 +332,13 @@ async def get_supplier_debt_summary(
                 "total_inbound_weight": round(total_inbound, 2),
                 "total_paid_weight": round(total_paid, 2),
                 "total_debt_weight": round(total_debt, 2),
+                "total_labor_debt": round(total_labor_debt, 2),
                 "supplier_count": len(result)
             },
             "suppliers": result
         }
     except Exception as e:
-        logger.error(f"获取供应商欠料统计失败: {e}", exc_info=True)
+        logger.error(f"获取供应商款料查询失败: {e}", exc_info=True)
         return {"success": False, "message": str(e), "suppliers": []}
 
 
