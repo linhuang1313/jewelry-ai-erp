@@ -1376,23 +1376,25 @@ async def batch_import_customers(
                     content_str, used_encoding = _decode_with_auto_detect(content)
                     results["encoding"] = used_encoding
             
-            csv_reader = csv.reader(io.StringIO(content_str))
-            
-            # 跳过表头
-            next(csv_reader, None)
-            
-            for row in csv_reader:
-                if row and row[0]:
-                    name = str(row[0]).strip()
-                    if name:
-                        customers_data.append({
-                            "name": name,
-                            "phone": row[1].strip() if len(row) > 1 and row[1] else None,
-                            "wechat": row[2].strip() if len(row) > 2 and row[2] else None,
-                            "address": row[3].strip() if len(row) > 3 and row[3] else None,
-                            "customer_type": row[4].strip() if len(row) > 4 and row[4] else "个人",
-                            "remark": row[5].strip() if len(row) > 5 and row[5] else None,
-                        })
+                csv_reader = csv.reader(io.StringIO(content_str))
+                
+                # 跳过表头
+                next(csv_reader, None)
+                
+                for row in csv_reader:
+                    if row and row[0]:
+                        name = str(row[0]).strip()
+                        if name:
+                            customers_data.append({
+                                "name": name,
+                                "phone": row[1].strip() if len(row) > 1 and row[1] else None,
+                                "wechat": row[2].strip() if len(row) > 2 and row[2] else None,
+                                "address": row[3].strip() if len(row) > 3 and row[3] else None,
+                                "customer_type": row[4].strip() if len(row) > 4 and row[4] else "个人",
+                                "remark": row[5].strip() if len(row) > 5 and row[5] else None,
+                            })
+            except Exception as e:
+                return error_response(message=f"CSV 文件解析失败: {str(e)[:200]}")
         
         elif file_extension == 'txt':
             # 纯文本文件（每行一个姓名）
@@ -1407,17 +1409,19 @@ async def batch_import_customers(
                     content_str, used_encoding = _decode_with_auto_detect(content)
                     results["encoding"] = used_encoding
             
-            for line in content_str.split('\n'):
-                name = line.strip()
-                if name:
-                    customers_data.append({
-                        "name": name,
-                        "phone": None,
-                        "wechat": None,
-                        "address": None,
-                        "customer_type": "个人",
-                        "remark": None,
-                    })
+                for line in content_str.split('\n'):
+                    name = line.strip()
+                    if name:
+                        customers_data.append({
+                            "name": name,
+                            "phone": None,
+                            "wechat": None,
+                            "address": None,
+                            "customer_type": "个人",
+                            "remark": None,
+                        })
+            except Exception as e:
+                return error_response(message=f"文本文件解析失败: {str(e)[:200]}")
         else:
             return error_response(
                 message=f"不支持的文件格式：{file_extension}。支持格式：.xlsx, .xls, .csv, .txt"
