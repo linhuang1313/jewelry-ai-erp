@@ -30,14 +30,24 @@ export interface ImportError {
 const HEADER_MAP: Record<string, keyof InboundImportRow> = {
   商品编码: 'productCode',
   商品名称: 'productName',
+  商品名: 'productName',
+  品名: 'productName',
   '克重(g)': 'weight',
+  重量: 'weight',
+  克重: 'weight',
   '克工费(元)': 'laborCost',
+  克工费: 'laborCost',
   件数: 'pieceCount',
   '件工费(元)': 'pieceLaborCost',
+  件工费: 'pieceLaborCost',
   备注: 'remark',
 }
 
-const REQUIRED_HEADERS = ['商品名称', '克重(g)', '克工费(元)']
+const REQUIRED_HEADER_DEFS = [
+  { label: '商品名称', headers: ['商品名称', '商品名', '品名'] },
+  { label: '克重(g)', headers: ['克重(g)', '重量', '克重'] },
+  { label: '克工费(元)', headers: ['克工费(元)', '克工费'] },
+]
 
 const normalizeHeader = (value: unknown): string => {
   if (value === null || value === undefined) return ''
@@ -71,15 +81,25 @@ export const parseInboundTable = (table: unknown[][]): {
 
   const headerRow = table[0] || []
   const headerIndexMap = new Map<string, number>()
+  const productNameIndexes = new Set<number>()
 
-  headerRow.forEach((cell, index) => {
-    const header = normalizeHeader(cell)
+  for (let index = 0; index < headerRow.length; index += 1) {
+    const header = normalizeHeader(headerRow[index])
     if (header) {
       headerIndexMap.set(header, index)
+      if (HEADER_MAP[header] === 'productName') {
+        productNameIndexes.add(index)
+        let nextIndex = index + 1
+        while (nextIndex < headerRow.length && normalizeHeader(headerRow[nextIndex]) === '') {
+          productNameIndexes.add(nextIndex)
+          nextIndex += 1
+        }
+      }
     }
-  })
+  }
 
-  const missingHeaders = REQUIRED_HEADERS.filter(h => !headerIndexMap.has(h))
+  const hasAnyHeader = (headers: string[]) => headers.some(h => headerIndexMap.has(h))
+  const missingHeaders = REQUIRED_HEADER_DEFS.filter(def => !hasAnyHeader(def.headers)).map(def => def.label)
   if (missingHeaders.length > 0) {
     errors.push({
       row: 1,
@@ -103,7 +123,13 @@ export const parseInboundTable = (table: unknown[][]): {
       rowData[key] = String(value).trim()
     })
 
-    const productName = String(rowData.productName ?? '').trim()
+    const productNameParts: string[] = []
+    productNameIndexes.forEach(index => {
+      const value = rawRow[index]
+      const trimmed = String(value ?? '').trim()
+      if (trimmed) productNameParts.push(trimmed)
+    })
+    const productName = productNameParts.length > 0 ? productNameParts.join('') : String(rowData.productName ?? '').trim()
     const weight = toNumber(rowData.weight ?? '')
     const laborCost = toNumber(rowData.laborCost ?? '')
     const pieceCount = toNumber(rowData.pieceCount ?? '')
