@@ -622,18 +622,22 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       
       const result = await response.json();
       
-      if (response.ok && result.id) {
+      // 检查成功响应 - 支持多种返回格式
+      const isSuccess = response.ok && (result.id || result.data?.id || result.success);
+      const transferNo = result.transfer_no || result.data?.transfer_no;
+      
+      if (isSuccess && (result.id || result.data?.id)) {
         // 成功创建转移单
-        toast.success(`批量转移成功，已创建转移单 ${result.transfer_no}，请在"待确认"中查看`);
+        toast.success(`批量转移成功，已创建转移单 ${transferNo}，请在"待确认"中查看`);
         setSelectedOrderIds(new Set());
         setBatchItems([]);
         loadTransfers();
         loadInventorySummary();
         loadRecentInboundOrders();
       } else {
-        // 显示后端返回的具体错误信息
-        const errorMsg = result.detail || result.message || '批量转移失败';
-        toast.error(errorMsg, { duration: 5000 });
+        // 显示后端返回的具体错误信息 - 支持多种错误格式
+        const errorMsg = result.message || result.detail || result.error || '批量转移失败';
+        toast.error(errorMsg, { duration: 6000 });
         console.error('转移失败:', response.status, result);
       }
     } catch (error: any) {
@@ -762,9 +766,13 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       
       const result = await response.json();
       
-      if (response.ok && result.id) {
+      // 检查成功响应 - 支持多种返回格式
+      const isSuccess = response.ok && (result.id || result.data?.id || result.success);
+      const transferNo = result.transfer_no || result.data?.transfer_no;
+      
+      if (isSuccess && (result.id || result.data?.id)) {
         // 成功创建转移单
-        toast.success(`批量转移成功，已创建转移单 ${result.transfer_no}，请在"待确认"中查看`);
+        toast.success(`批量转移成功，已创建转移单 ${transferNo}，请在"待确认"中查看`);
         setBatchOrderNo('');
         setBatchItems([]);
         setSelectedOrderIds(new Set());
@@ -772,9 +780,9 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
         loadInventorySummary();
         loadRecentInboundOrders();
       } else {
-        // 显示后端返回的具体错误信息
-        const errorMsg = result.detail || result.message || '批量转移失败';
-        toast.error(errorMsg, { duration: 5000 });
+        // 显示后端返回的具体错误信息 - 支持多种错误格式
+        const errorMsg = result.message || result.detail || result.error || '批量转移失败';
+        toast.error(errorMsg, { duration: 6000 });
         console.error('转移失败:', response.status, result);
       }
     } catch (error: any) {
