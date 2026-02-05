@@ -382,16 +382,28 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
     setIsImporting(true);
     try {
       const { rows: imported, errors } = await parseInboundFile(file);
-      const newRows = imported.map(item => ({
-        id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        productCode: item.data.productCode || '',
-        productName: item.data.productName || '',
-        weight: String(item.data.weight ?? ''),
-        laborCost: String(item.data.laborCost ?? ''),
-        pieceCount: item.data.pieceCount !== undefined ? String(item.data.pieceCount) : '',
-        pieceLaborCost: item.data.pieceLaborCost !== undefined ? String(item.data.pieceLaborCost) : '',
-        errors: item.errors,
-      }));
+      const newRows = imported.map(item => {
+        // 如果没有商品编码但有商品名称，尝试根据名称匹配编码
+        let productCode = item.data.productCode || '';
+        if (!productCode && item.data.productName) {
+          const matchedCode = productCodes.find(
+            pc => pc.name === item.data.productName.trim()
+          );
+          if (matchedCode) {
+            productCode = matchedCode.code;
+          }
+        }
+        return {
+          id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          productCode,
+          productName: item.data.productName || '',
+          weight: String(item.data.weight ?? ''),
+          laborCost: String(item.data.laborCost ?? ''),
+          pieceCount: item.data.pieceCount !== undefined ? String(item.data.pieceCount) : '',
+          pieceLaborCost: item.data.pieceLaborCost !== undefined ? String(item.data.pieceLaborCost) : '',
+          errors: item.errors,
+        };
+      });
 
       setRows(prev => {
         const baseRows = prev.length === 1 && isRowEmpty(prev[0]) ? [] : prev;
@@ -531,6 +543,27 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
         }));
       }
       searchProductCode(id, value);
+    } else if (field === 'productName') {
+      // 如果是商品名称字段，检查是否完全匹配已有编码的名称，自动填充商品编码
+      const matchedCode = productCodes.find(
+        pc => pc.name === value.trim()
+      );
+      
+      if (matchedCode) {
+        // 完全匹配，同时更新名称和编码
+        setRows(prev => prev.map(row => {
+          if (row.id !== id) return row;
+          const next = { ...row, productName: value, productCode: matchedCode.code };
+          return { ...next, errors: getRowErrors(next) };
+        }));
+      } else {
+        // 不匹配，只更新名称
+        setRows(prev => prev.map(row => {
+          if (row.id !== id) return row;
+          const next = { ...row, [field]: value } as InboundRow;
+          return { ...next, errors: getRowErrors(next) };
+        }));
+      }
     } else {
       setRows(prev => prev.map(row => {
         if (row.id !== id) return row;
