@@ -15,7 +15,7 @@ from ..database import get_db
 from ..schemas import InboundOrderCreate, BatchInboundCreate
 from ..models import (
     InboundOrder, InboundDetail, Inventory, Supplier,
-    Location, LocationInventory
+    Location, LocationInventory, InventoryTransferOrder, InventoryTransferItem
 )
 from ..schemas import InboundOrderResponse, InboundDetailResponse, InventoryResponse
 from ..middleware.permissions import has_permission
@@ -635,6 +635,29 @@ async def get_inbound_orders(
                                   weight_min, weight_max, labor_cost_min, labor_cost_max,
                                   total_cost_min, total_cost_max, fineness, craft, style])
         
+        # 预先计算所有入库单的已转移重量
+        # 查询所有转移单及其明细，根据remark字段匹配入库单号
+        order_nos = [order.order_no for order in orders]
+        transferred_weight_map = {}
+        
+        if order_nos:
+            # 查询remark中包含入库单号的转移单（状态为 pending_confirm, received, pending 都算已转移）
+            transfer_orders = db.query(InventoryTransferOrder).filter(
+                InventoryTransferOrder.status.in_(['pending', 'pending_confirm', 'received'])
+            ).all()
+            
+            for transfer_order in transfer_orders:
+                if not transfer_order.remark:
+                    continue
+                # 检查remark中是否包含任何入库单号
+                for order_no in order_nos:
+                    if order_no in transfer_order.remark:
+                        # 计算该转移单的总重量
+                        transfer_weight = sum(item.weight or 0 for item in transfer_order.items)
+                        if order_no not in transferred_weight_map:
+                            transferred_weight_map[order_no] = 0
+                        transferred_weight_map[order_no] += transfer_weight
+        
         result = []
         for order in orders:
             details = details_by_order.get(order.id, [])
@@ -645,6 +668,7 @@ async def get_inbound_orders(
             item_count = len(details)
             total_weight = sum(d.weight or 0 for d in details)
             suppliers_list = list(set(d.supplier for d in details if d.supplier))
+            transferred_weight = transferred_weight_map.get(order.order_no, 0)
             
             result.append({
                 "id": order.id,
@@ -657,6 +681,7 @@ async def get_inbound_orders(
                 "audited_at": order.audited_at.isoformat() if order.audited_at else None,
                 "item_count": item_count,
                 "total_weight": round(total_weight, 2),
+                "transferred_weight": round(transferred_weight, 2),
                 "suppliers": suppliers_list,
                 "details": [{
                     "id": d.id,

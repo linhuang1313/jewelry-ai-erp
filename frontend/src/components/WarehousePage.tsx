@@ -579,7 +579,8 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     
     setBatchLoading(true);
     try {
-      const response = await fetch(`${API_ENDPOINTS.TRANSFERS_BATCH}?user_role=${userRole}`, {
+      // 使用 /transfer-orders 端点，initial_status=pending_confirm 使转移单直接进入"待确认"状态
+      const response = await fetch(`${API_ENDPOINTS.TRANSFER_ORDERS}?user_role=${userRole}&created_by=${userRole}&initial_status=pending_confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -595,8 +596,9 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       
       const result = await response.json();
       
-      if (result.success) {
-        toast.success(result.message);
+      if (result.id) {
+        // 成功创建转移单
+        toast.success(`批量转移成功，已创建转移单 ${result.transfer_no}，请在"待确认"中查看`);
         setSelectedOrderIds(new Set());
         setBatchItems([]);
         loadTransfers();
@@ -713,7 +715,8 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     
     setBatchLoading(true);
     try {
-      const response = await fetch(`${API_ENDPOINTS.TRANSFERS_BATCH}?user_role=${userRole}`, {
+      // 使用 /transfer-orders 端点，initial_status=pending_confirm 使转移单直接进入"待确认"状态
+      const response = await fetch(`${API_ENDPOINTS.TRANSFER_ORDERS}?user_role=${userRole}&created_by=${userRole}&initial_status=pending_confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -729,8 +732,9 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       
       const result = await response.json();
       
-      if (result.success) {
-        toast.success(result.message);
+      if (result.id) {
+        // 成功创建转移单
+        toast.success(`批量转移成功，已创建转移单 ${result.transfer_no}，请在"待确认"中查看`);
         setBatchOrderNo('');
         setBatchItems([]);
         setSelectedOrderIds(new Set());

@@ -953,12 +953,22 @@ async def create_transfer_order(
     data: TransferOrderCreate,
     created_by: str = Query(default="系统管理员", description="创建人"),
     user_role: str = Query(default="manager", description="用户角色"),
+    initial_status: str = Query(default="pending", description="初始状态: pending(待接收) 或 pending_confirm(待确认)"),
     db: Session = Depends(get_db)
 ):
-    """创建转移单（支持多商品）"""
+    """创建转移单（支持多商品）
+    
+    initial_status 参数:
+    - pending: 默认状态，目标位置人员需要接收
+    - pending_confirm: 待确认状态，直接出现在"待确认"标签页，用于批量转移场景
+    """
     from ..middleware.permissions import has_permission
     if not has_permission(user_role, 'can_transfer'):
         raise HTTPException(status_code=403, detail="权限不足：您没有【发起库存转移】的权限")
+    
+    # 验证初始状态
+    if initial_status not in ["pending", "pending_confirm"]:
+        initial_status = "pending"
     
     # 验证位置
     from_location = db.query(Location).filter(Location.id == data.from_location_id).first()
@@ -1001,7 +1011,7 @@ async def create_transfer_order(
         transfer_no=transfer_no,
         from_location_id=data.from_location_id,
         to_location_id=data.to_location_id,
-        status="pending",
+        status=initial_status,
         created_by=created_by,
         created_at=china_now(),
         remark=data.remark
@@ -1342,9 +1352,9 @@ async def confirm_transfer_order(
     user_role: str = Query(default="manager", description="用户角色"),
     db: Session = Depends(get_db)
 ):
-    """商品部确认转移单（同意柜台填写的实际重量）"""
-    if user_role not in ['product', 'manager']:
-        raise HTTPException(status_code=403, detail="权限不足：只有商品专员可以确认转移单")
+    """商品部确认转移单（同意柜台填写的实际重量，或确认批量转移）"""
+    if user_role not in ['product', 'manager', 'counter']:
+        raise HTTPException(status_code=403, detail="权限不足：只有商品专员、柜台或管理层可以确认转移单")
     
     order = db.query(InventoryTransferOrder).filter(InventoryTransferOrder.id == order_id).first()
     
@@ -1353,24 +1363,34 @@ async def confirm_transfer_order(
     if order.status != "pending_confirm":
         raise HTTPException(status_code=400, detail=f"转移单状态为 {order.status}，无法确认")
     
-    # 按实际重量更新目标位置库存
+    # 按实际重量（或原始重量）更新目标位置库存
+    # 如果actual_weight未设置（批量转移场景），使用原始weight
     for item in order.items:
+        transfer_weight = item.actual_weight if item.actual_weight is not None else item.weight
+        
         to_inventory = db.query(LocationInventory).filter(
             LocationInventory.location_id == order.to_location_id,
             LocationInventory.product_name == item.product_name
         ).first()
         
         if to_inventory:
-            to_inventory.weight += item.actual_weight
+            to_inventory.weight += transfer_weight
         else:
             to_inventory = LocationInventory(
                 product_name=item.product_name,
                 location_id=order.to_location_id,
-                weight=item.actual_weight
+                weight=transfer_weight
             )
             db.add(to_inventory)
+        
+        # 如果actual_weight未设置，设置为weight（保持一致性）
+        if item.actual_weight is None:
+            item.actual_weight = item.weight
+            item.weight_diff = 0
     
     order.status = "received"
+    order.received_by = order.received_by or confirmed_by
+    order.received_at = order.received_at or china_now()
     
     db.commit()
     db.refresh(order)
