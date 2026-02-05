@@ -5,6 +5,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    allowedHosts: [
+      'fblerp.com' // 允许你的域名
+    ],
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
