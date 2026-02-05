@@ -20,6 +20,7 @@ export const API_ENDPOINTS = {
   LOCATION_INVENTORY: `${API_BASE_URL}/api/warehouse/inventory`,  // 分仓库存
   INVENTORY_SUMMARY: `${API_BASE_URL}/api/warehouse/inventory/summary`,  // 库存汇总
   // 转移单
+  TRANSFERS_BATCH: `${API_BASE_URL}/api/warehouse/transfers/batch`,  // 批量转移
   TRANSFER_ORDERS: `${API_BASE_URL}/api/warehouse/transfer-orders`,  // 转移单列表
   TRANSFER_ORDER: (id) => `${API_BASE_URL}/api/warehouse/transfer-orders/${id}`,  // 转移单详情
   TRANSFER_ORDER_RECEIVE: (id) => `${API_BASE_URL}/api/warehouse/transfer-orders/${id}/receive`,  // 整单接收
