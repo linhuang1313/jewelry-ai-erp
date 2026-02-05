@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from datetime import datetime
+from time import time
 from ..timezone_utils import china_now
 import logging
 
@@ -20,6 +21,22 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/suppliers", tags=["供应商管理"])
 
+SUPPLIER_CACHE_TTL = 60
+_SUPPLIER_CACHE: dict[str, dict] = {}
+
+
+def _get_supplier_cache_key(keyword: Optional[str], status: Optional[str], limit: int) -> str:
+    return f"{keyword or ''}|{status or ''}|{limit}"
+
+
+def _get_cached_suppliers(cache_key: str):
+    cached = _SUPPLIER_CACHE.get(cache_key)
+    if not cached:
+        return None
+    if time() - cached["timestamp"] > SUPPLIER_CACHE_TTL:
+        return None
+    return cached["data"]
+
 
 @router.get("")
 async def get_suppliers(
@@ -30,6 +47,11 @@ async def get_suppliers(
 ):
     """获取供应商列表（已优化：添加数量限制）"""
     try:
+        cache_key = _get_supplier_cache_key(keyword, status, limit)
+        cached = _get_cached_suppliers(cache_key)
+        if cached is not None:
+            return cached
+
         query = db.query(Supplier)
         
         if status:
@@ -43,7 +65,7 @@ async def get_suppliers(
         
         suppliers = query.order_by(desc(Supplier.create_time)).limit(limit).all()
         
-        return {
+        result = {
             "success": True,
             "suppliers": [
                 {
@@ -67,6 +89,11 @@ async def get_suppliers(
             ],
             "total": len(suppliers)
         }
+        _SUPPLIER_CACHE[cache_key] = {
+            "timestamp": time(),
+            "data": result
+        }
+        return result
     except Exception as e:
         logger.error(f"获取供应商列表失败: {e}", exc_info=True)
         return {"success": False, "message": str(e), "suppliers": []}
@@ -108,6 +135,7 @@ async def create_supplier(
         db.add(supplier)
         db.commit()
         db.refresh(supplier)
+        _SUPPLIER_CACHE.clear()
         
         logger.info(f"创建供应商成功: {supplier.name} ({supplier.supplier_no})")
         
@@ -159,6 +187,7 @@ async def update_supplier(
         supplier.remark = supplier_data.remark
         
         db.commit()
+        _SUPPLIER_CACHE.clear()
         
         logger.info(f"更新供应商成功: {supplier.name} ({supplier.supplier_no})")
         
@@ -200,6 +229,7 @@ async def delete_supplier(
         # 软删除
         supplier.status = "deleted"
         db.commit()
+        _SUPPLIER_CACHE.clear()
         
         logger.info(f"删除供应商成功: {supplier.name} ({supplier.supplier_no})")
         
