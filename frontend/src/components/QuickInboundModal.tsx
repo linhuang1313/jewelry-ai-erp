@@ -855,7 +855,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
 
         {/* 表格区域 */}
         <div className="flex-1 overflow-auto px-6 py-4">
-          <table className="w-full border-collapse">
+          <table className={`border-collapse ${isInlayMode ? 'min-w-[2000px]' : 'w-full'}`}>
             <thead>
               <tr className="bg-gray-100">
                 <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-12">
@@ -864,7 +864,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                 <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-28">
                   商品编码
                 </th>
-                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider min-w-[150px]">
                   商品名称
                 </th>
                 <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-24">
