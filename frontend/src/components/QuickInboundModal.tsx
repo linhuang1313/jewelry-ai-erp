@@ -520,25 +520,11 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       const { rows: imported, errors } = await parseInlayInboundFile(file);
       
       // 第一步：处理每行数据，标记需要生成新编码的行
+      // 镶嵌入库：每件商品都需要唯一编码（即使名称相同），所以不根据名称匹配已有编码
       const rowsWithCodeStatus = imported.map(item => {
-        let productCode = item.data.productCode || '';
-        let needsNewCode = false;
-        
-        if (!productCode && item.data.productName) {
-          // 尝试根据商品名称匹配已有编码
-          const matchedCode = productCodes.find(
-            pc => pc.name === item.data.productName.trim()
-          );
-          if (matchedCode) {
-            productCode = matchedCode.code;
-          } else {
-            // 没有匹配到，需要生成新编码
-            needsNewCode = true;
-          }
-        } else if (!productCode) {
-          // 没有编码也没有名称，也需要生成新编码
-          needsNewCode = true;
-        }
+        const productCode = item.data.productCode || '';
+        // 镶嵌入库：没有编码的都需要生成新编码，不匹配已有编码
+        const needsNewCode = !productCode;
         
         return { item, productCode, needsNewCode };
       });
