@@ -602,7 +602,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       
       const result = await response.json();
       
-      if (result.id) {
+      if (response.ok && result.id) {
         // 成功创建转移单
         toast.success(`批量转移成功，已创建转移单 ${result.transfer_no}，请在"待确认"中查看`);
         setSelectedOrderIds(new Set());
@@ -611,10 +611,14 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
         loadInventorySummary();
         loadRecentInboundOrders();
       } else {
-        toast.error(result.detail || '批量转移失败');
+        // 显示后端返回的具体错误信息
+        const errorMsg = result.detail || result.message || '批量转移失败';
+        toast.error(errorMsg, { duration: 5000 });
+        console.error('转移失败:', response.status, result);
       }
-    } catch (error) {
-      toast.error('批量转移失败');
+    } catch (error: any) {
+      console.error('转移请求失败:', error);
+      toast.error(`批量转移失败: ${error.message || '网络错误'}`);
     } finally {
       setBatchLoading(false);
     }
@@ -738,7 +742,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       
       const result = await response.json();
       
-      if (result.id) {
+      if (response.ok && result.id) {
         // 成功创建转移单
         toast.success(`批量转移成功，已创建转移单 ${result.transfer_no}，请在"待确认"中查看`);
         setBatchOrderNo('');
@@ -748,10 +752,14 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
         loadInventorySummary();
         loadRecentInboundOrders();
       } else {
-        toast.error(result.detail || '批量转移失败');
+        // 显示后端返回的具体错误信息
+        const errorMsg = result.detail || result.message || '批量转移失败';
+        toast.error(errorMsg, { duration: 5000 });
+        console.error('转移失败:', response.status, result);
       }
-    } catch (error) {
-      toast.error('批量转移失败');
+    } catch (error: any) {
+      console.error('转移请求失败:', error);
+      toast.error(`批量转移失败: ${error.message || '网络错误'}`);
     } finally {
       setBatchLoading(false);
     }
