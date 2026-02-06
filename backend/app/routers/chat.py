@@ -181,7 +181,12 @@ async def handle_payment_registration(ai_response, db: Session) -> Dict[str, Any
     customer = db.query(Customer).filter(Customer.name == customer_name).first()
     if not customer:
         # 尝试模糊匹配
-        customer = db.query(Customer).filter(Customer.name.contains(customer_name)).first()
+        candidates = db.query(Customer).filter(Customer.name.contains(customer_name)).all()
+        if len(candidates) == 1:
+            customer = candidates[0]
+        elif len(candidates) > 1:
+            names = '、'.join([c.name for c in candidates])
+            return {"success": False, "message": f"找到多个匹配客户：{names}，请输入完整姓名以确认", "action": "登记收款"}
     
     if not customer:
         return {"success": False, "message": f"未找到客户「{customer_name}」，请先在客户管理中创建该客户", "action": "登记收款"}
@@ -308,7 +313,12 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
         customer = local_db.query(Customer).filter(Customer.name == customer_name).first()
         if not customer:
             # 尝试模糊匹配
-            customer = local_db.query(Customer).filter(Customer.name.contains(customer_name)).first()
+            candidates = local_db.query(Customer).filter(Customer.name.contains(customer_name)).all()
+            if len(candidates) == 1:
+                customer = candidates[0]
+            elif len(candidates) > 1:
+                names = '、'.join([c.name for c in candidates])
+                return {"success": False, "message": f"找到多个匹配客户：{names}，请输入完整姓名以确认", "action": "收料"}
         
         if not customer:
             return {"success": False, "message": f"未找到客户「{customer_name}」，请先在客户管理中创建该客户", "action": "收料"}
@@ -437,7 +447,12 @@ async def handle_gold_payment(ai_response, db: Session, user_role: str) -> Dict[
     supplier = db.query(Supplier).filter(Supplier.name == supplier_name).first()
     if not supplier:
         # 尝试模糊匹配
-        supplier = db.query(Supplier).filter(Supplier.name.contains(supplier_name)).first()
+        candidates = db.query(Supplier).filter(Supplier.name.contains(supplier_name)).all()
+        if len(candidates) == 1:
+            supplier = candidates[0]
+        elif len(candidates) > 1:
+            names = '、'.join([s.name for s in candidates])
+            return {"success": False, "message": f"找到多个匹配供应商：{names}，请输入完整名称以确认", "action": "付料"}
     
     if not supplier:
         return {"success": False, "message": f"未找到供应商「{supplier_name}」，请先在供应商管理中创建该供应商", "action": "付料"}
@@ -561,7 +576,12 @@ async def handle_gold_withdrawal(ai_response, db: Session) -> Dict[str, Any]:
     customer = db.query(Customer).filter(Customer.name == customer_name).first()
     if not customer:
         # 尝试模糊匹配
-        customer = db.query(Customer).filter(Customer.name.contains(customer_name)).first()
+        candidates = db.query(Customer).filter(Customer.name.contains(customer_name)).all()
+        if len(candidates) == 1:
+            customer = candidates[0]
+        elif len(candidates) > 1:
+            names = '、'.join([c.name for c in candidates])
+            return {"success": False, "message": f"找到多个匹配客户：{names}，请输入完整姓名以确认", "action": "提料"}
     
     if not customer:
         return {"success": False, "message": f"未找到客户「{customer_name}」，请先在客户管理中创建该客户", "action": "提料"}
@@ -679,7 +699,12 @@ async def handle_supplier_cash_payment(ai_response, db: Session) -> Dict[str, An
     supplier = db.query(Supplier).filter(Supplier.name == supplier_name).first()
     if not supplier:
         # 尝试模糊匹配
-        supplier = db.query(Supplier).filter(Supplier.name.contains(supplier_name)).first()
+        candidates = db.query(Supplier).filter(Supplier.name.contains(supplier_name)).all()
+        if len(candidates) == 1:
+            supplier = candidates[0]
+        elif len(candidates) > 1:
+            names = '、'.join([s.name for s in candidates])
+            return {"success": False, "message": f"找到多个匹配供应商：{names}，请输入完整名称以确认", "action": "供应商付款"}
     
     if not supplier:
         return {"success": False, "message": f"未找到供应商「{supplier_name}」，请先在供应商管理中创建该供应商", "action": "供应商付款"}
@@ -1170,8 +1195,12 @@ async def chat_stream(request: AIRequest, db: Session = Depends(get_db)):
                 customer = db.query(Customer).filter(Customer.name == customer_name).first()
                 if not customer:
                     candidates = db.query(Customer).filter(Customer.name.contains(customer_name)).all()
-                    if candidates:
-                        customer = min(candidates, key=lambda c: abs(len(c.name) - len(customer_name)))
+                    if len(candidates) == 1:
+                        customer = candidates[0]
+                    elif len(candidates) > 1:
+                        names = '、'.join([c.name for c in candidates])
+                        yield f"data: {json.dumps({'type': 'complete', 'content': f'找到多个匹配客户：{names}，请输入完整姓名以确认'}, ensure_ascii=False)}\n\n"
+                        return
                 
                 if customer:
                     from ..models import CustomerWithdrawal
