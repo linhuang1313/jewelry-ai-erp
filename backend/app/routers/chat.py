@@ -23,16 +23,11 @@ from ..ai_parser import parse_user_message
 from .customers import chat_debt_query
 from .. import context_manager as ctx
 
+from ..timezone_utils import china_now
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chat"])
-
-# 中国时区 UTC+8
-CHINA_TZ = timezone(timedelta(hours=8))
-
-def china_now() -> datetime:
-    """获取中国时间（UTC+8）"""
-    return datetime.now(CHINA_TZ)
 
 
 def log_chat_message(
@@ -160,7 +155,7 @@ async def handle_payment_registration(ai_response, db: Session) -> Dict[str, Any
     """处理登记收款 - 自动登记客户收款"""
     from ..models import Customer
     from ..models.finance import PaymentRecord, AccountReceivable
-    from ..timezone_utils import china_now
+    # china_now 已在文件顶部导入
     from datetime import date
     
     # 提取参数
@@ -288,7 +283,7 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
     """
     from ..models import Customer, SettlementOrder, SalesOrder
     from ..models.finance import GoldReceipt
-    from ..timezone_utils import china_now
+    # china_now 已在文件顶部导入
     from ..database import SessionLocal
     from sqlalchemy import func
     
@@ -428,7 +423,7 @@ async def handle_gold_receipt(ai_response, db: Session) -> Dict[str, Any]:
 async def handle_gold_payment(ai_response, db: Session, user_role: str) -> Dict[str, Any]:
     """处理付料（给供应商金料）- 自动创建付料单"""
     from ..models import Supplier, GoldMaterialTransaction, SupplierGoldAccount, SupplierGoldTransaction
-    from ..timezone_utils import china_now
+    # china_now 已在文件顶部导入
     
     # 提取参数
     supplier_name = getattr(ai_response, 'gold_payment_supplier', None)
@@ -557,7 +552,7 @@ async def handle_gold_payment(ai_response, db: Session, user_role: str) -> Dict[
 async def handle_gold_withdrawal(ai_response, db: Session) -> Dict[str, Any]:
     """处理提料（客户取料）- 自动创建提料单"""
     from ..models import Customer, CustomerGoldDeposit, CustomerWithdrawal, CustomerGoldDepositTransaction
-    from ..timezone_utils import china_now
+    # china_now 已在文件顶部导入
     
     # 提取参数
     customer_name = getattr(ai_response, 'withdrawal_customer_name', None)
@@ -678,7 +673,7 @@ async def handle_supplier_cash_payment(ai_response, db: Session) -> Dict[str, An
     """处理供应商付款（工费）- 自动登记给供应商付款"""
     from ..models import Supplier
     from ..models.finance import SupplierPayment, AccountPayable
-    from ..timezone_utils import china_now
+    # china_now 已在文件顶部导入
     from datetime import date, datetime
     
     # 提取参数
@@ -805,7 +800,7 @@ async def handle_supplier_cash_payment(ai_response, db: Session) -> Dict[str, An
 async def handle_batch_transfer(ai_response, db: Session, user_role: str) -> Dict[str, Any]:
     """处理批量转移 - 按入库单号批量转移商品到目标位置"""
     from ..models import InboundOrder, InboundDetail, Location, LocationInventory, InventoryTransfer
-    from ..timezone_utils import china_now
+    # china_now 已在文件顶部导入
     from datetime import datetime
     
     # 提取参数

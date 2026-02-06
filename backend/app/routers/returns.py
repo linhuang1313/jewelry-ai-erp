@@ -626,24 +626,6 @@ async def get_return_order(
         return {"success": False, "message": str(e)}
 
 
-@router.post("/{return_id}/approve")
-async def approve_return_order(return_id: int, db: Session = Depends(get_db)):
-    """[已废弃] 审批通过退货单 - 请使用 POST /{return_id}/confirm 确认退货单"""
-    return {"success": False, "message": "此接口已废弃，请使用 POST /api/returns/{return_id}/confirm 确认退货单"}
-
-
-@router.post("/{return_id}/reject")
-async def reject_return_order(return_id: int, db: Session = Depends(get_db)):
-    """[已废弃] 驳回退货单 - 新流程不再需要审批/驳回"""
-    return {"success": False, "message": "此接口已废弃，新流程为：创建(draft) → 确认(confirm) → 反确认(unconfirm)"}
-
-
-@router.post("/{return_id}/complete")
-async def complete_return_order(return_id: int, db: Session = Depends(get_db)):
-    """[已废弃] 完成退货 - 请使用 POST /{return_id}/confirm 确认退货单"""
-    return {"success": False, "message": "此接口已废弃，请使用 POST /api/returns/{return_id}/confirm 确认退货单"}
-
-
 @router.options("/{return_id}/download")
 async def download_return_order_options(return_id: int):
     """处理CORS预检请求"""

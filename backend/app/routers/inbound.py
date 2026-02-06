@@ -19,17 +19,11 @@ from ..models import (
 )
 from ..schemas import InboundOrderResponse, InboundDetailResponse, InventoryResponse
 from ..middleware.permissions import has_permission
+from ..timezone_utils import china_now
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/inbound-orders", tags=["inbound"])
-
-# 中国时区 UTC+8
-CHINA_TZ = timezone(timedelta(hours=8))
-
-def china_now() -> datetime:
-    """获取中国时间（UTC+8）"""
-    return datetime.now(CHINA_TZ)
 
 
 def generate_inbound_order_no(db) -> str:

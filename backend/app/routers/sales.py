@@ -15,14 +15,9 @@ from ..database import get_db
 from ..models import SalesOrder, SalesDetail, Customer, Inventory, ProductCode, LocationInventory, Location, OrderStatusLog
 from ..schemas import SalesOrderCreate, SalesOrderResponse, SalesDetailResponse
 
+from ..timezone_utils import china_now
+
 logger = logging.getLogger(__name__)
-
-# 中国时区 UTC+8
-CHINA_TZ = timezone(timedelta(hours=8))
-
-def china_now() -> datetime:
-    """获取中国时间（UTC+8）"""
-    return datetime.now(CHINA_TZ)
 
 router = APIRouter(prefix="/api/sales", tags=["销售单管理"])
 
