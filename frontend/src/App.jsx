@@ -35,6 +35,8 @@ import LineNumberedTextarea from './components/LineNumberedTextarea'
 import { USER_ROLES } from './constants/roles'
 import { Header } from './components/layout'
 import { ChatHistoryPanel } from './components/ChatHistoryPanel'
+import { getUserIdentifier, getHistoryKey, getLastSessionKey } from './utils/userIdentifier'
+import { parseMessageHiddenMarkers } from './utils/messageParser'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -160,96 +162,8 @@ function App() {
     scrollToBottom()
   }, [messages])
 
-  // ========== 鐢ㄦ埛鏍囪瘑鎶借薄灞傦紙涓烘湭鏉ョ櫥褰曠郴缁熼鐣欙級 ==========
-  // 鑾峰彇褰撳墠鐢ㄦ埛鏍囪瘑绗?
-  // 闃舵1锛堝綋鍓嶏級锛氫娇鐢ㄨ澶嘔D浣滀负涓存椂鐢ㄦ埛鏍囪瘑
-  // 闃舵2锛堟湭鏉ワ級锛氭帴鍏ョ櫥褰曠郴缁熷悗锛岃繑鍥炵湡瀹炵敤鎴稩D
-  const getUserIdentifier = () => {
-    // 鏈潵鐧诲綍绯荤粺鎺ュ叆鐐?- 鍙栨秷娉ㄩ噴浠ヤ笅浠ｇ爜
-    // const authUser = getAuthUser()
-    // if (authUser) return authUser.id
-    
-    // 褰撳墠锛氫娇鐢ㄨ澶囨寚绾逛綔涓轰复鏃剁敤鎴锋爣璇?
-    if (typeof window === 'undefined') return 'anonymous'
-    
-    let deviceId = localStorage.getItem('jewelry_erp_device_id')
-    if (!deviceId) {
-      deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      localStorage.setItem('jewelry_erp_device_id', deviceId)
-    }
-    return deviceId
-  }
-
-  // 鑾峰彇褰撳墠瑙掕壊鐨勫巻鍙茶褰昸ey锛堝寘鍚敤鎴锋爣璇嗭紝鏀寔澶氱敤鎴烽殧绂伙級
-  const getHistoryKey = (role) => {
-    const userId = getUserIdentifier()
-    return `conversationHistory_${userId}_${role}`
-  }
-
-  // 鑾峰彇涓婃浣跨敤鐨剆ession key锛堢敤浜庢仮澶嶄笂娆″璇濓級
-  const getLastSessionKey = (role) => {
-    const userId = getUserIdentifier()
-    return `lastSessionId_${userId}_${role}`
-  }
-
-  // ========== 娑堟伅瑙ｆ瀽浼樺寲锛堟€ц兘浼樺寲锛氬悎骞舵鍒欏尮閰嶏級 ==========
-  // 瑙ｆ瀽娑堟伅涓殑闅愯棌鏍囪锛屾仮澶嶆墍鏈夌壒娈婃秷鎭殑棰濆瀛楁
-  const parseMessageHiddenMarkers = (messages) => {
-    // 娣诲姞鏁扮粍瀹夊叏妫€鏌?
-    if (!Array.isArray(messages)) return messages || [];
-    // 鍚堝苟鎵€鏈夋爣璁扮殑姝ｅ垯琛ㄨ揪寮忥紝涓€娆″尮閰嶅绉嶇被鍨?
-    const combinedRegex = /<!-- (WITHDRAWAL_ORDER|GOLD_RECEIPT|INBOUND_ORDER|RETURN_ORDER|SALES_ORDER|SETTLEMENT_ORDER):(\d+):?([^>]*) -->/g
-    
-    return messages.map(msg => {
-      if (!msg.content) return msg
-      
-      // 浣跨敤鍚堝苟姝ｅ垯涓€娆℃€у尮閰嶆墍鏈夋爣璁?
-      const matches = [...msg.content.matchAll(combinedRegex)]
-      if (matches.length === 0) return msg
-      
-      matches.forEach(match => {
-        const [, type, id] = match
-        const orderId = parseInt(id)
-        
-        switch (type) {
-          case 'WITHDRAWAL_ORDER':
-            if (!msg.withdrawalDownloadUrl) {
-              msg.withdrawalId = orderId
-              msg.withdrawalDownloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${orderId}/download?format=html`
-            }
-            break
-          case 'GOLD_RECEIPT':
-            if (!msg.goldReceiptDownloadUrl) {
-              msg.goldReceiptId = orderId
-              msg.goldReceiptDownloadUrl = `${API_BASE_URL}/api/gold-material/gold-receipts/${orderId}/print`
-            }
-            break
-          case 'INBOUND_ORDER':
-            if (!msg.inboundOrder) {
-              msg.inboundOrder = { id: orderId }
-            }
-            break
-          case 'RETURN_ORDER':
-            if (!msg.returnOrder) {
-              msg.returnOrder = { id: orderId }
-            }
-            break
-          case 'SALES_ORDER':
-            if (!msg.salesOrderId) {
-              msg.salesOrderId = orderId
-            }
-            break
-          case 'SETTLEMENT_ORDER':
-            if (!msg.settlementOrderId) {
-              msg.settlementOrderId = orderId
-            }
-            break
-        }
-      })
-      
-      return msg
-    })
-  }
+  // getUserIdentifier, getHistoryKey, getLastSessionKey, parseMessageHiddenMarkers
+  // 已移至 utils/userIdentifier.js 和 utils/messageParser.js，通过顶部 import 引入
 
   // 鍔犺浇鎸囧畾瑙掕壊鐨勫巻鍙茶褰曪紙浼樺寲鐗堬細浼樺厛浣跨敤缂撳瓨/localStorage锛屽悗鍙伴潤榛樺悓姝PI：
   const loadRoleHistory = async (role) => {
