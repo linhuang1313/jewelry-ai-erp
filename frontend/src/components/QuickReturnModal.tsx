@@ -287,7 +287,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
       if (!item.product_name.trim()) {
         return `第 ${i + 1} 行：请输入商品名称`;
       }
-      if (!item.return_weight || parseFloat(item.return_weight) <= 0) {
+      if (item.return_weight === '' || item.return_weight === undefined || parseFloat(item.return_weight) < 0) {
         return `第 ${i + 1} 行：请输入有效的退货克重`;
       }
     }
