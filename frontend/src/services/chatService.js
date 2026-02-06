@@ -92,7 +92,7 @@ export const uploadImageForOCR = async (file) => {
   const formData = new FormData()
   formData.append('file', file)
   
-  const response = await fetch(API_ENDPOINTS.OCR, {
+  const response = await fetch(API_ENDPOINTS.RECOGNIZE_INBOUND_SHEET, {
     method: 'POST',
     body: formData
   })

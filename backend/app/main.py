@@ -155,6 +155,45 @@ app.include_router(data_cleanup_router)
 app.include_router(documents_router)
 
 
+# ========== 通用操作日志查询 ==========
+
+@app.get("/api/order-logs/{order_type}/{order_id}")
+async def get_order_logs(
+    order_type: str,
+    order_id: int,
+    db: Session = Depends(get_db)
+):
+    """查询单据操作日志（通用接口，支持所有单据类型）"""
+    from .models import OrderStatusLog
+    logs = db.query(OrderStatusLog).filter(
+        OrderStatusLog.order_type == order_type,
+        OrderStatusLog.order_id == order_id
+    ).order_by(OrderStatusLog.operated_at.desc()).all()
+    
+    ACTION_MAP = {
+        "confirm": "确认",
+        "unconfirm": "反确认",
+        "edit": "编辑",
+    }
+    
+    return {
+        "success": True,
+        "logs": [
+            {
+                "id": log.id,
+                "action": log.action,
+                "action_label": ACTION_MAP.get(log.action, log.action),
+                "old_status": log.old_status,
+                "new_status": log.new_status,
+                "operated_by": log.operated_by,
+                "operated_at": log.operated_at.isoformat() if log.operated_at else None,
+                "remark": log.remark,
+            }
+            for log in logs
+        ]
+    }
+
+
 # ========== 数据库初始化和迁移 ==========
 
 @app.on_event("startup")

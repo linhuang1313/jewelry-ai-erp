@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Package, Search, Calendar, Filter, Edit2, Save, X, 
   ChevronDown, ChevronUp, Download, Printer, RefreshCw, FileText,
-  Check, Undo2
+  Check, Undo2, ClipboardList
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { hasPermission } from '../config/permissions';
@@ -1026,6 +1026,9 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                           ))}
                         </tbody>
                       </table>
+                      
+                      {/* 操作记录 */}
+                      <OrderLogsPanel orderType="inbound" orderId={order.id} />
                     </div>
                   );
                 })()}
@@ -1080,6 +1083,94 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
       {orders.length === 0 && !loading && (
         <div className="mt-4 text-sm text-gray-500 text-center">
           暂无符合条件的数据
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ========== 操作记录面板（通用组件） ==========
+interface OrderLog {
+  id: number;
+  action: string;
+  action_label: string;
+  old_status: string;
+  new_status: string;
+  operated_by: string;
+  operated_at: string | null;
+  remark: string | null;
+}
+
+const OrderLogsPanel: React.FC<{ orderType: string; orderId: number }> = ({ orderType, orderId }) => {
+  const [logs, setLogs] = useState<OrderLog[]>([]);
+  const [expanded, setExpanded] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const loadLogs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/order-logs/${orderType}/${orderId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLogs(data.logs || []);
+      }
+    } catch (e) {
+      console.error('加载操作记录失败:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [orderType, orderId]);
+
+  useEffect(() => {
+    if (expanded && logs.length === 0) {
+      loadLogs();
+    }
+  }, [expanded, loadLogs, logs.length]);
+
+  const ACTION_COLORS: Record<string, string> = {
+    confirm: 'text-green-700 bg-green-50 border-green-200',
+    unconfirm: 'text-orange-700 bg-orange-50 border-orange-200',
+    edit: 'text-blue-700 bg-blue-50 border-blue-200',
+  };
+
+  return (
+    <div className="mt-4 border-t border-gray-200 pt-3">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center space-x-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+      >
+        <ClipboardList className="w-4 h-4" />
+        <span>操作记录</span>
+        {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+      </button>
+      {expanded && (
+        <div className="mt-2">
+          {loading ? (
+            <div className="text-xs text-gray-400 py-2">加载中...</div>
+          ) : logs.length === 0 ? (
+            <div className="text-xs text-gray-400 py-2">暂无操作记录</div>
+          ) : (
+            <div className="space-y-1.5">
+              {logs.map((log) => (
+                <div key={log.id} className="flex items-start text-xs space-x-3 py-1.5">
+                  <span className={`px-2 py-0.5 rounded border text-xs font-medium whitespace-nowrap ${ACTION_COLORS[log.action] || 'text-gray-700 bg-gray-50 border-gray-200'}`}>
+                    {log.action_label}
+                  </span>
+                  <span className="text-gray-400 whitespace-nowrap">
+                    {log.operated_at ? new Date(log.operated_at).toLocaleString('zh-CN') : '-'}
+                  </span>
+                  <span className="text-gray-600 whitespace-nowrap">
+                    {log.operated_by || '-'}
+                  </span>
+                  {log.remark && (
+                    <span className="text-gray-500 break-all">
+                      {log.remark}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
