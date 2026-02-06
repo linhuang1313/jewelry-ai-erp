@@ -361,6 +361,29 @@ async def create_return_order(
                 inventory.weight -= item.return_weight
                 logger.info(f"扣减库存: {item.product_name} 在位置 {location.name} 扣减 {item.return_weight}g，剩余 {inventory.weight:.2f}g")
         
+        # 如果是退给商品部，在商品部仓库增加库存
+        if data.return_type == "to_warehouse":
+            warehouse_location = db.query(Location).filter(
+                Location.code == "warehouse",
+                Location.is_active == 1
+            ).first()
+            if warehouse_location:
+                for item in data.items:
+                    target_inv = db.query(LocationInventory).filter(
+                        LocationInventory.location_id == warehouse_location.id,
+                        LocationInventory.product_name == item.product_name
+                    ).first()
+                    if target_inv:
+                        target_inv.weight += item.return_weight
+                    else:
+                        target_inv = LocationInventory(
+                            product_name=item.product_name,
+                            location_id=warehouse_location.id,
+                            weight=item.return_weight
+                        )
+                        db.add(target_inv)
+                    logger.info(f"商品部库存增加: {item.product_name} +{item.return_weight}g")
+        
         # 更新主表的总工费
         return_order.total_labor_cost = total_labor_cost
         
@@ -665,6 +688,28 @@ async def complete_return_order(
                     }
                 inventory.weight -= return_order.return_weight
                 logger.info(f"扣减库存: {return_order.product_name} 在位置 {return_order.from_location_id} 扣减 {return_order.return_weight}g")
+        
+        # 如果是退给商品部，在商品部仓库增加库存
+        if return_order.return_type == "to_warehouse":
+            warehouse_location = db.query(Location).filter(
+                Location.code == "warehouse",
+                Location.is_active == 1
+            ).first()
+            if warehouse_location:
+                target_inv = db.query(LocationInventory).filter(
+                    LocationInventory.location_id == warehouse_location.id,
+                    LocationInventory.product_name == return_order.product_name
+                ).first()
+                if target_inv:
+                    target_inv.weight += return_order.return_weight
+                else:
+                    target_inv = LocationInventory(
+                        product_name=return_order.product_name,
+                        location_id=warehouse_location.id,
+                        weight=return_order.return_weight
+                    )
+                    db.add(target_inv)
+                logger.info(f"商品部库存增加: {return_order.product_name} +{return_order.return_weight}g")
         
         # 如果是退给供应商，更新供应商统计和金料账户
         if return_order.return_type == "to_supplier" and return_order.supplier_id:
