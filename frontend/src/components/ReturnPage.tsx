@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { API_ENDPOINTS } from '../config';
 import { hasPermission } from '../config/permissions';
 import { QuickReturnModal } from './QuickReturnModal';
@@ -770,6 +770,9 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
                   <span style={{ color: '#3b82f6' }}>{new Date(selectedReturn.audited_at).toLocaleString('zh-CN')}</span>
                 </div>
               )}
+              
+              {/* 操作记录 */}
+              <ReturnOrderLogsPanel orderId={selectedReturn.id} />
             </div>
             
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px', flexWrap: 'wrap' }}>
@@ -890,4 +893,98 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
     </div>
   );
 }
+
+// ========== 退货单操作记录面板（暗色主题） ==========
+interface ReturnOrderLog {
+  id: number;
+  action: string;
+  action_label: string;
+  old_status: string;
+  new_status: string;
+  operated_by: string;
+  operated_at: string | null;
+  remark: string | null;
+}
+
+const ACTION_COLORS: Record<string, string> = {
+  confirm: '#10b981',
+  unconfirm: '#f59e0b',
+  edit: '#3b82f6',
+};
+
+const ReturnOrderLogsPanel: React.FC<{ orderId: number }> = ({ orderId }) => {
+  const [logs, setLogs] = useState<ReturnOrderLog[]>([]);
+  const [expanded, setExpanded] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const loadLogs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/order-logs/return/${orderId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLogs(data.logs || []);
+      }
+    } catch (e) {
+      console.error('加载操作记录失败:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [orderId]);
+
+  useEffect(() => {
+    if (expanded && logs.length === 0) {
+      loadLogs();
+    }
+  }, [expanded, loadLogs, logs.length]);
+
+  return (
+    <div style={{ padding: '10px', background: '#0f172a', borderRadius: '8px' }}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: '#94a3b8', fontSize: '13px' }}
+      >
+        📋 操作记录 {expanded ? '▲' : '▼'}
+      </button>
+      {expanded && (
+        <div style={{ marginTop: '8px' }}>
+          {loading ? (
+            <div style={{ color: '#64748b', fontSize: '12px', padding: '4px 0' }}>加载中...</div>
+          ) : logs.length === 0 ? (
+            <div style={{ color: '#64748b', fontSize: '12px', padding: '4px 0' }}>暂无操作记录</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {logs.map((log) => (
+                <div key={log.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '12px', padding: '4px 0' }}>
+                  <span style={{
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontWeight: '500',
+                    whiteSpace: 'nowrap',
+                    color: ACTION_COLORS[log.action] || '#94a3b8',
+                    background: `${ACTION_COLORS[log.action] || '#94a3b8'}20`,
+                    border: `1px solid ${ACTION_COLORS[log.action] || '#94a3b8'}40`
+                  }}>
+                    {log.action_label}
+                  </span>
+                  <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>
+                    {log.operated_at ? new Date(log.operated_at).toLocaleString('zh-CN') : '-'}
+                  </span>
+                  <span style={{ color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                    {log.operated_by || '-'}
+                  </span>
+                  {log.remark && (
+                    <span style={{ color: '#cbd5e1', wordBreak: 'break-all' }}>
+                      {log.remark}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
