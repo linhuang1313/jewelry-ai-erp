@@ -41,8 +41,18 @@ export const API_ENDPOINTS = {
   SETTLEMENT_CONFIRM: (id) => `${API_BASE_URL}/api/settlement/orders/${id}/confirm`,  // 确认结算
   SETTLEMENT_PRINT: (id) => `${API_BASE_URL}/api/settlement/orders/${id}/print`,  // 标记已打印
   
+  // 入库单确认/反确认
+  INBOUND_CONFIRM: (id) => `${API_BASE_URL}/api/inbound-orders/${id}/confirm`,
+  INBOUND_UNCONFIRM: (id) => `${API_BASE_URL}/api/inbound-orders/${id}/unconfirm`,
+  
+  // 销售单确认/反确认
+  SALES_CONFIRM: (id) => `${API_BASE_URL}/api/sales/orders/${id}/confirm`,
+  SALES_UNCONFIRM: (id) => `${API_BASE_URL}/api/sales/orders/${id}/unconfirm`,
+  
   // 退货管理相关
   RETURNS: `${API_BASE_URL}/api/returns`,  // 退货单列表/操作
+  RETURN_CONFIRM: (id) => `${API_BASE_URL}/api/returns/${id}/confirm`,
+  RETURN_UNCONFIRM: (id) => `${API_BASE_URL}/api/returns/${id}/unconfirm`,
   
   // 导出 API_BASE_URL 供服务使用
   API_BASE_URL,

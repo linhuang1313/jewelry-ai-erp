@@ -1,10 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Package, Search, Calendar, Filter, Edit2, Save, X, 
-  ChevronDown, ChevronUp, Download, Printer, RefreshCw, FileText
+  ChevronDown, ChevronUp, Download, Printer, RefreshCw, FileText,
+  Check, Undo2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { hasPermission } from '../config/permissions';
+
+// 入库单状态显示映射
+const INBOUND_STATUS_MAP: Record<string, { label: string; bgColor: string; textColor: string }> = {
+  draft: { label: '未确认', bgColor: 'bg-yellow-100', textColor: 'text-yellow-700' },
+  confirmed: { label: '已确认', bgColor: 'bg-green-100', textColor: 'text-green-700' },
+  cancelled: { label: '已取消', bgColor: 'bg-gray-100', textColor: 'text-gray-500' },
+  // 向后兼容旧状态
+  '已入库': { label: '已入库', bgColor: 'bg-green-100', textColor: 'text-green-700' },
+};
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -80,7 +90,8 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
     operator: '',
     fineness: '',
     craft: '',
-    style: ''
+    style: '',
+    status: ''
   });
   const [showFilters, setShowFilters] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -140,6 +151,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
       if (filters.fineness) params.append('fineness', filters.fineness);
       if (filters.craft) params.append('craft', filters.craft);
       if (filters.style) params.append('style', filters.style);
+      if (filters.status) params.append('status', filters.status);
       params.append('limit', '200');
 
       const res = await fetch(`${API_BASE_URL}/api/inbound-orders?${params}`);
@@ -185,6 +197,14 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
   const startEdit = (order: InboundOrder) => {
     if (order.is_audited) {
       toast.error('该入库单已审核，无法编辑');
+      return;
+    }
+    if (order.status === 'confirmed') {
+      toast.error('该入库单已确认，请先反确认后再编辑');
+      return;
+    }
+    if (order.status === 'cancelled') {
+      toast.error('该入库单已取消，无法编辑');
       return;
     }
     setEditingOrderId(order.id);
@@ -285,6 +305,44 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
     }
   };
 
+  // 确认入库单
+  const handleConfirmInbound = async (orderId: number) => {
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/inbound-orders/${orderId}/confirm?confirmed_by=${encodeURIComponent(userRole)}&user_role=${encodeURIComponent(userRole)}`,
+        { method: 'POST' }
+      );
+      const data = await res.json();
+      if (data.success) {
+        toast.success('入库单确认成功');
+        loadOrders();
+      } else {
+        toast.error(data.error || '确认失败');
+      }
+    } catch (error) {
+      toast.error('确认失败');
+    }
+  };
+
+  // 反确认入库单
+  const handleUnconfirmInbound = async (orderId: number) => {
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/inbound-orders/${orderId}/unconfirm?operated_by=${encodeURIComponent(userRole)}&user_role=${encodeURIComponent(userRole)}`,
+        { method: 'POST' }
+      );
+      const data = await res.json();
+      if (data.success) {
+        toast.success('入库单已反确认');
+        loadOrders();
+      } else {
+        toast.error(data.error || '反确认失败');
+      }
+    } catch (error) {
+      toast.error('反确认失败');
+    }
+  };
+
   // 切换下载菜单
   const toggleDownloadMenu = (orderId: number) => {
     setDownloadMenuOrderId(downloadMenuOrderId === orderId ? null : orderId);
@@ -313,7 +371,8 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
       operator: '',
       fineness: '',
       craft: '',
-      style: ''
+      style: '',
+      status: ''
     });
   };
 
@@ -417,6 +476,22 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                     <option key={i} value={s} />
                   ))}
                 </datalist>
+              </div>
+            </div>
+            {/* 状态筛选 */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">状态</label>
+                <select
+                  value={filters.status}
+                  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                >
+                  <option value="">全部状态</option>
+                  <option value="draft">未确认</option>
+                  <option value="confirmed">已确认</option>
+                  <option value="cancelled">已取消</option>
+                </select>
               </div>
             </div>
 
@@ -676,8 +751,12 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                     </div>
                     <div className="text-center">
                       <div className="text-sm text-gray-500">状态</div>
-                      <span className="px-2 py-0.5 bg-green-100 text-green-700 text-sm rounded-full">
-                        {order.status}
+                      <span className={`px-2 py-0.5 text-sm rounded-full ${
+                        INBOUND_STATUS_MAP[order.status]?.bgColor || 'bg-gray-100'
+                      } ${
+                        INBOUND_STATUS_MAP[order.status]?.textColor || 'text-gray-600'
+                      }`}>
+                        {INBOUND_STATUS_MAP[order.status]?.label || order.status}
                       </span>
                     </div>
                     <div className="text-center">
@@ -711,18 +790,41 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                         </>
                       ) : (
                         <>
+                          {/* 确认/反确认按钮 */}
+                          {order.status === 'draft' && canEditInbound && (
+                            <button
+                              onClick={() => handleConfirmInbound(order.id)}
+                              className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-1"
+                              title="确认入库单"
+                            >
+                              <Check className="w-4 h-4" />
+                              <span>确认</span>
+                            </button>
+                          )}
+                          {order.status === 'confirmed' && !order.is_audited && canEditInbound && (
+                            <button
+                              onClick={() => handleUnconfirmInbound(order.id)}
+                              className="px-3 py-1.5 text-sm bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors flex items-center space-x-1"
+                              title="反确认入库单"
+                            >
+                              <Undo2 className="w-4 h-4" />
+                              <span>反确认</span>
+                            </button>
+                          )}
+                          {/* 编辑按钮 - 仅draft状态可编辑 */}
                           <button
                             onClick={() => startEdit(order)}
                             className={`p-2 rounded-lg transition-colors ${
-                              order.is_audited || !canEditInbound
+                              (order.status !== 'draft' && order.status !== '已入库') || order.is_audited || !canEditInbound
                                 ? 'text-gray-300 cursor-not-allowed'
                                 : 'text-blue-600 hover:bg-blue-50'
                             }`}
-                            title={order.is_audited ? '已审核不可编辑' : '编辑'}
-                            disabled={order.is_audited || !canEditInbound}
+                            title={order.is_audited ? '已审核不可编辑' : order.status !== 'draft' && order.status !== '已入库' ? '已确认不可编辑' : '编辑'}
+                            disabled={(order.status !== 'draft' && order.status !== '已入库') || order.is_audited || !canEditInbound}
                           >
                             <Edit2 className="w-5 h-5" />
                           </button>
+                          {/* 审核/反审按钮 */}
                           {canAuditInbound && !order.is_audited && (
                             <button
                               onClick={() => handleAudit(order.id)}

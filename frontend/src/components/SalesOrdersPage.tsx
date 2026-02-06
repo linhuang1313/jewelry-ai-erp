@@ -1,11 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Search, Calendar, Filter, Edit2, Eye, X, 
-  ChevronDown, ChevronUp, Download, Printer, RefreshCw, RotateCcw
+  ChevronDown, ChevronUp, Download, Printer, RefreshCw, RotateCcw,
+  CheckCircle, XCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+// 销售单状态映射（支持新旧状态值）
+const SALES_STATUS_MAP: Record<string, { label: string; bg: string; text: string }> = {
+  draft: { label: '未确认', bg: 'bg-yellow-100', text: 'text-yellow-700' },
+  confirmed: { label: '已确认', bg: 'bg-blue-100', text: 'text-blue-700' },
+  cancelled: { label: '已取消', bg: 'bg-gray-100', text: 'text-gray-700' },
+  // 向后兼容旧状态值
+  '待结算': { label: '待结算', bg: 'bg-yellow-100', text: 'text-yellow-700' },
+  '已结算': { label: '已结算', bg: 'bg-green-100', text: 'text-green-700' },
+  '已取消': { label: '已取消', bg: 'bg-gray-100', text: 'text-gray-700' },
+};
+
+const getSalesStatusDisplay = (status: string) => {
+  return SALES_STATUS_MAP[status] || { label: status, bg: 'bg-gray-100', text: 'text-gray-700' };
+};
 
 interface SalesDetail {
   id: number;
@@ -139,8 +155,8 @@ export const SalesOrdersPage: React.FC<SalesOrdersPageProps> = ({ userRole = 'se
 
   // 销退销售单（取消并回滚库存）
   const handleSalesReturn = async (order: SalesOrder) => {
-    if (order.status !== '待结算') {
-      toast.error('只有待结算状态的销售单可以销退');
+    if (order.status !== 'draft' && order.status !== '待结算') {
+      toast.error('只有未确认状态的销售单可以销退');
       return;
     }
     
@@ -164,6 +180,56 @@ export const SalesOrdersPage: React.FC<SalesOrdersPageProps> = ({ userRole = 'se
     }
   };
 
+  // 确认销售单
+  const handleConfirmOrder = async (order: SalesOrder) => {
+    if (!confirm(`确认销售单 ${order.order_no}？\n确认后将不可编辑。`)) {
+      return;
+    }
+    try {
+      const params = new URLSearchParams({
+        confirmed_by: userRole === 'counter' ? '柜台' : '管理员',
+        user_role: userRole || 'counter'
+      });
+      const res = await fetch(`${API_BASE_URL}/api/sales/orders/${order.id}/confirm?${params}`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (res.ok && data.success !== false) {
+        toast.success(data.message || '销售单已确认');
+        loadOrders();
+      } else {
+        toast.error(data.detail || data.message || '确认失败');
+      }
+    } catch (error) {
+      toast.error('确认操作失败');
+    }
+  };
+
+  // 反确认销售单
+  const handleUnconfirmOrder = async (order: SalesOrder) => {
+    if (!confirm(`反确认销售单 ${order.order_no}？\n将恢复为未确认状态，可重新编辑。`)) {
+      return;
+    }
+    try {
+      const params = new URLSearchParams({
+        operated_by: userRole === 'counter' ? '柜台' : '管理员',
+        user_role: userRole || 'counter'
+      });
+      const res = await fetch(`${API_BASE_URL}/api/sales/orders/${order.id}/unconfirm?${params}`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (res.ok && data.success !== false) {
+        toast.success(data.message || '销售单已反确认');
+        loadOrders();
+      } else {
+        toast.error(data.detail || data.message || '反确认失败');
+      }
+    } catch (error) {
+      toast.error('反确认操作失败');
+    }
+  };
+
   // 重置筛选
   const resetFilters = () => {
     setFilters({
@@ -175,11 +241,12 @@ export const SalesOrdersPage: React.FC<SalesOrdersPageProps> = ({ userRole = 'se
     });
   };
 
-  // 统计信息
+  // 统计信息（兼容新旧状态值）
   const stats = {
     total: orders.length,
-    pending: orders.filter(o => o.status === '待结算').length,
-    settled: orders.filter(o => o.status === '已结算').length,
+    draft: orders.filter(o => o.status === 'draft' || o.status === '待结算').length,
+    confirmed: orders.filter(o => o.status === 'confirmed' || o.status === '已结算').length,
+    cancelled: orders.filter(o => o.status === 'cancelled' || o.status === '已取消').length,
     totalWeight: orders.reduce((sum, o) => sum + (o.total_weight || 0), 0),
     totalAmount: orders.reduce((sum, o) => sum + (o.total_labor_cost || 0), 0)
   };
@@ -267,9 +334,9 @@ export const SalesOrdersPage: React.FC<SalesOrdersPageProps> = ({ userRole = 'se
                 className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none"
               >
                 <option value="">全部状态</option>
-                <option value="待结算">待结算</option>
-                <option value="已结算">已结算</option>
-                <option value="已取消">已取消</option>
+                <option value="draft">未确认</option>
+                <option value="confirmed">已确认</option>
+                <option value="cancelled">已取消</option>
               </select>
             </div>
             
@@ -308,8 +375,9 @@ export const SalesOrdersPage: React.FC<SalesOrdersPageProps> = ({ userRole = 'se
       {/* 统计栏 */}
       <div className="px-4 py-3 bg-gray-50 border-b flex flex-wrap gap-4 text-sm">
         <span className="text-gray-600">共 <strong className="text-gray-900">{stats.total}</strong> 单</span>
-        <span className="text-yellow-600">待结算 <strong>{stats.pending}</strong> 单</span>
-        <span className="text-green-600">已结算 <strong>{stats.settled}</strong> 单</span>
+        <span className="text-yellow-600">未确认 <strong>{stats.draft}</strong> 单</span>
+        <span className="text-blue-600">已确认 <strong>{stats.confirmed}</strong> 单</span>
+        <span className="text-gray-500">已取消 <strong>{stats.cancelled}</strong> 单</span>
         <span className="text-blue-600">总重量 <strong>{stats.totalWeight.toFixed(2)}</strong> 克</span>
         <span className="text-orange-600">总工费 <strong>¥{stats.totalAmount.toFixed(2)}</strong></span>
       </div>
@@ -377,15 +445,14 @@ export const SalesOrdersPage: React.FC<SalesOrdersPageProps> = ({ userRole = 'se
                   
                   {/* 状态 */}
                   <div className="min-w-[80px]">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      order.status === '已取消' 
-                        ? 'bg-gray-100 text-gray-700'
-                        : order.status === '已结算' 
-                          ? 'bg-green-100 text-green-700' 
-                          : 'bg-yellow-100 text-yellow-700'
-                    }`}>
-                      {order.status}
-                    </span>
+                    {(() => {
+                      const statusInfo = getSalesStatusDisplay(order.status);
+                      return (
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.text}`}>
+                          {statusInfo.label}
+                        </span>
+                      );
+                    })()}
                   </div>
                   
                   {/* 操作按钮 */}
@@ -397,15 +464,37 @@ export const SalesOrdersPage: React.FC<SalesOrdersPageProps> = ({ userRole = 'se
                     >
                       <Eye className="w-4 h-4" />
                     </button>
-                    <button
-                      onClick={() => handleEdit(order)}
-                      className="p-2 hover:bg-gray-100 rounded-lg text-gray-600"
-                      title="编辑"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    {/* 销退按钮 - 仅柜台角色可见，且仅待结算状态可用 */}
-                    {userRole === 'counter' && order.status === '待结算' && (
+                    {/* 确认按钮 - 仅draft状态可用 */}
+                    {(order.status === 'draft' || order.status === '待结算') && (
+                      <>
+                        <button
+                          onClick={() => handleEdit(order)}
+                          className="p-2 hover:bg-gray-100 rounded-lg text-gray-600"
+                          title="编辑"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleConfirmOrder(order)}
+                          className="p-2 hover:bg-green-100 rounded-lg text-green-600"
+                          title="确认"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                    {/* 反确认按钮 - 仅confirmed状态可用 */}
+                    {(order.status === 'confirmed' || order.status === '已结算') && (
+                      <button
+                        onClick={() => handleUnconfirmOrder(order)}
+                        className="p-2 hover:bg-yellow-100 rounded-lg text-yellow-600"
+                        title="反确认"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                    )}
+                    {/* 销退按钮 - 仅柜台角色可见，且仅draft/待结算状态可用 */}
+                    {userRole === 'counter' && (order.status === 'draft' || order.status === '待结算') && (
                       <button
                         onClick={() => handleSalesReturn(order)}
                         className="p-2 hover:bg-red-100 rounded-lg text-red-600"

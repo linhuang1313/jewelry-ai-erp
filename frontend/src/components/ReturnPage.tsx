@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { API_ENDPOINTS } from '../config';
 import { hasPermission } from '../config/permissions';
 import { QuickReturnModal } from './QuickReturnModal';
+import toast from 'react-hot-toast';
 
 // 退货商品明细
 interface ReturnOrderItem {
@@ -53,10 +54,15 @@ interface ReturnOrder {
 
 interface ReturnStats {
   total_count: number;
-  pending_count: number;
-  approved_count: number;
-  completed_count: number;
-  rejected_count: number;
+  // 新状态字段
+  draft_count?: number;
+  confirmed_count?: number;
+  cancelled_count?: number;
+  // 旧状态字段（向后兼容）
+  pending_count?: number;
+  approved_count?: number;
+  completed_count?: number;
+  rejected_count?: number;
   to_supplier_count: number;
   to_warehouse_count: number;
   total_completed_weight: number;
@@ -68,6 +74,11 @@ interface ReturnPageProps {
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
+  // 新的两步状态流
+  draft: { label: '未确认', color: '#f59e0b' },
+  confirmed: { label: '已确认', color: '#10b981' },
+  cancelled: { label: '已取消', color: '#6b7280' },
+  // 向后兼容旧状态
   pending: { label: '待审批', color: '#f59e0b' },
   approved: { label: '已批准', color: '#3b82f6' },
   completed: { label: '已完成', color: '#10b981' },
@@ -207,6 +218,52 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
     }
   };
 
+  // 确认退货单
+  const handleConfirmReturn = async (returnOrder: ReturnOrder) => {
+    if (!confirm(`确认退货单 ${returnOrder.return_no}？`)) return;
+    
+    try {
+      const res = await fetch(
+        `${API_ENDPOINTS.API_BASE_URL}/api/returns/${returnOrder.id}/confirm?confirmed_by=${encodeURIComponent(userRole)}&user_role=${encodeURIComponent(userRole)}`,
+        { method: 'POST' }
+      );
+      const data = await res.json();
+      if (data.success) {
+        toast.success('退货单确认成功');
+        fetchReturns();
+        fetchStats();
+      } else {
+        toast.error(data.error || data.message || '确认失败');
+      }
+    } catch (error) {
+      console.error('确认失败:', error);
+      toast.error('确认失败，请重试');
+    }
+  };
+
+  // 反确认退货单
+  const handleUnconfirmReturn = async (returnOrder: ReturnOrder) => {
+    if (!confirm(`确认反确认退货单 ${returnOrder.return_no}？`)) return;
+    
+    try {
+      const res = await fetch(
+        `${API_ENDPOINTS.API_BASE_URL}/api/returns/${returnOrder.id}/unconfirm?operated_by=${encodeURIComponent(userRole)}&user_role=${encodeURIComponent(userRole)}`,
+        { method: 'POST' }
+      );
+      const data = await res.json();
+      if (data.success) {
+        toast.success('退货单已反确认');
+        fetchReturns();
+        fetchStats();
+      } else {
+        toast.error(data.error || data.message || '反确认失败');
+      }
+    } catch (error) {
+      console.error('反确认失败:', error);
+      toast.error('反确认失败，请重试');
+    }
+  };
+
   // 点击外部关闭下载菜单
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -324,16 +381,12 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f8fafc' }}>{stats.total_count}</div>
           </div>
           <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', padding: '16px', borderRadius: '12px', border: '1px solid #f59e0b' }}>
-            <div style={{ fontSize: '12px', color: '#94a3b8' }}>待审批</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f59e0b' }}>{stats.pending_count}</div>
-          </div>
-          <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', padding: '16px', borderRadius: '12px', border: '1px solid #3b82f6' }}>
-            <div style={{ fontSize: '12px', color: '#94a3b8' }}>已批准待处理</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#3b82f6' }}>{stats.approved_count}</div>
+            <div style={{ fontSize: '12px', color: '#94a3b8' }}>未确认</div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f59e0b' }}>{stats.draft_count ?? stats.pending_count ?? 0}</div>
           </div>
           <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', padding: '16px', borderRadius: '12px', border: '1px solid #10b981' }}>
-            <div style={{ fontSize: '12px', color: '#94a3b8' }}>已完成</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#10b981' }}>{stats.completed_count}</div>
+            <div style={{ fontSize: '12px', color: '#94a3b8' }}>已确认</div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#10b981' }}>{stats.confirmed_count ?? stats.completed_count ?? 0}</div>
           </div>
           <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', padding: '16px', borderRadius: '12px', border: '1px solid #10b981' }}>
             <div style={{ fontSize: '12px', color: '#94a3b8' }}>已退货总重量</div>
@@ -360,10 +413,13 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
             style={{ padding: '8px 12px', borderRadius: '8px', background: '#1e293b', border: '1px solid #475569', color: '#e2e8f0' }}
           >
             <option value="">全部状态</option>
-            <option value="pending">待审批</option>
-            <option value="approved">已批准</option>
-            <option value="completed">已完成</option>
-            <option value="rejected">已驳回</option>
+            <option value="draft">未确认</option>
+            <option value="confirmed">已确认</option>
+            <option value="cancelled">已取消</option>
+            <option value="pending">待审批（旧）</option>
+            <option value="approved">已批准（旧）</option>
+            <option value="completed">已完成（旧）</option>
+            <option value="rejected">已驳回（旧）</option>
           </select>
           <input
             type="text"
@@ -467,6 +523,24 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
                       >
                         详情
                       </button>
+                      {/* 新状态流：确认/反确认 */}
+                      {r.status === 'draft' && canApprove && (
+                        <button
+                          onClick={() => handleConfirmReturn(r)}
+                          style={{ padding: '6px 12px', borderRadius: '6px', background: '#10b981', border: 'none', color: 'white', cursor: 'pointer', fontSize: '12px' }}
+                        >
+                          确认
+                        </button>
+                      )}
+                      {r.status === 'confirmed' && !r.is_audited && canApprove && (
+                        <button
+                          onClick={() => handleUnconfirmReturn(r)}
+                          style={{ padding: '6px 12px', borderRadius: '6px', background: '#f59e0b', border: 'none', color: 'white', cursor: 'pointer', fontSize: '12px' }}
+                        >
+                          反确认
+                        </button>
+                      )}
+                      {/* 旧状态流：保留向后兼容 */}
                       {r.status === 'pending' && canApprove && (
                         <>
                           <button

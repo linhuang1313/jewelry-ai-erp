@@ -20,6 +20,7 @@ from ..models import (
     CustomerGoldDeposit,
     CustomerGoldDepositTransaction,
     CustomerTransaction,
+    OrderStatusLog,
 )
 from ..schemas import (
     SettlementOrderCreate,
@@ -141,11 +142,11 @@ async def check_sales_order_status(
         # 没有结算单，可以自由操作
         can_modify = True
         can_delete = True
-    elif settlement.status == "pending":
+    elif settlement.status == "draft":
         # 结算单待确认，可以取消结算单或销退
         block_reason = "该销售单已有待确认的结算单，请先取消结算单后再操作销售单"
         next_action = "cancel_settlement"
-        can_refund = True  # pending 状态可以直接销退
+        can_refund = True  # draft 状态可以直接销退
     elif settlement.status in ["confirmed", "printed"]:
         # 结算单已确认，需要先撤销结算
         block_reason = "该销售单已有已确认的结算单。请先【撤销结算】将结算单变回待确认状态（会回滚现金欠款和金料账户），然后再做销退。"
@@ -512,7 +513,7 @@ async def create_settlement_order(
         # 灵活支付状态
         payment_difference=payment_difference,
         payment_status=payment_status,
-        status="pending",
+        status="draft",
         created_by=created_by,
         remark=remark
     )
@@ -632,7 +633,7 @@ async def update_settlement_order(
         raise HTTPException(status_code=404, detail="结算单不存在")
     
     # 只能修改待确认状态的结算单
-    if settlement.status != "pending":
+    if settlement.status != "draft":
         raise HTTPException(status_code=400, detail=f"结算单状态为 {settlement.status}，只有待确认状态可修改")
     
     # 获取关联的销售单
@@ -765,13 +766,24 @@ async def confirm_settlement_order(
     if not settlement:
         raise HTTPException(status_code=404, detail="结算单不存在")
     
-    if settlement.status != "pending":
+    if settlement.status != "draft":
         raise HTTPException(status_code=400, detail=f"结算单状态为 {settlement.status}，无法确认")
     
     # 更新结算单状态
     settlement.status = "confirmed"
     settlement.confirmed_by = data.confirmed_by
     settlement.confirmed_at = china_now()
+    
+    # 记录状态变更日志
+    status_log = OrderStatusLog(
+        order_type="settlement",
+        order_id=settlement_id,
+        action="confirm",
+        old_status="draft",
+        new_status="confirmed",
+        operated_by=data.confirmed_by
+    )
+    db.add(status_log)
     
     # 更新销售单状态为已结算
     sales_order = db.query(SalesOrder).filter(SalesOrder.id == settlement.sales_order_id).first()
@@ -1074,7 +1086,7 @@ async def download_settlement_order(
         
         # 状态转换
         status_map = {
-            "pending": "待确认",
+            "draft": "待确认",
             "confirmed": "已确认",
             "printed": "已打印"
         }
@@ -1863,7 +1875,7 @@ async def cancel_settlement_order(
             detail="已确认的结算单不能直接取消。请先进行【撤销结算】操作，将结算单变回待确认状态后才能取消。"
         )
     
-    if settlement.status != "pending":
+    if settlement.status != "draft":
         raise HTTPException(status_code=400, detail=f"结算单状态为 {settlement.status}，无法取消")
     
     try:
@@ -1916,7 +1928,7 @@ async def revert_settlement_order(
         raise HTTPException(status_code=404, detail="结算单不存在")
     
     # ========== 流程控制：只有 confirmed/printed 可以撤销 ==========
-    if settlement.status == "pending":
+    if settlement.status == "draft":
         raise HTTPException(status_code=400, detail="待确认的结算单无需撤销，可直接取消或修改")
     
     if settlement.status == "cancelled":
@@ -2001,16 +2013,27 @@ async def revert_settlement_order(
         
         # ========== 更新结算单状态 ==========
         old_status = settlement.status
-        settlement.status = "pending"
+        settlement.status = "draft"
         settlement.confirmed_by = None
         settlement.confirmed_at = None
         
         # 销售单状态改回待结算
         sales_order.status = "待结算"
         
+        # 记录状态变更日志
+        status_log = OrderStatusLog(
+            order_type="settlement",
+            order_id=settlement_id,
+            action="unconfirm",
+            old_status=old_status,
+            new_status="draft",
+            operated_by=user_role
+        )
+        db.add(status_log)
+        
         db.commit()
         
-        logger.info(f"结算单 {settlement.settlement_no} 撤销成功: {old_status} -> pending")
+        logger.info(f"结算单 {settlement.settlement_no} 撤销成功: {old_status} -> draft")
         
         return {
             "success": True,
@@ -2075,7 +2098,7 @@ async def refund_sales_order(
     if settlement.status == "refunded":
         raise HTTPException(status_code=400, detail="该销售单已销退")
     
-    if settlement.status != "pending":
+    if settlement.status != "draft":
         raise HTTPException(status_code=400, detail=f"结算单状态为 {settlement.status}，无法销退")
     
     # 获取关联的销售单和商品明细

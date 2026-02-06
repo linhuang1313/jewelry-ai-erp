@@ -12,7 +12,7 @@ import logging
 import io
 
 from ..database import get_db
-from ..models import SalesOrder, SalesDetail, Customer, Inventory, ProductCode, LocationInventory, Location
+from ..models import SalesOrder, SalesDetail, Customer, Inventory, ProductCode, LocationInventory, Location, OrderStatusLog
 from ..schemas import SalesOrderCreate, SalesOrderResponse, SalesDetailResponse
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
                     SalesOrder
                 ).filter(
                     SalesDetail.product_name == item.product_name,
-                    SalesOrder.status == "待结算"
+                    SalesOrder.status == "draft"
                 ).scalar() or 0.0
                 
                 available_weight = inventory.total_weight - reserved_weight
@@ -166,7 +166,7 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
             remark=order_data.remark,
             total_labor_cost=total_labor_cost,
             total_weight=total_weight,
-            status="待结算"
+            status="draft"
         )
         db.add(sales_order)
         db.flush()
@@ -191,32 +191,7 @@ async def create_sales_order(order_data: SalesOrderCreate, db: Session = Depends
             db.add(detail)
             details.append(detail)
         
-        # ==================== 规则A: 创建销售单时立即扣减库存 ====================
-        # 获取展厅位置（销售从展厅发生）
-        showroom_location = db.query(Location).filter(
-            Location.location_type == "showroom",
-            Location.is_active == 1
-        ).first()
-        
-        for item in order_data.items:
-            # 1. 扣减总库存 (Inventory 表)
-            inventory = db.query(Inventory).filter(
-                Inventory.product_name == item.product_name
-            ).first()
-            if inventory:
-                inventory.total_weight = round(inventory.total_weight - item.weight, 3)
-                logger.info(f"扣减总库存: {item.product_name} - {item.weight}克, 剩余: {inventory.total_weight}克")
-            
-            # 2. 扣减展厅库存 (LocationInventory 表)
-            if showroom_location:
-                location_inv = db.query(LocationInventory).filter(
-                    LocationInventory.product_name == item.product_name,
-                    LocationInventory.location_id == showroom_location.id
-                ).first()
-                if location_inv:
-                    location_inv.weight -= item.weight
-                    logger.info(f"扣减展厅库存: {item.product_name} - {item.weight}克, 剩余: {location_inv.weight}克")
-        # ==================== 库存扣减完成 ====================
+        # 库存将在确认(confirm)时扣减，创建时不影响库存
         
         # 更新客户统计信息
         if customer_id:
@@ -255,7 +230,7 @@ async def get_sales_orders(
     order_no: Optional[str] = Query(None, description="销售单号（模糊匹配）"),
     customer_name: Optional[str] = None,
     salesperson: Optional[str] = None,
-    status: Optional[str] = Query(None, description="状态筛选：待结算/已结算"),
+    status: Optional[str] = Query(None, description="状态筛选：draft/confirmed/cancelled"),
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     limit: int = Query(100, ge=1, le=500, description="返回数量限制"),
@@ -664,45 +639,93 @@ async def download_sales_order(
         raise HTTPException(status_code=500, detail=f"生成销售单失败: {str(e)}")
 
 
-@router.post("/orders/{order_id}/cancel")
-async def cancel_sales_order(order_id: int, db: Session = Depends(get_db)):
-    """取消销售单并回滚库存（仅待结算状态可取消）"""
+@router.post("/orders/{order_id}/confirm")
+async def confirm_sales_order(
+    order_id: int,
+    confirmed_by: str = Query(default="系统管理员", description="确认人"),
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """确认销售单（库存生效）"""
     try:
-        # 查询销售单
         order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
         if not order:
-            return {
-                "success": False,
-                "message": "销售单不存在"
-            }
+            return {"success": False, "message": "销售单不存在"}
+        if order.status != "draft":
+            return {"success": False, "message": f"销售单状态为 {order.status}，只有未确认的销售单才能确认"}
         
-        # 只有待结算状态才能取消
-        if order.status != "待结算":
-            return {
-                "success": False,
-                "message": f"只有待结算状态的销售单可以取消，当前状态: {order.status}"
-            }
-        
-        # 查询销售明细
         details = db.query(SalesDetail).filter(SalesDetail.order_id == order_id).all()
+        if not details:
+            return {"success": False, "message": "销售单没有商品明细"}
         
-        # ==================== 回滚库存 ====================
-        # 获取展厅位置
-        showroom_location = db.query(Location).filter(
-            Location.location_type == "showroom",
-            Location.is_active == 1
-        ).first()
+        # 验证库存
+        for detail in details:
+            inventory = db.query(Inventory).filter(Inventory.product_name == detail.product_name).first()
+            if not inventory or inventory.total_weight < detail.weight:
+                available = inventory.total_weight if inventory else 0
+                return {"success": False, "message": f"库存不足：{detail.product_name} 仅有 {available:.2f}g，需要 {detail.weight}g"}
+        
+        # 扣减库存
+        showroom_location = db.query(Location).filter(Location.location_type == "showroom", Location.is_active == 1).first()
         
         for detail in details:
-            # 1. 回滚总库存 (Inventory 表)
-            inventory = db.query(Inventory).filter(
-                Inventory.product_name == detail.product_name
-            ).first()
+            # 扣减总库存
+            inventory = db.query(Inventory).filter(Inventory.product_name == detail.product_name).first()
+            if inventory:
+                inventory.total_weight = round(inventory.total_weight - detail.weight, 3)
+            
+            # 扣减展厅库存
+            if showroom_location:
+                location_inv = db.query(LocationInventory).filter(
+                    LocationInventory.product_name == detail.product_name,
+                    LocationInventory.location_id == showroom_location.id
+                ).first()
+                if location_inv:
+                    location_inv.weight -= detail.weight
+        
+        order.status = "confirmed"
+        
+        status_log = OrderStatusLog(order_type="sales", order_id=order_id, action="confirm", old_status="draft", new_status="confirmed", operated_by=confirmed_by)
+        db.add(status_log)
+        
+        db.commit()
+        logger.info(f"销售单已确认: {order.order_no}, 确认人: {confirmed_by}")
+        
+        return {"success": True, "message": f"销售单 {order.order_no} 已确认，库存已扣减"}
+    
+    except Exception as e:
+        db.rollback()
+        logger.error(f"确认销售单失败: {e}", exc_info=True)
+        return {"success": False, "message": f"确认销售单失败: {str(e)}"}
+
+
+@router.post("/orders/{order_id}/unconfirm")
+async def unconfirm_sales_order(
+    order_id: int,
+    operated_by: str = Query(default="系统管理员", description="操作人"),
+    user_role: str = Query(default="manager", description="用户角色"),
+    remark: str = Query(default="", description="反确认原因"),
+    db: Session = Depends(get_db)
+):
+    """反确认销售单（回滚库存）"""
+    try:
+        order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
+        if not order:
+            return {"success": False, "message": "销售单不存在"}
+        if order.status != "confirmed":
+            return {"success": False, "message": f"销售单状态为 {order.status}，只有已确认的销售单才能反确认"}
+        
+        details = db.query(SalesDetail).filter(SalesDetail.order_id == order_id).all()
+        
+        showroom_location = db.query(Location).filter(Location.location_type == "showroom", Location.is_active == 1).first()
+        
+        for detail in details:
+            # 回滚总库存
+            inventory = db.query(Inventory).filter(Inventory.product_name == detail.product_name).first()
             if inventory:
                 inventory.total_weight = round(inventory.total_weight + detail.weight, 3)
-                logger.info(f"回滚总库存: {detail.product_name} + {detail.weight}克, 剩余: {inventory.total_weight}克")
             
-            # 2. 回滚展厅库存 (LocationInventory 表)
+            # 回滚展厅库存
             if showroom_location:
                 location_inv = db.query(LocationInventory).filter(
                     LocationInventory.product_name == detail.product_name,
@@ -710,11 +733,42 @@ async def cancel_sales_order(order_id: int, db: Session = Depends(get_db)):
                 ).first()
                 if location_inv:
                     location_inv.weight += detail.weight
-                    logger.info(f"回滚展厅库存: {detail.product_name} + {detail.weight}克, 剩余: {location_inv.weight}克")
-        # ==================== 库存回滚完成 ====================
         
-        # 更新销售单状态为已取消
-        order.status = "已取消"
+        order.status = "draft"
+        
+        status_log = OrderStatusLog(order_type="sales", order_id=order_id, action="unconfirm", old_status="confirmed", new_status="draft", operated_by=operated_by, remark=remark or None)
+        db.add(status_log)
+        
+        db.commit()
+        logger.info(f"销售单已反确认: {order.order_no}, 操作人: {operated_by}")
+        
+        return {"success": True, "message": f"销售单 {order.order_no} 已反确认，库存已回滚"}
+    
+    except Exception as e:
+        db.rollback()
+        logger.error(f"反确认销售单失败: {e}", exc_info=True)
+        return {"success": False, "message": f"反确认销售单失败: {str(e)}"}
+
+
+@router.post("/orders/{order_id}/cancel")
+async def cancel_sales_order(order_id: int, db: Session = Depends(get_db)):
+    """取消销售单（仅draft状态可直接取消，confirmed需先反确认）"""
+    try:
+        order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
+        if not order:
+            return {"success": False, "message": "销售单不存在"}
+        
+        if order.status == "cancelled":
+            return {"success": False, "message": "销售单已经是取消状态"}
+        
+        if order.status == "confirmed":
+            return {"success": False, "message": "已确认的销售单请先反确认再取消"}
+        
+        if order.status != "draft":
+            return {"success": False, "message": f"销售单状态为 {order.status}，无法取消"}
+        
+        # draft状态直接取消，无需回滚库存（创建时未扣减库存）
+        order.status = "cancelled"
         
         # 更新客户统计信息（回滚）
         if order.customer_id:
@@ -723,20 +777,46 @@ async def cancel_sales_order(order_id: int, db: Session = Depends(get_db)):
                 customer.total_purchase_amount -= order.total_labor_cost
                 customer.total_purchase_count = max(0, customer.total_purchase_count - 1)
         
+        status_log = OrderStatusLog(order_type="sales", order_id=order_id, action="cancel", old_status="draft", new_status="cancelled", operated_by="系统管理员")
+        db.add(status_log)
+        
         db.commit()
         
-        logger.info(f"销售单已取消: {order.order_no}, 库存已回滚")
+        logger.info(f"销售单已取消: {order.order_no}")
         
-        return {
-            "success": True,
-            "message": f"销售单 {order.order_no} 已取消，库存已回滚"
-        }
+        return {"success": True, "message": f"销售单 {order.order_no} 已取消"}
     
     except Exception as e:
         db.rollback()
         logger.error(f"取消销售单失败: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"取消销售单失败: {str(e)}"
-        }
+        return {"success": False, "message": f"取消销售单失败: {str(e)}"}
+
+
+@router.put("/orders/{order_id}")
+async def update_sales_order(
+    order_id: int,
+    updates: dict,
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """编辑销售单（仅未确认状态可编辑）"""
+    try:
+        order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
+        if not order:
+            return {"success": False, "message": "销售单不存在"}
+        if order.status != "draft":
+            return {"success": False, "message": "只有未确认的销售单才能编辑，请先反确认"}
+        
+        if "remark" in updates:
+            order.remark = updates["remark"]
+        if "salesperson" in updates:
+            order.salesperson = updates["salesperson"]
+        
+        db.commit()
+        return {"success": True, "message": "销售单已更新"}
+    
+    except Exception as e:
+        db.rollback()
+        logger.error(f"编辑销售单失败: {e}", exc_info=True)
+        return {"success": False, "message": f"编辑销售单失败: {str(e)}"}
 

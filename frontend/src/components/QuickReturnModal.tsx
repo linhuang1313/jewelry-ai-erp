@@ -341,6 +341,10 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
       const data = await response.json();
       if (data.success) {
         toast.success(`退货单创建成功！单号：${data.return_order?.return_no || ''}`);
+        toast('退货单为"未确认"状态，请到退货管理列表中确认', {
+          icon: 'ℹ️',
+          duration: 5000,
+        });
         setCreatedReturn(data.return_order);
         
         const selectedSupplierObj = suppliers.find(s => s.id === parseInt(formData.supplier_id));
@@ -442,6 +446,14 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                 <p>总退货克重：{createdReturn.total_weight?.toFixed(2)}克</p>
                 <p>总工费：¥{createdReturn.total_labor_cost?.toFixed(2)}</p>
                 <p>退货原因：{createdReturn.return_reason}</p>
+              </div>
+            </div>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+              <div className="flex items-center space-x-2">
+                <AlertCircle className="w-5 h-5 text-yellow-600" />
+                <span className="text-sm text-yellow-800">
+                  退货单当前为<strong>未确认</strong>状态，请到退货管理列表中确认后生效。
+                </span>
               </div>
             </div>
 
@@ -786,7 +798,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                   <span>提交中...</span>
                 </>
               ) : (
-                <span>提交退货单</span>
+                <span>新建退货单</span>
               )}
             </button>
           </div>

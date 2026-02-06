@@ -316,7 +316,7 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
         order_no = generate_inbound_order_no(db)
         
         # 创建入库单
-        order = InboundOrder(order_no=order_no, create_time=china_now())
+        order = InboundOrder(order_no=order_no, create_time=china_now(), status="draft")
         db.add(order)
         db.flush()
         
@@ -380,92 +380,14 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
         )
         db.add(detail)
         
-        # 更新总库存
-        inventory = db.query(Inventory).filter(Inventory.product_name == product_name).first()
-        if inventory:
-            inventory.total_weight = round(inventory.total_weight + weight, 3)
-        else:
-            inventory = Inventory(product_name=product_name, total_weight=weight)
-            db.add(inventory)
-        
-        # 更新分仓库存
-        default_location = db.query(Location).filter(Location.code == "warehouse").first()
-        if not default_location:
-            default_location = Location(
-                code="warehouse",
-name="商品部仓库",
-                location_type="warehouse",
-                description="默认入库位置"
-            )
-            db.add(default_location)
-            db.flush()
-        
-        location_inventory = db.query(LocationInventory).filter(
-            LocationInventory.product_name == product_name,
-            LocationInventory.location_id == default_location.id
-        ).first()
-        
-        if location_inventory:
-            location_inventory.weight += weight
-        else:
-            location_inventory = LocationInventory(
-                product_name=product_name,
-                location_id=default_location.id,
-                weight=weight
-            )
-            db.add(location_inventory)
-        
-        # 更新供应商统计
-        if supplier_obj:
-            supplier_obj.total_supply_amount = round(supplier_obj.total_supply_amount + total_cost, 2)
-            supplier_obj.total_supply_weight = round(supplier_obj.total_supply_weight + weight, 3)
-            supplier_obj.total_supply_count += 1
-            supplier_obj.last_supply_time = datetime.now()
-            
-            # 更新供应商金料账户
-            from ..models import SupplierGoldAccount, SupplierGoldTransaction
-            
-            supplier_gold_account = db.query(SupplierGoldAccount).filter(
-                SupplierGoldAccount.supplier_id == supplier_obj.id
-            ).first()
-            
-            if not supplier_gold_account:
-                supplier_gold_account = SupplierGoldAccount(
-                    supplier_id=supplier_obj.id,
-                    supplier_name=supplier_obj.name,
-                    current_balance=0.0,
-                    total_received=0.0,
-                    total_paid=0.0
-                )
-                db.add(supplier_gold_account)
-                db.flush()
-            
-            balance_before = supplier_gold_account.current_balance
-            supplier_gold_account.current_balance = round(supplier_gold_account.current_balance + weight, 3)
-            supplier_gold_account.total_received = round(supplier_gold_account.total_received + weight, 3)
-            supplier_gold_account.last_transaction_at = china_now()
-            
-            supplier_gold_tx = SupplierGoldTransaction(
-                supplier_id=supplier_obj.id,
-                supplier_name=supplier_obj.name,
-                transaction_type='receive',
-                inbound_order_id=order.id,
-                gold_weight=weight,
-                balance_before=balance_before,
-                balance_after=supplier_gold_account.current_balance,
-                created_by="系统",
-                remark=f"入库单：{order.order_no}，供应商发货"
-            )
-            db.add(supplier_gold_tx)
+        # 库存将在确认(confirm)时更新，创建时不影响库存
         
         db.commit()
         db.refresh(order)
         db.refresh(detail)
-        db.refresh(inventory)
         
         order_response = InboundOrderResponse.model_validate(order).model_dump(mode='json')
         detail_response = InboundDetailResponse.model_validate(detail).model_dump(mode='json')
-        inventory_response = InventoryResponse.model_validate(inventory).model_dump(mode='json')
         
         return {
             "success": True,
@@ -474,7 +396,7 @@ name="商品部仓库",
             "order_no": order.order_no,
             "order": order_response,
             "detail": detail_response,
-            "inventory": inventory_response
+            "inventory": None
         }
     
     except Exception as e:
@@ -764,6 +686,9 @@ async def update_inbound_order(
         if order.is_audited:
             return {"success": False, "error": "该入库单已审核，无法编辑，请先反审"}
 
+        if order.status != "draft":
+            return {"success": False, "error": "只有未确认的入库单才能编辑，请先反确认"}
+
         if not has_permission(user_role, 'can_inbound'):
             raise HTTPException(status_code=403, detail="权限不足：无法编辑入库单")
         
@@ -855,6 +780,233 @@ async def unaudit_inbound_order(
     return {"success": True, "message": "反审成功", "order_id": order_id}
 
 
+@router.post("/{order_id}/confirm")
+async def confirm_inbound_order(
+    order_id: int,
+    confirmed_by: str = Query(default="系统管理员", description="确认人"),
+    user_role: str = Query(default="manager", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """确认入库单（库存生效）"""
+    if not has_permission(user_role, 'can_inbound'):
+        raise HTTPException(status_code=403, detail="权限不足：无法确认入库单")
+    
+    order = db.query(InboundOrder).filter(InboundOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="入库单不存在")
+    if order.status != "draft":
+        raise HTTPException(status_code=400, detail=f"入库单状态为 {order.status}，只有未确认的入库单才能确认")
+    
+    # 获取所有明细
+    details = db.query(InboundDetail).filter(InboundDetail.order_id == order_id).all()
+    if not details:
+        raise HTTPException(status_code=400, detail="入库单没有商品明细，无法确认")
+    
+    # 获取默认入库位置
+    default_location = db.query(Location).filter(Location.code == "warehouse").first()
+    if not default_location:
+        default_location = Location(
+            code="warehouse",
+            name="商品部仓库",
+            location_type="warehouse",
+            description="默认入库位置"
+        )
+        db.add(default_location)
+        db.flush()
+    
+    # 遍历明细，更新库存
+    for detail in details:
+        product_name = detail.product_name
+        weight = detail.weight
+        
+        # 更新总库存
+        inventory = db.query(Inventory).filter(Inventory.product_name == product_name).first()
+        if inventory:
+            inventory.total_weight = round(inventory.total_weight + weight, 3)
+        else:
+            inventory = Inventory(product_name=product_name, total_weight=weight)
+            db.add(inventory)
+        
+        # 更新分仓库存
+        location_inventory = db.query(LocationInventory).filter(
+            LocationInventory.product_name == product_name,
+            LocationInventory.location_id == default_location.id
+        ).first()
+        if location_inventory:
+            location_inventory.weight += weight
+        else:
+            location_inventory = LocationInventory(
+                product_name=product_name,
+                location_id=default_location.id,
+                weight=weight
+            )
+            db.add(location_inventory)
+        
+        # 更新供应商统计
+        if detail.supplier:
+            supplier_obj = db.query(Supplier).filter(Supplier.name == detail.supplier, Supplier.status == "active").first()
+            if supplier_obj:
+                supplier_obj.total_supply_amount = round(supplier_obj.total_supply_amount + (detail.weight * detail.labor_cost), 2)
+                supplier_obj.total_supply_weight = round(supplier_obj.total_supply_weight + weight, 3)
+                supplier_obj.total_supply_count += 1
+                supplier_obj.last_supply_time = datetime.now()
+                
+                # 更新供应商金料账户
+                from ..models import SupplierGoldAccount, SupplierGoldTransaction
+                supplier_gold_account = db.query(SupplierGoldAccount).filter(
+                    SupplierGoldAccount.supplier_id == supplier_obj.id
+                ).first()
+                if not supplier_gold_account:
+                    supplier_gold_account = SupplierGoldAccount(
+                        supplier_id=supplier_obj.id,
+                        supplier_name=supplier_obj.name,
+                        current_balance=0.0,
+                        total_received=0.0,
+                        total_paid=0.0
+                    )
+                    db.add(supplier_gold_account)
+                    db.flush()
+                
+                balance_before = supplier_gold_account.current_balance
+                supplier_gold_account.current_balance = round(supplier_gold_account.current_balance + weight, 3)
+                supplier_gold_account.total_received = round(supplier_gold_account.total_received + weight, 3)
+                supplier_gold_account.last_transaction_at = china_now()
+                
+                supplier_gold_tx = SupplierGoldTransaction(
+                    supplier_id=supplier_obj.id,
+                    supplier_name=supplier_obj.name,
+                    transaction_type='receive',
+                    inbound_order_id=order.id,
+                    gold_weight=weight,
+                    balance_before=balance_before,
+                    balance_after=supplier_gold_account.current_balance,
+                    created_by=confirmed_by,
+                    remark=f"入库单确认：{order.order_no}"
+                )
+                db.add(supplier_gold_tx)
+    
+    # 更新状态
+    order.status = "confirmed"
+    
+    # 写操作日志
+    from ..models import OrderStatusLog
+    status_log = OrderStatusLog(
+        order_type="inbound",
+        order_id=order_id,
+        action="confirm",
+        old_status="draft",
+        new_status="confirmed",
+        operated_by=confirmed_by
+    )
+    db.add(status_log)
+    
+    db.commit()
+    
+    logger.info(f"入库单已确认: {order.order_no}, 确认人: {confirmed_by}")
+    
+    return {"success": True, "message": f"入库单 {order.order_no} 已确认，库存已更新"}
+
+
+@router.post("/{order_id}/unconfirm")
+async def unconfirm_inbound_order(
+    order_id: int,
+    operated_by: str = Query(default="系统管理员", description="操作人"),
+    user_role: str = Query(default="manager", description="用户角色"),
+    remark: str = Query(default="", description="反确认原因"),
+    db: Session = Depends(get_db)
+):
+    """反确认入库单（回滚库存）"""
+    if not has_permission(user_role, 'can_inbound'):
+        raise HTTPException(status_code=403, detail="权限不足：无法反确认入库单")
+    
+    order = db.query(InboundOrder).filter(InboundOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="入库单不存在")
+    if order.status != "confirmed":
+        raise HTTPException(status_code=400, detail=f"入库单状态为 {order.status}，只有已确认的入库单才能反确认")
+    if order.is_audited:
+        raise HTTPException(status_code=400, detail="入库单已审核，请先反审后再反确认")
+    
+    # 获取所有明细
+    details = db.query(InboundDetail).filter(InboundDetail.order_id == order_id).all()
+    
+    # 获取默认入库位置
+    default_location = db.query(Location).filter(Location.code == "warehouse").first()
+    
+    # 遍历明细，回滚库存
+    for detail in details:
+        product_name = detail.product_name
+        weight = detail.weight
+        
+        # 回滚总库存
+        inventory = db.query(Inventory).filter(Inventory.product_name == product_name).first()
+        if inventory:
+            inventory.total_weight = round(inventory.total_weight - weight, 3)
+        
+        # 回滚分仓库存
+        if default_location:
+            location_inventory = db.query(LocationInventory).filter(
+                LocationInventory.product_name == product_name,
+                LocationInventory.location_id == default_location.id
+            ).first()
+            if location_inventory:
+                location_inventory.weight -= weight
+        
+        # 回滚供应商统计
+        if detail.supplier:
+            supplier_obj = db.query(Supplier).filter(Supplier.name == detail.supplier, Supplier.status == "active").first()
+            if supplier_obj:
+                supplier_obj.total_supply_weight = round(supplier_obj.total_supply_weight - weight, 3)
+                if supplier_obj.total_supply_count > 0:
+                    supplier_obj.total_supply_count -= 1
+                
+                # 回滚供应商金料账户
+                from ..models import SupplierGoldAccount, SupplierGoldTransaction
+                supplier_gold_account = db.query(SupplierGoldAccount).filter(
+                    SupplierGoldAccount.supplier_id == supplier_obj.id
+                ).first()
+                if supplier_gold_account:
+                    balance_before = supplier_gold_account.current_balance
+                    supplier_gold_account.current_balance = round(supplier_gold_account.current_balance - weight, 3)
+                    supplier_gold_account.total_received = round(supplier_gold_account.total_received - weight, 3)
+                    supplier_gold_account.last_transaction_at = china_now()
+                    
+                    supplier_gold_tx = SupplierGoldTransaction(
+                        supplier_id=supplier_obj.id,
+                        supplier_name=supplier_obj.name,
+                        transaction_type='return',
+                        inbound_order_id=order.id,
+                        gold_weight=weight,
+                        balance_before=balance_before,
+                        balance_after=supplier_gold_account.current_balance,
+                        created_by=operated_by,
+                        remark=f"入库单反确认：{order.order_no}"
+                    )
+                    db.add(supplier_gold_tx)
+    
+    # 更新状态
+    order.status = "draft"
+    
+    # 写操作日志
+    from ..models import OrderStatusLog
+    status_log = OrderStatusLog(
+        order_type="inbound",
+        order_id=order_id,
+        action="unconfirm",
+        old_status="confirmed",
+        new_status="draft",
+        operated_by=operated_by,
+        remark=remark or None
+    )
+    db.add(status_log)
+    
+    db.commit()
+    
+    logger.info(f"入库单已反确认: {order.order_no}, 操作人: {operated_by}, 原因: {remark}")
+    
+    return {"success": True, "message": f"入库单 {order.order_no} 已反确认，库存已回滚"}
+
+
 @router.post("")
 async def create_inbound_order(card_data: InboundOrderCreate, db: Session = Depends(get_db)):
     """创建入库单（从卡片数据确认入库）"""
@@ -891,7 +1043,8 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
         order = InboundOrder(
             order_no=order_no,
             create_time=china_now(),
-            operator=batch_data.operator or "系统"
+            operator=batch_data.operator or "系统",
+            status="draft"
         )
         db.add(order)
         db.flush()
@@ -917,25 +1070,11 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
             
             supplier_id = supplier_obj.id
         
-        default_location = db.query(Location).filter(Location.code == "warehouse").first()
-        if not default_location:
-            default_location = Location(
-                code="warehouse",
-                name="商品部仓库",
-                location_type="warehouse",
-                description="默认入库位置"
-            )
-            db.add(default_location)
-            db.flush()
-        
         results = []
         total_weight = 0
         total_cost = 0
         success_count = 0
         error_count = 0
-        
-        inventory_cache = {}
-        location_inventory_cache = {}
         
         for idx, item in enumerate(batch_data.items):
             try:
@@ -1021,37 +1160,7 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
                 )
                 db.add(detail)
                 
-                if product_name in inventory_cache:
-                    inventory_cache[product_name].total_weight = round(inventory_cache[product_name].total_weight + weight, 3)
-                else:
-                    inventory = db.query(Inventory).filter(Inventory.product_name == product_name).first()
-                    if inventory:
-                        inventory.total_weight = round(inventory.total_weight + weight, 3)
-                        inventory_cache[product_name] = inventory
-                    else:
-                        inventory = Inventory(product_name=product_name, total_weight=weight)
-                        db.add(inventory)
-                        inventory_cache[product_name] = inventory
-                
-                if product_name in location_inventory_cache:
-                    location_inventory_cache[product_name].weight += weight
-                else:
-                    location_inventory = db.query(LocationInventory).filter(
-                        LocationInventory.product_name == product_name,
-                        LocationInventory.location_id == default_location.id
-                    ).first()
-                    
-                    if location_inventory:
-                        location_inventory.weight += weight
-                        location_inventory_cache[product_name] = location_inventory
-                    else:
-                        location_inventory = LocationInventory(
-                            product_name=product_name,
-                            location_id=default_location.id,
-                            weight=weight
-                        )
-                        db.add(location_inventory)
-                        location_inventory_cache[product_name] = location_inventory
+                # 库存将在确认(confirm)时更新，创建时不影响库存
                 
                 total_weight += weight
                 total_cost += item_total_cost
@@ -1072,11 +1181,7 @@ async def create_batch_inbound_orders(batch_data: BatchInboundCreate, db: Sessio
                     "error": str(e)
                 })
         
-        if supplier_obj and success_count > 0:
-            supplier_obj.total_supply_amount = round(supplier_obj.total_supply_amount + total_cost, 2)
-            supplier_obj.total_supply_weight = round(supplier_obj.total_supply_weight + total_weight, 3)
-            supplier_obj.total_supply_count += success_count
-            supplier_obj.last_supply_time = datetime.now()
+        # 供应商统计将在确认(confirm)时更新
         
         # ========== 自动生成采购单（应付账款） ==========
         if supplier_id and total_cost > 0:

@@ -33,7 +33,7 @@ class InboundOrder(Base):
     order_no = Column(String(50), unique=True, index=True, nullable=False)
     create_time = Column(DateTime(timezone=True), server_default=func.now())
     operator = Column(String(50), default="系统管理员")
-    status = Column(String(20), default="已入库", index=True)
+    status = Column(String(20), default="draft", index=True)
     is_audited = Column(Boolean, default=False, index=True)
     audited_by = Column(String(50), nullable=True)
     audited_at = Column(DateTime(timezone=True), nullable=True)
@@ -157,7 +157,7 @@ class SalesOrder(Base):
     total_labor_cost = Column(Float, default=0.0)  # 总工费
     total_weight = Column(Float, default=0.0)  # 总克重
     remark = Column(Text)  # 备注信息
-    status = Column(String(20), default="待结算", index=True)  # 待结算/已结算/已取消
+    status = Column(String(20), default="draft", index=True)  # draft/confirmed/cancelled
     create_time = Column(DateTime, server_default=func.now(), index=True)
     operator = Column(String(50), default="系统管理员")
     
@@ -216,7 +216,7 @@ class SettlementOrder(Base):
     payment_status = Column(String(20), default="full")  # full全额 / overpaid多付 / underpaid少付
     
     # 状态和操作信息
-    status = Column(String(20), default="pending", index=True)  # pending待结算 / confirmed已确认 / printed已打印
+    status = Column(String(20), default="draft", index=True)  # draft待结算 / confirmed已确认 / printed已打印
     created_by = Column(String(50))  # 创建人（柜台）
     confirmed_by = Column(String(50), nullable=True)  # 确认人（结算专员）
     confirmed_at = Column(DateTime, nullable=True)  # 确认时间
@@ -429,8 +429,8 @@ class ReturnOrder(Base):
     return_reason = Column(String(50), nullable=False)  # 原因分类: 质量问题/款式不符/数量差异/工艺瑕疵/其他
     reason_detail = Column(Text, nullable=True)  # 详细说明
     
-    # 状态: pending待审批 / approved已批准 / completed已完成 / rejected已驳回
-    status = Column(String(20), default="pending", index=True)
+    # 状态: draft未确认 / confirmed已确认 / cancelled已取消
+    status = Column(String(20), default="draft", index=True)
     
     # 发起信息
     created_by = Column(String(50))  # 发起人
@@ -895,6 +895,23 @@ class LoanOrderLog(Base):
     loan_order = relationship("LoanOrder", backref="logs")
 
 
+# ============= 单据操作日志 =============
+
+class OrderStatusLog(Base):
+    """单据状态变更日志 - 记录确认/反确认等操作"""
+    __tablename__ = "order_status_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    order_type = Column(String(30), nullable=False, index=True)  # inbound/return/sales/settlement
+    order_id = Column(Integer, nullable=False, index=True)
+    action = Column(String(30), nullable=False)  # confirm/unconfirm
+    old_status = Column(String(20))
+    new_status = Column(String(20))
+    operated_by = Column(String(50))
+    operated_at = Column(DateTime, server_default=func.now())
+    remark = Column(Text, nullable=True)
+
+
 # 导出所有模型
 __all__ = [
     # 入库
@@ -954,4 +971,6 @@ __all__ = [
     # 审计日志
     'AuditLog',
     'BalanceChangeLog',
+    # 单据操作日志
+    'OrderStatusLog',
 ]

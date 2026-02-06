@@ -3705,11 +3705,15 @@ function App() {
                             <div>
                               <span className="text-gray-600">状态：</span>
                               <span className={`font-semibold ${
-                                msg.salesOrder.status === '已结算' ? 'text-green-600' : 
-                                msg.salesOrder.status === '待结算' ? 'text-yellow-600' : 
+                                msg.salesOrder.status === 'confirmed' || msg.salesOrder.status === '已结算' ? 'text-blue-600' :
+                                msg.salesOrder.status === 'draft' || msg.salesOrder.status === '待结算' ? 'text-yellow-600' : 
+                                msg.salesOrder.status === 'cancelled' || msg.salesOrder.status === '已取消' ? 'text-gray-500' :
                                 'text-gray-600'
                               }`}>
-                                {msg.salesOrder.status}
+                                {msg.salesOrder.status === 'draft' ? '未确认' :
+                                 msg.salesOrder.status === 'confirmed' ? '已确认' :
+                                 msg.salesOrder.status === 'cancelled' ? '已取消' :
+                                 msg.salesOrder.status}
                               </span>
                             </div>
                           </div>

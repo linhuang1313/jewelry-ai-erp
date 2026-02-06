@@ -63,6 +63,7 @@ interface SettlementOrder {
 // 状态徽章
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const config: Record<string, { bg: string; text: string; label: string }> = {
+    draft: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: '未确认' },
     pending: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: '待确认' },
     confirmed: { bg: 'bg-blue-100', text: 'text-blue-700', label: '已确认' },
     printed: { bg: 'bg-green-100', text: 'text-green-700', label: '已打印' },
@@ -892,15 +893,15 @@ export const SettlementPage: React.FC<SettlementPageProps> = ({ onSettlementConf
     return settlement.payment_method === 'physical_gold' || settlement.payment_method === 'mixed';
   };
 
-  // 过滤结算单（添加数组安全检查）
+  // 过滤结算单（添加数组安全检查，兼容draft和pending）
   const filteredSettlements = (Array.isArray(settlements) ? settlements : []).filter(s => {
-    if (activeTab === 'pending') return s.status === 'pending';
+    if (activeTab === 'pending') return s.status === 'pending' || s.status === 'draft';
     if (activeTab === 'confirmed') return s.status === 'confirmed' || s.status === 'printed';
     // to_settle tab 不显示结算单列表
     return false;
   });
 
-  const pendingCount = (Array.isArray(settlements) ? settlements : []).filter(s => s.status === 'pending').length;
+  const pendingCount = (Array.isArray(settlements) ? settlements : []).filter(s => s.status === 'pending' || s.status === 'draft').length;
   const completedCount = (Array.isArray(settlements) ? settlements : []).filter(s => s.status === 'confirmed' || s.status === 'printed').length;
 
   return (

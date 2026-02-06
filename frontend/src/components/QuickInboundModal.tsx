@@ -830,7 +830,11 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
       const result = await response.json();
       
       if (result.success) {
-        toast.success(result.message);
+        toast.success(result.message || '入库单创建成功');
+        toast('入库单为"未确认"状态，请到入库单据一览表中确认', {
+          icon: 'ℹ️',
+          duration: 5000,
+        });
         
         // 计算总工费
         const totalLaborCost = validRows.reduce((sum, row) => {
@@ -1585,7 +1589,7 @@ export default function QuickInboundModal({ isOpen, onClose, onSuccess, userRole
                   入库中...
                 </>
               ) : (
-                '确认入库'
+                '新建入库'
               )}
             </button>
           </div>
