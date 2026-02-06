@@ -697,6 +697,7 @@ async def update_inbound_order(
         if "status" in updates:
             order.status = updates["status"]
         
+        changed_fields = []
         if "details" in updates and isinstance(updates["details"], list):
             for detail_update in updates["details"]:
                 detail_id = detail_update.get("id")
@@ -704,17 +705,44 @@ async def update_inbound_order(
                     detail = db.query(InboundDetail).filter(InboundDetail.id == detail_id).first()
                     if detail:
                         if "product_name" in detail_update:
+                            if detail.product_name != detail_update["product_name"]:
+                                changed_fields.append(f"商品名称: {detail.product_name} -> {detail_update['product_name']}")
                             detail.product_name = detail_update["product_name"]
                         if "weight" in detail_update:
-                            detail.weight = float(detail_update["weight"])
+                            new_weight = float(detail_update["weight"])
+                            if detail.weight != new_weight:
+                                changed_fields.append(f"克重: {detail.weight} -> {new_weight}")
+                            detail.weight = new_weight
                         if "labor_cost" in detail_update:
-                            detail.labor_cost = float(detail_update["labor_cost"])
+                            new_labor = float(detail_update["labor_cost"])
+                            if detail.labor_cost != new_labor:
+                                changed_fields.append(f"克工费: {detail.labor_cost} -> {new_labor}")
+                            detail.labor_cost = new_labor
                         if "supplier" in detail_update:
                             detail.supplier = detail_update["supplier"]
                         if "piece_count" in detail_update:
                             detail.piece_count = int(detail_update["piece_count"]) if detail_update["piece_count"] else None
                         if "piece_labor_cost" in detail_update:
                             detail.piece_labor_cost = float(detail_update["piece_labor_cost"]) if detail_update["piece_labor_cost"] else None
+                        
+                        # 重算总成本
+                        gram_cost = detail.weight * detail.labor_cost
+                        piece_cost = (detail.piece_count or 0) * (detail.piece_labor_cost or 0)
+                        detail.total_cost = round(gram_cost + piece_cost, 2)
+        
+        # 编辑留痕
+        if changed_fields:
+            from ..models import OrderStatusLog
+            edit_log = OrderStatusLog(
+                order_type="inbound",
+                order_id=order_id,
+                action="edit",
+                old_status="draft",
+                new_status="draft",
+                operated_by=user_role,
+                remark="；".join(changed_fields)
+            )
+            db.add(edit_log)
         
         db.commit()
         
