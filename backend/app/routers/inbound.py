@@ -734,6 +734,7 @@ async def update_inbound_order(
                 old_status="draft",
                 new_status="draft",
                 operated_by=user_role,
+                operated_at=china_now(),
                 remark="；".join(changed_fields)
             )
             db.add(edit_log)
@@ -918,7 +919,8 @@ async def confirm_inbound_order(
         action="confirm",
         old_status="draft",
         new_status="confirmed",
-        operated_by=confirmed_by
+        operated_by=confirmed_by,
+        operated_at=china_now()
     )
     db.add(status_log)
     
@@ -1018,6 +1020,7 @@ async def unconfirm_inbound_order(
         old_status="confirmed",
         new_status="draft",
         operated_by=operated_by,
+        operated_at=china_now(),
         remark=remark or None
     )
     db.add(status_log)

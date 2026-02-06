@@ -680,7 +680,7 @@ async def confirm_sales_order(
         
         order.status = "confirmed"
         
-        status_log = OrderStatusLog(order_type="sales", order_id=order_id, action="confirm", old_status="draft", new_status="confirmed", operated_by=confirmed_by)
+        status_log = OrderStatusLog(order_type="sales", order_id=order_id, action="confirm", old_status="draft", new_status="confirmed", operated_by=confirmed_by, operated_at=china_now())
         db.add(status_log)
         
         db.commit()
@@ -731,7 +731,7 @@ async def unconfirm_sales_order(
         
         order.status = "draft"
         
-        status_log = OrderStatusLog(order_type="sales", order_id=order_id, action="unconfirm", old_status="confirmed", new_status="draft", operated_by=operated_by, remark=remark or None)
+        status_log = OrderStatusLog(order_type="sales", order_id=order_id, action="unconfirm", old_status="confirmed", new_status="draft", operated_by=operated_by, operated_at=china_now(), remark=remark or None)
         db.add(status_log)
         
         db.commit()
@@ -772,7 +772,7 @@ async def cancel_sales_order(order_id: int, db: Session = Depends(get_db)):
                 customer.total_purchase_amount -= order.total_labor_cost
                 customer.total_purchase_count = max(0, customer.total_purchase_count - 1)
         
-        status_log = OrderStatusLog(order_type="sales", order_id=order_id, action="cancel", old_status="draft", new_status="cancelled", operated_by="系统管理员")
+        status_log = OrderStatusLog(order_type="sales", order_id=order_id, action="cancel", old_status="draft", new_status="cancelled", operated_by="系统管理员", operated_at=china_now())
         db.add(status_log)
         
         db.commit()

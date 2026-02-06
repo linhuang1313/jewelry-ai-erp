@@ -781,7 +781,8 @@ async def confirm_settlement_order(
         action="confirm",
         old_status="draft",
         new_status="confirmed",
-        operated_by=data.confirmed_by
+        operated_by=data.confirmed_by,
+        operated_at=china_now()
     )
     db.add(status_log)
     
@@ -2027,7 +2028,8 @@ async def revert_settlement_order(
             action="unconfirm",
             old_status=old_status,
             new_status="draft",
-            operated_by=user_role
+            operated_by=user_role,
+            operated_at=china_now()
         )
         db.add(status_log)
         

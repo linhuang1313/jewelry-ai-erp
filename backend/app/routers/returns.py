@@ -435,7 +435,7 @@ async def confirm_return_order(
     
     # 写操作日志
     from ..models import OrderStatusLog
-    status_log = OrderStatusLog(order_type="return", order_id=return_id, action="confirm", old_status="draft", new_status="confirmed", operated_by=confirmed_by)
+    status_log = OrderStatusLog(order_type="return", order_id=return_id, action="confirm", old_status="draft", new_status="confirmed", operated_by=confirmed_by, operated_at=china_now())
     db.add(status_log)
     
     db.commit()
@@ -513,7 +513,7 @@ async def unconfirm_return_order(
     return_order.completed_at = None
     
     from ..models import OrderStatusLog
-    status_log = OrderStatusLog(order_type="return", order_id=return_id, action="unconfirm", old_status="confirmed", new_status="draft", operated_by=operated_by, remark=remark or None)
+    status_log = OrderStatusLog(order_type="return", order_id=return_id, action="unconfirm", old_status="confirmed", new_status="draft", operated_by=operated_by, operated_at=china_now(), remark=remark or None)
     db.add(status_log)
     
     db.commit()
