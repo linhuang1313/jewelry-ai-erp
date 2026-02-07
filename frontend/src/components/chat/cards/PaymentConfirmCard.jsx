@@ -5,17 +5,17 @@ export const PaymentConfirmCard = ({ msg, setMessages }) => {
   return (
     <div className="flex justify-start">
       <div className="bg-white rounded-2xl shadow-lg border border-orange-200 max-w-md overflow-hidden">
-        {/* 鏍囬鏍? */}
+        {/* 标题栏 */}
         <div className="bg-gradient-to-r from-orange-500 to-amber-500 px-5 py-3">
           <div className="flex items-center gap-2 text-white">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className="font-semibold">纭鐧昏鏀舵</span>
+            <span className="font-semibold">确认登记收款</span>
           </div>
         </div>
         
-        {/* 内容? */}
+        {/* 内容 */}
         <div className="p-5 space-y-4">
           {/* 客户信息 */}
           <div className="flex items-center gap-3">
@@ -35,7 +35,7 @@ export const PaymentConfirmCard = ({ msg, setMessages }) => {
               <span className="font-medium text-gray-900">¥{pd.current_debt?.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">鏈鏀舵</span>
+              <span className="text-gray-600">本次收款</span>
               <span className="font-bold text-orange-600 text-lg">¥{pd.payment_amount?.toFixed(2)}</span>
             </div>
             <div className="border-t border-gray-200 pt-2 flex justify-between text-sm">
@@ -49,7 +49,7 @@ export const PaymentConfirmCard = ({ msg, setMessages }) => {
             </div>
           </div>
           
-          {/* 鏀舵鏂瑰紡 */}
+          {/* 收款方式 */}
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <span>收款方式：</span>
             <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded">{pd.payment_method}</span>
@@ -74,7 +74,7 @@ export const PaymentConfirmCard = ({ msg, setMessages }) => {
                       : `-¥${Math.abs(pd.balance_after || 0).toFixed(2)} (预收款`
                     setMessages(prev => prev.map(m => 
                       m.id === msg.id 
-                        ? { ...m, type: 'system', content: `✅ 鏀舵鐧昏鎴愬姛锛乗n\n客户：${pd.customer.name}\n鏀舵閲戦锛毬?${pd.payment_amount.toFixed(2)}\n鏀舵鏂瑰紡：${pd.payment_method}\n鏀舵鍚庢瑺娆撅細${balanceText}` }
+                        ? { ...m, type: 'system', content: `✅ 收款登记成功！\n\n客户：${pd.customer.name}\n收款金额：¥${pd.payment_amount.toFixed(2)}\n收款方式：${pd.payment_method}\n收款后欠款：${balanceText}` }
                         : m
                     ))
                   } else {
@@ -87,7 +87,7 @@ export const PaymentConfirmCard = ({ msg, setMessages }) => {
               }}
               className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-medium py-2.5 px-4 rounded-xl transition-colors"
             >
-              纭鐧昏
+              确认登记
             </button>
             <button
               onClick={() => {

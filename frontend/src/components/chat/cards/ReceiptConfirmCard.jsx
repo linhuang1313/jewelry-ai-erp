@@ -5,17 +5,17 @@ export const ReceiptConfirmCard = ({ msg, setMessages, API_BASE_URL }) => {
   return (
     <div className="flex justify-start">
       <div className="bg-white rounded-2xl shadow-lg border border-yellow-200 max-w-md overflow-hidden">
-        {/* 鏍囬鏍? */}
+        {/* 标题栏 */}
         <div className="bg-gradient-to-r from-yellow-500 to-amber-500 px-5 py-3">
           <div className="flex items-center gap-2 text-white">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
             </svg>
-            <span className="font-semibold">纭寮€鍏锋敹鏂欏崟</span>
+            <span className="font-semibold">确认开具收料单</span>
           </div>
         </div>
         
-        {/* 内容? */}
+        {/* 内容 */}
         <div className="p-5 space-y-4">
           {/* 客户信息 */}
           <div className="flex items-center gap-3">
@@ -76,7 +76,7 @@ export const ReceiptConfirmCard = ({ msg, setMessages, API_BASE_URL }) => {
                     }
                   } else {
                     const error = await response.json()
-                    alert('收料单创建失败：' + (error.detail || '鏈煡閿欒'))
+                    alert('收料单创建失败：' + (error.detail || '未知错误'))
                   }
                 } catch (error) {
                   console.error('Receipt order creation failed:', error)
@@ -85,7 +85,7 @@ export const ReceiptConfirmCard = ({ msg, setMessages, API_BASE_URL }) => {
               }}
               className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2.5 px-4 rounded-xl transition-colors"
             >
-              纭骞舵墦鍗?
+              确认并打印
             </button>
             <button
               onClick={() => {

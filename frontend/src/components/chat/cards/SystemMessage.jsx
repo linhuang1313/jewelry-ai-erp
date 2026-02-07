@@ -34,7 +34,7 @@ export const SystemMessage = ({ msg, setMessages, setCurrentPage, userRole, API_
   return (
     <React.Fragment>
       <div className="flex justify-start items-start gap-3">
-        {/* AI澶村儚 - 鎷涜储鐚? */}
+        {/* AI头像 - 招财猫 */}
         <img src="/ai-avatar.png" alt="AI" className="flex-shrink-0 w-8 h-8 rounded-full object-cover shadow-md ring-2 ring-jewelry-gold/30" />
         <div className={`
           ${msg.id ? 'max-w-2xl' : 'max-w-[85%] md:max-w-[75%]'}
@@ -43,7 +43,7 @@ export const SystemMessage = ({ msg, setMessages, setCurrentPage, userRole, API_
           {/* 意图识别可视化标签? - 珠宝风格 */}
           {msg.detectedIntent && (
             <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-gray-100">
-              <span className="text-xs text-gray-400">🎯 璇嗗埆鍒帮細</span>
+                <span className="text-xs text-gray-400">🎯 识别到：</span>
               <span className="px-2 py-0.5 text-xs font-medium bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 rounded-full">
                 {msg.detectedIntent}
               </span>
@@ -376,7 +376,7 @@ export const SystemMessage = ({ msg, setMessages, setCurrentPage, userRole, API_
               data={msg.inboundCard}
               actions={{
                 onConfirm: async (card) => {
-                  // 鏂规B：调用真实的入库API
+              // 方案B：调用真实的入库API
                   console.log('Confirm inbound:', card)
                   try {
                     // 更新卡片状态为处理中
@@ -389,7 +389,7 @@ export const SystemMessage = ({ msg, setMessages, setCurrentPage, userRole, API_
                     
                     // 调用入库API
                     const { confirmInbound } = await import('../../../services/inboundService')
-                    // 涓嶄娇鐢∕ock妯″紡锛岀'淇濊幏鍙栫湡瀹炵殑orderId
+              // 不使用Mock模式，确保获取真实的orderId
                     const useMock = false
                     const result = await confirmInbound(card, useMock)
                     
@@ -722,13 +722,13 @@ export const SystemMessage = ({ msg, setMessages, setCurrentPage, userRole, API_
           </div>
         </div>
       )}
-      {/* 鍥捐〃灞曠ず */}
+        {/* 图表展示 */}
       {msg.chartData && (
         <div className="flex justify-start mt-2">
           <div className="max-w-5xl w-full bg-white rounded-2xl shadow-sm border border-gray-200/60 p-6">
-            {/* 鍥捐〃缃戞牸甯冨眬 */}
+          {/* 图表网格布局 */}
             <div className={`grid gap-6 ${msg.pieData ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
-              {/* 鏌辩姸鍥?鎶樼嚎鍥? */}
+            {/* 柱状图/折线图 */}
               <div className="bg-gray-50 rounded-xl p-4">
                 {msg.lineData ? (
                   <Line 
@@ -792,7 +792,7 @@ export const SystemMessage = ({ msg, setMessages, setCurrentPage, userRole, API_
                 )}
               </div>
               
-              {/* 鐜舰鍥撅紙鏇夸唬楗煎浘锛屾洿鐜颁唬锛? */}
+            {/* 圆形图（替代饼图，更现代） */}
               {msg.pieData && (
                 <div className="bg-gray-50 rounded-xl p-4">
                   <Doughnut 

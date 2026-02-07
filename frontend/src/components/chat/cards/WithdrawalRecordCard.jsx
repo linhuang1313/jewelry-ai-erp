@@ -5,7 +5,7 @@ export const WithdrawalRecordCard = ({ withdrawalData }) => {
   return (
     <div className="flex justify-start">
       <div className="bg-white rounded-2xl shadow-lg border border-green-200 max-w-md overflow-hidden">
-        {/* 鏍囬鏍? */}
+        {/* 标题栏 */}
         <div className="bg-gradient-to-r from-green-500 to-emerald-500 px-5 py-3">
           <div className="flex items-center gap-2 text-white">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -15,11 +15,11 @@ export const WithdrawalRecordCard = ({ withdrawalData }) => {
           </div>
         </div>
         
-        {/* 内容? */}
+        {/* 内容 */}
         <div className="p-5 space-y-4">
           {/* 单号信息 */}
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-500">鍗曞彿</span>
+            <span className="text-sm text-gray-500">单号</span>
             <span className="font-mono font-semibold text-green-700">{wd.withdrawal_no}</span>
           </div>
           

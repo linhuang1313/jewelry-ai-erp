@@ -5,7 +5,6 @@ import { Toaster } from 'react-hot-toast'
 import { API_ENDPOINTS, API_BASE_URL } from './config'
 import LanguageSelector from './components/LanguageSelector'
 import { hasPermission } from './config/permissions'
-import { createCardFromBackend, createNewCard } from './utils/inboundHelpers'
 import { FinancePage } from './components/finance'
 import { AnalyticsPage } from './components/AnalyticsPage'
 import DashboardPage from './components/DashboardPage'
@@ -32,7 +31,7 @@ import { OCRModal, QuickReceiptModal, QuickWithdrawalModal } from './components/
 import { ChatHistoryPanel } from './components/ChatHistoryPanel'
 import { parseMessageHiddenMarkers } from './utils/messageParser'
 import { saveChatMessage } from './services/chatService'
-import { useConversationHistory, useUserRole } from './hooks'
+import { useConversationHistory, useUserRole, useChatStream } from './hooks'
 
 function App() {
   // 国际化
@@ -47,11 +46,8 @@ function App() {
   const currentLanguage = i18n.language || 'zh'
   
   const [messages, setMessages] = useState([])
-  const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)  // 图片上传状态
   const messagesEndRef = useRef(null)
-  const abortControllerRef = useRef(null)  // SSE 请求取消控制?
   
   // OCR编辑对话框相关状态
   const [showOCRModal, setShowOCRModal] = useState(false)
@@ -77,13 +73,13 @@ function App() {
   
   // 用户角色相关状态
   const [userRole, setUserRole] = useState(() => {
-    // 浠?localStorage 读取保存的角色，默认为业务员
+    // 从 localStorage 读取保存的角色，默认为业务员
     if (typeof window !== 'undefined') {
       return localStorage.getItem('userRole') || 'sales'
     }
     return 'sales'
   })
-  // Toast 鎻愮ず鍑芥暟：绉掑悗鑷姩娑堝け：
+  // Toast 提示函数：几秒后自动消失
   const showToast = (message, duration = 3000) => {
     setToastMessage(message)
     setTimeout(() => setToastMessage(''), duration)
@@ -114,847 +110,29 @@ function App() {
     getCurrentRole, changeUserRole
   } = role
 
-  // 组件卸载时取消正在进行的 SSE 璇锋眰
-  useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-      }
+  // ========== Chat Stream Hook ==========
+  const { input, setInput, loading, sendMessage } = useChatStream({
+    messages,
+    setMessages,
+    userRole,
+    currentSessionId: conversation.currentSessionId,
+    currentLanguage,
+    onNeedForm: (action) => {
+      if (action === '退货') setShowQuickReturnModal(true)
+      else if (action === '入库') setShowQuickInboundModal(true)
+      else if (action === '创建销售单') setShowQuickOrderModal(true)
     }
-  }, [])
-
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return
-
-    const userMessage = input.trim()
-    setInput('')
-    setMessages(prev => [...prev, { type: 'user', content: userMessage }])
-    setLoading(true)
-    
-    // 创建思考过程消息ID
-    const thinkingMessageId = Date.now()
-    let contentMessageId = null
-    let currentContent = ''
-    let isContentStarted = false
-    let thinkingSteps = []
-
-    try {
-      console.log('Send stream request to:', API_ENDPOINTS.CHAT_STREAM)
-      console.log('Request message:', userMessage)
-      
-      // 取消之前的请求（如果有）
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-      }
-      abortControllerRef.current = new AbortController()
-      
-      const response = await fetch(API_ENDPOINTS.CHAT_STREAM, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          message: userMessage, 
-          user_role: userRole,
-          session_id: currentSessionId,  // 传递会话ID，确保同一对话的消息关联在一起
-          language: currentLanguage  // 传递当前语言设置
-        }),
-        signal: abortControllerRef.current.signal  // 添加取消信号
-      })
-
-      console.log('Received response, status code:', response.status)
-      console.log('Response headers:', {
-        'Content-Type': response.headers.get('Content-Type'),
-        'Cache-Control': response.headers.get('Cache-Control'),
-        'Connection': response.headers.get('Connection'),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('Response error, status code:', response.status)
-        console.error('Error content:', errorText)
-        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
-      }
-      
-      if (!response.body) {
-        console.error('Response body is empty')
-          throw new Error('响应体为空')
-      }
-      
-        console.log('Start reading SSE stream...')
-
-      // 创建思考过程消息
-      setMessages(prev => [...prev, { 
-        id: thinkingMessageId,
-        type: 'thinking', 
-        steps: [],
-        progress: 0
-      }])
-
-      // 读取SSE流
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      let chunkCount = 0
-      while (true) {
-        try {
-          const { done, value } = await reader.read()
-          
-          if (done) {
-            console.log(`SSE stream ended, total ${chunkCount} data chunks received`)
-            setLoading(false)
-            break
-          }
-          
-          if (!value) {
-            console.warn('Received empty value, continue waiting...')
-            continue
-          }
-
-          chunkCount++
-          if (chunkCount <= 3) {
-            console.log(`Received chunk #${chunkCount}, length: ${value.length} bytes`)
-          }
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() || '' // 保留不完整的行?
-
-          for (const line of lines) {
-                  if (line.trim() === '') continue // 跳过空行
-                  if (line.startsWith('data: ')) {
-                    try {
-                      const jsonStr = line.slice(6)
-                      console.log('Parse SSE JSON:', jsonStr)
-                      const data = JSON.parse(jsonStr)
-                      console.log('Received SSE data:', data)
-                      // 鐗瑰埆妫€鏌?all_products
-                      if (data.data?.all_products) {
-                        console.log('[IMPORTANT] Detected all_products:', data.data.all_products)
-                      }
-                
-                // 处理思考步骤?
-                if (data.type === 'thinking') {
-                  const stepIndex = thinkingSteps.findIndex(s => s.step === data.step)
-                  if (stepIndex >= 0) {
-                    // 更新现有步骤
-                    thinkingSteps[stepIndex] = {
-                      step: data.step,
-                      message: data.message,
-                      progress: data.progress || 0,
-                      status: data.status || 'processing'
-                    }
-                  } else {
-                    // 添加新步骤?
-                    thinkingSteps.push({
-                      step: data.step,
-                      message: data.message,
-                      progress: data.progress || 0,
-                      status: data.status || 'processing'
-                    })
-                  }
-                  
-                  setMessages(prev => prev.map(msg => {
-                    if (msg.id === thinkingMessageId) {
-                      return { ...msg, steps: [...thinkingSteps], progress: data.progress || 0 }
-                    }
-                    return msg
-                  }))
-                }
-                // 内容开?
-                else if (data.type === 'content_start') {
-                  isContentStarted = true
-                  contentMessageId = Date.now()
-                  setMessages(prev => [...prev, { 
-                    id: contentMessageId,
-                    type: 'system', 
-                    content: '',
-                    isStreaming: true
-                  }])
-                }
-                // 内容?
-                else if (data.type === 'content') {
-                  // 如果content_start事件还没收到，先创建消息
-                  if (!isContentStarted || !contentMessageId) {
-                    isContentStarted = true
-                    contentMessageId = Date.now()
-                    setMessages(prev => [...prev, { 
-                      id: contentMessageId,
-                      type: 'system', 
-                      content: '',
-                      isStreaming: true
-                    }])
-                  }
-                  currentContent += data.chunk
-                  setMessages(prev => prev.map(msg => {
-                    if (msg.id === contentMessageId) {
-                      return { ...msg, content: currentContent }
-                    }
-                    return msg
-                  }))
-                }
-              // 鏀舵纭
-              else if (data.type === 'payment_confirm') {
-                console.log('Received payment_confirm event:', data)
-                setLoading(false)
-                // 移除思考过程消息
-                setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
-                // 创建收款确认卡片消息
-                const confirmData = data.data
-                setMessages(prev => [...prev, { 
-                  id: Date.now(),
-                  type: 'payment_confirm', 
-                  paymentData: confirmData,
-                  content: confirmData.message
-                }])
-              }
-              // 收料确认卡片
-              else if (data.type === 'receipt_confirm') {
-                setLoading(false)
-                setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
-                // 创建收料确认卡片消息
-                const confirmData = data.data
-                setMessages(prev => [...prev, { 
-                  id: Date.now(),
-                  type: 'receipt_confirm', 
-                  receiptData: confirmData,
-                  content: confirmData.message
-                }])
-              }
-              // 提料确认卡片
-              else if (data.type === 'withdrawal_confirm') {
-                setLoading(false)
-                setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
-                // 创建提料确认卡片消息
-                const confirmData = data.data
-                setMessages(prev => [...prev, { 
-                  id: Date.now(),
-                  type: 'withdrawal_confirm', 
-                  withdrawalData: confirmData,
-                  content: confirmData.message
-                }])
-              }
-              // 瀹屾垚
-              else if (data.type === 'complete') {
-                console.log('Received complete event:', data)
-                setLoading(false)
-                // 移除思考过程消息（如果存在
-                setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
-                
-                // 如果没有内容消息（比如入库操作直接返回结果），创建一个新消息
-                if (!contentMessageId || !isContentStarted) {
-                    console.log('Create new system message to display result')
-                  contentMessageId = Date.now()
-                  // 处理入库等操作的响应
-                  if (data.data) {
-                    // ========== 智能表单弹出：当信息不完整时自动弹出表单 ==========
-                    if (data.data.need_form) {
-                      console.log('Detected need_form flag, popup corresponding form:', data.data.action)
-                      
-                      // 根据操作类型弹出对应的表?
-                        if (data.data.action === '退货') {
-                        setShowQuickReturnModal(true)
-                        } else if (data.data.action === '入库') {
-                        setShowQuickInboundModal(true)
-                        } else if (data.data.action === '创建销售单') {
-                        setShowQuickOrderModal(true)
-                      }
-                      
-                      // 添加提示消息
-                      setMessages(prev => [...prev, { 
-                        type: 'system', 
-                        content: data.data.message || '📝 请在弹出的表格中填写完整信息',
-                        id: contentMessageId
-                      }])
-                      return  // 不再继续处理
-                    }
-                    
-                    let messageContent = ''
-                    if (data.data.message) {
-                      messageContent = data.data.message
-                    } else if (data.data.success !== undefined) {
-                      messageContent = data.data.success 
-                        ? '操作成功完成' 
-                        : (data.data.error || '操作失败')
-                    }
-                    
-                    console.log('Create message, content:', messageContent)
-                    
-                    // 检查是否是入库操作，如果是则创建待确认的卡片数据?
-                    let inboundCard = null
-                    let inboundCards = null  // 澶氬晢鍝佸叆搴撴椂浣跨敤
-                    // 打印完整?data.data 对象
-                    console.log('[Inbound Debug] Complete data.data:', JSON.stringify(data.data, null, 2))
-                    console.log('[Inbound Debug] all_products exists:', 'all_products' in (data.data || {}))
-                    console.log('[Inbound Debug] all_products value:', data.data?.all_products)
-                    console.log('[Inbound Debug] all_products length:', data.data?.all_products?.length)
-                    
-                    if (data.data?.success && data.data?.pending && data.data?.card_data) {
-                      // 鏂规B锛氬垱寤哄緟纭鐨勫崱鐗囷紙status: 'pending'：
-                      try {
-                        // 缁熶竴浣跨敤 all_products（如果没有则使用 card_data 浣滀负鍗曞厓绱犳暟缁勶級
-                        console.log('[Debug] data.data.all_products original:', data.data.all_products)
-                        console.log('[Debug] data.data.card_data original:', data.data.card_data)
-                        
-                        const allProducts = data.data.all_products && data.data.all_products.length > 0 
-                          ? data.data.all_products 
-                          : [data.data.card_data]
-                        console.log('收到待确认商品数据，共', allProducts.length, '个商品', allProducts)
-                        
-                        // 统一创建卡片数组（无论单商品还是多商品）
-                        inboundCards = allProducts.map((cardData, index) => {
-                          console.log(`[Debug] Create card ${index+1}:`, cardData)
-                          const card = createNewCard({
-                            productName: cardData.product_name,
-                            goldWeight: cardData.weight,
-                            laborCostPerGram: cardData.labor_cost,
-                            pieceCount: cardData.piece_count,
-                            pieceLaborCost: cardData.piece_labor_cost,
-                            totalCost: cardData.total_cost,
-                            supplier: {
-                              id: 0,
-                              name: cardData.supplier || '未知供应商',
-                            },
-                            status: 'pending',
-                            source: 'api',
-                            createdAt: new Date(),
-                          })
-                          card.barcode = ''
-                          return card
-                        })
-                        console.log('Create inbound cards, total:', inboundCards.length, inboundCards)
-                        
-                        // 如果只有一个商品，同时设置 inboundCard（向后兼容）
-                        if (inboundCards.length === 1) {
-                          inboundCard = inboundCards[0]
-                          inboundCards = null  // 单商品时清空数组，使用单卡片显示
-                        }
-                      } catch (error) {
-                        console.error('Create inbound cards failed:', error)
-                      }
-                    } else if (data.data?.success && data.data?.order && data.data?.detail && !data.data?.pending) {
-                      // 如果已经有订单和明细，且没有pending标志，说明是已确认的（向后兼容或直接入库的情况）
-                      console.log('Detected confirmed inbound data (backward compatible)')
-                      const orderNo = data.data.order.order_no || ''
-                      if (orderNo.startsWith('RK')) {
-                        try {
-                          inboundCard = createCardFromBackend(
-                            data.data.detail,
-                            null
-                          )
-                          inboundCard.orderNo = orderNo
-                          inboundCard.orderId = data.data.order.id
-                          if (!inboundCard.barcode) {
-                            inboundCard.barcode = orderNo
-                          }
-                          inboundCard.status = 'confirmed'
-                          console.log('Create confirmed inbound card (backward compatible):', inboundCard)
-                        } catch (error) {
-                          console.error('Create inbound card failed:', error)
-                        }
-                      }
-                    } else {
-                      console.log('No match for inbound card condition, data:', data.data)
-                    }
-                    
-                    setMessages(prev => [...prev, {
-                      id: contentMessageId,
-                      type: 'system',
-                      content: messageContent,
-                      isStreaming: false,
-                      // 添加其他数据（如订单信息等）
-                      order: data.data.order,
-                      detail: data.data.detail,
-                      inventory: data.data.inventory,
-                      chartData: data.data.chart_data,
-                      pieData: data.data.pie_data,
-                      chartType: data.data.action,
-                      rawData: data.data.raw_data,  // 原始数据（用于详细数据展示）
-                      // AI意图识别结果（用于可视化显示）
-                      detectedIntent: data.data.action,
-                      // 添加入库卡片数据（单商品或多商品
-                      inboundCard: inboundCard,
-                      inboundCards: inboundCards,  // 澶氬晢鍝佸叆搴撴椂鐨勫崱鐗囨暟缁?
-                    }])
-                  } else {
-                    console.warn('complete event has no data field')
-                  }
-                } else {
-                  console.log('Update existing content message')
-                  // 如果有内容消息，更新?
-                  setMessages(prev => prev.map(msg => {
-                    if (msg.id === contentMessageId) {
-                      const updatedMsg = { 
-                        ...msg, 
-                        isStreaming: false
-                      }
-                      // 只有在有图表数据时才添加
-                      if (data.data?.chart_data) {
-                        updatedMsg.chartData = data.data.chart_data
-                        updatedMsg.chartType = data.data.action
-                      }
-                      if (data.data?.pie_data) {
-                        updatedMsg.pieData = data.data.pie_data
-                      }
-                      // 添加其他数据
-                      if (data.data?.order) updatedMsg.order = data.data.order
-                      if (data.data?.detail) updatedMsg.detail = data.data.detail
-                      if (data.data?.inventory) updatedMsg.inventory = data.data.inventory
-                      if (data.data?.raw_data) updatedMsg.rawData = data.data.raw_data
-                      
-                      // 如果是入库操作，创建卡片数据
-                      if (data.data?.success && data.data?.order && data.data?.detail) {
-                        const orderNo = data.data.order.order_no || ''
-                        if (orderNo.startsWith('RK')) {
-                          try {
-                            const inboundCard = createCardFromBackend(data.data.detail, null)
-                            inboundCard.orderNo = orderNo
-                            inboundCard.orderId = data.data.order.id
-                            if (!inboundCard.barcode) {
-                              inboundCard.barcode = orderNo // 浣跨敤璁㈠崟鍙蜂綔涓烘潯鐮?
-                            }
-                            inboundCard.status = 'confirmed'
-                            updatedMsg.inboundCard = inboundCard
-                          } catch (error) {
-                            console.error('Create inbound card failed:', error)
-                          }
-                        }
-                      }
-                      
-                      return updatedMsg
-                    }
-                    return msg
-                  }))
-                }
-              }
-                // 閿欒
-                else if (data.type === 'error') {
-                  setLoading(false)
-                  setMessages(prev => prev.map(msg => {
-                    if (msg.id === thinkingMessageId || msg.id === contentMessageId) {
-                      return { ...msg, type: 'system', content: `❌ ${data.message}`, isStreaming: false }
-                    }
-                    return msg
-                  }))
-                }
-              } catch (e) {
-                console.error('Parse SSE data failed:', e)
-              }
-            }
-          }
-        } catch (readError) {
-          console.error('Read SSE stream failed:', readError)
-          setLoading(false)
-          setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
-          setMessages(prev => [...prev, { 
-            type: 'system', 
-            content: `❌ 读取流式响应失败：{readError.message}` 
-          }])
-          break
-        }
-      }
-    } catch (error) {
-      // 如果是请求被取消（用户切换页面或发送新消息），静默处理
-      if (error.name === 'AbortError') {
-          console.log('SSE request cancelled')
-        setLoading(false)
-        setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
-        return
-      }
-      
-      setLoading(false)
-      // 移除思考过程消息
-      setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
-      
-      let errorMessage = `❌ 网络错误{error.message}`
-      
-      if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        errorMessage = '❌ 无法连接到服务器，请检查后端服务是否运行（http://localhost:8000）'
-      }
-      
-      setMessages(prev => [...prev, { 
-        type: 'system', 
-        content: errorMessage 
-      }])
-    }
-  }
-
-  // 处理完成响应的辅助函?
-  const handleCompleteResponse = (data, messageId) => {
-    if (!data.success) {
-      setMessages(prev => prev.map(msg => {
-        if (msg.id === messageId) {
-          return { ...msg, content: `❌ ${data.message || '处理失败'}` }
-        }
-        return msg
-      }))
-      return
-    }
-
-    // 处理各种响应类型（保持向后兼容）
-    let systemMessage = data.message || ''
-    
-    // 如果有原始数据，可以用于图表?
-    if (data.raw_data) {
-      // 可以根据需要处理raw_data
-    }
-
-    // 更新消息内容（如果需要添加额外信息）
-    setMessages(prev => prev.map(msg => {
-      if (msg.id === messageId) {
-        return { ...msg, content: systemMessage }
-      }
-      return msg
-    }))
-  }
-
-  // 保留旧的sendMessage作为备用（如果需要回退）
-  const sendMessageOld = async () => {
-    if (!input.trim() || loading) return
-
-    const userMessage = input.trim()
-    setInput('')
-    setMessages(prev => [...prev, { type: 'user', content: userMessage }])
-    setLoading(true)
-
-    try {
-      const response = await fetch(API_ENDPOINTS.CHAT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message: userMessage, user_role: userRole }),
-      })
-
-      const data = await response.json()
-      setLoading(false)
-
-      if (data.success) {
-        let systemMessage = data.message
-        
-        // 如果有思考过程，先显示思考过?
-        if (data.thinking_steps && data.thinking_steps.length > 0) {
-          systemMessage = "💡 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + systemMessage
-        }
-
-        // 如果是图表数据（查询所有库存）
-        if (data.chart_data) {
-          systemMessage += `\n\n📊 库存统计：\n` +
-            `商品种类：{data.summary.total_products}绉峔n` +
-            `供应商数量：${data.summary.total_suppliers}瀹禱n` +
-            `鎬诲簱瀛橈細${data.summary.total_weight.toFixed(2)}鍏媆n`
-          
-          setMessages(prev => [...prev, { 
-            type: 'system', 
-            content: systemMessage,
-            chartData: data.chart_data,
-            pieData: data.pie_data,
-            tableData: data.table_data
-          }])
-        }
-        // 如果是批量入库成功?
-        else if (data.order && data.details && data.details.length > 0) {
-          systemMessage += `\n\n📋 入库单信息：\n` +
-            `入库单号：{data.order.order_no}\n` +
-            `鍟嗗搧鏁伴噺：{data.details.length}涓猏n\n`
-          
-          // 显示每个商品的详细信息?
-          data.details.forEach((detail, index) => {
-            systemMessage += `鍟嗗搧${index + 1}锛歕n` +
-              `  商品名称：{detail.product_name}\n` +
-              `  閲嶉噺：{detail.weight}鍏媆n` +
-              `  宸ヨ垂：{detail.labor_cost}克鍏媆n` +
-              `  供应商：${detail.supplier}\n` +
-              `  璇ュ晢鍝佸伐璐癸細${detail.total_cost.toFixed(2)}鍏僜n\n`
-          })
-          
-          systemMessage += `💰 鍚堣宸ヨ垂：{data.total_labor_cost.toFixed(2)}鍏僜n\n`
-          
-          // 显示库存更新
-          if (data.inventories && data.inventories.length > 0) {
-            systemMessage += `📦 库存更新：\n`
-            data.inventories.forEach(inv => {
-              systemMessage += `  ${inv.product_name}：{inv.total_weight}鍏媆n`
-            })
-          }
-          
-          setMessages(prev => [...prev, { 
-            type: 'system', 
-            content: systemMessage 
-          }])
-        }
-        // 向后兼容：单个商品入库（旧格式）
-        else if (data.order && data.detail && data.inventory) {
-          systemMessage += `\n\n📋 入库单信息：\n` +
-            `入库单号：{data.order.order_no}\n` +
-            `商品名称：{data.detail.product_name}\n` +
-            `重量：${data.detail.weight}克\n` +
-            `工费：${data.detail.labor_cost}元/克\n` +
-            `供应商：${data.detail.supplier}\n` +
-            `总成本：${data.detail.total_cost.toFixed(2)}元\n\n` +
-            `📦 当前库存：${data.inventory.total_weight}克`
-
-          setMessages(prev => [...prev, { 
-            type: 'system', 
-            content: systemMessage 
-          }])
-        }
-        // 如果是查询单个库存（保留向后兼容）
-        else if (data.inventory && !data.order) {
-          systemMessage += `\n\n📦 库存信息：\n` +
-            `商品名称：${data.inventory.product_name}\n` +
-            `总重量：${data.inventory.total_weight}克\n`
-          
-          // 显示所有工费明?
-          if (data.inventory.labor_cost_details && data.inventory.labor_cost_details.length > 0) {
-          systemMessage += `\n💵 工费明细：\n`
-            data.inventory.labor_cost_details.forEach((detail, idx) => {
-            systemMessage += `  记录${idx + 1}：工费${detail.labor_cost.toFixed(2)}元/克，重量${detail.weight}克，总工费${detail.total_cost.toFixed(2)}元（入库单：${detail.order_no}）\n`
-            })
-          }
-          
-          systemMessage += (data.inventory.last_update ? 
-            `\n最后更新：${new Date(data.inventory.last_update).toLocaleString('zh-CN')}` : 
-            '')
-
-          setMessages(prev => [...prev, { 
-            type: 'system', 
-            content: systemMessage,
-            laborCostDetails: data.inventory.labor_cost_details  // 用于表格展示
-          }])
-          return
-        }
-        // 如果是查询所有库存（返回inventories鏁扮粍： 保留向后兼容
-        else if (data.inventories && Array.isArray(data.inventories) && data.inventories.length > 0 && !data.action) {
-          systemMessage += `\n\n📦 商品列表：\n`
-          data.inventories.forEach((inv, idx) => {
-            systemMessage += `${idx + 1}. ${inv.product_name}：${inv.total_weight}克`
-            if (inv.latest_labor_cost) {
-              systemMessage += `，最新工费：${inv.latest_labor_cost}元/克`
-            }
-            if (inv.avg_labor_cost) {
-              systemMessage += `，平均工费：${inv.avg_labor_cost}元/克`
-            }
-            systemMessage += `\n`
-          })
-          
-          if (data.total_weight) {
-            systemMessage += `\n💵 总库存：${data.total_weight.toFixed(2)}克`
-          }
-          
-          setMessages(prev => [...prev, { 
-            type: 'system', 
-            content: systemMessage 
-          }])
-          return
-        }
-        // 如果是查询入库单详情（保留向后兼容）
-        else if (data.order && data.details && !data.order.order_no.startsWith('XS')) {
-          systemMessage += `\n\n📋 入库单详情：\n` +
-            `入库单号：${data.order.order_no}\n` +
-            `入库时间：${new Date(data.order.create_time).toLocaleString('zh-CN')}\n` +
-            `状态：${data.order.status}\n\n` +
-            `商品明细：\n`
-          data.details.forEach((detail, idx) => {
-            systemMessage += `${idx + 1}. ${detail.product_category || detail.product_name}：${detail.weight}克，工费${detail.labor_cost}元/克，总工费${detail.total_cost.toFixed(2)}元\n`
-          })
-          
-          setMessages(prev => [...prev, { 
-            type: 'system', 
-            content: systemMessage 
-          }])
-          return
-        }
-        // 如果是查询最近的入库单列表（保留向后兼容）
-        else if (data.orders && Array.isArray(data.orders) && data.orders.length > 0 && !data.orders[0].order_no.startsWith('XS')) {
-          systemMessage += `\n\n📋 最近的入库单：\n`
-          data.orders.forEach((order, idx) => {
-            systemMessage += `${idx + 1}. ${order.order_no} - ${new Date(order.create_time).toLocaleString('zh-CN')} (${order.status})\n`
-          })
-          
-          setMessages(prev => [...prev, { 
-            type: 'system', 
-            content: systemMessage 
-          }])
-          return
-        }
-        // 处理۵ɹ
-        else if (data.order && data.order.order_no && data.order.order_no.startsWith('XS')) {
-          // 这是销售单（销售单号以XS开头）
-          systemMessage += `\n\n📋 销售单信息：\n` +
-            `销售单号：${data.order.order_no}\n` +
-            `客户：${data.order.customer_name}\n` +
-            `业务员：${data.order.salesperson}\n` +
-            `门店代码：${data.order.store_code || '未填写'}\n` +
-            `日期：${new Date(data.order.order_date).toLocaleString('zh-CN')}\n` +
-            `状态：${data.order.status}\n\n` +
-            `商品明细：\n`
-          
-          if (data.order.details && data.order.details.length > 0) {
-            data.order.details.forEach((detail, idx) => {
-              systemMessage += `${idx + 1}. ${detail.product_name}：${detail.weight}克，工费${detail.labor_cost}元/克，总工费${detail.total_labor_cost.toFixed(2)}元\n`
-            })
-          }
-          
-          systemMessage += `\n💵 合计：\n` +
-            `总克重：${data.order.total_weight}克\n` +
-            `总工费：${data.order.total_labor_cost.toFixed(2)}元`
-          
-          setMessages(prev => [...prev, { 
-            type: 'system', 
-            content: systemMessage,
-            salesOrder: data.order  // 保存完整数据用于后续展示
-          }])
-        }
-        // 处理销售单列表查询
-        else if (data.orders && Array.isArray(data.orders) && data.orders.length > 0 && data.orders[0].order_no && data.orders[0].order_no.startsWith('XS')) {
-          systemMessage += `\n\n📋 销售单列表：\n`
-          data.orders.forEach((order, idx) => {
-            systemMessage += `${idx + 1}. ${order.order_no} - ${order.customer_name} - ${new Date(order.order_date).toLocaleString('zh-CN')} - ${order.status}\n`
-          })
-          
-          setMessages(prev => [...prev, { 
-            type: 'system', 
-            content: systemMessage,
-            salesOrders: data.orders
-          }])
-        }
-        // 处理客户创建/查询
-        else if (data.customer) {
-          systemMessage += `\n\n👤 客户信息：\n` +
-            `客户编号：${data.customer.customer_no}\n` +
-            `客户名称：${data.customer.name}\n` +
-            `电话：${data.customer.phone || '未填写'}\n` +
-            `类型：${data.customer.customer_type}\n` +
-            `累计购买：${data.customer.total_purchase_amount.toFixed(2)}元\n` +
-            `购买次数：${data.customer.total_purchase_count}次`
-          
-          setMessages(prev => [...prev, { 
-            type: 'system', 
-            content: systemMessage 
-          }])
-        }
-        // 处理客户列表查询
-        else if (data.customers && Array.isArray(data.customers)) {
-          systemMessage += `\n\n👤 客户列表：\n` +
-            `共 ${data.customers.length} 位客户\n\n`
-          
-          data.customers.forEach((customer, idx) => {
-            systemMessage += `${idx + 1}. ${customer.name} (${customer.customer_no}) - ${customer.phone || '无电话'} - 累计购买${customer.total_purchase_amount.toFixed(2)}元\n`
-          })
-          
-          setMessages(prev => [...prev, { 
-            type: 'system', 
-            content: systemMessage 
-          }])
-        }
-        // 处理库存检查错误?
-        else if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
-          systemMessage += `\n\n❌ 库存检查失败：\n`
-          data.inventory_errors.forEach((error, idx) => {
-            systemMessage += `${idx + 1}. ${error.product_name}：{error.error}\n` +
-              `   需要：${error.required_weight}鍏媆n` +
-              `   鍙敤：{error.available_weight}鍏媆n`
-            if (error.reserved_weight !== undefined) {
-              systemMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
-            }
-            systemMessage += `\n`
-          })
-          
-          setMessages(prev => [...prev, { 
-            type: 'system', 
-            content: systemMessage,
-            inventoryErrors: data.inventory_errors
-          }])
-        }
-        else {
-          setMessages(prev => [...prev, { 
-            type: 'system', 
-            content: systemMessage 
-          }])
-        }
-      } else {
-        let errorMessage = data.message
-        
-        // 如果有思考过程，先显示思考过?
-        if (data.thinking_steps && data.thinking_steps.length > 0) {
-          errorMessage = "💡 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + errorMessage
-        }
-        
-        // 处理库存检查错误（在错误响应中
-        if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
-          errorMessage += `\n\n❌ 库存检查失败：\n`
-          data.inventory_errors.forEach((error, idx) => {
-            errorMessage += `${idx + 1}. ${error.product_name}：{error.error}\n` +
-              `   需要：${error.required_weight}鍏媆n` +
-              `   鍙敤：{error.available_weight}鍏媆n`
-            if (error.reserved_weight !== undefined) {
-              errorMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
-            }
-            if (error.total_weight !== undefined) {
-              errorMessage += `   鎬诲簱瀛橈細${error.total_weight}鍏媆n`
-            }
-            errorMessage += `\n`
-          })
-          
-          setMessages(prev => [...prev, { 
-            type: 'system', 
-            content: errorMessage,
-            inventoryErrors: data.inventory_errors
-          }])
-          setLoading(false)
-          return
-        }
-        
-        // 如果有缺失字段列表，格式化显示?
-        if (data.missing_fields && data.missing_fields.length > 0) {
-          errorMessage += `\n\n❌ 缺失的必填项：\n`
-          data.missing_fields.forEach(field => {
-            errorMessage += `  • ${field}\n`
-          })
-          errorMessage += `\n请补充完整信息后重新提交。`
-        }
-        
-        // 如果是多供应商错误，添加规则说明
-        if (data.suppliers && Array.isArray(data.suppliers) && data.suppliers.length > 1) {
-            errorMessage += `\n\n📋 系统规则提醒：\n`
-            errorMessage += `每张入库单只能对应一个供应商。如果一次入库包含多个供应商的商品，请按供应商拆分为多张入库单分别提交。\n`
-            errorMessage += `例如：先提交"供应商A的商品1、商品2"，再提交"供应商B的商品3、商品4"。`
-        }
-        
-        setMessages(prev => [...prev, { 
-          type: 'system', 
-          content: errorMessage 
-        }])
-      }
-    } catch (error) {
-      setLoading(false)
-      let errorMessage = `❌ 网络错误{error.message}`
-      
-      // 提供更详细的错误信息
-      if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        errorMessage = '❌ 无法连接到服务器，请检查后端服务是否运行（http://localhost:8000）'
-      } else if (error.name === 'AbortError') {
-        errorMessage = '❌ 请求超时，请稍后重试'
-      }
-      
-      setMessages(prev => [...prev, { 
-        type: 'system', 
-        content: errorMessage 
-      }])
-    }
-  }
+  })
 
   // 处理图片上传（接收 File 对象，由 InputArea 组件传入）
   const handleImageUpload = async (file) => {
     if (!file) return
 
-    // 楠岃瘉鏂囦欢绫诲瀷
+    // 验证文件类型
     if (!file.type.startsWith('image/')) {
       setMessages(prev => [...prev, {
         type: 'system',
-        content: '❌ 璇蜂笂浼犲浘鐗囨枃浠讹紙jpg銆乸ng绛夋牸寮忥級'
+        content: '❌ 请上传图片文件（jpg、png等格式）'
       }])
       return
     }
@@ -980,7 +158,7 @@ function App() {
         // 显示用户上传的图片?
         setMessages(prev => [...prev, {
           type: 'user',
-          content: `馃摲 上传入库单图片：${file.name}`,
+          content: `📷 上传入库单图片：${file.name}`,
           image: imageDataUrl
         }])
         
@@ -1112,9 +290,9 @@ function App() {
         // 如果是图表数据（查询所有库存）
         if (data.chart_data) {
           systemMessage += `\n\n📊 库存统计：\n` +
-            `商品种类：{data.summary.total_products}绉峔n` +
-            `供应商数量：${data.summary.total_suppliers}瀹禱n` +
-            `鎬诲簱瀛橈細${data.summary.total_weight.toFixed(2)}鍏媆n`
+            `商品种类：${data.summary.total_products}种\n` +
+            `供应商数量：${data.summary.total_suppliers}家\n` +
+            `总库存：${data.summary.total_weight.toFixed(2)}克\n`
           
           setMessages(prev => [...prev, { 
             type: 'system', 
@@ -1127,13 +305,13 @@ function App() {
         // 如果是批量入库成功?
         else if (data.order && data.details && data.details.length > 0 && data.order.order_no && data.order.order_no.startsWith('RK')) {
           systemMessage += `\n\n📋 入库单信息：\n` +
-            `入库单号：{data.order.order_no}\n` +
-            `鍟嗗搧鏁伴噺：{data.details.length}涓猏n\n`
+            `入库单号：${data.order.order_no}\n` +
+            `商品数量：${data.details.length}个\n\n`
           
           data.details.forEach((detail, index) => {
-            systemMessage += `鍟嗗搧${index + 1}锛歕n` +
-              `  商品名称：{detail.product_category || detail.product_name}\n` +
-              `  閲嶉噺：{detail.weight}鍏媆n` +
+            systemMessage += `商品${index + 1}：\n` +
+              `  商品名称：${detail.product_category || detail.product_name}\n` +
+              `  重量：${detail.weight}克\n` +
               `  工费：${detail.labor_cost}元/克\n` +
               `  供应商：${detail.supplier}\n` +
               `  该商品工费：${detail.total_cost.toFixed(2)}元\n\n`
@@ -1153,7 +331,7 @@ function App() {
             content: systemMessage
           }])
         }
-        // 处理۵ɹ（OCR确认后也可能创建销售单
+        // 处理销售单（OCR确认后也可能创建销售单
         else if (data.order && data.order.order_no && data.order.order_no.startsWith('XS')) {
           systemMessage += `\n\n📋 销售单信息：\n` +
             `销售单号：${data.order.order_no}\n` +
@@ -1180,7 +358,7 @@ function App() {
             salesOrder: data.order
           }])
         }
-        // 如果是查询所有库存（返回inventories鏁扮粍：
+        // 如果是查询所有库存（返回inventories数组：
         else if (data.inventories && Array.isArray(data.inventories) && data.inventories.length > 0) {
           systemMessage += `\n\n📦 商品列表：\n`
           data.inventories.forEach((inv, idx) => {
@@ -1207,11 +385,11 @@ function App() {
         else if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
           systemMessage += `\n\n❌ 库存检查失败：\n`
           data.inventory_errors.forEach((error, idx) => {
-            systemMessage += `${idx + 1}. ${error.product_name}：{error.error}\n` +
-              `   需要：${error.required_weight}鍏媆n` +
-              `   鍙敤：{error.available_weight}鍏媆n`
+            systemMessage += `${idx + 1}. ${error.product_name}：${error.error}\n` +
+              `   需要：${error.required_weight}克\n` +
+              `   可用：${error.available_weight}克\n`
             if (error.reserved_weight !== undefined) {
-              systemMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
+              systemMessage += `   已预留：${error.reserved_weight}克\n`
             }
             systemMessage += `\n`
           })
@@ -1226,11 +404,11 @@ function App() {
         else if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
           systemMessage += `\n\n❌ 库存检查失败：\n`
           data.inventory_errors.forEach((error, idx) => {
-            systemMessage += `${idx + 1}. ${error.product_name}：{error.error}\n` +
-              `   需要：${error.required_weight}鍏媆n` +
-              `   鍙敤：{error.available_weight}鍏媆n`
+            systemMessage += `${idx + 1}. ${error.product_name}：${error.error}\n` +
+              `   需要：${error.required_weight}克\n` +
+              `   可用：${error.available_weight}克\n`
             if (error.reserved_weight !== undefined) {
-              systemMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
+              systemMessage += `   已预留：${error.reserved_weight}克\n`
             }
             systemMessage += `\n`
           })
@@ -1241,7 +419,7 @@ function App() {
             inventoryErrors: data.inventory_errors
           }])
         }
-        // 鍏朵粬鎴愬姛鍝嶅簲
+        // 其他成功响应
         else {
           setMessages(prev => [...prev, {
             type: 'system',
@@ -1259,14 +437,14 @@ function App() {
         if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
           errorMessage += `\n\n❌ 库存检查失败：\n`
           data.inventory_errors.forEach((error, idx) => {
-            errorMessage += `${idx + 1}. ${error.product_name}：{error.error}\n` +
-              `   需要：${error.required_weight}鍏媆n` +
-              `   鍙敤：{error.available_weight}鍏媆n`
+            errorMessage += `${idx + 1}. ${error.product_name}：${error.error}\n` +
+              `   需要：${error.required_weight}克\n` +
+              `   可用：${error.available_weight}克\n`
             if (error.reserved_weight !== undefined) {
-              errorMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
+              errorMessage += `   已预留：${error.reserved_weight}克\n`
             }
             if (error.total_weight !== undefined) {
-              errorMessage += `   鎬诲簱瀛橈細${error.total_weight}鍏媆n`
+              errorMessage += `   总库存：${error.total_weight}克\n`
             }
             errorMessage += `\n`
           })
@@ -1282,7 +460,7 @@ function App() {
 
         // 如果是多供应商错误，添加规则说明
         if (data.suppliers && Array.isArray(data.suppliers) && data.suppliers.length > 1) {
-          errorMessage += `\n\n📋 绯荤粺瑙勫垯鎻愰啋锛歕n`
+          errorMessage += `\n\n📋 系统规则提醒：\n`
           errorMessage += `每张入库单只能对应一个供应商。如果一次入库包含多个供应商的商品，请按供应商拆分为多张入库单分别提交。\n`
         }
 
@@ -1295,7 +473,7 @@ function App() {
       setLoading(false)
       setMessages(prev => [...prev, {
         type: 'system',
-        content: `❌ 网络错误{error.message}`
+        content: `❌ 网络错误：${error.message}`
       }])
     }
   }
@@ -1307,7 +485,7 @@ function App() {
     }
   }
 
-  // 璇█閫夋嫨椤?
+      // 语言选择页面
   if (showLanguageSelector) {
     return <LanguageSelector onSelect={() => setShowLanguageSelector(false)} />
   }
@@ -1326,7 +504,7 @@ function App() {
         onDeleteConversation={deleteConversation}
       />
 
-      {/* 涓诲唴瀹瑰尯鍩?*/}
+      {/* 主内容区域 */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header
           currentPage={currentPage}
@@ -1679,7 +857,7 @@ ${itemsList}
           // 加载历史对话到当前聊?
           if (sessionMessages && sessionMessages.length > 0) {
             const formattedMessages = sessionMessages.map(msg => ({
-              type: msg.message_type === 'user' ? 'user' : 'system',  // 浣跨敤 type 鍜?system（与渲染逻辑一致）
+              type: msg.message_type === 'user' ? 'user' : 'system',  // 使用 type 和 system（与渲染逻辑一致）
               content: msg.content,
               timestamp: msg.created_at
             }))
@@ -1736,7 +914,7 @@ ${itemsList}
         showToast={showToast}
       />
       
-      {/* Toast 閫氱煡瀹瑰櫒 */}
+      {/* Toast 通知容器 */}
       <Toaster 
         position="top-center"
         toastOptions={{

@@ -5,7 +5,7 @@ export const WithdrawalConfirmCard = ({ msg, setMessages, API_BASE_URL }) => {
   return (
     <div className="flex justify-start">
       <div className="bg-white rounded-2xl shadow-lg border border-blue-200 max-w-md overflow-hidden">
-        {/* 鏍囬鏍? */}
+        {/* 标题栏 */}
         <div className="bg-gradient-to-r from-blue-500 to-indigo-500 px-5 py-3">
           <div className="flex items-center gap-2 text-white">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -15,7 +15,7 @@ export const WithdrawalConfirmCard = ({ msg, setMessages, API_BASE_URL }) => {
           </div>
         </div>
         
-        {/* 内容? */}
+        {/* 内容 */}
         <div className="p-5 space-y-4">
           {/* 客户信息 */}
           <div className="flex items-center gap-3">
@@ -92,7 +92,7 @@ export const WithdrawalConfirmCard = ({ msg, setMessages, API_BASE_URL }) => {
               }}
               className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2.5 px-4 rounded-xl transition-colors"
             >
-              纭骞舵墦鍗?
+              确认并打印
             </button>
             <button
               onClick={() => {
