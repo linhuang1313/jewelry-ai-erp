@@ -39,6 +39,10 @@ export const InputArea = ({
     if (file) {
       onImageUpload(file)
     }
+    // Reset file input so the same file can be re-uploaded
+    if (e.target) {
+      e.target.value = ''
+    }
   }
 
   return (

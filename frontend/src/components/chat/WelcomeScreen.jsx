@@ -72,11 +72,11 @@ export const WelcomeScreen = ({
           <span className="text-sm text-gray-700">
             {(() => {
               const hour = new Date().getHours()
-              if (hour < 9) return '早上好！今天也要加油哦'
+              if (hour < 9) return '早上好！今天也要加油哦 ☀️'
               if (hour < 12) return '上午好！有什么可以帮您的？'
-              if (hour < 14) return '中午好！记得休息一下'
+              if (hour < 14) return '中午好！记得休息一下 🍵'
               if (hour < 18) return '下午好！我随时准备为您服务'
-              return '晚上好！辛苦了'
+              return '晚上好！辛苦了 🌙'
             })()}
           </span>
         </div>
@@ -84,7 +84,7 @@ export const WelcomeScreen = ({
       
       {/* 智能快捷建议按钮 */}
       <div className="flex flex-wrap justify-center gap-2 mb-6">
-        <span className="text-gray-400 text-sm">试试：</span>
+        <span className="text-gray-400 text-sm">💡 试试：</span>
         {getSuggestButtons().map((btn, idx) => (
           <button 
             key={idx}
@@ -112,7 +112,7 @@ export const WelcomeScreen = ({
             onClick={() => setShowQuickOrderModal(true)}
             className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
           >
-            <div className="text-2xl mb-3">🧾</div>
+            <div className="text-2xl mb-3">📝</div>
             <h3 className="font-semibold text-gray-900 mb-2">快速开单</h3>
             <p className="text-sm text-gray-600">创建销售单</p>
           </div>
@@ -124,7 +124,7 @@ export const WelcomeScreen = ({
             onClick={() => setCurrentPage('warehouse')}
             className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
           >
-            <div className="text-2xl mb-3">📥</div>
+            <div className="text-2xl mb-3">📦</div>
             <h3 className="font-semibold text-gray-900 mb-2">接收库存</h3>
             <p className="text-sm text-gray-600">接收从仓库转移的商品</p>
           </div>
@@ -167,7 +167,7 @@ export const WelcomeScreen = ({
         )}
         
         {/* 快捷退货卡片 - 柜台 */}
-        {hasPermission(userRole, 'canReturnToWarehouse') && !hasPermission(userRole, 'canReturnToSupplier') && (
+        {hasPermission(userRole, 'canReturnToWarehouse') && (
           <div 
             onClick={() => setShowQuickReturnModal(true)}
             className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
@@ -214,7 +214,7 @@ export const WelcomeScreen = ({
             onClick={() => setCurrentPage('finance')}
             className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
           >
-            <div className="text-2xl mb-3">💰</div>
+            <div className="text-2xl mb-3">💵</div>
             <h3 className="font-semibold text-gray-900 mb-2">财务对账</h3>
             <p className="text-sm text-gray-600">查看财务对账情况</p>
           </div>
@@ -226,7 +226,7 @@ export const WelcomeScreen = ({
             onClick={() => setCurrentPage('supplier')}
             className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
           >
-            <div className="text-2xl mb-3">🏭</div>
+            <div className="text-2xl mb-3">🏢</div>
             <h3 className="font-semibold text-gray-900 mb-2">供应商管理</h3>
             <p className="text-sm text-gray-600">管理供应商信息</p>
           </div>
@@ -256,6 +256,18 @@ export const WelcomeScreen = ({
           </div>
         )}
         
+        {/* 数据导出卡片 */}
+        {hasPermission(userRole, 'canExport') && (
+          <div 
+            onClick={() => setCurrentPage('export')}
+            className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+          >
+            <div className="text-2xl mb-3">📥</div>
+            <h3 className="font-semibold text-gray-900 mb-2">数据导出</h3>
+            <p className="text-sm text-gray-600">导出各类数据报表</p>
+          </div>
+        )}
+        
         {/* 金料管理卡片 */}
         {(hasPermission(userRole, 'canViewGoldMaterial') || hasPermission(userRole, 'canManageGoldMaterial')) && (
           <div 
@@ -277,6 +289,20 @@ export const WelcomeScreen = ({
             <div className="text-2xl mb-3">🏷️</div>
             <h3 className="font-semibold text-gray-900 mb-2">商品编码</h3>
             <p className="text-sm text-gray-600">管理F编码、FL编码</p>
+          </div>
+        )}
+        
+        {/* 创建付料单卡片 */}
+        {hasPermission(userRole, 'canCreateGoldPayment') && (
+          <div 
+            onClick={() => {
+              setCurrentPage('gold-material');
+            }}
+            className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
+          >
+            <div className="text-2xl mb-3">📝</div>
+            <h3 className="font-semibold text-gray-900 mb-2">创建付料单</h3>
+            <p className="text-sm text-gray-600">支付供应商金料</p>
           </div>
         )}
       </div>

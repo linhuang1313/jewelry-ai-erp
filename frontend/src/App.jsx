@@ -22,7 +22,6 @@ import { QuickOrderModal } from './components/QuickOrderModal'
 import { QuickReturnModal } from './components/QuickReturnModal'
 import QuickInboundModal from './components/QuickInboundModal'
 import SalesOrdersPage from './components/SalesOrdersPage'
-import InventoryOverview from './components/InventoryOverview'
 import ManagerDashboardCard from './components/ManagerDashboardCard'
 import { SupplierPage } from './components/SupplierPage'
 import ReturnPage from './components/ReturnPage'
@@ -31,10 +30,10 @@ import LoanPage from './components/LoanPage'
 import DocumentCenterPage from './components/DocumentCenterPage'
 import ProductCodePage from './components/ProductCodePage'
 import InboundOrdersPage from './components/InboundOrdersPage'
-import LineNumberedTextarea from './components/LineNumberedTextarea'
 import { USER_ROLES } from './constants/roles'
 import { Header, Sidebar } from './components/layout'
-import { ThinkingIndicator, ThinkingMessage } from './components/chat'
+import { ThinkingIndicator, ThinkingMessage, WelcomeScreen, InputArea } from './components/chat'
+import { OCRModal } from './components/modals'
 import { ChatHistoryPanel } from './components/ChatHistoryPanel'
 import { getUserIdentifier, getHistoryKey, getLastSessionKey } from './utils/userIdentifier'
 import { parseMessageHiddenMarkers } from './utils/messageParser'
@@ -82,14 +81,12 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)  // 图片上传状态
   const messagesEndRef = useRef(null)
-  const fileInputRef = useRef(null)  // 文件输入引用
   const abortControllerRef = useRef(null)  // SSE 请求取消控制?
   
   // OCR编辑对话框相关状态
   const [showOCRModal, setShowOCRModal] = useState(false)
   const [ocrResult, setOcrResult] = useState('')
   const [uploadedImage, setUploadedImage] = useState(null)
-  const ocrTextareaRef = useRef(null)  // 鐢ㄤ簬鑷姩鑱氱劍
   
   // 历史对话记录相关状态
   const [conversationHistory, setConversationHistory] = useState([]) // 历史对话列表
@@ -957,23 +954,6 @@ function App() {
     }
   }
 
-  // 当对话框打开时自动聚焦?
-  useEffect(() => {
-    if (showOCRModal && ocrTextareaRef.current) {
-      // 延迟聚焦，确保对话框已完全渲染?
-      const timer = setTimeout(() => {
-        ocrTextareaRef.current?.focus()
-        // 将光标移到文本末尾
-        if (ocrTextareaRef.current) {
-          const length = ocrTextareaRef.current.value.length
-          ocrTextareaRef.current.setSelectionRange(length, length)
-        }
-      }, 150)
-      
-      return () => clearTimeout(timer)
-    }
-  }, [showOCRModal])
-
   const sendMessage = async () => {
     if (!input.trim() || loading) return
 
@@ -1797,9 +1777,8 @@ function App() {
     }
   }
 
-  // 处理图片上传
-  const handleImageUpload = async (event) => {
-    const file = event.target.files?.[0]
+  // 处理图片上传（接收 File 对象，由 InputArea 组件传入）
+  const handleImageUpload = async (file) => {
     if (!file) return
 
     // 楠岃瘉鏂囦欢绫诲瀷
@@ -1911,10 +1890,6 @@ function App() {
       }])
     }
 
-    // 清空文件输入
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
   }
 
   // OCR完成后打开对话?
@@ -2212,290 +2187,15 @@ function App() {
             <div className="flex-1 overflow-y-auto px-6 py-8">
           <div className="max-w-4xl mx-auto space-y-6">
         {messages.length === 0 && (
-              <div className="text-center pt-8">
-                {/* 智能时间问候 + AI标识 */}
-                <div className="mb-6">
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-full border border-amber-200">
-                    <img src="/ai-avatar.png" alt="AI" className="w-6 h-6 rounded-full object-cover" />
-                    <span className="text-sm text-gray-700">
-                      {(() => {
-                        const hour = new Date().getHours()
-                        if (hour < 9) return '早上好！今天也要加油哦 ☀️'
-                        if (hour < 12) return '上午好！有什么可以帮您的？'
-                        if (hour < 14) return '中午好！记得休息一下 🍵'
-                        if (hour < 18) return '下午好！我随时准备为您服务'
-                        return '晚上好！辛苦了 🌙'
-                      })()}
-                    </span>
-                  </div>
-                </div>
-                
-                {/* 智能快捷建议按钮 - 可点击直接发送 */}
-                <div className="flex flex-wrap justify-center gap-2 mb-6">
-                  <span className="text-gray-400 text-sm">💡 试试：</span>
-                  {userRole === 'counter' && (
-                    <>
-                      <button onClick={() => setInput('帮我开一张销售单')} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">开销售单</button>
-                      <button onClick={() => setInput('查询今天的销售情况')} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">今日销售</button>
-                      <button onClick={() => setInput('库存还有多少')} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors">查库存</button>
-                    </>
-                  )}
-                  {userRole === 'product' && (
-                    <>
-                      <button onClick={() => setInput('古法黄金戒指 100克 工费6元 供应商金源珠宝 帮我入库')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">入库商品</button>
-                      <button onClick={() => setInput('查询今天的入库单')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">今日入库</button>
-                      <button onClick={() => setInput('库存分析')} className="px-3 py-1.5 text-sm bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100 transition-colors">库存分析</button>
-                    </>
-                  )}
-                  {userRole === 'settlement' && (
-                    <>
-                      <button onClick={() => setInput('查看今天待结算的订单')} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">待结算</button>
-                      <button onClick={() => setInput('张老板提5克')} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">客户提料</button>
-                      <button onClick={() => setInput('收料登记')} className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-full hover:bg-green-100 transition-colors">收料登记</button>
-                    </>
-                  )}
-                  {userRole === 'finance' && (
-                    <>
-                      <button onClick={() => setInput('查看本月财务对账情况')} className="px-3 py-1.5 text-sm bg-purple-50 text-purple-600 rounded-full hover:bg-purple-100 transition-colors">月度对账</button>
-                      <button onClick={() => setInput('今日收款汇总')} className="px-3 py-1.5 text-sm bg-purple-50 text-purple-600 rounded-full hover:bg-purple-100 transition-colors">收款汇总</button>
-                    </>
-                  )}
-                  {userRole === 'sales' && (
-                    <>
-                      <button onClick={() => setInput('帮我查询张三今天的销售情况')} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">客户销售</button>
-                      <button onClick={() => setInput('王五有多少欠款')} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">欠款查询</button>
-                      <button onClick={() => setInput('查询退货记录')} className="px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">退货记录</button>
-                    </>
-                  )}
-                  {userRole === 'material' && (
-                    <>
-                      <button onClick={() => setInput('查看今日金料收付情况')} className="px-3 py-1.5 text-sm bg-yellow-50 text-yellow-600 rounded-full hover:bg-yellow-100 transition-colors">今日收付</button>
-                      <button onClick={() => setInput('金料库存统计')} className="px-3 py-1.5 text-sm bg-yellow-50 text-yellow-600 rounded-full hover:bg-yellow-100 transition-colors">库存统计</button>
-                    </>
-                  )}
-                  {userRole === 'manager' && (
-                    <>
-                      <button onClick={() => setInput('查看今日销售数据汇总')} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">今日汇总</button>
-                      <button onClick={() => setInput('本月业绩分析')} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">业绩分析</button>
-                      <button onClick={() => setInput('库存预警')} className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors">库存预警</button>
-                    </>
-                  )}
-                </div>
-                
-                {/* 库存概览 - 商品专员、柜台、结算、管理层可见 */}
-                {(userRole === 'product' || userRole === 'counter' || userRole === 'settlement' || userRole === 'manager') && (
-                  <div className="max-w-2xl mx-auto mb-6">
-                    <InventoryOverview userRole={userRole} />
-          </div>
-        )}
-
-                {/* 角色快捷操作卡片 - 使用权限控制 */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
-                  
-                  {/* 蹇€熷紑鍗曞崱鐗?- 需要创建销售单权限 */}
-                  {hasPermission(userRole, 'canCreateSales') && (
-                    <div 
-                      onClick={() => setShowQuickOrderModal(true)}
-                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">📝</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">快速开单</h3>
-                      <p className="text-sm text-gray-600">创建销售单</p>
-                    </div>
-                  )}
-                  
-                  {/* 接收库存卡片 - 需要接收库存权限*/}
-                  {hasPermission(userRole, 'canReceiveTransfer') && (
-                    <div 
-                      onClick={() => setCurrentPage('warehouse')}
-                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">📦</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">接收库存</h3>
-                      <p className="text-sm text-gray-600">接收从仓库转移的商品</p>
-                    </div>
-                  )}
-                  
-                  {/* 快捷入库卡片 - 需要入库权限?*/}
-                  {hasPermission(userRole, 'canInbound') && (
-                    <div 
-                      onClick={() => setShowQuickInboundModal(true)}
-                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">📦</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">快捷入库</h3>
-                      <p className="text-sm text-gray-600">表格形式批量入库</p>
-                    </div>
-                  )}
-                  
-                  {/* 库存转移卡片 - 需要转移权限*/}
-                  {hasPermission(userRole, 'canTransfer') && (
-                    <div 
-                      onClick={() => setCurrentPage('warehouse')}
-                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">📊</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">分仓库存</h3>
-                      <p className="text-sm text-gray-600">管理仓库库存和转移</p>
-                    </div>
-                  )}
-                  
-                  {/* 快捷退货卡片 - 商品专员（退给供应商）*/}
-                  {hasPermission(userRole, 'canReturnToSupplier') && (
-                    <div 
-                      onClick={() => setShowQuickReturnModal(true)}
-                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">🔄</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">快捷退货</h3>
-                      <p className="text-sm text-gray-600">快速创建退货单（退给供应商）</p>
-                    </div>
-                  )}
-                  
-                  {/* 快捷退货卡片 - 柜台（退给商品部）*/}
-                  {hasPermission(userRole, 'canReturnToWarehouse') && (
-                    <div 
-                      onClick={() => setShowQuickReturnModal(true)}
-                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">🔄</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">快捷退货</h3>
-                      <p className="text-sm text-gray-600">快速创建退货单（退给商品部）</p>
-                    </div>
-                  )}
-                  
-                  {/* 结算管理卡片 - 需要创建结算单权限 */}
-                  {hasPermission(userRole, 'canCreateSettlement') && (
-                    <div 
-                      onClick={() => setCurrentPage('settlement')}
-                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">📋</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">待结算订单</h3>
-                      <p className="text-sm text-gray-600">查看待结算的销售单</p>
-                    </div>
-                  )}
-                  
-                  {/* 客户管理卡片 - 需要查看或管理权限 */}
-                  {(hasPermission(userRole, 'canViewCustomers') || hasPermission(userRole, 'canManageCustomers')) && (
-                    <div 
-                      onClick={() => setCurrentPage('customer')}
-                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">👥</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">
-                        {userRole === 'sales' ? '客户查询' : '客户管理'}
-                      </h3>
-                      <p className="text-sm text-gray-600">
-                        {userRole === 'sales' 
-                          ? '查询客户销售、退货、欠款、往来账目' 
-                          : '管理客户信息'}
-                      </p>
-                    </div>
-                  )}
-                  
-                  {/* 财务对账卡片 - 需要财务权限*/}
-                  {hasPermission(userRole, 'canViewFinance') && (
-                    <div 
-                      onClick={() => setCurrentPage('finance')}
-                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">💵</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">财务对账</h3>
-                      <p className="text-sm text-gray-600">查看财务对账情况</p>
-                    </div>
-                  )}
-                  
-                  {/* 供应商管理卡片?- 需要供应商管理权限 */}
-                  {hasPermission(userRole, 'canManageSuppliers') && (
-                    <div 
-                      onClick={() => setCurrentPage('supplier')}
-                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">🏢</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">供应商管理</h3>
-                      <p className="text-sm text-gray-600">管理供应商信息</p>
-                    </div>
-                  )}
-                  
-                  {/* 浠〃鐩樺崱鐗?- 管理层快速查?*/}
-                  {hasPermission(userRole, 'canViewAnalytics') && (
-                    <div 
-                      onClick={() => setCurrentPage('dashboard')}
-                      className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">📈</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">数据仪表盘</h3>
-                      <p className="text-sm text-gray-600">今日销售、业绩排行</p>
-                    </div>
-                  )}
-                  
-                  {/* 数据分析卡片 - 需要数据分析权限 */}
-                  {hasPermission(userRole, 'canViewAnalytics') && (
-                    <div 
-                      onClick={() => setCurrentPage('analytics')}
-                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">📊</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">数据分析</h3>
-                      <p className="text-sm text-gray-600">查看业务数据分析</p>
-                    </div>
-                  )}
-                  
-                  {/* 数据导出卡片 - 需要数据导出权限 */}
-                  {hasPermission(userRole, 'canExport') && (
-                    <div 
-                      onClick={() => setCurrentPage('export')}
-                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">📥</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">数据导出</h3>
-                      <p className="text-sm text-gray-600">导出各类数据报表</p>
-                    </div>
-                  )}
-                  
-                  {/* 金料管理卡片 - 料部和管理层 */}
-                  {(hasPermission(userRole, 'canViewGoldMaterial') || hasPermission(userRole, 'canManageGoldMaterial')) && (
-                    <div 
-                      onClick={() => setCurrentPage('gold-material')}
-                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">⚖️</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">金料管理</h3>
-                      <p className="text-sm text-gray-600">金料台账、收料、付料</p>
-                    </div>
-                  )}
-                  
-                  {/* 商品编码管理卡片 - 商品专员和管理层 */}
-                  {hasPermission(userRole, 'canManageProductCodes') && (
-                    <div 
-                      onClick={() => setCurrentPage('product-codes')}
-                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">🏷️</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">商品编码</h3>
-                      <p className="text-sm text-gray-600">管理F编码、FL编码</p>
-                    </div>
-                  )}
-                  
-                  {/* 创建付料单卡片?- 料部 */}
-                  {hasPermission(userRole, 'canCreateGoldPayment') && (
-                    <div 
-                      onClick={() => {
-                        setCurrentPage('gold-material');
-                        // 可以通过状态控制打开创建付料单弹窗?
-                      }}
-                      className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
-                    >
-                      <div className="text-2xl mb-3">📝</div>
-                      <h3 className="font-semibold text-gray-900 mb-2">创建付料单</h3>
-                      <p className="text-sm text-gray-600">支付供应商金料</p>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <WelcomeScreen
+                userRole={userRole}
+                setInput={setInput}
+                setShowQuickOrderModal={setShowQuickOrderModal}
+                setShowQuickInboundModal={setShowQuickInboundModal}
+                setShowQuickReturnModal={setShowQuickReturnModal}
+                setCurrentPage={setCurrentPage}
+              />
             )}
-
             {messages.map((msg, idx) => {
               // 思考过程消息
               if (msg.type === 'thinking' && Array.isArray(msg.steps)) {
@@ -3774,270 +3474,29 @@ function App() {
       </div>
 
       {/* OCR识别编辑对话?*/}
-      {showOCRModal && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4"
-          onClick={(e) => {
-            // 点击背景关闭对话?
-            if (e.target === e.currentTarget) {
-              setShowOCRModal(false)
-              setOcrResult('')
-              setUploadedImage(null)
-            }
-          }}
-        >
-          <div className="bg-white rounded-lg shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
-            {/* 对话框标题栏 */}
-            <div className="px-4 sm:px-6 py-4 border-b flex justify-between items-center bg-gray-50">
-              <div className="flex items-center space-x-2">
-                <span className="text-2xl">📝</span>
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-800">
-                  审核并编辑识别内容
-                </h2>
-              </div>
-              <button
-                onClick={() => {
-                  setShowOCRModal(false)
-                  setOcrResult('')
-                  setUploadedImage(null)
-                }}
-                className="text-gray-400 hover:text-gray-600 text-3xl font-light w-8 h-8 flex items-center justify-center transition-colors"
-                title="关闭"
-              >
-                ×
-              </button>
-            </div>
-            
-            {/* 对话框内容区域?*/}
-            <div className="flex-1 overflow-hidden flex flex-col sm:flex-row">
-              {/* 左侧：图片预览（桌面端显示，移动端隐藏或折叠）*/}
-              {uploadedImage && (
-                <div className="hidden sm:block w-80 border-r bg-gray-50 p-4 overflow-y-auto">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">鍘熷鍥剧墖</h3>
-                  <div className="bg-white rounded-lg p-2 shadow-sm">
-                    <img 
-                      src={uploadedImage} 
-                      alt="上传的入库单" 
-                      className="w-full h-auto rounded border border-gray-200"
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-3">
-                    请对照图片检查识别内容是否正确?
-                  </p>
-                </div>
-              )}
-              
-              {/* 鍙充晶锛氱紪杈戝尯鍩?*/}
-              <div className="flex-1 flex flex-col overflow-hidden">
-                {/* 提示信息 */}
-                <div className="px-4 sm:px-6 py-3 sm:py-4 border-b bg-blue-50">
-                  <p className="text-xs sm:text-sm text-blue-800 font-medium mb-1">
-                    ⚠️ 请检查并编辑识别内容，确认无误后点击"确认入库"
-                  </p>
-                  <ul className="text-xs text-blue-700 list-disc list-inside space-y-0.5 mt-2">
-                    <li>检查商品名称是否正确</li>
-                    <li>检查重量、工费、供应商等信息</li>
-                    <li>可以手动编辑修改内容</li>
-                  </ul>
-                </div>
-                
-                {/* 鏂囨湰缂栬緫鍖哄煙 */}
-                <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
-                  <LineNumberedTextarea
-                    ref={ocrTextareaRef}
-                    value={ocrResult}
-                    onChange={(e) => setOcrResult(e.target.value)}
-                    placeholder="识别出的文字内容将显示在这里..."
-                    className="min-h-[300px]"
-                  />
-                </div>
-              </div>
-            </div>
-            
-            {/* 移动端图片预览（可选，在编辑区域下方显示） */}
-            {uploadedImage && (
-              <div className="sm:hidden border-t bg-gray-50 p-4 max-h-48 overflow-y-auto">
-                <h3 className="text-xs font-semibold text-gray-700 mb-2">鍘熷鍥剧墖</h3>
-                <img 
-                  src={uploadedImage} 
-                  alt="上传的入库单" 
-                  className="w-full h-auto rounded border border-gray-200"
-                />
-              </div>
-            )}
-            
-            {/* 对话框底部按钮?*/}
-            <div className="px-4 sm:px-6 py-4 border-t bg-gray-50 flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-4">
-              <button
-                onClick={() => {
-                  setShowOCRModal(false)
-                  setOcrResult('')
-                  setUploadedImage(null)
-                }}
-                className="w-full sm:w-auto px-6 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-white transition-colors font-medium order-2 sm:order-1"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleConfirmInbound}
-                disabled={loading || !ocrResult.trim()}
-                className="w-full sm:w-auto px-8 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium order-1 sm:order-2"
-              >
-                {loading ? '处理中...' : '确认入库'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-        {/* 输入区域 - 鑻规灉椋庢牸 */}
-        <footer className="bg-white/80 backdrop-blur-xl border-t border-gray-200/60 px-6 py-5">
-          <div className="max-w-4xl mx-auto">
-            <div className="flex items-end space-x-3">
-              {/* 快捷入库按钮 - 浠呭晢鍝佷笓鍛樺彲瑙?*/}
-              {userRole === 'product' && (
-                <button
-                  onClick={() => setShowQuickInboundModal(true)}
-                  disabled={loading || uploading}
-                  className={`
-                    px-3 py-3 rounded-2xl cursor-pointer transition-all duration-200
-                    h-[52px] flex items-center font-medium text-[14px]
-                    ${loading || uploading
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-orange-500 text-white hover:bg-orange-600 shadow-sm hover:shadow-md'
-                    }
-                  `}
-                  title="快捷入库"
-                >
-                  📦 入库
-                </button>
-              )}
-
-              {/* 快速开单按钮 - 仅柜台可见（结算专员不需要） */}
-              {userRole === 'counter' && (
-                <button
-                  onClick={() => setShowQuickOrderModal(true)}
-                  disabled={loading || uploading}
-                  className={`
-                    px-3 py-3 rounded-2xl cursor-pointer transition-all duration-200
-                    h-[52px] flex items-center font-medium text-[14px]
-                    ${loading || uploading
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm hover:shadow-md'
-                    }
-                  `}
-                  title="快速开单"
-                >
-                  📝 开单
-                </button>
-              )}
-
-              {/* 快捷退货按钮 - 商品专员和柜台可见 */}
-              {(userRole === 'product' || userRole === 'counter') && (
-                <button
-                  onClick={() => setShowQuickReturnModal(true)}
-                  disabled={loading || uploading}
-                  className={`
-                    px-3 py-3 rounded-2xl cursor-pointer transition-all duration-200
-                    h-[52px] flex items-center font-medium text-[14px]
-                    ${loading || uploading
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-red-500 text-white hover:bg-red-600 shadow-sm hover:shadow-md'
-                    }
-                  `}
-                  title="快捷退货"
-                >
-                  ↩️ 退货
-                </button>
-              )}
-
-          {/* 图片上传按钮 */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageUpload}
-            className="hidden"
-            id="image-upload"
-            disabled={loading || uploading}
-          />
-          <label
-            htmlFor="image-upload"
-            title="OCR识别入库单据 - 支持拍照或上传单据图片自动识别"
-                className={`
-                  px-4 py-3 rounded-2xl cursor-pointer transition-all duration-200
-                  h-[52px] flex items-center font-medium text-[15px]
-                  ${loading || uploading
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'border-2 border-jewelry-navy text-jewelry-navy hover:bg-jewelry-navy hover:text-white'
-                  }
-                `}
-              >
-                {uploading ? `📲 ${t('chat.scanning')}` : `📲 ${t('chat.scan')}`}
-          </label>
-
-          {/* 快捷收料/提料按钮 - 结算专员和管理层可见 */}
-          {(userRole === 'settlement' || userRole === 'manager') && (
-            <>
-              <button
-                onClick={openQuickReceiptModal}
-                className="px-4 py-3 rounded-2xl h-[52px] flex items-center font-medium text-[15px] bg-gradient-to-r from-jewelry-gold to-jewelry-gold-light text-white hover:from-jewelry-gold-dark hover:to-jewelry-gold shadow-sm hover:shadow-md transition-all duration-200"
-                title={currentLanguage === 'en' ? 'Quick Receipt' : '快捷收料'}
-              >
-                📦 {t('chat.receipt')}
-              </button>
-              <button
-                onClick={openQuickWithdrawalModal}
-                className="px-4 py-3 rounded-2xl h-[52px] flex items-center font-medium text-[15px] border-2 border-jewelry-navy text-jewelry-navy hover:bg-jewelry-navy hover:text-white transition-all duration-200"
-                title={currentLanguage === 'en' ? 'Quick Withdrawal' : '快捷提料'}
-              >
-                ⬆️ {t('chat.withdrawal')}
-              </button>
-            </>
-          )}
-
-              <div className="flex-1 relative">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                sendMessage()
-              }
-            }}
-            placeholder={t('chat.inputPlaceholder')}
-            rows={1}
-                  className="w-full px-5 py-4 border-2 border-gray-200 rounded-2xl 
-                             focus:outline-none focus:border-jewelry-gold focus:ring-4 focus:ring-jewelry-gold/10
-                             resize-none min-h-[52px] max-h-[200px] overflow-y-auto
-                             text-[15px] bg-white transition-all duration-200"
-            disabled={loading || uploading}
-            onInput={(e) => {
-              const target = e.target
-              target.style.height = 'auto'
-              target.style.height = Math.min(target.scrollHeight, 200) + 'px'
-            }}
-          />
-              </div>
-              
-          <button
-            onClick={sendMessage}
-            disabled={loading || uploading || !input.trim()}
-                className={`
-                  px-6 py-3 rounded-2xl font-medium text-[15px] h-[52px]
-                  transition-all duration-200 shadow-sm hover:shadow-md
-                  ${loading || uploading || !input.trim()
-                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-jewelry-gold to-jewelry-gold-light text-white hover:from-jewelry-gold-dark hover:to-jewelry-gold'
-                  }
-                `}
-          >
-            {t('common.send')}
-          </button>
-            </div>
-        </div>
-      </footer>
+      <OCRModal
+        isOpen={showOCRModal}
+        onClose={() => { setShowOCRModal(false); setOcrResult(''); setUploadedImage(null) }}
+        ocrResult={ocrResult}
+        setOcrResult={setOcrResult}
+        uploadedImage={uploadedImage}
+        onConfirm={handleConfirmInbound}
+        loading={loading}
+      />
+        <InputArea
+          input={input}
+          setInput={setInput}
+          onSend={sendMessage}
+          loading={loading}
+          uploading={uploading}
+          userRole={userRole}
+          onImageUpload={handleImageUpload}
+          onQuickInbound={() => setShowQuickInboundModal(true)}
+          onQuickOrder={() => setShowQuickOrderModal(true)}
+          onQuickReturn={() => setShowQuickReturnModal(true)}
+          onQuickReceipt={openQuickReceiptModal}
+          onQuickWithdrawal={openQuickWithdrawalModal}
+        />
           </>
         )}
 
