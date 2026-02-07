@@ -33,7 +33,7 @@ import InboundOrdersPage from './components/InboundOrdersPage'
 import { USER_ROLES } from './constants/roles'
 import { Header, Sidebar } from './components/layout'
 import { ThinkingIndicator, ThinkingMessage, WelcomeScreen, InputArea } from './components/chat'
-import { OCRModal } from './components/modals'
+import { OCRModal, QuickReceiptModal, QuickWithdrawalModal } from './components/modals'
 import { ChatHistoryPanel } from './components/ChatHistoryPanel'
 import { getUserIdentifier, getHistoryKey, getLastSessionKey } from './utils/userIdentifier'
 import { parseMessageHiddenMarkers } from './utils/messageParser'
@@ -121,12 +121,6 @@ function App() {
   const [showQuickReceiptModal, setShowQuickReceiptModal] = useState(false) // 快捷收料弹窗
   const [showQuickWithdrawalModal, setShowQuickWithdrawalModal] = useState(false) // 快捷提料弹窗
   const [toastMessage, setToastMessage] = useState('') // Toast 提示消息
-  const [quickFormCustomers, setQuickFormCustomers] = useState([]) // 客户列表
-  const [quickFormCustomerSearch, setQuickFormCustomerSearch] = useState('') // 客户搜索
-  const [quickReceiptForm, setQuickReceiptForm] = useState({ customer_id: '', gold_weight: '', gold_fineness: '足金999', remark: '' })
-  const [quickWithdrawalForm, setQuickWithdrawalForm] = useState({ customer_id: '', gold_weight: '', remark: '' })
-  const [selectedCustomerDeposit, setSelectedCustomerDeposit] = useState(null) // 选中客户的存料余额
-  const [depositLoading, setDepositLoading] = useState(false)
   
   // 用户角色相关状态
   const [userRole, setUserRole] = useState(() => {
@@ -497,203 +491,6 @@ function App() {
     }
   }
 
-  // 加载客户列表（用于快捷收料/提料）
-  const loadQuickFormCustomers = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/customers`)
-      if (response.ok) {
-        const data = await response.json()
-        console.log('Load customer list:', data)  // Debug log
-        // API返回格式: { success: true, data: { customers: [...] } }
-        const customers = data.data?.customers || data.customers || []
-        setQuickFormCustomers(Array.isArray(customers) ? customers : [])
-      } else {
-        console.error('Load customer list API failed:', response.status)
-        showToast('加载客户列表失败，请刷新重试')
-      }
-    } catch (error) {
-      console.error('Load customer list failed:', error)
-      showToast('加载客户列表失败，请检查网络连接')
-    }
-  }
-
-  // 打开快捷收料弹窗
-  const openQuickReceiptModal = () => {
-    loadQuickFormCustomers()
-    setQuickReceiptForm({ customer_id: '', gold_weight: '', gold_fineness: '足金999', remark: '' })
-    setQuickFormCustomerSearch('')
-    setShowQuickReceiptModal(true)
-  }
-
-  // 打开快捷提料弹窗
-  const openQuickWithdrawalModal = () => {
-    loadQuickFormCustomers()
-    setQuickWithdrawalForm({ customer_id: '', gold_weight: '', remark: '' })
-    setQuickFormCustomerSearch('')
-    setSelectedCustomerDeposit(null)
-    setShowQuickWithdrawalModal(true)
-  }
-
-  // 查询客户存料余额
-  const fetchCustomerDeposit = async (customerId) => {
-    if (!customerId) {
-      setSelectedCustomerDeposit(null)
-      return
-    }
-    setDepositLoading(true)
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/gold-material/customers/${customerId}/deposit`)
-      if (response.ok) {
-        const result = await response.json()
-        setSelectedCustomerDeposit({
-          current_balance: result.data?.deposit?.current_balance || 0,
-          customer_name: result.data?.customer_name || ''
-        })
-      } else {
-        setSelectedCustomerDeposit({ current_balance: 0, customer_name: '' })
-      }
-    } catch (error) {
-      console.error('Query customer balance failed:', error)
-      setSelectedCustomerDeposit({ current_balance: 0, customer_name: '' })
-      showToast('查询客户余额失败，显示为0')
-    } finally {
-      setDepositLoading(false)
-    }
-  }
-
-  // 创建快捷收料?
-  const handleQuickReceipt = async (e) => {
-    e.preventDefault()
-    if (!quickReceiptForm.customer_id) {
-      alert('请选择客户')
-      return
-    }
-    if (!quickReceiptForm.gold_weight || parseFloat(quickReceiptForm.gold_weight) <= 0) {
-      alert('请输入有效的收料克重')
-      return
-    }
-    try {
-      const params = new URLSearchParams({
-        customer_id: quickReceiptForm.customer_id,
-        gold_weight: quickReceiptForm.gold_weight,
-        gold_fineness: quickReceiptForm.gold_fineness,
-        remark: quickReceiptForm.remark || '快捷收料',
-        created_by: '结算专员'
-      })
-      const response = await fetch(`${API_BASE_URL}/api/gold-material/gold-receipts?${params}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      })
-      if (response.ok) {
-        const result = await response.json()
-        const customerName = quickFormCustomers.find(c => c.id.toString() === quickReceiptForm.customer_id)?.name || '未知客户'
-        const receiptWeight = parseFloat(quickReceiptForm.gold_weight)
-        const remarkText = quickReceiptForm.remark || ''
-        
-        setShowQuickReceiptModal(false)
-        // 重置表单
-        setQuickReceiptForm({ customer_id: '', gold_weight: '', gold_fineness: '足金999', remark: '' })
-        setQuickFormCustomerSearch('')
-        
-        // 添加收料单记录到聊天框（使用文本格式+隐藏标记）
-        const downloadUrl = `${API_BASE_URL}/api/gold-material/gold-receipts/${result.data.id}/print`
-        const receiptMessage = `✅ 收料单已生成\n\n📋 单号：{result.data.receipt_no}\n👤 客户：{customerName}\n⚖️ 克重：{receiptWeight.toFixed(2)} 克
-🏷️ 成色：{quickReceiptForm.gold_fineness}${remarkText ? `\n📝 备注：{remarkText}` : ''}\n🕐 时间：{new Date().toLocaleString('zh-CN')}\n\n<!-- GOLD_RECEIPT:${result.data.id}:${result.data.receipt_no} -->`
-        setMessages(prev => [...prev, {
-          id: Date.now(),
-          type: 'system',
-          content: receiptMessage,
-          goldReceiptDownloadUrl: downloadUrl,
-          goldReceiptId: result.data.id
-        }])
-        
-        // 自动打开打印页面
-        if (result.data.id) {
-          window.open(downloadUrl, '_blank')
-        }
-      } else {
-        const error = await response.json()
-        alert('创建收料单失败：' + (error.detail || '鏈煡閿欒'))
-      }
-    } catch (error) {
-      console.error('创建收料单失败', error)
-      alert('创建收料单失败')
-    }
-  }
-
-  // 创建快捷ϵ
-  const handleQuickWithdrawal = async (e) => {
-    e.preventDefault()
-    if (!quickWithdrawalForm.customer_id) {
-      alert('请选择客户')
-      return
-    }
-    const weight = parseFloat(quickWithdrawalForm.gold_weight)
-    if (!weight || weight <= 0) {
-      alert('请输入有效的提料克重')
-      return
-    }
-    if (weight > (selectedCustomerDeposit?.current_balance || 0)) {
-      alert(`提料克重不能超过客户存料余额：{selectedCustomerDeposit?.current_balance?.toFixed(2) || 0}克）`)
-      return
-    }
-    try {
-      const params = new URLSearchParams({ user_role: 'settlement', created_by: '结算专员' })
-      const response = await fetch(`${API_BASE_URL}/api/gold-material/withdrawals?${params}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customer_id: parseInt(quickWithdrawalForm.customer_id),
-          gold_weight: weight,
-          withdrawal_type: 'self',
-          remark: quickWithdrawalForm.remark || '快捷提料'
-        })
-      })
-      if (response.ok) {
-        const result = await response.json()
-        const customerName = quickFormCustomers.find(c => c.id.toString() === quickWithdrawalForm.customer_id)?.name || '未知客户'
-        const withdrawalWeight = parseFloat(quickWithdrawalForm.gold_weight)
-        const remarkText = quickWithdrawalForm.remark || ''
-        
-        setShowQuickWithdrawalModal(false)
-        // 重置表单
-        setQuickWithdrawalForm({ customer_id: '', gold_weight: '', remark: '' })
-        setSelectedCustomerDeposit(null)
-        setQuickFormCustomerSearch('')
-        
-        // 添加提料单记录到聊天框（使用文本格式+隐藏标记，确保历史记录持久化）
-        const downloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${result.id}/download?format=html`
-          const withdrawalMessage = `✅ 提料单已生成\n\n📋 单号：${result.withdrawal_no}\n👤 客户：${customerName}\n⚖️ 克重：${withdrawalWeight.toFixed(2)} 克${remarkText ? `\n📝 备注：${remarkText}` : ''}\n⏰ 时间：${new Date().toLocaleString('zh-CN')}\n\n<!-- WITHDRAWAL_ORDER:${result.id}:${result.withdrawal_no} -->`
-        setMessages(prev => [...prev, {
-          id: Date.now(),
-          type: 'system',
-          content: withdrawalMessage,
-          // 淇濈暀下载閾炬帴渚涙寜閽娇鐢?
-          withdrawalDownloadUrl: downloadUrl,
-          withdrawalId: result.id
-        }])
-        
-        // 自动打开打印页面
-        if (result.id) {
-          window.open(`${API_BASE_URL}/api/gold-material/withdrawals/${result.id}/download?format=html`, '_blank')
-        }
-      } else {
-        const error = await response.json()
-        alert('创建提料单失败：' + (error.detail || '未知错误'))
-      }
-    } catch (error) {
-      console.error('创建提料单失败', error)
-      alert('创建提料单失败')
-    }
-  }
-
-  // 筛选客户列表（确保是数组）
-  const filteredQuickFormCustomers = (Array.isArray(quickFormCustomers) ? quickFormCustomers : []).filter(c => {
-    if (!quickFormCustomerSearch.trim()) return true; // 绌烘悳绱㈡樉绀哄叏閮?
-    const search = quickFormCustomerSearch.toLowerCase();
-    return (c.name && c.name.toLowerCase().includes(search)) ||
-           (c.phone && c.phone.includes(quickFormCustomerSearch));
-  })
 
   // 角色变化时加载待处理数量
   useEffect(() => {
@@ -3494,8 +3291,8 @@ function App() {
           onQuickInbound={() => setShowQuickInboundModal(true)}
           onQuickOrder={() => setShowQuickOrderModal(true)}
           onQuickReturn={() => setShowQuickReturnModal(true)}
-          onQuickReceipt={openQuickReceiptModal}
-          onQuickWithdrawal={openQuickWithdrawalModal}
+          onQuickReceipt={() => setShowQuickReceiptModal(true)}
+          onQuickWithdrawal={() => setShowQuickWithdrawalModal(true)}
         />
           </>
         )}
@@ -3805,210 +3602,43 @@ ${itemsList}
       />
 
       {/* 快捷收料弹窗 */}
-      {showQuickReceiptModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold flex items-center">
-                <span className="text-xl mr-2">📦</span>
-                快捷收料
-              </h3>
-              <button onClick={() => setShowQuickReceiptModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
-            </div>
-            <form onSubmit={handleQuickReceipt} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">选择客户</label>
-                <input
-                  type="text"
-                  placeholder="搜索客户姓名或电话..."
-                  value={quickFormCustomerSearch}
-                  onChange={(e) => setQuickFormCustomerSearch(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 mb-2"
-                />
-                <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
-                  {filteredQuickFormCustomers.length === 0 ? (
-                    <div className="p-3 text-center text-gray-500 text-sm">暂无匹配客户</div>
-                  ) : (
-                    filteredQuickFormCustomers.slice(0, 10).map(customer => (
-                      <div
-                        key={customer.id}
-                        onClick={() => {
-                          setQuickReceiptForm({ ...quickReceiptForm, customer_id: customer.id.toString() })
-                          setQuickFormCustomerSearch(customer.name) // 设置搜索框为客户名，收起下拉
-                        }}
-                        className={`p-3 cursor-pointer hover:bg-yellow-50 border-b last:border-b-0 flex justify-between items-center ${
-                          quickReceiptForm.customer_id === customer.id.toString() ? 'bg-yellow-100' : ''
-                        }`}
-                      >
-                        <span className="font-medium">{customer.name}</span>
-                        <span className="text-sm text-gray-500">{customer.phone || '-'}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-                {quickReceiptForm.customer_id && (
-                  <div className="mt-2 text-sm text-green-600">
-                      已选择：{quickFormCustomers.find(c => c.id.toString() === quickReceiptForm.customer_id)?.name}
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">收料克重 (克)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={quickReceiptForm.gold_weight}
-                  onChange={(e) => setQuickReceiptForm({ ...quickReceiptForm, gold_weight: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                  placeholder="输入收料克重"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">成色</label>
-                <select
-                  value={quickReceiptForm.gold_fineness}
-                  onChange={(e) => setQuickReceiptForm({ ...quickReceiptForm, gold_fineness: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                >
-                  <option value="足金999">足金999</option>
-                  <option value="足金9999">足金9999</option>
-                  <option value="Au999">Au999</option>
-                  <option value="Au9999">Au9999</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">备注（可选）</label>
-                <textarea
-                  value={quickReceiptForm.remark}
-                  onChange={(e) => setQuickReceiptForm({ ...quickReceiptForm, remark: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                  rows={2}
-                  placeholder="客户存料 / 其他说明"
-                />
-              </div>
-              <div className="flex space-x-3 pt-4">
-                  <button type="button" onClick={() => setShowQuickReceiptModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">取消</button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600">确认并打印</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <QuickReceiptModal
+        isOpen={showQuickReceiptModal}
+        onClose={() => setShowQuickReceiptModal(false)}
+        onSuccess={(data) => {
+          // Create chat message with hidden marker (critical for history persistence)
+          const downloadUrl = `${API_BASE_URL}/api/gold-material/gold-receipts/${data.id}/print`
+          const receiptMessage = `✅ 收料单已生成\n\n📋 单号：${data.receipt_no}\n👤 客户：${data.customer_name}\n⚖️ 克重：${data.gold_weight.toFixed(2)} 克\n🏷️ 成色：${data.gold_fineness}${data.remark ? `\n📝 备注：${data.remark}` : ''}\n🕐 时间：${new Date().toLocaleString('zh-CN')}\n\n<!-- GOLD_RECEIPT:${data.id}:${data.receipt_no} -->`
+          setMessages(prev => [...prev, {
+            id: Date.now(),
+            type: 'system',
+            content: receiptMessage,
+            goldReceiptDownloadUrl: downloadUrl,
+            goldReceiptId: data.id
+          }])
+        }}
+        showToast={showToast}
+      />
 
       {/* 快捷提料弹窗 */}
-      {showQuickWithdrawalModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold flex items-center">
-                <span className="text-xl mr-2">⬆️</span>
-                快捷提料
-              </h3>
-              <button onClick={() => setShowQuickWithdrawalModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
-            </div>
-            <form onSubmit={handleQuickWithdrawal} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">选择客户</label>
-                <input
-                  type="text"
-                  placeholder="搜索客户姓名或电话..."
-                  value={quickFormCustomerSearch}
-                  onChange={(e) => setQuickFormCustomerSearch(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
-                />
-                <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
-                  {filteredQuickFormCustomers.length === 0 ? (
-                    <div className="p-3 text-center text-gray-500 text-sm">暂无匹配客户</div>
-                  ) : (
-                    filteredQuickFormCustomers.slice(0, 10).map(customer => (
-                      <div
-                        key={customer.id}
-                        onClick={() => {
-                          setQuickWithdrawalForm({ ...quickWithdrawalForm, customer_id: customer.id.toString() })
-                          setQuickFormCustomerSearch(customer.name) // 设置搜索框为客户名，收起下拉
-                          fetchCustomerDeposit(customer.id.toString())
-                        }}
-                        className={`p-3 cursor-pointer hover:bg-blue-50 border-b last:border-b-0 flex justify-between items-center ${
-                          quickWithdrawalForm.customer_id === customer.id.toString() ? 'bg-blue-100' : ''
-                        }`}
-                      >
-                        <span className="font-medium">{customer.name}</span>
-                        <span className="text-sm text-gray-500">{customer.phone || '-'}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-                {quickWithdrawalForm.customer_id && (
-                  <div className="mt-2 text-sm text-green-600">
-                      已选择：{quickFormCustomers.find(c => c.id.toString() === quickWithdrawalForm.customer_id)?.name}
-                  </div>
-                )}
-              </div>
-              {/* 存料余额显示 */}
-              {quickWithdrawalForm.customer_id && (
-                <div className={`p-4 rounded-lg ${
-                  depositLoading ? 'bg-gray-100' : 
-                  (selectedCustomerDeposit?.current_balance || 0) > 0 ? 'bg-blue-50 border border-blue-200' : 'bg-red-50 border border-red-200'
-                }`}>
-                  {depositLoading ? (
-                    <div className="text-center text-gray-500">查询中...</div>
-                  ) : (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">当前存料余额</span>
-                      <span className={`text-xl font-bold ${(selectedCustomerDeposit?.current_balance || 0) > 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                        {selectedCustomerDeposit?.current_balance?.toFixed(2) || '0.00'} 克
-                      </span>
-                    </div>
-                  )}
-                  {!depositLoading && (selectedCustomerDeposit?.current_balance || 0) === 0 && (
-                    <div className="mt-2 text-xs text-red-600">⚠️ 该客户暂无存料，无法提料</div>
-                  )}
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">提料克重 (克)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={quickWithdrawalForm.gold_weight}
-                  onChange={(e) => setQuickWithdrawalForm({ ...quickWithdrawalForm, gold_weight: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="输入提料克重"
-                  max={selectedCustomerDeposit?.current_balance || 0}
-                  required
-                />
-                {quickWithdrawalForm.gold_weight && parseFloat(quickWithdrawalForm.gold_weight) > (selectedCustomerDeposit?.current_balance || 0) && (
-                  <div className="mt-1 text-xs text-red-600">⚠️ 提料克重不能超过存料余额</div>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">备注（可选）</label>
-                <textarea
-                  value={quickWithdrawalForm.remark}
-                  onChange={(e) => setQuickWithdrawalForm({ ...quickWithdrawalForm, remark: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows={2}
-                  placeholder="客户提料 / 其他说明"
-                />
-              </div>
-              <div className="flex space-x-3 pt-4">
-                <button type="button" onClick={() => setShowQuickWithdrawalModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">取消</button>
-                <button 
-                  type="submit" 
-                  disabled={!quickWithdrawalForm.customer_id || 
-                    !quickWithdrawalForm.gold_weight || 
-                    parseFloat(quickWithdrawalForm.gold_weight) <= 0 ||
-                    parseFloat(quickWithdrawalForm.gold_weight) > (selectedCustomerDeposit?.current_balance || 0)}
-                  className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                >
-                  纭骞舵墦鍗?
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <QuickWithdrawalModal
+        isOpen={showQuickWithdrawalModal}
+        onClose={() => setShowQuickWithdrawalModal(false)}
+        onSuccess={(data) => {
+          // Create chat message with hidden marker (critical for history persistence)
+          const downloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${data.id}/download?format=html`
+          const withdrawalMessage = `✅ 提料单已生成\n\n📋 单号：${data.withdrawal_no}\n👤 客户：${data.customer_name}\n⚖️ 克重：${data.gold_weight.toFixed(2)} 克${data.remark ? `\n📝 备注：${data.remark}` : ''}\n⏰ 时间：${new Date().toLocaleString('zh-CN')}\n\n<!-- WITHDRAWAL_ORDER:${data.id}:${data.withdrawal_no} -->`
+          setMessages(prev => [...prev, {
+            id: Date.now(),
+            type: 'system',
+            content: withdrawalMessage,
+            withdrawalDownloadUrl: downloadUrl,
+            withdrawalId: data.id
+          }])
+        }}
+        userRole={userRole}
+        showToast={showToast}
+      />
       
       {/* Toast 閫氱煡瀹瑰櫒 */}
       <Toaster 
