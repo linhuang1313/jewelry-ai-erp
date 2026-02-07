@@ -3,9 +3,9 @@
  */
 import { useState, useEffect, useRef } from 'react'
 import { USER_ROLES } from '../constants/roles'
-import { API_ENDPOINTS } from '../config'
 import { getHistoryKey, getLastSessionKey } from '../utils/userIdentifier'
 import { parseMessageHiddenMarkers } from '../utils/messageParser'
+import { getPendingTransferCount, getPendingSalesCount } from '../services/chatService'
 
 export function useUserRole(userRole, setUserRole, conversationState, messages, setMessages, setSidebarOpen) {
   const {
@@ -128,28 +128,9 @@ export function useUserRole(userRole, setUserRole, conversationState, messages, 
 
   // 加载待处理转移单数量
   const loadPendingTransferCount = async () => {
-    if (!['counter', 'settlement', 'manager'].includes(userRole)) {
-      setPendingTransferCount(0)
-      return
-    }
     try {
-      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/warehouse/transfers?status=pending`)
-      if (response.ok) {
-        const transfers = await response.json()
-        
-        const roleLocationMap = {
-          'counter': '展厅',
-          'product': '商品部仓库'
-        }
-        const myLocation = roleLocationMap[userRole]
-        
-        if (myLocation) {
-          const filtered = transfers.filter(t => t.to_location_name === myLocation)
-          setPendingTransferCount(filtered.length)
-        } else {
-          setPendingTransferCount(transfers.length)
-        }
-      }
+      const count = await getPendingTransferCount(userRole)
+      setPendingTransferCount(count)
     } catch (error) {
       console.error('Load pending transfer count failed:', error)
     }
@@ -157,16 +138,9 @@ export function useUserRole(userRole, setUserRole, conversationState, messages, 
 
   // 加载待结算销售单数量
   const loadPendingSalesCount = async () => {
-    if (!['settlement', 'manager'].includes(userRole)) {
-      setPendingSalesCount(0)
-      return
-    }
     try {
-      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/settlement/pending-sales`)
-      if (response.ok) {
-        const sales = await response.json()
-        setPendingSalesCount(sales.length)
-      }
+      const count = await getPendingSalesCount(userRole)
+      setPendingSalesCount(count)
     } catch (error) {
       console.error('Load pending sales count failed:', error)
     }

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Toaster } from 'react-hot-toast'
 import { API_ENDPOINTS, API_BASE_URL } from './config'
 import LanguageSelector from './components/LanguageSelector'
-import { hasPermission, canAccessPage, getPermissionDeniedMessage } from './config/permissions'
+import { hasPermission } from './config/permissions'
 import { createCardFromBackend, createNewCard } from './utils/inboundHelpers'
 import { FinancePage } from './components/finance'
 import { AnalyticsPage } from './components/AnalyticsPage'
@@ -19,7 +19,6 @@ import { QuickOrderModal } from './components/QuickOrderModal'
 import { QuickReturnModal } from './components/QuickReturnModal'
 import QuickInboundModal from './components/QuickInboundModal'
 import SalesOrdersPage from './components/SalesOrdersPage'
-import ManagerDashboardCard from './components/ManagerDashboardCard'
 import { SupplierPage } from './components/SupplierPage'
 import ReturnPage from './components/ReturnPage'
 import GoldMaterialPage from './components/GoldMaterialPage'
@@ -32,6 +31,7 @@ import { ThinkingIndicator, WelcomeScreen, InputArea, MessageRenderer } from './
 import { OCRModal, QuickReceiptModal, QuickWithdrawalModal } from './components/modals'
 import { ChatHistoryPanel } from './components/ChatHistoryPanel'
 import { parseMessageHiddenMarkers } from './utils/messageParser'
+import { saveChatMessage } from './services/chatService'
 import { useConversationHistory, useUserRole } from './hooks'
 
 function App() {
@@ -101,8 +101,8 @@ function App() {
   // ========== Conversation History Hook ==========
   const conversation = useConversationHistory(userRole, messages, setMessages, setSidebarOpen, showToast)
   const {
-    conversationHistory, currentConversationId, conversationTitle,
-    currentSessionId, loadRoleHistory, saveConversation, loadConversation,
+    conversationHistory, currentConversationId, setCurrentConversationId, conversationTitle,
+    currentSessionId, setCurrentSessionId, loadRoleHistory, saveConversation, loadConversation,
     newConversation, deleteConversation
   } = conversation
 
@@ -1461,18 +1461,11 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
                   settlementOrderNo: data.settlement_no
                 }])
                 
-                // 保存到聊天历史
-                if (currentSessionId) {
-                  const params = new URLSearchParams({
-                    session_id: currentSessionId,
-                    message_type: 'assistant',
-                    content: settlementMessage,
-                    user_role: userRole
-                  })
-                  fetch(`${API_BASE_URL}/api/chat-logs/message?${params}`, {
-                    method: 'POST'
-                  }).catch(err => console.error('Save settlement message failed:', err))
-                }
+            // 保存到聊天历史
+            if (currentSessionId) {
+              saveChatMessage(currentSessionId, 'assistant', settlementMessage, userRole)
+                .catch(err => console.error('Save settlement message failed:', err))
+            }
                 
                 // 切换回聊天页?
                 setCurrentPage('chat')
@@ -1593,15 +1586,8 @@ ${itemsList}
             
             // 保存到聊天历史
             if (currentSessionId) {
-              const params = new URLSearchParams({
-                session_id: currentSessionId,
-                message_type: 'assistant',
-                content: salesMessage,
-                user_role: userRole
-              })
-              fetch(`${API_BASE_URL}/api/chat-logs/message?${params}`, {
-                method: 'POST'
-              }).catch(err => console.error('Save sales message failed:', err))
+              saveChatMessage(currentSessionId, 'assistant', salesMessage, userRole)
+                .catch(err => console.error('Save sales message failed:', err))
             }
           }}
         />
@@ -1628,9 +1614,7 @@ ${itemsList}
             
             // Save to backend chat history (with ID marker)
             try {
-              await fetch(`${API_BASE_URL}/api/chat-logs/message?session_id=${encodeURIComponent(currentSessionId)}&message_type=assistant&content=${encodeURIComponent(returnMessage)}&user_role=${userRole}&intent=return`, {
-                method: 'POST'
-              })
+              await saveChatMessage(currentSessionId, 'assistant', returnMessage, userRole, 'return')
             } catch (error) {
               console.error('Save return record to chat history failed:', error)
             }
@@ -1672,9 +1656,7 @@ ${itemsList}
             
             // 保存到后端聊天历史（包含ID标记）
             try {
-              await fetch(`${API_BASE_URL}/api/chat-logs/message?session_id=${encodeURIComponent(currentSessionId)}&message_type=assistant&content=${encodeURIComponent(inboundMessage)}&user_role=${userRole}&intent=入库`, {
-                method: 'POST'
-              })
+              await saveChatMessage(currentSessionId, 'assistant', inboundMessage, userRole, '入库')
             } catch (error) {
               console.error('Save inbound record to chat history failed:', error)
             }

@@ -121,9 +121,11 @@ export const getCustomerDeposit = async (customerId) => {
     return { current_balance: 0, customer_name: '' }
   }
   const result = await response.json()
+  // Support both { data: { deposit: ... } } and { deposit: ... } response formats
+  const data = result.data || result
   return {
-    current_balance: result.deposit.current_balance,
-    customer_name: result.customer_name
+    current_balance: data.deposit?.current_balance || 0,
+    customer_name: data.customer_name || ''
   }
 }
 
