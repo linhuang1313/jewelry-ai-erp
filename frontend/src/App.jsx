@@ -33,7 +33,8 @@ import ProductCodePage from './components/ProductCodePage'
 import InboundOrdersPage from './components/InboundOrdersPage'
 import LineNumberedTextarea from './components/LineNumberedTextarea'
 import { USER_ROLES } from './constants/roles'
-import { Header } from './components/layout'
+import { Header, Sidebar } from './components/layout'
+import { ThinkingIndicator, ThinkingMessage } from './components/chat'
 import { ChatHistoryPanel } from './components/ChatHistoryPanel'
 import { getUserIdentifier, getHistoryKey, getLastSessionKey } from './utils/userIdentifier'
 import { parseMessageHiddenMarkers } from './utils/messageParser'
@@ -944,8 +945,8 @@ function App() {
   }
 
   // 删除对话（从当前角色的历史记录删除）
-  const deleteConversation = (conversationId, e) => {
-    e.stopPropagation()
+  // 注意：e.stopPropagation() 由 Sidebar 组件内部处理
+  const deleteConversation = (conversationId) => {
     // 获取当前角色的历史记录key
     const historyKey = getHistoryKey(userRole)
     const history = (Array.isArray(conversationHistory) ? conversationHistory : []).filter(c => c.id !== conversationId)
@@ -2169,95 +2170,17 @@ function App() {
 
   return (
     <div className="flex h-screen bg-jewelry-gold-50 overflow-hidden">
-      {/* 宸︿晶杈规爮 - 历史对话记录 */}
-      <aside className={`
-        ${sidebarOpen ? 'w-80' : 'w-0'} 
-        ${sidebarOpen ? 'flex' : 'hidden'}
-        lg:!flex lg:w-80
-        transition-all duration-300 ease-in-out
-        bg-gradient-to-b from-jewelry-navy to-jewelry-navy-dark
-        flex-col
-        overflow-hidden
-      `}>
-        {/* 侧边栏头部*/}
-        <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between">
-          <h2 className="text-[17px] font-semibold text-white tracking-tight">{t('sidebar.title')}</h2>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
-          >
-            <svg className="w-5 h-5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        
-        {/* 新建对话按钮 */}
-        <div className="px-6 py-4 border-b border-white/10">
-          <button
-            onClick={newConversation}
-            className="w-full px-4 py-2.5 bg-gradient-to-r from-jewelry-gold to-jewelry-gold-light text-white rounded-xl 
-                       hover:from-jewelry-gold-dark hover:to-jewelry-gold transition-all duration-200 font-medium text-[15px] shadow-md"
-          >
-            {t('sidebar.newChat')}
-          </button>
-        </div>
-        
-        {/* 对话列表 */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20">
-          {conversationHistory.length === 0 ? (
-            <div className="px-6 py-8 text-center text-white/50 text-sm">
-              {t('sidebar.noRecords')}
-            </div>
-          ) : (
-            <div className="py-2">
-              {conversationHistory.map((conv) => (
-                <div
-                  key={conv.id}
-                  className={`
-                    mx-3 mb-1 px-4 py-3 rounded-xl cursor-pointer
-                    transition-all duration-200
-                    ${currentConversationId === conv.id 
-                      ? 'bg-jewelry-gold/20 border border-jewelry-gold/40' 
-                      : 'hover:bg-white/10 border border-transparent'
-                    }
-                    group
-                  `}
-                  onClick={() => loadConversation(conv.id)}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-[15px] font-medium truncate mb-1 ${currentConversationId === conv.id ? 'text-jewelry-gold-light' : 'text-white'}`}>
-                        {conv.title}
-                      </div>
-                      <div className="text-xs text-white/50">
-                        {new Date(conv.updatedAt).toLocaleDateString('zh-CN', {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </div>
-                    </div>
-                    {/* 只有管理员可以删除对话记录?*/}
-                    {userRole === 'manager' && (
-                      <button
-                        onClick={(e) => deleteConversation(conv.id, e)}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded-lg transition-all"
-                        title="删除对话"
-                      >
-                        <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </aside>
+      {/* 侧边栏 - 历史对话记录 */}
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        conversationHistory={conversationHistory}
+        currentConversationId={currentConversationId}
+        userRole={userRole}
+        onNewConversation={newConversation}
+        onLoadConversation={loadConversation}
+        onDeleteConversation={deleteConversation}
+      />
 
       {/* 涓诲唴瀹瑰尯鍩?*/}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -2576,44 +2499,7 @@ function App() {
             {messages.map((msg, idx) => {
               // 思考过程消息
               if (msg.type === 'thinking' && Array.isArray(msg.steps)) {
-                return (
-                  <div key={msg.id || idx} className="flex justify-start">
-                    <div className="bg-white rounded-3xl px-5 py-4 shadow-sm border border-gray-200/60 max-w-2xl">
-                      {/* 进度条 */}
-                      {msg.steps.length > 0 && (
-                        <div className="mb-3">
-                          <div className="flex justify-between text-xs text-gray-600 mb-1">
-                            <span>处理进度</span>
-                            <span>{msg.steps[msg.steps.length - 1]?.progress || 0}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-1.5">
-                            <div 
-                              className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
-                              style={{ width: `${msg.steps[msg.steps.length - 1]?.progress || 0}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* 思考步骤?*/}
-                      <div className="space-y-2">
-                        {msg.steps.map((step, stepIdx) => (
-                          <div key={stepIdx} className="flex items-start space-x-3">
-                            <div className={`w-2 h-2 rounded-full mt-2 ${
-                              step.status === 'complete' 
-                                ? 'bg-green-500' 
-                                : 'bg-blue-500 animate-pulse'
-                            }`}></div>
-                            <div className="flex-1">
-                              <div className="text-sm font-medium text-gray-700">{step.step}</div>
-                              <div className="text-sm text-gray-500">{step.message}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )
+                return <ThinkingMessage key={msg.id || idx} steps={msg.steps} />
               }
               
               // 收款确认卡片
@@ -3880,29 +3766,8 @@ function App() {
               return null
             })}
 
-        {/* AI思考状态动画 - 珠宝风格 */}
-        {(loading || uploading) && (
-          <div className="flex justify-start items-start gap-3">
-            {/* AI头像 + 脉冲动画 */}
-            <div className="relative flex-shrink-0">
-              <img src="/ai-avatar.png" alt="AI" className="w-9 h-9 rounded-full object-cover shadow-lg" />
-              <div className="absolute inset-0 bg-amber-400 rounded-full animate-ping opacity-30"></div>
-            </div>
-            {/* 思考气泡 */}
-            <div className="bg-gradient-to-br from-white to-amber-50 rounded-3xl px-5 py-4 shadow-sm border border-amber-100">
-              <div className="flex items-center gap-3">
-                <div className="flex space-x-1.5">
-                  <div className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-bounce"></div>
-                  <div className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></div>
-                  <div className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
-                </div>
-                <span className="text-sm text-amber-600 font-medium">
-                  {uploading ? 'AI正在识别图片...' : 'AI正在分析...'}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* AI思考状态动画 */}
+        {(loading || uploading) && <ThinkingIndicator uploading={uploading} />}
 
         <div ref={messagesEndRef} />
           </div>
