@@ -1,29 +1,176 @@
 /**
- * 用户角色管理 Hook
+ * 用户角色管理 Hook (Phase 5 - copy-paste extraction from App.jsx)
  */
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { USER_ROLES } from '../constants/roles'
+import { API_ENDPOINTS } from '../config'
 import { getHistoryKey, getLastSessionKey } from '../utils/userIdentifier'
 import { parseMessageHiddenMarkers } from '../utils/messageParser'
 
-export const useUserRole = (onRoleChange) => {
-  // 用户角色状态
-  const [userRole, setUserRole] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('userRole') || 'sales'
-    }
-    return 'sales'
-  })
-  
+export function useUserRole(userRole, setUserRole, conversationState, messages, setMessages, setSidebarOpen) {
+  const {
+    conversationTitle, currentConversationId, currentSessionId,
+    loadRoleHistory,
+    setCurrentConversationId, setCurrentSessionId, setConversationTitle,
+    newConversation
+  } = conversationState
+
+  // 角色下拉菜单状态
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false)
   const [roleLoading, setRoleLoading] = useState(false)
   const roleDropdownRef = useRef(null)
-  const roleHistoryCache = useRef({})
+
+  // 待处理转移单数量
+  const [pendingTransferCount, setPendingTransferCount] = useState(0)
+  // 待结算销售单数量
+  const [pendingSalesCount, setPendingSalesCount] = useState(0)
 
   // 获取当前角色信息
-  const getCurrentRole = useCallback(() => {
+  const getCurrentRole = () => {
     return USER_ROLES.find(r => r.id === userRole) || USER_ROLES[0]
-  }, [userRole])
+  }
+
+  // ========== 切换用户角色（增强版：保存恢复各角色上次对话） ==========
+  const changeUserRole = async (roleId) => {
+    // 如果是同一角色，直接返回
+    if (roleId === userRole) {
+      setRoleDropdownOpen(false)
+      return
+    }
+    
+    // 显示加载状态
+    setRoleLoading(true)
+    setRoleDropdownOpen(false)
+    
+    // 如果切换到不同角色，保存当前对话并加载新角色的历史记录
+    if (roleId !== userRole) {
+      // 1. 保存当前角色的对话和会话ID
+      if (messages.length > 0) {
+        // 直接保存到当前角色的历史记录（不使用延迟保存）
+        const currentHistoryKey = getHistoryKey(userRole)
+        const parsedHistory = JSON.parse(localStorage.getItem(currentHistoryKey) || '[]')
+        const currentHistory = Array.isArray(parsedHistory) ? parsedHistory : []
+        
+        // 自动生成对话标题
+        let title = conversationTitle
+        if (title === '新对话' || !currentConversationId) {
+          const firstUserMessage = messages.find(m => m.type === 'user')
+          if (firstUserMessage) {
+            title = firstUserMessage.content.substring(0, 20) || '新对话'
+            if (firstUserMessage.content.length > 20) title += '...'
+          }
+        }
+        
+        const conversationId = currentConversationId || currentSessionId || Date.now().toString()
+        const conversation = {
+          id: conversationId,
+          title: title,
+          messages: messages,
+          createdAt: currentConversationId ? 
+            (currentHistory.find(c => c.id === currentConversationId)?.createdAt || new Date().toISOString()) :
+            new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+        
+        const existingIndex = currentHistory.findIndex(h => h.id === conversation.id)
+        if (existingIndex >= 0) {
+          currentHistory[existingIndex] = conversation
+        } else {
+          currentHistory.unshift(conversation)
+        }
+        
+        const limitedHistory = currentHistory.slice(0, 50)
+        localStorage.setItem(currentHistoryKey, JSON.stringify(limitedHistory))
+        
+        // 保存当前角色的上次会话ID
+        const currentLastSessionKey = getLastSessionKey(userRole)
+        localStorage.setItem(currentLastSessionKey, conversationId)
+      }
+      
+      // 2. 切换到新角色，加载新角色的历史记录
+      await loadRoleHistory(roleId)
+      
+      // 3. 尝试恢复新角色上次的对话
+      const newLastSessionKey = getLastSessionKey(roleId)
+      const lastSessionId = localStorage.getItem(newLastSessionKey)
+      
+      if (lastSessionId) {
+        // 尝试恢复新角色上次的对话
+        const newHistoryKey = getHistoryKey(roleId)
+        try {
+          const parsedData = JSON.parse(localStorage.getItem(newHistoryKey) || '[]')
+          const history = Array.isArray(parsedData) ? parsedData : []
+          const lastConversation = history.find(c => c.id === lastSessionId)
+          
+          if (lastConversation && lastConversation.messages && lastConversation.messages.length > 0) {
+            const restoredMessages = parseMessageHiddenMarkers(lastConversation.messages)
+            setMessages(restoredMessages)
+            setCurrentConversationId(lastSessionId)
+            setCurrentSessionId(lastSessionId)
+            setConversationTitle(lastConversation.title || '新对话')
+            console.log('[Role Switch] Restore last conversation:', lastSessionId)
+          } else {
+            // 没有找到上次对话，开始新对话
+            newConversation()
+          }
+        } catch {
+          newConversation()
+        }
+      } else {
+        // 该角色没有上次对话记录，开始新对话
+        newConversation()
+      }
+    }
+    setUserRole(roleId)
+    localStorage.setItem('userRole', roleId)
+    setRoleLoading(false)
+  }
+
+  // 加载待处理转移单数量
+  const loadPendingTransferCount = async () => {
+    if (!['counter', 'settlement', 'manager'].includes(userRole)) {
+      setPendingTransferCount(0)
+      return
+    }
+    try {
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/warehouse/transfers?status=pending`)
+      if (response.ok) {
+        const transfers = await response.json()
+        
+        const roleLocationMap = {
+          'counter': '展厅',
+          'product': '商品部仓库'
+        }
+        const myLocation = roleLocationMap[userRole]
+        
+        if (myLocation) {
+          const filtered = transfers.filter(t => t.to_location_name === myLocation)
+          setPendingTransferCount(filtered.length)
+        } else {
+          setPendingTransferCount(transfers.length)
+        }
+      }
+    } catch (error) {
+      console.error('Load pending transfer count failed:', error)
+    }
+  }
+
+  // 加载待结算销售单数量
+  const loadPendingSalesCount = async () => {
+    if (!['settlement', 'manager'].includes(userRole)) {
+      setPendingSalesCount(0)
+      return
+    }
+    try {
+      const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/settlement/pending-sales`)
+      if (response.ok) {
+        const sales = await response.json()
+        setPendingSalesCount(sales.length)
+      }
+    } catch (error) {
+      console.error('Load pending sales count failed:', error)
+    }
+  }
 
   // 点击外部关闭角色下拉菜单
   useEffect(() => {
@@ -36,80 +183,23 @@ export const useUserRole = (onRoleChange) => {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // 切换用户角色
-  const changeUserRole = useCallback(async (roleId, currentMessages, conversationTitle, currentConversationId, currentSessionId, conversationHistory) => {
-    if (roleId === userRole) {
-      setRoleDropdownOpen(false)
-      return null
-    }
-    
-    setRoleLoading(true)
-    setRoleDropdownOpen(false)
-    
-    // 保存当前角色的对话
-    if (currentMessages && currentMessages.length > 0) {
-      const currentHistoryKey = getHistoryKey(userRole)
-      const parsedHistory = JSON.parse(localStorage.getItem(currentHistoryKey) || '[]')
-      const currentHistory = Array.isArray(parsedHistory) ? parsedHistory : []
-      
-      let title = conversationTitle
-      if (title === '新对话' || !currentConversationId) {
-        const firstUserMessage = currentMessages.find(m => m.type === 'user')
-        if (firstUserMessage) {
-          title = firstUserMessage.content.substring(0, 20) || '新对话'
-          if (firstUserMessage.content.length > 20) title += '...'
-        }
-      }
-      
-      const conversationId = currentConversationId || currentSessionId || Date.now().toString()
-      const conversation = {
-        id: conversationId,
-        title: title,
-        messages: currentMessages,
-        createdAt: currentConversationId ? 
-          (currentHistory.find(c => c.id === currentConversationId)?.createdAt || new Date().toISOString()) :
-          new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
-      
-      const existingIndex = currentHistory.findIndex(h => h.id === conversation.id)
-      if (existingIndex >= 0) {
-        currentHistory[existingIndex] = conversation
-      } else {
-        currentHistory.unshift(conversation)
-      }
-      
-      const limitedHistory = currentHistory.slice(0, 50)
-      localStorage.setItem(currentHistoryKey, JSON.stringify(limitedHistory))
-      
-      const currentLastSessionKey = getLastSessionKey(userRole)
-      localStorage.setItem(currentLastSessionKey, conversationId)
-    }
-    
-    // 切换到新角色
-    setUserRole(roleId)
-    localStorage.setItem('userRole', roleId)
-    setRoleLoading(false)
-    
-    // 通知父组件角色已更改
-    if (onRoleChange) {
-      onRoleChange(roleId)
-    }
-    
-    return roleId
-  }, [userRole, onRoleChange])
+  // 角色变化时加载待处理数量
+  useEffect(() => {
+    loadPendingTransferCount()
+    loadPendingSalesCount()
+    const interval = setInterval(() => {
+      loadPendingTransferCount()
+      loadPendingSalesCount()
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [userRole])
 
   return {
-    userRole,
-    setUserRole,
-    roleDropdownOpen,
-    setRoleDropdownOpen,
+    roleDropdownOpen, setRoleDropdownOpen,
     roleLoading,
     roleDropdownRef,
-    roleHistoryCache,
+    pendingTransferCount, pendingSalesCount,
     getCurrentRole,
     changeUserRole
   }
 }
-
-export default useUserRole
