@@ -65,10 +65,10 @@ ChartJS.register(
 )
 
 function App() {
-  // 鍥介檯鍖?
+  // 国际化
   const { t, i18n } = useTranslation()
   const [showLanguageSelector, setShowLanguageSelector] = useState(() => {
-    // 棣栨璁块棶鏄剧ず璇█閫夋嫨椤?
+    // 首次访问显示语言选择?
     if (typeof window !== 'undefined') {
       return localStorage.getItem('languageSelected') !== 'true'
     }
@@ -79,24 +79,24 @@ function App() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [uploading, setUploading] = useState(false)  // 鍥剧墖涓婁紶鐘舵€?
+  const [uploading, setUploading] = useState(false)  // 图片上传状态
   const messagesEndRef = useRef(null)
-  const fileInputRef = useRef(null)  // 鏂囦欢杈撳叆寮曠敤
-  const abortControllerRef = useRef(null)  // SSE 璇锋眰鍙栨秷鎺у埗鍣?
+  const fileInputRef = useRef(null)  // 文件输入引用
+  const abortControllerRef = useRef(null)  // SSE 请求取消控制?
   
-  // OCR缂栬緫瀵硅瘽妗嗙浉鍏崇姸鎬?
+  // OCR编辑对话框相关状态
   const [showOCRModal, setShowOCRModal] = useState(false)
   const [ocrResult, setOcrResult] = useState('')
   const [uploadedImage, setUploadedImage] = useState(null)
   const ocrTextareaRef = useRef(null)  // 鐢ㄤ簬鑷姩鑱氱劍
   
-  // 鍘嗗彶瀵硅瘽璁板綍鐩稿叧鐘舵€?
-  const [conversationHistory, setConversationHistory] = useState([]) // 鍘嗗彶瀵硅瘽鍒楄〃
-  const [currentConversationId, setCurrentConversationId] = useState(null) // 褰撳墠瀵硅瘽ID
+  // 历史对话记录相关状态
+  const [conversationHistory, setConversationHistory] = useState([]) // 历史对话列表
+  const [currentConversationId, setCurrentConversationId] = useState(null) // 当前对话ID
   
-  // 鍚庣浼氳瘽ID锛堢敤浜庤亰澶╄褰曟寔涔呭寲：
+  // 后端会话ID（用于聊天记录持久化）
   const [currentSessionId, setCurrentSessionId] = useState(() => {
-    // 鐢熸垚鎴栨仮澶?session_id
+    // 生成或恢复?session_id
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('current_session_id')
       if (saved) return saved
@@ -106,7 +106,7 @@ function App() {
     }
     return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   })
-  // 渚ц竟鏍忓紑鍏筹紙妗岄潰绔粯璁ゆ墦寮€锛岀Щ鍔ㄧ榛樿鍏抽棴：
+  // 侧边栏开关（桌面端默认打开，移动端默认关闭）
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth >= 1024
@@ -115,13 +115,13 @@ function App() {
   })
   const [conversationTitle, setConversationTitle] = useState('New Chat') // 当前对话标题
   const [currentPage, setCurrentPage] = useState('chat') // 'chat', 'finance', 'warehouse', 'settlement', 'analytics', 'export'
-  const [showQuickOrderModal, setShowQuickOrderModal] = useState(false) // 蹇嵎寮€鍗曞脊绐?
-  const [showQuickReturnModal, setShowQuickReturnModal] = useState(false) // 蹇嵎閫€璐у脊绐?
-  const [showQuickInboundModal, setShowQuickInboundModal] = useState(false) // 蹇嵎鍏ュ簱寮圭獥
-  const [showSalesSearchModal, setShowSalesSearchModal] = useState(false) // 閿€鍞鐞嗗脊绐?
+  const [showQuickOrderModal, setShowQuickOrderModal] = useState(false) // 快捷开单弹窗
+  const [showQuickReturnModal, setShowQuickReturnModal] = useState(false) // 快捷退货弹窗
+  const [showQuickInboundModal, setShowQuickInboundModal] = useState(false) // 快捷入库弹窗
+  const [showSalesSearchModal, setShowSalesSearchModal] = useState(false) // 销售管理弹窗
   const [showHistoryPanel, setShowHistoryPanel] = useState(false) // 历史回顾面板
-  const [showQuickReceiptModal, setShowQuickReceiptModal] = useState(false) // 蹇嵎鏀舵枡寮圭獥
-  const [showQuickWithdrawalModal, setShowQuickWithdrawalModal] = useState(false) // 蹇嵎鎻愭枡寮圭獥
+  const [showQuickReceiptModal, setShowQuickReceiptModal] = useState(false) // 快捷收料弹窗
+  const [showQuickWithdrawalModal, setShowQuickWithdrawalModal] = useState(false) // 快捷提料弹窗
   const [toastMessage, setToastMessage] = useState('') // Toast 提示消息
   const [quickFormCustomers, setQuickFormCustomers] = useState([]) // 客户列表
   const [quickFormCustomerSearch, setQuickFormCustomerSearch] = useState('') // 客户搜索
@@ -130,22 +130,22 @@ function App() {
   const [selectedCustomerDeposit, setSelectedCustomerDeposit] = useState(null) // 选中客户的存料余额
   const [depositLoading, setDepositLoading] = useState(false)
   
-  // 鐢ㄦ埛瑙掕壊鐩稿叧鐘舵€?
+  // 用户角色相关状态
   const [userRole, setUserRole] = useState(() => {
-    // 浠?localStorage 璇诲彇淇濆瓨鐨勮鑹诧紝榛樿涓轰笟鍔″憳
+    // 浠?localStorage 读取保存的角色，默认为业务员
     if (typeof window !== 'undefined') {
       return localStorage.getItem('userRole') || 'sales'
     }
     return 'sales'
   })
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false)
-  const [roleLoading, setRoleLoading] = useState(false)  // 瑙掕壊鍒囨崲鍔犺浇鐘舵€?
+  const [roleLoading, setRoleLoading] = useState(false)  // 角色切换加载状态
   const roleDropdownRef = useRef(null)
-  const roleHistoryCache = useRef({})  // 瑙掕壊鍘嗗彶璁板綍缂撳瓨
+  const roleHistoryCache = useRef({})  // 角色历史记录缓存
   
-  // 寰呭鐞嗚浆绉诲崟鏁伴噺锛堢敤浜庡垎浠撳簱瀛樻寜閽産adge：
+  // 待处理转移单数量（用于分仓库存按钮badge：
   const [pendingTransferCount, setPendingTransferCount] = useState(0)
-  // 寰呯粨绠楅攢鍞崟鏁伴噺锛堢敤浜庣粨绠楃鐞嗘寜閽産adge：
+  // 待结算销售单数量（用于结算管理按钮badge：
   const [pendingSalesCount, setPendingSalesCount] = useState(0)
 
   // Toast 鎻愮ず鍑芥暟：绉掑悗鑷姩娑堝け：
@@ -165,18 +165,18 @@ function App() {
   // getUserIdentifier, getHistoryKey, getLastSessionKey, parseMessageHiddenMarkers
   // 已移至 utils/userIdentifier.js 和 utils/messageParser.js，通过顶部 import 引入
 
-  // 鍔犺浇鎸囧畾瑙掕壊鐨勫巻鍙茶褰曪紙浼樺寲鐗堬細浼樺厛浣跨敤缂撳瓨/localStorage锛屽悗鍙伴潤榛樺悓姝PI：
+  // 加载指定角色的历史记录（优化版：优先使用缓存/localStorage，后台静默同步API：
   const loadRoleHistory = async (role) => {
     const historyKey = getHistoryKey(role)
     
-    // 1. 棣栧厛妫€鏌ュ唴瀛樼紦瀛橈紙5鍒嗛挓鏈夋晥鏈燂級
+    // 1. 首先检查内存缓存（5鍒嗛挓鏈夋晥鏈燂級
     const cached = roleHistoryCache.current[role]
     if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
       setConversationHistory(cached.data)
       return cached.data
     }
     
-    // 2. 绔嬪嵆浠?localStorage 鍔犺浇锛堝揩閫熷搷搴旓級
+    // 2. 立即从?localStorage 加载（快速响应）
     let localHistory = []
     try {
       const parsed = JSON.parse(localStorage.getItem(historyKey) || '[]')
@@ -187,7 +187,7 @@ function App() {
       setConversationHistory([])
     }
     
-    // 3. 鍚庡彴闈欓粯鍚屾 API 鏁版嵁锛堜笉闃诲 UI：
+    // 3. 后台静默同步 API 数据（不阻塞 UI：
     // 浣跨敤 setTimeout 璁?UI 鍏堟洿鏂?
     setTimeout(async () => {
       try {
@@ -205,19 +205,19 @@ function App() {
             lastIntent: session.last_intent
           }))
           
-          // 鏇存柊 localStorage
+          // 更新 localStorage
           localStorage.setItem(historyKey, JSON.stringify(history))
           
-          // 鏇存柊鍐呭瓨缂撳瓨
+          // 更新内存缓存
           roleHistoryCache.current[role] = {
             data: history,
             timestamp: Date.now()
           }
           
-          // 鍙湁褰撳墠瑙掕壊鍖归厤鏃舵墠鏇存柊 UI
-          // 閬垮厤鍒囨崲瑙掕壊鍚庢棫璇锋眰瑕嗙洊鏂版暟鎹?
+          // 只有当前角色匹配时才更新 UI
+          // 避免切换角色后旧请求覆盖新数据?
           setConversationHistory(prev => {
-            // 濡傛灉鏈湴宸叉湁鏁版嵁锛屽悎骞朵繚鐣欐湰鍦扮殑娑堟伅鍐呭
+            // 如果本地已有数据，合并保留本地的消息内容
             if (localHistory.length > 0) {
               return history.map(h => {
                 const local = localHistory.find(l => l.id === h.id)
@@ -241,28 +241,28 @@ function App() {
     return localHistory
   }
 
-  // ========== 鍒囨崲鐢ㄦ埛瑙掕壊锛堝寮虹増锛氫繚瀛?鎭㈠鍚勮鑹蹭笂娆″璇濓級 ==========
+  // ========== 切换用户角色（增强版：保存恢复各角色上次对话） ==========
   const changeUserRole = async (roleId) => {
-    // 濡傛灉鏄悓涓€瑙掕壊锛岀洿鎺ヨ繑鍥?
+    // 如果是同一角色，直接返回?
     if (roleId === userRole) {
       setRoleDropdownOpen(false)
       return
     }
     
-    // 鏄剧ず鍔犺浇鐘舵€?
+    // 显示加载状态
     setRoleLoading(true)
     setRoleDropdownOpen(false)
     
-    // 濡傛灉鍒囨崲鍒颁笉鍚岃鑹诧紝淇濆瓨褰撳墠瀵硅瘽骞跺姞杞芥柊瑙掕壊鐨勫巻鍙茶褰?
+    // 如果切换到不同角色，保存当前对话并加载新角色的历史记录?
     if (roleId !== userRole) {
-      // 1. 淇濆瓨褰撳墠瑙掕壊鐨勫璇濆拰浼氳瘽ID
+      // 1. 保存当前角色的对话和会话ID
       if (messages.length > 0) {
-        // 鐩存帴淇濆瓨鍒板綋鍓嶈鑹茬殑鍘嗗彶璁板綍锛堜笉浣跨敤寤惰繜淇濆瓨：
+        // 直接保存到当前角色的历史记录（不使用延迟保存
         const currentHistoryKey = getHistoryKey(userRole)
         const parsedHistory = JSON.parse(localStorage.getItem(currentHistoryKey) || '[]')
         const currentHistory = Array.isArray(parsedHistory) ? parsedHistory : []
         
-        // 鑷姩鐢熸垚瀵硅瘽鏍囬
+        // 自动生成对话标题
         let title = conversationTitle
         if (title === '新对话' || !currentConversationId) {
           const firstUserMessage = messages.find(m => m.type === 'user')
@@ -294,20 +294,20 @@ function App() {
         const limitedHistory = currentHistory.slice(0, 50)
         localStorage.setItem(currentHistoryKey, JSON.stringify(limitedHistory))
         
-        // 淇濆瓨褰撳墠瑙掕壊鐨勪笂娆′細璇滻D
+        // 保存当前角色的上次会话ID
         const currentLastSessionKey = getLastSessionKey(userRole)
         localStorage.setItem(currentLastSessionKey, conversationId)
       }
       
-      // 2. 鍒囨崲鍒版柊瑙掕壊锛屽姞杞芥柊瑙掕壊鐨勫巻鍙茶褰?
+      // 2. 切换到新角色，加载新角色的历史记录?
       await loadRoleHistory(roleId)
       
-      // 3. 灏濊瘯鎭㈠鏂拌鑹蹭笂娆＄殑瀵硅瘽
+      // 3. 尝试恢复新角色上次的对话
       const newLastSessionKey = getLastSessionKey(roleId)
       const lastSessionId = localStorage.getItem(newLastSessionKey)
       
       if (lastSessionId) {
-        // 灏濊瘯鎭㈠鏂拌鑹蹭笂娆＄殑瀵硅瘽
+        // 尝试恢复新角色上次的对话
         const newHistoryKey = getHistoryKey(roleId)
         try {
           const parsedData = JSON.parse(localStorage.getItem(newHistoryKey) || '[]')
@@ -322,28 +322,28 @@ function App() {
             setConversationTitle(lastConversation.title || '新对话')
             console.log('[Role Switch] Restore last conversation:', lastSessionId)
           } else {
-            // 娌℃湁鎵惧埌涓婃瀵硅瘽锛屽紑濮嬫柊瀵硅瘽
+            // 没有找到上次对话，开始新对话
             newConversation()
           }
         } catch {
           newConversation()
         }
       } else {
-        // 璇ヨ鑹叉病鏈変笂娆″璇濊褰曪紝寮€濮嬫柊瀵硅瘽
+        // 该角色没有上次对话记录，开始新对话
         newConversation()
       }
     }
     setUserRole(roleId)
     localStorage.setItem('userRole', roleId)
-    setRoleLoading(false)  // 鍏抽棴鍔犺浇鐘舵€?
+    setRoleLoading(false)  // 关闭加载状态
   }
 
-  // 鑾峰彇褰撳墠瑙掕壊淇℃伅
+  // 获取当前角色信息
   const getCurrentRole = () => {
     return USER_ROLES.find(r => r.id === userRole) || USER_ROLES[0]
   }
 
-  // 鐐瑰嚮澶栭儴鍏抽棴瑙掕壊涓嬫媺鑿滃崟
+  // 点击外部关闭角色下拉菜单
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (roleDropdownRef.current && !roleDropdownRef.current.contains(event.target)) {
@@ -354,7 +354,7 @@ function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // 缁勪欢鍗歌浇鏃跺彇娑堟鍦ㄨ繘琛岀殑 SSE 璇锋眰
+  // 组件卸载时取消正在进行的 SSE 璇锋眰
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
@@ -363,18 +363,18 @@ function App() {
     }
   }, [])
 
-  // 浠呭湪椤甸潰鍒濆鍔犺浇鏃跺姞杞藉綋鍓嶈鑹茬殑鍘嗗彶瀵硅瘽璁板綍
-  // 瑙掕壊鍒囨崲鏃剁敱 changeUserRole 鍑芥暟璐熻矗鍔犺浇锛岄伩鍏嶉噸澶嶈皟鐢?
+  // 仅在页面初始加载时加载当前角色的历史对话记录
+  // 角色切换时由 changeUserRole 函数负责加载，避免重复调用?
   const initialLoadRef = useRef(false)
   useEffect(() => {
     if (!initialLoadRef.current) {
       initialLoadRef.current = true
       loadRoleHistory(userRole)
     }
-  }, []) // 鍙湪缁勪欢鎸傝浇鏃舵墽琛屼竴娆?
+  }, []) // 只在组件挂载时执行一起
 
-  // ========== 椤甸潰鍒濆鍖栨椂鎭㈠褰撳墠瀵硅瘽锛堝寮虹増锛氭敮鎸佸悗绔悓姝ュ厹搴曪級 ==========
-  const [isRestoring, setIsRestoring] = useState(false) // 闃叉閲嶅鎭㈠
+  // ========== 页面初始化时恢复当前对话（增强版：支持后端同步兜底） ==========
+  const [isRestoring, setIsRestoring] = useState(false) // 防止重复恢复
   
   useEffect(() => {
     // 纭繚 userRole 宸插垵濮嬪寲
@@ -383,7 +383,7 @@ function App() {
     const restoreCurrentConversation = async () => {
       setIsRestoring(true)
       
-      // 鑾峰彇璇ヨ鑹蹭笂娆′娇鐢ㄧ殑session
+      // 获取该角色上次使用的session
       const lastSessionKey = getLastSessionKey(userRole)
       const savedSessionId = localStorage.getItem(lastSessionKey) || localStorage.getItem('current_session_id')
       
@@ -392,7 +392,7 @@ function App() {
         return
       }
       
-      // 妫€鏌ocalStorage涓槸鍚︽湁杩欎釜瀵硅瘽鐨勬秷鎭?
+      // 妫€鏌ocalStorage中是否有这个对话的消?
       const historyKey = getHistoryKey(userRole)
       try {
         const parsedData = JSON.parse(localStorage.getItem(historyKey) || '[]')
@@ -408,7 +408,7 @@ function App() {
           setConversationTitle(conversation.title || '新对话')
           console.log('[Restore] Restored from local:', savedSessionId, 'message count:', restoredMessages.length)
         } else {
-          // 鏈湴娌℃湁锛屽皾璇曚粠鍚庣鍚屾
+          // 本地没有，尝试从后端同步
           console.log('[Restore] No local data, try to sync from backend:', savedSessionId)
           try {
             const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/chat-history/${savedSessionId}`)
@@ -433,7 +433,7 @@ function App() {
         }
       } catch (error) {
         console.error('[Restore] Restore conversation failed:', error)
-        // 鏁版嵁鎹熷潖鏃讹紝娓呯┖璇ヨ鑹茬殑鍘嗗彶璁板綍
+        // 数据损坏时，清空该角色的历史记录
         try {
           localStorage.setItem(historyKey, '[]')
           console.warn('[Restore] Cleared corrupted history records')
@@ -444,11 +444,11 @@ function App() {
     }
     
     restoreCurrentConversation()
-  }, [userRole]) // 渚濊禆 userRole锛岀‘淇濊鑹插彉鍖栨椂涔熻兘姝ｇ‘鎭㈠
+  }, [userRole]) // 渚濊禆 userRole，确保角色变化时也能正确恢复
 
-  // 鍔犺浇寰呭鐞嗚浆绉诲崟鏁伴噺锛堟煖鍙拌鑹查渶瑕佺湅鍒板晢鍝侀儴鍙戞潵鐨勮浆绉诲崟：
+  // 加载待处理转移单数量（柜台角色需要看到商品部发来的转移单
   const loadPendingTransferCount = async () => {
-    // 鍙湁鏌滃彴銆佺粨绠椼€佺鐞嗗眰闇€瑕佺湅鍒板緟鎺ユ敹杞Щ鍗曟暟閲?
+    // 只有柜台、结算、管理层需要看到待接收转移单数据?
     if (!['counter', 'settlement', 'manager'].includes(userRole)) {
       setPendingTransferCount(0)
       return
@@ -458,7 +458,7 @@ function App() {
       if (response.ok) {
         const transfers = await response.json()
         
-        // 鏍规嵁瑙掕壊杩囨护锛屼笌 WarehousePage 閫昏緫淇濇寔涓€鑷?
+        // 根据角色过滤，与 WarehousePage 閫昏緫淇濇寔涓€鑷?
         const roleLocationMap = {
           'counter': '展厅',
           'product': '商品部仓库'
@@ -466,23 +466,23 @@ function App() {
         const myLocation = roleLocationMap[userRole]
         
         if (myLocation) {
-          // 鍙绠楃洰鏍囨槸褰撳墠瑙掕壊绠¤緰浠撳簱鐨勮浆绉诲崟
+          // 只计算目标是当前角色管辖仓库的转移单
           const filtered = transfers.filter(t => t.to_location_name === myLocation)
           setPendingTransferCount(filtered.length)
         } else {
-          // 绠＄悊鍛樼湅鎵€鏈?
+          // 管理员看所?
           setPendingTransferCount(transfers.length)
         }
       }
     } catch (error) {
       console.error('Load pending transfer count failed:', error)
-      // 闈炲叧閿姛鑳斤紝闈欓粯澶辫触
+      // 非关键功能，静默失败
     }
   }
 
-  // 鍔犺浇寰呯粨绠楅攢鍞崟鏁伴噺锛堢粨绠椾笓鍛橀渶瑕佺湅鍒版煖鍙板紑鐨勯攢鍞崟：
+  // 加载待结算销售单数量（结算专员需要看到柜台开的销售单
   const loadPendingSalesCount = async () => {
-    // 鍙湁缁撶畻涓撳憳鍜岀鐞嗗眰闇€瑕佺湅鍒板緟缁撶畻閿€鍞崟鏁伴噺
+    // 只有结算专员和管理层需要看到待结算销售单数量
     if (!['settlement', 'manager'].includes(userRole)) {
       setPendingSalesCount(0)
       return
@@ -495,7 +495,7 @@ function App() {
       }
     } catch (error) {
       console.error('Load pending sales count failed:', error)
-      // 闈炲叧閿姛鑳斤紝闈欓粯澶辫触
+      // 非关键功能，静默失败
     }
   }
 
@@ -506,12 +506,12 @@ function App() {
       if (response.ok) {
         const data = await response.json()
         console.log('Load customer list:', data)  // Debug log
-        // API杩斿洖鏍煎紡: { success: true, data: { customers: [...] } }
+        // API返回格式: { success: true, data: { customers: [...] } }
         const customers = data.data?.customers || data.customers || []
         setQuickFormCustomers(Array.isArray(customers) ? customers : [])
       } else {
         console.error('Load customer list API failed:', response.status)
-        showToast('鍔犺浇客户列表澶辫触锛岃鍒锋柊閲嶈瘯')
+        showToast('加载客户列表失败，请刷新重试')
       }
     } catch (error) {
       console.error('Load customer list failed:', error)
@@ -519,7 +519,7 @@ function App() {
     }
   }
 
-  // 鎵撳紑蹇嵎鏀舵枡寮圭獥
+  // 打开快捷收料弹窗
   const openQuickReceiptModal = () => {
     loadQuickFormCustomers()
     setQuickReceiptForm({ customer_id: '', gold_weight: '', gold_fineness: '足金999', remark: '' })
@@ -527,7 +527,7 @@ function App() {
     setShowQuickReceiptModal(true)
   }
 
-  // 鎵撳紑蹇嵎鎻愭枡寮圭獥
+  // 打开快捷提料弹窗
   const openQuickWithdrawalModal = () => {
     loadQuickFormCustomers()
     setQuickWithdrawalForm({ customer_id: '', gold_weight: '', remark: '' })
@@ -536,7 +536,7 @@ function App() {
     setShowQuickWithdrawalModal(true)
   }
 
-  // 鏌ヨ瀹㈡埛瀛樻枡浣欓
+  // 查询客户存料余额
   const fetchCustomerDeposit = async (customerId) => {
     if (!customerId) {
       setSelectedCustomerDeposit(null)
@@ -557,13 +557,13 @@ function App() {
     } catch (error) {
       console.error('Query customer balance failed:', error)
       setSelectedCustomerDeposit({ current_balance: 0, customer_name: '' })
-      showToast('鏌ヨ瀹㈡埛浣欓澶辫触锛屾樉绀轰负0')
+      showToast('查询客户余额失败，显示为0')
     } finally {
       setDepositLoading(false)
     }
   }
 
-  // 鍒涘缓蹇嵎鏀舵枡鍗?
+  // 创建快捷收料?
   const handleQuickReceipt = async (e) => {
     e.preventDefault()
     if (!quickReceiptForm.customer_id) {
@@ -579,8 +579,8 @@ function App() {
         customer_id: quickReceiptForm.customer_id,
         gold_weight: quickReceiptForm.gold_weight,
         gold_fineness: quickReceiptForm.gold_fineness,
-        remark: quickReceiptForm.remark || '蹇嵎鏀舵枡',
-        created_by: '缁撶畻涓撳憳'
+        remark: quickReceiptForm.remark || '快捷收料',
+        created_by: '结算专员'
       })
       const response = await fetch(`${API_BASE_URL}/api/gold-material/gold-receipts?${params}`, {
         method: 'POST',
@@ -588,16 +588,16 @@ function App() {
       })
       if (response.ok) {
         const result = await response.json()
-        const customerName = quickFormCustomers.find(c => c.id.toString() === quickReceiptForm.customer_id)?.name || '鏈煡瀹㈡埛'
+        const customerName = quickFormCustomers.find(c => c.id.toString() === quickReceiptForm.customer_id)?.name || '未知客户'
         const receiptWeight = parseFloat(quickReceiptForm.gold_weight)
         const remarkText = quickReceiptForm.remark || ''
         
         setShowQuickReceiptModal(false)
-        // 閲嶇疆琛ㄥ崟
+        // 重置表单
         setQuickReceiptForm({ customer_id: '', gold_weight: '', gold_fineness: '足金999', remark: '' })
         setQuickFormCustomerSearch('')
         
-        // 娣诲姞鏀舵枡鍗曡褰曞埌鑱婂ぉ妗嗭紙浣跨敤鏂囨湰鏍煎紡+闅愯棌鏍囪：
+        // 添加收料单记录到聊天框（使用文本格式+隐藏标记）
         const downloadUrl = `${API_BASE_URL}/api/gold-material/gold-receipts/${result.data.id}/print`
         const receiptMessage = `✅ 收料单已生成\n\n📋 单号：{result.data.receipt_no}\n👤 客户：{customerName}\n⚖️ 克重：{receiptWeight.toFixed(2)} 克
 🏷️ 成色：{quickReceiptForm.gold_fineness}${remarkText ? `\n📝 备注：{remarkText}` : ''}\n🕐 时间：{new Date().toLocaleString('zh-CN')}\n\n<!-- GOLD_RECEIPT:${result.data.id}:${result.data.receipt_no} -->`
@@ -609,7 +609,7 @@ function App() {
           goldReceiptId: result.data.id
         }])
         
-        // 鑷姩鎵撳紑鎵撳嵃椤甸潰
+        // 自动打开打印页面
         if (result.data.id) {
           window.open(downloadUrl, '_blank')
         }
@@ -623,7 +623,7 @@ function App() {
     }
   }
 
-  // 鍒涘缓蹇嵎提料单
+  // 创建快捷ϵ
   const handleQuickWithdrawal = async (e) => {
     e.preventDefault()
     if (!quickWithdrawalForm.customer_id) {
@@ -636,11 +636,11 @@ function App() {
       return
     }
     if (weight > (selectedCustomerDeposit?.current_balance || 0)) {
-      alert(`鎻愭枡鍏嬮噸涓嶈兘瓒呰繃瀹㈡埛瀛樻枡浣欓：{selectedCustomerDeposit?.current_balance?.toFixed(2) || 0}克）`)
+      alert(`提料克重不能超过客户存料余额：{selectedCustomerDeposit?.current_balance?.toFixed(2) || 0}克）`)
       return
     }
     try {
-      const params = new URLSearchParams({ user_role: 'settlement', created_by: '缁撶畻涓撳憳' })
+      const params = new URLSearchParams({ user_role: 'settlement', created_by: '结算专员' })
       const response = await fetch(`${API_BASE_URL}/api/gold-material/withdrawals?${params}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -648,22 +648,22 @@ function App() {
           customer_id: parseInt(quickWithdrawalForm.customer_id),
           gold_weight: weight,
           withdrawal_type: 'self',
-          remark: quickWithdrawalForm.remark || '蹇嵎鎻愭枡'
+          remark: quickWithdrawalForm.remark || '快捷提料'
         })
       })
       if (response.ok) {
         const result = await response.json()
-        const customerName = quickFormCustomers.find(c => c.id.toString() === quickWithdrawalForm.customer_id)?.name || '鏈煡瀹㈡埛'
+        const customerName = quickFormCustomers.find(c => c.id.toString() === quickWithdrawalForm.customer_id)?.name || '未知客户'
         const withdrawalWeight = parseFloat(quickWithdrawalForm.gold_weight)
         const remarkText = quickWithdrawalForm.remark || ''
         
         setShowQuickWithdrawalModal(false)
-        // 閲嶇疆琛ㄥ崟
+        // 重置表单
         setQuickWithdrawalForm({ customer_id: '', gold_weight: '', remark: '' })
         setSelectedCustomerDeposit(null)
         setQuickFormCustomerSearch('')
         
-        // 娣诲姞鎻愭枡鍗曡褰曞埌鑱婂ぉ妗嗭紙浣跨敤鏂囨湰鏍煎紡+闅愯棌鏍囪锛岀‘淇濆巻鍙茶褰曟寔涔呭寲：
+        // 添加提料单记录到聊天框（使用文本格式+隐藏标记，确保历史记录持久化）
         const downloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${result.id}/download?format=html`
           const withdrawalMessage = `✅ 提料单已生成\n\n📋 单号：${result.withdrawal_no}\n👤 客户：${customerName}\n⚖️ 克重：${withdrawalWeight.toFixed(2)} 克${remarkText ? `\n📝 备注：${remarkText}` : ''}\n⏰ 时间：${new Date().toLocaleString('zh-CN')}\n\n<!-- WITHDRAWAL_ORDER:${result.id}:${result.withdrawal_no} -->`
         setMessages(prev => [...prev, {
@@ -675,7 +675,7 @@ function App() {
           withdrawalId: result.id
         }])
         
-        // 鑷姩鎵撳紑鎵撳嵃椤甸潰
+        // 自动打开打印页面
         if (result.id) {
           window.open(`${API_BASE_URL}/api/gold-material/withdrawals/${result.id}/download?format=html`, '_blank')
         }
@@ -689,7 +689,7 @@ function App() {
     }
   }
 
-  // 绛涢€夊鎴峰垪琛紙纭繚鏄暟缁勶級
+  // 筛选客户列表（确保是数组）
   const filteredQuickFormCustomers = (Array.isArray(quickFormCustomers) ? quickFormCustomers : []).filter(c => {
     if (!quickFormCustomerSearch.trim()) return true; // 绌烘悳绱㈡樉绀哄叏閮?
     const search = quickFormCustomerSearch.toLowerCase();
@@ -697,7 +697,7 @@ function App() {
            (c.phone && c.phone.includes(quickFormCustomerSearch));
   })
 
-  // 瑙掕壊鍙樺寲鏃跺姞杞藉緟澶勭悊鏁伴噺
+  // 角色变化时加载待处理数量
   useEffect(() => {
     loadPendingTransferCount()
     loadPendingSalesCount()
@@ -709,27 +709,27 @@ function App() {
     return () => clearInterval(interval)
   }, [userRole])
 
-  // 淇濆瓨瀵硅瘽鍒板巻鍙茶褰曪紙淇濆瓨鍒板綋鍓嶈鑹茬殑鍘嗗彶璁板綍：
-  // ========== 淇濆瓨瀵硅瘽锛堝寮虹増锛氬幓閲嶄紭鍖?+ 淇濆瓨涓婃浼氳瘽ID：==========
+  // 保存对话到历史记录（保存到当前角色的历史记录
+  // ========== 保存对话（增强版：去重优化?+ 保存上次会话ID：==========
   const lastSavedRef = useRef({ messageCount: 0, lastMessageId: null })
   
   const saveConversation = () => {
     if (messages.length === 0) return
     
-    // 鎬ц兘浼樺寲锛氭鏌ユ秷鎭槸鍚︾湡鐨勫彉鍖栦簡锛岄伩鍏嶉噸澶嶄繚瀛?
+    // 性能优化：检查消息是否真的变化了，避免重复保存
     const lastMessage = messages[messages.length - 1]
     if (lastSavedRef.current.messageCount === messages.length && 
         lastSavedRef.current.lastMessageId === lastMessage?.id) {
-      return // 娑堟伅娌℃湁鍙樺寲锛屼笉闇€瑕佷繚瀛?
+      return // 消息没有变化，不需要保存
     }
     
-    // 鑾峰彇褰撳墠瑙掕壊鐨勫巻鍙茶褰昸ey
+    // 获取当前角色的历史记录key
     const historyKey = getHistoryKey(userRole)
-    // 浠巐ocalStorage鑾峰彇褰撳墠瑙掕壊鐨勬渶鏂板巻鍙茶褰?
+    // 浠巐ocalStorage获取当前角色的最新历史记录?
     const parsedData = JSON.parse(localStorage.getItem(historyKey) || '[]')
     const history = Array.isArray(parsedData) ? parsedData : []
     
-    // 鑷姩鐢熸垚瀵硅瘽鏍囬锛堜娇鐢ㄧ涓€鏉＄敤鎴锋秷鎭殑鍓?0涓瓧绗︼級
+    // 自动生成对话标题（使用第一条用户消息的?0涓瓧绗︼級
     let title = conversationTitle
     if (title === '新对话' || !currentConversationId) {
       const firstUserMessage = messages.find(m => m.type === 'user')
@@ -765,26 +765,26 @@ function App() {
     setConversationHistory(limitedHistory)
     setCurrentConversationId(conversationId)
     
-    // 淇濆瓨褰撳墠瑙掕壊鐨勪笂娆′細璇滻D锛堢敤浜庤鑹插垏鎹㈡椂鎭㈠：
+    // 保存当前角色的上次会话ID（用于角色切换时恢复
     const lastSessionKey = getLastSessionKey(userRole)
     localStorage.setItem(lastSessionKey, conversationId)
     
-    // 鏇存柊淇濆瓨鐘舵€侊紝鐢ㄤ簬鍘婚噸妫€娴?
+    // 更新保存状态，用于去重检测?
     lastSavedRef.current = { messageCount: messages.length, lastMessageId: lastMessage?.id }
   }
 
-  // 褰撴秷鎭彉鍖栨椂鑷姩淇濆瓨锛堜紭鍖栵細鍘婚噸：
+  // 当消息变化时自动保存（优化：去重
   useEffect(() => {
     if (messages.length === 0) return
     
-    // 寤惰繜淇濆瓨锛岄伩鍏嶉绻佸啓克
+    // 延迟保存，避免频繁写入
     const timer = setTimeout(() => {
       saveConversation()
     }, 1000)
     return () => clearTimeout(timer)
   }, [messages])
 
-  // 鍔犺浇鎸囧畾瀵硅瘽锛堜粠鍚庣API鍔犺浇瀹屾暣娑堟伅鍐呭：
+  // 加载指定对话（从后端API加载完整消息内容
   const loadConversation = async (conversationId) => {
     // 先尝试从localStorage加载（优先本地缓存，避免后端不可用时无法加载）
     const historyKey = getHistoryKey(userRole)
@@ -818,15 +818,15 @@ function App() {
       const data = await response.json()
       
       if (data.success && Array.isArray(data.messages)) {
-        // 灏嗗悗绔秷鎭牸寮忚浆鎹负鍓嶇娑堟伅鏍煎紡
+        // 将后端消息格式转换为前端消息格式
         const messages = data.messages.map(msg => {
           const message = {
-            type: msg.message_type === 'user' ? 'user' : 'system',  // assistant 娑堟伅鏄剧ず涓?system 绫诲瀷
+            type: msg.message_type === 'user' ? 'user' : 'system',  // assistant 消息显示为?system 绫诲瀷
             content: msg.content || '',
             id: msg.id
           }
           
-          // 瑙ｆ瀽鎵€鏈夌被鍨嬬殑闅愯棌鏍囪
+          // 解析所有类型的隐藏标记
           if (msg.content) {
             // 提料单
             const withdrawalMatch = msg.content.match(/<!-- WITHDRAWAL_ORDER:(\d+):([^>]+) -->/)
@@ -835,29 +835,29 @@ function App() {
               message.withdrawalId = withdrawalId
               message.withdrawalDownloadUrl = `${API_BASE_URL}/api/gold-material/withdrawals/${withdrawalId}/download?format=html`
             }
-            // 鏀舵枡鍗?
+            // 收料单
             const goldReceiptMatch = msg.content.match(/<!-- GOLD_RECEIPT:(\d+):/)
             if (goldReceiptMatch) {
               const receiptId = parseInt(goldReceiptMatch[1])
               message.goldReceiptId = receiptId
               message.goldReceiptDownloadUrl = `${API_BASE_URL}/api/gold-material/gold-receipts/${receiptId}/print`
             }
-            // 鍏ュ簱鍗?
+            // 入库?
             const inboundMatch = msg.content.match(/<!-- INBOUND_ORDER:(\d+):/)
             if (inboundMatch) {
               message.inboundOrder = { id: parseInt(inboundMatch[1]) }
             }
-            // 閫€璐у崟
+            // 退货单
             const returnMatch = msg.content.match(/<!-- RETURN_ORDER:(\d+):/)
             if (returnMatch) {
               message.returnOrder = { id: parseInt(returnMatch[1]) }
             }
-            // 閿€鍞崟
+            // 销售单
             const salesMatch = msg.content.match(/<!-- SALES_ORDER:(\d+):/)
             if (salesMatch) {
               message.salesOrderId = parseInt(salesMatch[1])
             }
-            // 缁撶畻鍗?
+            // 结算?
             const settlementMatch = msg.content.match(/<!-- SETTLEMENT_ORDER:(\d+):/)
             if (settlementMatch) {
               message.settlementOrderId = parseInt(settlementMatch[1])
@@ -867,7 +867,7 @@ function App() {
           return message
         })
         
-        // 浠庡巻鍙茶褰曚腑鑾峰彇瀵硅瘽鏍囬
+        // 从历史记录中获取对话标题
         const history = conversationHistory
         const conversation = history.find(c => c.id === conversationId)
         const title = conversation?.title || messages.find(m => m.type === 'user')?.content?.substring(0, 20) || '新对话'
@@ -876,25 +876,25 @@ function App() {
         setCurrentConversationId(conversationId)
         setConversationTitle(title)
         
-        // 璁剧疆鍚庣 session_id锛岀‘淇濆悗缁秷鎭户缁娇鐢ㄧ浉鍚岀殑浼氳瘽
+        // 设置后端 session_id，确保后续消息继续使用相同的会话
         setCurrentSessionId(conversationId)
         localStorage.setItem('current_session_id', conversationId)
         
-        // 鍙湪绉诲姩绔叧闂晶杈规爮锛屾闈㈢淇濇寔鎵撳紑
+        // 只在移动端关闭侧边栏，桌面端保持打开
         if (window.innerWidth < 1024) {
           setSidebarOpen(false)
         } else {
-          // 妗岄潰绔‘淇濅晶杈规爮鎵撳紑
+          // 桌面端确保侧边栏打开
           setSidebarOpen(true)
         }
       } else {
-        // 濡傛灉API澶辫触锛屽皾璇曚粠localStorage鍔犺浇
+        // 如果API失败，尝试从localStorage加载
         const historyKey = getHistoryKey(userRole)
         const parsedData = JSON.parse(localStorage.getItem(historyKey) || '[]')
         const history = Array.isArray(parsedData) ? parsedData : []
         const conversation = history.find(c => c.id === conversationId)
         if (conversation && conversation.messages) {
-          // 瑙ｆ瀽娑堟伅涓殑闅愯棌鏍囪锛屾仮澶嶆墍鏈夌壒娈婃秷鎭殑棰濆瀛楁
+          // 解析消息中的隐藏标记，恢复所有特殊消息的额外字段
           const messages = parseMessageHiddenMarkers(conversation.messages)
           setMessages(messages)
           setCurrentConversationId(conversation.id)
@@ -923,30 +923,30 @@ function App() {
     }
   }
 
-  // 鏂板缓瀵硅瘽
+  // 新建对话
   const newConversation = () => {
     setMessages([])
     setCurrentConversationId(null)
     setConversationTitle('新对话')
     
-    // 鐢熸垚鏂扮殑鍚庣 session_id
+    // 生成新的后端 session_id
     const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     setCurrentSessionId(newSessionId)
     localStorage.setItem('current_session_id', newSessionId)
     
-    // 鍙湪绉诲姩绔叧闂晶杈规爮锛屾闈㈢淇濇寔鎵撳紑
+    // 只在移动端关闭侧边栏，桌面端保持打开
     if (window.innerWidth < 1024) {
       setSidebarOpen(false)
     } else {
-      // 妗岄潰绔‘淇濅晶杈规爮鎵撳紑
+      // 桌面端确保侧边栏打开
       setSidebarOpen(true)
     }
   }
 
-  // 鍒犻櫎瀵硅瘽锛堜粠褰撳墠瑙掕壊鐨勫巻鍙茶褰曞垹闄わ級
+  // 删除对话（从当前角色的历史记录删除）
   const deleteConversation = (conversationId, e) => {
     e.stopPropagation()
-    // 鑾峰彇褰撳墠瑙掕壊鐨勫巻鍙茶褰昸ey
+    // 获取当前角色的历史记录key
     const historyKey = getHistoryKey(userRole)
     const history = (Array.isArray(conversationHistory) ? conversationHistory : []).filter(c => c.id !== conversationId)
     localStorage.setItem(historyKey, JSON.stringify(history))
@@ -956,13 +956,13 @@ function App() {
     }
   }
 
-  // 褰撳璇濇鎵撳紑鏃惰嚜鍔ㄨ仛鐒?
+  // 当对话框打开时自动聚焦?
   useEffect(() => {
     if (showOCRModal && ocrTextareaRef.current) {
-      // 寤惰繜鑱氱劍锛岀‘淇濆璇濇宸插畬鍏ㄦ覆鏌?
+      // 延迟聚焦，确保对话框已完全渲染?
       const timer = setTimeout(() => {
         ocrTextareaRef.current?.focus()
-        // 灏嗗厜鏍囩Щ鍒版枃鏈湯灏?
+        // 将光标移到文本末尾
         if (ocrTextareaRef.current) {
           const length = ocrTextareaRef.current.value.length
           ocrTextareaRef.current.setSelectionRange(length, length)
@@ -992,7 +992,7 @@ function App() {
       console.log('Send stream request to:', API_ENDPOINTS.CHAT_STREAM)
       console.log('Request message:', userMessage)
       
-      // 鍙栨秷涔嬪墠鐨勮姹傦紙濡傛灉鏈夛級
+      // 取消之前的请求（如果有）
       if (abortControllerRef.current) {
         abortControllerRef.current.abort()
       }
@@ -1006,10 +1006,10 @@ function App() {
         body: JSON.stringify({ 
           message: userMessage, 
           user_role: userRole,
-          session_id: currentSessionId,  // 浼犻€掍細璇滻D锛岀‘淇濆悓涓€瀵硅瘽鐨勬秷鎭叧鑱斿湪涓€璧?
-          language: currentLanguage  // 浼犻€掑綋鍓嶈瑷€璁剧疆
+          session_id: currentSessionId,  // 传递会话ID，确保同一对话的消息关联在一起
+          language: currentLanguage  // 传递当前语言设置
         }),
-        signal: abortControllerRef.current.signal  // 娣诲姞鍙栨秷淇″彿
+        signal: abortControllerRef.current.signal  // 添加取消信号
       })
 
       console.log('Received response, status code:', response.status)
@@ -1069,10 +1069,10 @@ function App() {
 
           buffer += decoder.decode(value, { stream: true })
           const lines = buffer.split('\n')
-          buffer = lines.pop() || '' // 淇濈暀涓嶅畬鏁寸殑琛?
+          buffer = lines.pop() || '' // 保留不完整的行?
 
           for (const line of lines) {
-                  if (line.trim() === '') continue // 璺宠繃绌鸿
+                  if (line.trim() === '') continue // 跳过空行
                   if (line.startsWith('data: ')) {
                     try {
                       const jsonStr = line.slice(6)
@@ -1084,7 +1084,7 @@ function App() {
                         console.log('[IMPORTANT] Detected all_products:', data.data.all_products)
                       }
                 
-                // 澶勭悊鎬濊€冩楠?
+                // 处理思考步骤?
                 if (data.type === 'thinking') {
                   const stepIndex = thinkingSteps.findIndex(s => s.step === data.step)
                   if (stepIndex >= 0) {
@@ -1096,7 +1096,7 @@ function App() {
                       status: data.status || 'processing'
                     }
                   } else {
-                    // 娣诲姞鏂版楠?
+                    // 添加新步骤?
                     thinkingSteps.push({
                       step: data.step,
                       message: data.message,
@@ -1112,7 +1112,7 @@ function App() {
                     return msg
                   }))
                 }
-                // 鍐呭寮€濮?
+                // 内容开?
                 else if (data.type === 'content_start') {
                   isContentStarted = true
                   contentMessageId = Date.now()
@@ -1123,9 +1123,9 @@ function App() {
                     isStreaming: true
                   }])
                 }
-                // 鍐呭鍧?
+                // 内容?
                 else if (data.type === 'content') {
-                  // 濡傛灉content_start浜嬩欢杩樻病鏀跺埌锛屽厛鍒涘缓娑堟伅
+                  // 如果content_start事件还没收到，先创建消息
                   if (!isContentStarted || !contentMessageId) {
                     isContentStarted = true
                     contentMessageId = Date.now()
@@ -1150,7 +1150,7 @@ function App() {
                 setLoading(false)
                 // 移除思考过程消息
                 setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
-                // 鍒涘缓鏀舵纭鍗＄墖娑堟伅
+                // 创建收款确认卡片消息
                 const confirmData = data.data
                 setMessages(prev => [...prev, { 
                   id: Date.now(),
@@ -1159,11 +1159,11 @@ function App() {
                   content: confirmData.message
                 }])
               }
-              // 鏀舵枡纭鍗＄墖
+              // 收料确认卡片
               else if (data.type === 'receipt_confirm') {
                 setLoading(false)
                 setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
-                // 鍒涘缓鏀舵枡纭鍗＄墖娑堟伅
+                // 创建收料确认卡片消息
                 const confirmData = data.data
                 setMessages(prev => [...prev, { 
                   id: Date.now(),
@@ -1172,11 +1172,11 @@ function App() {
                   content: confirmData.message
                 }])
               }
-              // 鎻愭枡纭鍗＄墖
+              // 提料确认卡片
               else if (data.type === 'withdrawal_confirm') {
                 setLoading(false)
                 setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
-                // 鍒涘缓鎻愭枡纭鍗＄墖娑堟伅
+                // 创建提料确认卡片消息
                 const confirmData = data.data
                 setMessages(prev => [...prev, { 
                   id: Date.now(),
@@ -1189,20 +1189,20 @@ function App() {
               else if (data.type === 'complete') {
                 console.log('Received complete event:', data)
                 setLoading(false)
-                // 绉婚櫎鎬濊€冭繃绋嬫秷鎭紙濡傛灉瀛樺湪：
+                // 移除思考过程消息（如果存在
                 setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
                 
-                // 濡傛灉娌℃湁鍐呭娑堟伅锛堟瘮濡傚叆搴撴搷浣滅洿鎺ヨ繑鍥炵粨鏋滐級锛屽垱寤轰竴涓柊娑堟伅
+                // 如果没有内容消息（比如入库操作直接返回结果），创建一个新消息
                 if (!contentMessageId || !isContentStarted) {
                     console.log('Create new system message to display result')
                   contentMessageId = Date.now()
                   // 处理入库等操作的响应
                   if (data.data) {
-                    // ========== 鏅鸿兘琛ㄥ崟寮瑰嚭锛氬綋淇℃伅涓嶅畬鏁存椂鑷姩寮瑰嚭琛ㄥ崟 ==========
+                    // ========== 智能表单弹出：当信息不完整时自动弹出表单 ==========
                     if (data.data.need_form) {
                       console.log('Detected need_form flag, popup corresponding form:', data.data.action)
                       
-                      // 鏍规嵁鎿嶄綔绫诲瀷寮瑰嚭瀵瑰簲鐨勮〃鍗?
+                      // 根据操作类型弹出对应的表?
                         if (data.data.action === '退货') {
                         setShowQuickReturnModal(true)
                         } else if (data.data.action === '入库') {
@@ -1211,13 +1211,13 @@ function App() {
                         setShowQuickOrderModal(true)
                       }
                       
-                      // 娣诲姞鎻愮ず娑堟伅
+                      // 添加提示消息
                       setMessages(prev => [...prev, { 
                         type: 'system', 
-                        content: data.data.message || '馃摑 璇峰湪寮瑰嚭鐨勮〃鏍间腑濉啓瀹屾暣淇℃伅',
+                        content: data.data.message || '📝 请在弹出的表格中填写完整信息',
                         id: contentMessageId
                       }])
-                      return  // 涓嶅啀缁х画澶勭悊
+                      return  // 不再继续处理
                     }
                     
                     let messageContent = ''
@@ -1231,10 +1231,10 @@ function App() {
                     
                     console.log('Create message, content:', messageContent)
                     
-                    // 妫€鏌ユ槸鍚︽槸鍏ュ簱鎿嶄綔锛屽鏋滄槸鍒欏垱寤哄緟纭鐨勫崱鐗囨暟鎹?
+                    // 检查是否是入库操作，如果是则创建待确认的卡片数据?
                     let inboundCard = null
                     let inboundCards = null  // 澶氬晢鍝佸叆搴撴椂浣跨敤
-                    // 鎵撳嵃瀹屾暣鐨?data.data 瀵硅薄
+                    // 打印完整?data.data 对象
                     console.log('[Inbound Debug] Complete data.data:', JSON.stringify(data.data, null, 2))
                     console.log('[Inbound Debug] all_products exists:', 'all_products' in (data.data || {}))
                     console.log('[Inbound Debug] all_products value:', data.data?.all_products)
@@ -1243,7 +1243,7 @@ function App() {
                     if (data.data?.success && data.data?.pending && data.data?.card_data) {
                       // 鏂规B锛氬垱寤哄緟纭鐨勫崱鐗囷紙status: 'pending'：
                       try {
-                        // 缁熶竴浣跨敤 all_products锛堝鏋滄病鏈夊垯浣跨敤 card_data 浣滀负鍗曞厓绱犳暟缁勶級
+                        // 缁熶竴浣跨敤 all_products（如果没有则使用 card_data 浣滀负鍗曞厓绱犳暟缁勶級
                         console.log('[Debug] data.data.all_products original:', data.data.all_products)
                         console.log('[Debug] data.data.card_data original:', data.data.card_data)
                         
@@ -1252,7 +1252,7 @@ function App() {
                           : [data.data.card_data]
                         console.log('收到待确认商品数据，共', allProducts.length, '个商品', allProducts)
                         
-                        // 缁熶竴鍒涘缓鍗＄墖鏁扮粍锛堟棤璁哄崟鍟嗗搧杩樻槸澶氬晢鍝侊級
+                        // 统一创建卡片数组（无论单商品还是多商品）
                         inboundCards = allProducts.map((cardData, index) => {
                           console.log(`[Debug] Create card ${index+1}:`, cardData)
                           const card = createNewCard({
@@ -1275,16 +1275,16 @@ function App() {
                         })
                         console.log('Create inbound cards, total:', inboundCards.length, inboundCards)
                         
-                        // 濡傛灉鍙湁涓€涓晢鍝侊紝鍚屾椂璁剧疆 inboundCard锛堝悜鍚庡吋瀹癸級
+                        // 如果只有一个商品，同时设置 inboundCard（向后兼容）
                         if (inboundCards.length === 1) {
                           inboundCard = inboundCards[0]
-                          inboundCards = null  // 鍗曞晢鍝佹椂娓呯┖鏁扮粍锛屼娇鐢ㄥ崟鍗＄墖鏄剧ず
+                          inboundCards = null  // 单商品时清空数组，使用单卡片显示
                         }
                       } catch (error) {
                         console.error('Create inbound cards failed:', error)
                       }
                     } else if (data.data?.success && data.data?.order && data.data?.detail && !data.data?.pending) {
-                      // 濡傛灉宸茬粡鏈夎鍗曞拰鏄庣粏锛屼笖娌℃湁pending鏍囧織锛岃鏄庢槸宸茬‘璁ょ殑锛堝悜鍚庡吋瀹规垨鐩存帴鍏ュ簱鐨勬儏鍐碉級
+                      // 如果已经有订单和明细，且没有pending标志，说明是已确认的（向后兼容或直接入库的情况）
                       console.log('Detected confirmed inbound data (backward compatible)')
                       const orderNo = data.data.order.order_no || ''
                       if (orderNo.startsWith('RK')) {
@@ -1313,17 +1313,17 @@ function App() {
                       type: 'system',
                       content: messageContent,
                       isStreaming: false,
-                      // 娣诲姞鍏朵粬鏁版嵁锛堝璁㈠崟淇℃伅绛夛級
+                      // 添加其他数据（如订单信息等）
                       order: data.data.order,
                       detail: data.data.detail,
                       inventory: data.data.inventory,
                       chartData: data.data.chart_data,
                       pieData: data.data.pie_data,
                       chartType: data.data.action,
-                      rawData: data.data.raw_data,  // 鍘熷鏁版嵁锛堢敤浜庤缁嗘暟鎹睍绀猴級
-                      // AI鎰忓浘璇嗗埆缁撴灉锛堢敤浜庡彲瑙嗗寲鏄剧ず：
+                      rawData: data.data.raw_data,  // 原始数据（用于详细数据展示）
+                      // AI意图识别结果（用于可视化显示）
                       detectedIntent: data.data.action,
-                      // 娣诲姞鍏ュ簱鍗＄墖鏁版嵁锛堝崟鍟嗗搧鎴栧鍟嗗搧：
+                      // 添加入库卡片数据（单商品或多商品
                       inboundCard: inboundCard,
                       inboundCards: inboundCards,  // 澶氬晢鍝佸叆搴撴椂鐨勫崱鐗囨暟缁?
                     }])
@@ -1332,14 +1332,14 @@ function App() {
                   }
                 } else {
                   console.log('Update existing content message')
-                  // 濡傛灉鏈夊唴瀹规秷鎭紝鏇存柊瀹?
+                  // 如果有内容消息，更新?
                   setMessages(prev => prev.map(msg => {
                     if (msg.id === contentMessageId) {
                       const updatedMsg = { 
                         ...msg, 
                         isStreaming: false
                       }
-                      // 鍙湁鍦ㄦ湁鍥捐〃鏁版嵁鏃舵墠娣诲姞
+                      // 只有在有图表数据时才添加
                       if (data.data?.chart_data) {
                         updatedMsg.chartData = data.data.chart_data
                         updatedMsg.chartType = data.data.action
@@ -1347,13 +1347,13 @@ function App() {
                       if (data.data?.pie_data) {
                         updatedMsg.pieData = data.data.pie_data
                       }
-                      // 娣诲姞鍏朵粬鏁版嵁
+                      // 添加其他数据
                       if (data.data?.order) updatedMsg.order = data.data.order
                       if (data.data?.detail) updatedMsg.detail = data.data.detail
                       if (data.data?.inventory) updatedMsg.inventory = data.data.inventory
                       if (data.data?.raw_data) updatedMsg.rawData = data.data.raw_data
                       
-                      // 濡傛灉鏄叆搴撴搷浣滐紝鍒涘缓鍗＄墖鏁版嵁
+                      // 如果是入库操作，创建卡片数据
                       if (data.data?.success && data.data?.order && data.data?.detail) {
                         const orderNo = data.data.order.order_no || ''
                         if (orderNo.startsWith('RK')) {
@@ -1405,7 +1405,7 @@ function App() {
         }
       }
     } catch (error) {
-      // 濡傛灉鏄姹傝鍙栨秷锛堢敤鎴峰垏鎹㈤〉闈㈡垨鍙戦€佹柊娑堟伅锛夛紝闈欓粯澶勭悊
+      // 如果是请求被取消（用户切换页面或发送新消息），静默处理
       if (error.name === 'AbortError') {
           console.log('SSE request cancelled')
         setLoading(false)
@@ -1417,7 +1417,7 @@ function App() {
       // 移除思考过程消息
       setMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId))
       
-      let errorMessage = `❌ 缃戠粶閿欒：{error.message}`
+      let errorMessage = `❌ 网络错误{error.message}`
       
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
         errorMessage = '❌ 无法连接到服务器，请检查后端服务是否运行（http://localhost:8000）'
@@ -1430,27 +1430,27 @@ function App() {
     }
   }
 
-  // 澶勭悊瀹屾垚鍝嶅簲鐨勮緟鍔╁嚱鏁?
+  // 处理完成响应的辅助函?
   const handleCompleteResponse = (data, messageId) => {
     if (!data.success) {
       setMessages(prev => prev.map(msg => {
         if (msg.id === messageId) {
-          return { ...msg, content: `❌ ${data.message || '澶勭悊澶辫触'}` }
+          return { ...msg, content: `❌ ${data.message || '处理失败'}` }
         }
         return msg
       }))
       return
     }
 
-    // 澶勭悊鍚勭鍝嶅簲绫诲瀷锛堜繚鎸佸悜鍚庡吋瀹癸級
+    // 处理各种响应类型（保持向后兼容）
     let systemMessage = data.message || ''
     
-    // 濡傛灉鏈夊師濮嬫暟鎹紝鍙互鐢ㄤ簬鍥捐〃绛?
+    // 如果有原始数据，可以用于图表?
     if (data.raw_data) {
-      // 鍙互鏍规嵁闇€瑕佸鐞唕aw_data
+      // 可以根据需要处理raw_data
     }
 
-    // 鏇存柊娑堟伅鍐呭锛堝鏋滈渶瑕佹坊鍔犻澶栦俊鎭級
+    // 更新消息内容（如果需要添加额外信息）
     setMessages(prev => prev.map(msg => {
       if (msg.id === messageId) {
         return { ...msg, content: systemMessage }
@@ -1459,7 +1459,7 @@ function App() {
     }))
   }
 
-  // 淇濈暀鏃х殑sendMessage浣滀负澶囩敤锛堝鏋滈渶瑕佸洖閫€：
+  // 保留旧的sendMessage作为备用（如果需要回退）
   const sendMessageOld = async () => {
     if (!input.trim() || loading) return
 
@@ -1483,16 +1483,16 @@ function App() {
       if (data.success) {
         let systemMessage = data.message
         
-        // 濡傛灉鏈夋€濊€冭繃绋嬶紝鍏堟樉绀烘€濊€冭繃绋?
+        // 如果有思考过程，先显示思考过?
         if (data.thinking_steps && data.thinking_steps.length > 0) {
           systemMessage = "💡 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + systemMessage
         }
 
-        // 濡傛灉鏄浘琛ㄦ暟鎹紙鏌ヨ鎵€鏈夊簱瀛橈級
+        // 如果是图表数据（查询所有库存）
         if (data.chart_data) {
-          systemMessage += `\n\n📊 搴撳瓨缁熻锛歕n` +
-            `鍟嗗搧绉嶇被：{data.summary.total_products}绉峔n` +
-            `渚涘簲鍟嗘暟閲忥細${data.summary.total_suppliers}瀹禱n` +
+          systemMessage += `\n\n📊 库存统计：\n` +
+            `商品种类：{data.summary.total_products}绉峔n` +
+            `供应商数量：${data.summary.total_suppliers}瀹禱n` +
             `鎬诲簱瀛橈細${data.summary.total_weight.toFixed(2)}鍏媆n`
           
           setMessages(prev => [...prev, { 
@@ -1503,27 +1503,27 @@ function App() {
             tableData: data.table_data
           }])
         }
-        // 濡傛灉鏄壒閲忓叆搴撴垚鍔?
+        // 如果是批量入库成功?
         else if (data.order && data.details && data.details.length > 0) {
-          systemMessage += `\n\n📋 鍏ュ簱鍗曚俊鎭細\n` +
-            `鍏ュ簱单号：{data.order.order_no}\n` +
+          systemMessage += `\n\n📋 入库单信息：\n` +
+            `入库单号：{data.order.order_no}\n` +
             `鍟嗗搧鏁伴噺：{data.details.length}涓猏n\n`
           
-          // 鏄剧ず姣忎釜鍟嗗搧鐨勮缁嗕俊鎭?
+          // 显示每个商品的详细信息?
           data.details.forEach((detail, index) => {
             systemMessage += `鍟嗗搧${index + 1}锛歕n` +
-              `  鍟嗗搧鍚嶇О：{detail.product_name}\n` +
+              `  商品名称：{detail.product_name}\n` +
               `  閲嶉噺：{detail.weight}鍏媆n` +
               `  宸ヨ垂：{detail.labor_cost}克鍏媆n` +
-              `  渚涘簲鍟嗭細${detail.supplier}\n` +
+              `  供应商：${detail.supplier}\n` +
               `  璇ュ晢鍝佸伐璐癸細${detail.total_cost.toFixed(2)}鍏僜n\n`
           })
           
-          systemMessage += `馃挵 鍚堣宸ヨ垂：{data.total_labor_cost.toFixed(2)}鍏僜n\n`
+          systemMessage += `💰 鍚堣宸ヨ垂：{data.total_labor_cost.toFixed(2)}鍏僜n\n`
           
-          // 鏄剧ず搴撳瓨鏇存柊
+          // 显示库存更新
           if (data.inventories && data.inventories.length > 0) {
-            systemMessage += `📦 搴撳瓨鏇存柊锛歕n`
+            systemMessage += `📦 库存更新：\n`
             data.inventories.forEach(inv => {
               systemMessage += `  ${inv.product_name}：{inv.total_weight}鍏媆n`
             })
@@ -1534,11 +1534,11 @@ function App() {
             content: systemMessage 
           }])
         }
-        // 鍚戝悗鍏煎锛氬崟涓晢鍝佸叆搴擄紙鏃ф牸寮忥級
+        // 向后兼容：单个商品入库（旧格式）
         else if (data.order && data.detail && data.inventory) {
-          systemMessage += `\n\n📋 鍏ュ簱鍗曚俊鎭細\n` +
-            `鍏ュ簱单号：{data.order.order_no}\n` +
-            `鍟嗗搧鍚嶇О：{data.detail.product_name}\n` +
+          systemMessage += `\n\n📋 入库单信息：\n` +
+            `入库单号：{data.order.order_no}\n` +
+            `商品名称：{data.detail.product_name}\n` +
             `重量：${data.detail.weight}克\n` +
             `工费：${data.detail.labor_cost}元/克\n` +
             `供应商：${data.detail.supplier}\n` +
@@ -1550,13 +1550,13 @@ function App() {
             content: systemMessage 
           }])
         }
-        // 濡傛灉鏄煡璇㈠崟涓簱瀛橈紙淇濈暀鍚戝悗鍏煎：
+        // 如果是查询单个库存（保留向后兼容）
         else if (data.inventory && !data.order) {
           systemMessage += `\n\n📦 库存信息：\n` +
             `商品名称：${data.inventory.product_name}\n` +
             `总重量：${data.inventory.total_weight}克\n`
           
-          // 鏄剧ず鎵€鏈夊伐璐规槑缁?
+          // 显示所有工费明?
           if (data.inventory.labor_cost_details && data.inventory.labor_cost_details.length > 0) {
           systemMessage += `\n💵 工费明细：\n`
             data.inventory.labor_cost_details.forEach((detail, idx) => {
@@ -1565,19 +1565,19 @@ function App() {
           }
           
           systemMessage += (data.inventory.last_update ? 
-            `\n鏈€鍚庢洿鏂帮細${new Date(data.inventory.last_update).toLocaleString('zh-CN')}` : 
+            `\n最后更新：${new Date(data.inventory.last_update).toLocaleString('zh-CN')}` : 
             '')
 
           setMessages(prev => [...prev, { 
             type: 'system', 
             content: systemMessage,
-            laborCostDetails: data.inventory.labor_cost_details  // 鐢ㄤ簬琛ㄦ牸灞曠ず
+            laborCostDetails: data.inventory.labor_cost_details  // 用于表格展示
           }])
           return
         }
-        // 濡傛灉鏄煡璇㈡墍鏈夊簱瀛橈紙杩斿洖inventories鏁扮粍： 淇濈暀鍚戝悗鍏煎
+        // 如果是查询所有库存（返回inventories鏁扮粍： 保留向后兼容
         else if (data.inventories && Array.isArray(data.inventories) && data.inventories.length > 0 && !data.action) {
-          systemMessage += `\n\n📦 鍟嗗搧鍒楄〃锛歕n`
+          systemMessage += `\n\n📦 商品列表：\n`
           data.inventories.forEach((inv, idx) => {
             systemMessage += `${idx + 1}. ${inv.product_name}：${inv.total_weight}克`
             if (inv.latest_labor_cost) {
@@ -1599,7 +1599,7 @@ function App() {
           }])
           return
         }
-        // 濡傛灉鏄煡璇㈠叆搴撳崟璇︽儏锛堜繚鐣欏悜鍚庡吋瀹癸級
+        // 如果是查询入库单详情（保留向后兼容）
         else if (data.order && data.details && !data.order.order_no.startsWith('XS')) {
           systemMessage += `\n\n📋 入库单详情：\n` +
             `入库单号：${data.order.order_no}\n` +
@@ -1616,7 +1616,7 @@ function App() {
           }])
           return
         }
-        // 濡傛灉鏄煡璇㈡渶杩戠殑鍏ュ簱鍗曞垪琛紙淇濈暀鍚戝悗鍏煎：
+        // 如果是查询最近的入库单列表（保留向后兼容）
         else if (data.orders && Array.isArray(data.orders) && data.orders.length > 0 && !data.orders[0].order_no.startsWith('XS')) {
           systemMessage += `\n\n📋 最近的入库单：\n`
           data.orders.forEach((order, idx) => {
@@ -1629,9 +1629,9 @@ function App() {
           }])
           return
         }
-        // 澶勭悊销售单创建成功
+        // 处理۵ɹ
         else if (data.order && data.order.order_no && data.order.order_no.startsWith('XS')) {
-          // 杩欐槸閿€鍞崟锛堥攢鍞崟鍙蜂互XS寮€澶达級
+          // 这是销售单（销售单号以XS开头）
           systemMessage += `\n\n📋 销售单信息：\n` +
             `销售单号：${data.order.order_no}\n` +
             `客户：${data.order.customer_name}\n` +
@@ -1654,10 +1654,10 @@ function App() {
           setMessages(prev => [...prev, { 
             type: 'system', 
             content: systemMessage,
-            salesOrder: data.order  // 淇濆瓨瀹屾暣鏁版嵁鐢ㄤ簬鍚庣画灞曠ず
+            salesOrder: data.order  // 保存完整数据用于后续展示
           }])
         }
-        // 澶勭悊閿€鍞崟鍒楄〃鏌ヨ
+        // 处理销售单列表查询
         else if (data.orders && Array.isArray(data.orders) && data.orders.length > 0 && data.orders[0].order_no && data.orders[0].order_no.startsWith('XS')) {
           systemMessage += `\n\n📋 销售单列表：\n`
           data.orders.forEach((order, idx) => {
@@ -1685,7 +1685,7 @@ function App() {
             content: systemMessage 
           }])
         }
-        // 澶勭悊客户列表鏌ヨ
+        // 处理客户列表查询
         else if (data.customers && Array.isArray(data.customers)) {
           systemMessage += `\n\n👤 客户列表：\n` +
             `共 ${data.customers.length} 位客户\n\n`
@@ -1699,12 +1699,12 @@ function App() {
             content: systemMessage 
           }])
         }
-        // 澶勭悊搴撳瓨妫€鏌ラ敊璇?
+        // 处理库存检查错误?
         else if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
           systemMessage += `\n\n❌ 库存检查失败：\n`
           data.inventory_errors.forEach((error, idx) => {
             systemMessage += `${idx + 1}. ${error.product_name}：{error.error}\n` +
-              `   闇€瑕侊細${error.required_weight}鍏媆n` +
+              `   需要：${error.required_weight}鍏媆n` +
               `   鍙敤：{error.available_weight}鍏媆n`
             if (error.reserved_weight !== undefined) {
               systemMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
@@ -1727,17 +1727,17 @@ function App() {
       } else {
         let errorMessage = data.message
         
-        // 濡傛灉鏈夋€濊€冭繃绋嬶紝鍏堟樉绀烘€濊€冭繃绋?
+        // 如果有思考过程，先显示思考过?
         if (data.thinking_steps && data.thinking_steps.length > 0) {
           errorMessage = "💡 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + errorMessage
         }
         
-        // 澶勭悊搴撳瓨妫€鏌ラ敊璇紙鍦ㄩ敊璇搷搴斾腑：
+        // 处理库存检查错误（在错误响应中
         if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
-          errorMessage += `\n\n❌ 搴撳瓨妫€鏌ュけ璐ワ細\n`
+          errorMessage += `\n\n❌ 库存检查失败：\n`
           data.inventory_errors.forEach((error, idx) => {
             errorMessage += `${idx + 1}. ${error.product_name}：{error.error}\n` +
-              `   闇€瑕侊細${error.required_weight}鍏媆n` +
+              `   需要：${error.required_weight}鍏媆n` +
               `   鍙敤：{error.available_weight}鍏媆n`
             if (error.reserved_weight !== undefined) {
               errorMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
@@ -1757,7 +1757,7 @@ function App() {
           return
         }
         
-        // 濡傛灉鏈夌己澶卞瓧娈靛垪琛紝鏍煎紡鍖栨樉绀?
+        // 如果有缺失字段列表，格式化显示?
         if (data.missing_fields && data.missing_fields.length > 0) {
           errorMessage += `\n\n❌ 缺失的必填项：\n`
           data.missing_fields.forEach(field => {
@@ -1766,7 +1766,7 @@ function App() {
           errorMessage += `\n请补充完整信息后重新提交。`
         }
         
-        // 濡傛灉鏄渚涘簲鍟嗛敊璇紝娣诲姞瑙勫垯璇存槑
+        // 如果是多供应商错误，添加规则说明
         if (data.suppliers && Array.isArray(data.suppliers) && data.suppliers.length > 1) {
             errorMessage += `\n\n📋 系统规则提醒：\n`
             errorMessage += `每张入库单只能对应一个供应商。如果一次入库包含多个供应商的商品，请按供应商拆分为多张入库单分别提交。\n`
@@ -1780,13 +1780,13 @@ function App() {
       }
     } catch (error) {
       setLoading(false)
-      let errorMessage = `❌ 缃戠粶閿欒：{error.message}`
+      let errorMessage = `❌ 网络错误{error.message}`
       
-      // 鎻愪緵鏇磋缁嗙殑閿欒淇℃伅
+      // 提供更详细的错误信息
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
         errorMessage = '❌ 无法连接到服务器，请检查后端服务是否运行（http://localhost:8000）'
       } else if (error.name === 'AbortError') {
-        errorMessage = '❌ 璇锋眰瓒呮椂锛岃绋嶅悗閲嶈瘯'
+        errorMessage = '❌ 请求超时，请稍后重试'
       }
       
       setMessages(prev => [...prev, { 
@@ -1796,7 +1796,7 @@ function App() {
     }
   }
 
-  // 澶勭悊鍥剧墖涓婁紶
+  // 处理图片上传
   const handleImageUpload = async (event) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -1810,7 +1810,7 @@ function App() {
       return
     }
 
-    // 楠岃瘉鏂囦欢澶у皬锛堥檺鍒?0MB：
+    // 验证文件大小（限制10MB）
     if (file.size > 10 * 1024 * 1024) {
       setMessages(prev => [...prev, {
         type: 'system',
@@ -1821,17 +1821,17 @@ function App() {
 
     setUploading(true)
     
-    // 淇濆瓨鍥剧墖棰勮锛堜娇鐢≒romise纭繚鍥剧墖鍔犺浇瀹屾垚：
+    // 保存图片预览（使用Promise确保图片加载完成功
     const imageDataUrlPromise = new Promise((resolve) => {
       const reader = new FileReader()
       reader.onload = (e) => {
         const imageDataUrl = e.target.result
         setUploadedImage(imageDataUrl)
         
-        // 鏄剧ず鐢ㄦ埛涓婁紶鐨勫浘鐗?
+        // 显示用户上传的图片?
         setMessages(prev => [...prev, {
           type: 'user',
-          content: `馃摲 涓婁紶鍏ュ簱鍗曞浘鐗囷細${file.name}`,
+          content: `馃摲 上传入库单图片：${file.name}`,
           image: imageDataUrl
         }])
         
@@ -1844,7 +1844,7 @@ function App() {
       const formData = new FormData()
       formData.append('file', file)
 
-      // 璋冪敤璇嗗埆鎺ュ彛锛堝彧璇嗗埆锛屼笉鍏ュ簱：
+      // 调用识别接口（只识别，不入库
       const response = await fetch(API_ENDPOINTS.RECOGNIZE_INBOUND_SHEET, {
         method: 'POST',
         body: formData,
@@ -1853,11 +1853,11 @@ function App() {
       const data = await response.json()
       setUploading(false)
 
-      // 绛夊緟鍥剧墖鍔犺浇瀹屾垚
+      // 等待图片加载完成
       const imageDataUrl = await imageDataUrlPromise
 
       if (data.success) {
-        // OCR瀹屾垚鍚庢墦寮€瀵硅瘽妗?
+        // OCR完成后打开对话?
         handleOCRComplete(data.recognized_text, imageDataUrl)
         
         let systemMessage = "✅ 图片识别完成！\n\n"
@@ -1897,7 +1897,7 @@ function App() {
       setUploading(false)
       let errorMessage = `❌ 上传失败：${error.message}`
       
-      // 鎻愪緵鏇磋缁嗙殑閿欒淇℃伅
+      // 提供更详细的错误信息
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
         errorMessage = '❌ 无法连接到服务器，请检查后端服务是否运行（http://localhost:8000）'
       } else if (error.name === 'AbortError') {
@@ -1910,20 +1910,20 @@ function App() {
       }])
     }
 
-    // 娓呯┖鏂囦欢杈撳叆
+    // 清空文件输入
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
   }
 
-  // OCR瀹屾垚鍚庢墦寮€瀵硅瘽妗?
+  // OCR完成后打开对话?
   const handleOCRComplete = (text, imageUrl) => {
     setOcrResult(text || '')
     setUploadedImage(imageUrl)
     setShowOCRModal(true)
   }
 
-  // 纭鍏ュ簱
+  // 确认入库
   const handleConfirmInbound = async () => {
     const textToSend = ocrResult.trim()
     if (!textToSend) {
@@ -1931,13 +1931,13 @@ function App() {
       return
     }
 
-    // 鍏抽棴瀵硅瘽妗?
+    // 关闭对话?
     setShowOCRModal(false)
     setUploadedImage(null)
     const textToProcess = ocrResult
     setOcrResult('')
 
-    // 鏄剧ず鐢ㄦ埛娑堟伅
+    // 显示用户消息
     setMessages(prev => [...prev, { 
       type: 'user', 
       content: textToProcess 
@@ -1959,16 +1959,16 @@ function App() {
       if (data.success) {
         let systemMessage = data.message
         
-        // 濡傛灉鏈夋€濊€冭繃绋嬶紝鍏堟樉绀烘€濊€冭繃绋?
+        // 如果有思考过程，先显示思考过?
         if (data.thinking_steps && data.thinking_steps.length > 0) {
           systemMessage = "💡 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + systemMessage
         }
 
-        // 濡傛灉鏄浘琛ㄦ暟鎹紙鏌ヨ鎵€鏈夊簱瀛橈級
+        // 如果是图表数据（查询所有库存）
         if (data.chart_data) {
-          systemMessage += `\n\n📊 搴撳瓨缁熻锛歕n` +
-            `鍟嗗搧绉嶇被：{data.summary.total_products}绉峔n` +
-            `渚涘簲鍟嗘暟閲忥細${data.summary.total_suppliers}瀹禱n` +
+          systemMessage += `\n\n📊 库存统计：\n` +
+            `商品种类：{data.summary.total_products}绉峔n` +
+            `供应商数量：${data.summary.total_suppliers}瀹禱n` +
             `鎬诲簱瀛橈細${data.summary.total_weight.toFixed(2)}鍏媆n`
           
           setMessages(prev => [...prev, { 
@@ -1979,15 +1979,15 @@ function App() {
             tableData: data.table_data
           }])
         }
-        // 濡傛灉鏄壒閲忓叆搴撴垚鍔?
+        // 如果是批量入库成功?
         else if (data.order && data.details && data.details.length > 0 && data.order.order_no && data.order.order_no.startsWith('RK')) {
-          systemMessage += `\n\n📋 鍏ュ簱鍗曚俊鎭細\n` +
-            `鍏ュ簱单号：{data.order.order_no}\n` +
+          systemMessage += `\n\n📋 入库单信息：\n` +
+            `入库单号：{data.order.order_no}\n` +
             `鍟嗗搧鏁伴噺：{data.details.length}涓猏n\n`
           
           data.details.forEach((detail, index) => {
             systemMessage += `鍟嗗搧${index + 1}锛歕n` +
-              `  鍟嗗搧鍚嶇О：{detail.product_category || detail.product_name}\n` +
+              `  商品名称：{detail.product_category || detail.product_name}\n` +
               `  閲嶉噺：{detail.weight}鍏媆n` +
               `  工费：${detail.labor_cost}元/克\n` +
               `  供应商：${detail.supplier}\n` +
@@ -2008,7 +2008,7 @@ function App() {
             content: systemMessage
           }])
         }
-        // 澶勭悊销售单创建成功锛圤CR纭鍚庝篃鍙兘鍒涘缓閿€鍞崟：
+        // 处理۵ɹ（OCR确认后也可能创建销售单
         else if (data.order && data.order.order_no && data.order.order_no.startsWith('XS')) {
           systemMessage += `\n\n📋 销售单信息：\n` +
             `销售单号：${data.order.order_no}\n` +
@@ -2035,7 +2035,7 @@ function App() {
             salesOrder: data.order
           }])
         }
-        // 濡傛灉鏄煡璇㈡墍鏈夊簱瀛橈紙杩斿洖inventories鏁扮粍：
+        // 如果是查询所有库存（返回inventories鏁扮粍：
         else if (data.inventories && Array.isArray(data.inventories) && data.inventories.length > 0) {
           systemMessage += `\n\n📦 商品列表：\n`
           data.inventories.forEach((inv, idx) => {
@@ -2058,12 +2058,12 @@ function App() {
             content: systemMessage 
           }])
         }
-        // 澶勭悊搴撳瓨妫€鏌ラ敊璇?
+        // 处理库存检查错误?
         else if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
-          systemMessage += `\n\n❌ 搴撳瓨妫€鏌ュけ璐ワ細\n`
+          systemMessage += `\n\n❌ 库存检查失败：\n`
           data.inventory_errors.forEach((error, idx) => {
             systemMessage += `${idx + 1}. ${error.product_name}：{error.error}\n` +
-              `   闇€瑕侊細${error.required_weight}鍏媆n` +
+              `   需要：${error.required_weight}鍏媆n` +
               `   鍙敤：{error.available_weight}鍏媆n`
             if (error.reserved_weight !== undefined) {
               systemMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
@@ -2077,12 +2077,12 @@ function App() {
             inventoryErrors: data.inventory_errors
           }])
         }
-        // 澶勭悊搴撳瓨妫€鏌ラ敊璇紙閲嶅浠ｇ爜锛屼繚鐣欎互闃蹭竾涓€：
+        // 处理库存检查错误（重复代码，保留以防万一）
         else if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
-          systemMessage += `\n\n❌ 搴撳瓨妫€鏌ュけ璐ワ細\n`
+          systemMessage += `\n\n❌ 库存检查失败：\n`
           data.inventory_errors.forEach((error, idx) => {
             systemMessage += `${idx + 1}. ${error.product_name}：{error.error}\n` +
-              `   闇€瑕侊細${error.required_weight}鍏媆n` +
+              `   需要：${error.required_weight}鍏媆n` +
               `   鍙敤：{error.available_weight}鍏媆n`
             if (error.reserved_weight !== undefined) {
               systemMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
@@ -2110,12 +2110,12 @@ function App() {
           errorMessage = "💡 处理过程：\n" + data.thinking_steps.join('\n') + "\n\n" + errorMessage
         }
 
-        // 澶勭悊搴撳瓨妫€鏌ラ敊璇紙鍦ㄩ敊璇搷搴斾腑：
+        // 处理库存检查错误（在错误响应中
         if (data.inventory_errors && Array.isArray(data.inventory_errors)) {
-          errorMessage += `\n\n❌ 搴撳瓨妫€鏌ュけ璐ワ細\n`
+          errorMessage += `\n\n❌ 库存检查失败：\n`
           data.inventory_errors.forEach((error, idx) => {
             errorMessage += `${idx + 1}. ${error.product_name}：{error.error}\n` +
-              `   闇€瑕侊細${error.required_weight}鍏媆n` +
+              `   需要：${error.required_weight}鍏媆n` +
               `   鍙敤：{error.available_weight}鍏媆n`
             if (error.reserved_weight !== undefined) {
               errorMessage += `   宸查鐣欙細${error.reserved_weight}鍏媆n`
@@ -2135,10 +2135,10 @@ function App() {
           return
         }
 
-        // 濡傛灉鏄渚涘簲鍟嗛敊璇紝娣诲姞瑙勫垯璇存槑
+        // 如果是多供应商错误，添加规则说明
         if (data.suppliers && Array.isArray(data.suppliers) && data.suppliers.length > 1) {
           errorMessage += `\n\n📋 绯荤粺瑙勫垯鎻愰啋锛歕n`
-          errorMessage += `姣忓紶鍏ュ簱鍗曞彧鑳藉搴斾竴涓緵搴斿晢銆傚鏋滀竴娆″叆搴撳寘鍚涓緵搴斿晢鐨勫晢鍝侊紝璇锋寜渚涘簲鍟嗘媶鍒嗕负澶氬紶鍏ュ簱鍗曞垎鍒彁浜ゃ€俓n`
+          errorMessage += `每张入库单只能对应一个供应商。如果一次入库包含多个供应商的商品，请按供应商拆分为多张入库单分别提交。\n`
         }
 
         setMessages(prev => [...prev, {
@@ -2150,7 +2150,7 @@ function App() {
       setLoading(false)
       setMessages(prev => [...prev, {
         type: 'system',
-        content: `❌ 缃戠粶閿欒：{error.message}`
+        content: `❌ 网络错误{error.message}`
       }])
     }
   }
@@ -2169,7 +2169,7 @@ function App() {
 
   return (
     <div className="flex h-screen bg-jewelry-gold-50 overflow-hidden">
-      {/* 宸︿晶杈规爮 - 鍘嗗彶瀵硅瘽璁板綍 */}
+      {/* 宸︿晶杈规爮 - 历史对话记录 */}
       <aside className={`
         ${sidebarOpen ? 'w-80' : 'w-0'} 
         ${sidebarOpen ? 'flex' : 'hidden'}
@@ -2179,7 +2179,7 @@ function App() {
         flex-col
         overflow-hidden
       `}>
-        {/* 渚ц竟鏍忓ご閮?*/}
+        {/* 侧边栏头部*/}
         <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between">
           <h2 className="text-[17px] font-semibold text-white tracking-tight">{t('sidebar.title')}</h2>
           <button
@@ -2192,7 +2192,7 @@ function App() {
           </button>
         </div>
         
-        {/* 鏂板缓瀵硅瘽鎸夐挳 */}
+        {/* 新建对话按钮 */}
         <div className="px-6 py-4 border-b border-white/10">
           <button
             onClick={newConversation}
@@ -2203,7 +2203,7 @@ function App() {
           </button>
         </div>
         
-        {/* 瀵硅瘽鍒楄〃 */}
+        {/* 对话列表 */}
         <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20">
           {conversationHistory.length === 0 ? (
             <div className="px-6 py-8 text-center text-white/50 text-sm">
@@ -2239,12 +2239,12 @@ function App() {
                         })}
                       </div>
                     </div>
-                    {/* 鍙湁绠＄悊鍛樺彲浠ュ垹闄ゅ璇濊褰?*/}
+                    {/* 只有管理员可以删除对话记录?*/}
                     {userRole === 'manager' && (
                       <button
                         onClick={(e) => deleteConversation(conv.id, e)}
                         className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded-lg transition-all"
-                        title="鍒犻櫎瀵硅瘽"
+                        title="删除对话"
                       >
                         <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -2359,17 +2359,17 @@ function App() {
                   )}
                 </div>
                 
-                {/* 搴撳瓨姒傝 - 鍟嗗搧涓撳憳銆佹煖鍙般€佺粨绠椼€佺鐞嗗眰鍙 */}
+                {/* 库存概览 - 商品专员、柜台、结算、管理层可见 */}
                 {(userRole === 'product' || userRole === 'counter' || userRole === 'settlement' || userRole === 'manager') && (
                   <div className="max-w-2xl mx-auto mb-6">
                     <InventoryOverview userRole={userRole} />
           </div>
         )}
 
-                {/* 瑙掕壊蹇嵎鎿嶄綔鍗＄墖 - 浣跨敤鏉冮檺鎺у埗 */}
+                {/* 角色快捷操作卡片 - 使用权限控制 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
                   
-                  {/* 蹇€熷紑鍗曞崱鐗?- 闇€瑕佸垱寤洪攢鍞崟鏉冮檺 */}
+                  {/* 蹇€熷紑鍗曞崱鐗?- 需要创建销售单权限 */}
                   {hasPermission(userRole, 'canCreateSales') && (
                     <div 
                       onClick={() => setShowQuickOrderModal(true)}
@@ -2393,7 +2393,7 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 蹇嵎鍏ュ簱鍗＄墖 - 闇€瑕佸叆搴撴潈闄?*/}
+                  {/* 快捷入库卡片 - 需要入库权限?*/}
                   {hasPermission(userRole, 'canInbound') && (
                     <div 
                       onClick={() => setShowQuickInboundModal(true)}
@@ -2405,7 +2405,7 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 搴撳瓨杞Щ鍗＄墖 - 闇€瑕佽浆绉绘潈闄?*/}
+                  {/* 库存转移卡片 - 需要转移权限*/}
                   {hasPermission(userRole, 'canTransfer') && (
                     <div 
                       onClick={() => setCurrentPage('warehouse')}
@@ -2417,7 +2417,7 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 蹇嵎閫€璐у崱鐗?- 鍟嗗搧涓撳憳锛堥€€缁欎緵搴斿晢：*/}
+                  {/* 快捷退货卡片 - 商品专员（退给供应商）*/}
                   {hasPermission(userRole, 'canReturnToSupplier') && (
                     <div 
                       onClick={() => setShowQuickReturnModal(true)}
@@ -2429,7 +2429,7 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 蹇嵎閫€璐у崱鐗?- 鏌滃彴锛堥€€缁欏晢鍝侀儴：*/}
+                  {/* 快捷退货卡片 - 柜台（退给商品部）*/}
                   {hasPermission(userRole, 'canReturnToWarehouse') && (
                     <div 
                       onClick={() => setShowQuickReturnModal(true)}
@@ -2483,7 +2483,7 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 渚涘簲鍟嗙鐞嗗崱鐗?- 闇€瑕佷緵搴斿晢绠＄悊鏉冮檺 */}
+                  {/* 供应商管理卡片?- 需要供应商管理权限 */}
                   {hasPermission(userRole, 'canManageSuppliers') && (
                     <div 
                       onClick={() => setCurrentPage('supplier')}
@@ -2495,7 +2495,7 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 浠〃鐩樺崱鐗?- 绠＄悊灞傚揩閫熸煡鐪?*/}
+                  {/* 浠〃鐩樺崱鐗?- 管理层快速查?*/}
                   {hasPermission(userRole, 'canViewAnalytics') && (
                     <div 
                       onClick={() => setCurrentPage('dashboard')}
@@ -2507,7 +2507,7 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 鏁版嵁鍒嗘瀽鍗＄墖 - 闇€瑕佹暟鎹垎鏋愭潈闄?*/}
+                  {/* 数据分析卡片 - 需要数据分析权限 */}
                   {hasPermission(userRole, 'canViewAnalytics') && (
                     <div 
                       onClick={() => setCurrentPage('analytics')}
@@ -2519,7 +2519,7 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 鏁版嵁瀵煎嚭鍗＄墖 - 闇€瑕佹暟鎹鍑烘潈闄?*/}
+                  {/* 数据导出卡片 - 需要数据导出权限 */}
                   {hasPermission(userRole, 'canExport') && (
                     <div 
                       onClick={() => setCurrentPage('export')}
@@ -2531,7 +2531,7 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 閲戞枡绠＄悊鍗＄墖 - 鏂欓儴鍜岀鐞嗗眰 */}
+                  {/* 金料管理卡片 - 料部和管理层 */}
                   {(hasPermission(userRole, 'canViewGoldMaterial') || hasPermission(userRole, 'canManageGoldMaterial')) && (
                     <div 
                       onClick={() => setCurrentPage('gold-material')}
@@ -2543,7 +2543,7 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 鍟嗗搧缂栫爜绠＄悊鍗＄墖 - 鍟嗗搧涓撳憳鍜岀鐞嗗眰 */}
+                  {/* 商品编码管理卡片 - 商品专员和管理层 */}
                   {hasPermission(userRole, 'canManageProductCodes') && (
                     <div 
                       onClick={() => setCurrentPage('product-codes')}
@@ -2555,12 +2555,12 @@ function App() {
                     </div>
                   )}
                   
-                  {/* 鍒涘缓浠樻枡鍗曞崱鐗?- 鏂欓儴 */}
+                  {/* 创建付料单卡片?- 料部 */}
                   {hasPermission(userRole, 'canCreateGoldPayment') && (
                     <div 
                       onClick={() => {
                         setCurrentPage('gold-material');
-                        // 鍙互閫氳繃鐘舵€佹帶鍒舵墦寮€鍒涘缓浠樻枡鍗曞脊绐?
+                        // 可以通过状态控制打开创建付料单弹窗?
                       }}
                       className="p-6 bg-white rounded-2xl border border-gray-200/60 hover:shadow-lg transition-all cursor-pointer active:scale-95"
                     >
@@ -2595,7 +2595,7 @@ function App() {
                         </div>
                       )}
                       
-                      {/* 鎬濊€冩楠?*/}
+                      {/* 思考步骤?*/}
                       <div className="space-y-2">
                         {msg.steps.map((step, stepIdx) => (
                           <div key={stepIdx} className="flex items-start space-x-3">
@@ -2616,7 +2616,7 @@ function App() {
                 )
               }
               
-              // 鏀舵纭鍗＄墖
+              // 收款确认卡片
               if (msg.type === 'payment_confirm' && msg.paymentData) {
                 const pd = msg.paymentData
                 return (
@@ -2632,7 +2632,7 @@ function App() {
                         </div>
                       </div>
                       
-                      {/* 鍐呭鍖?*/}
+                      {/* 内容?*/}
                       <div className="p-5 space-y-4">
                         {/* 客户信息 */}
                         <div className="flex items-center gap-3">
@@ -2645,7 +2645,7 @@ function App() {
                           </div>
                         </div>
                         
-                        {/* 閲戦淇℃伅 */}
+                        {/* 金额信息 */}
                         <div className="bg-gray-50 rounded-xl p-4 space-y-2">
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-600">当前欠款</span>
@@ -2685,7 +2685,7 @@ function App() {
                                   pd.remark || ''
                                 )
                                 if (result.success) {
-                                  // 鏇存柊娑堟伅涓烘垚鍔熺姸鎬?
+                                  // 更新消息为成功状态
                                   const balanceText = (pd.balance_after || 0) >= 0 
                                     ? `¥${pd.balance_after.toFixed(2)}` 
                                     : `-¥${Math.abs(pd.balance_after || 0).toFixed(2)} (预收款`
@@ -2708,12 +2708,12 @@ function App() {
                           </button>
                           <button
                             onClick={() => {
-                              // 鍙栨秷纭锛岀Щ闄ゆ娑堟伅
+                              // 取消确认，移除此消息
                               setMessages(prev => prev.filter(m => m.id !== msg.id))
                             }}
                             className="px-4 py-2.5 border border-gray-300 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors"
                           >
-                            鍙栨秷
+                            取消
                           </button>
                         </div>
                       </div>
@@ -2722,7 +2722,7 @@ function App() {
                 )
               }
 
-              // 鏀舵枡纭鍗＄墖
+              // 收料确认卡片
               if (msg.type === 'receipt_confirm' && msg.receiptData) {
                 const rd = msg.receiptData
                 return (
@@ -2738,7 +2738,7 @@ function App() {
                         </div>
                       </div>
                       
-                      {/* 鍐呭鍖?*/}
+                      {/* 内容?*/}
                       <div className="p-5 space-y-4">
                         {/* 客户信息 */}
                         <div className="flex items-center gap-3">
@@ -2778,8 +2778,8 @@ function App() {
                                   customer_id: rd.customer.id.toString(),
                                   gold_weight: rd.gold_weight.toString(),
                                   gold_fineness: rd.gold_fineness,
-                                  remark: rd.remark || '鑱婂ぉ鏀舵枡',
-                                  created_by: '缁撶畻涓撳憳'
+                                  remark: rd.remark || '聊天收料',
+                                  created_by: '结算专员'
                                 })
                                 const response = await fetch(`${API_BASE_URL}/api/gold-material/gold-receipts?${params}`, {
                                   method: 'POST',
@@ -2787,14 +2787,14 @@ function App() {
                                 })
                                 if (response.ok) {
                                   const result = await response.json()
-                                  // 鏇存柊娑堟伅涓烘垚鍔熺姸鎬?
+                                  // 更新消息为成功状态
                                   setMessages(prev => prev.map(m => 
                                     m.id === msg.id 
                                       ? { ...m, type: 'system', content: `✅ 收料单创建成功！\n\n单号：{result.data.receipt_no}\n客户：{rd.customer.name}\n克重：{rd.gold_weight.toFixed(2)}克
 成色：{rd.gold_fineness}` }
                                       : m
                                   ))
-                                  // 鎵撳紑鎵撳嵃椤甸潰
+                                  // 打开打印页面
                                   if (result.data.id) {
                                     window.open(`${API_BASE_URL}/api/gold-material/gold-receipts/${result.data.id}/print`, '_blank')
                                   }
@@ -2813,12 +2813,12 @@ function App() {
                           </button>
                           <button
                             onClick={() => {
-                              // 鍙栨秷纭锛岀Щ闄ゆ娑堟伅
+                              // 取消确认，移除此消息
                               setMessages(prev => prev.filter(m => m.id !== msg.id))
                             }}
                             className="px-4 py-2.5 border border-gray-300 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors"
                           >
-                            鍙栨秷
+                            取消
                           </button>
                         </div>
                       </div>
@@ -2827,7 +2827,7 @@ function App() {
                 )
               }
 
-              // 鎻愭枡纭鍗＄墖
+              // 提料确认卡片
               if (msg.type === 'withdrawal_confirm' && msg.withdrawalData) {
                 const wd = msg.withdrawalData
                 return (
@@ -2843,7 +2843,7 @@ function App() {
                         </div>
                       </div>
                       
-                      {/* 鍐呭鍖?*/}
+                      {/* 内容?*/}
                       <div className="p-5 space-y-4">
                         {/* 客户信息 */}
                         <div className="flex items-center gap-3">
@@ -2885,7 +2885,7 @@ function App() {
                               try {
                                 const params = new URLSearchParams({
                                   user_role: 'settlement',
-                                  created_by: '缁撶畻涓撳憳'
+                                  created_by: '结算专员'
                                 })
                                 const response = await fetch(`${API_BASE_URL}/api/gold-material/withdrawals?${params}`, {
                                   method: 'POST',
@@ -2899,13 +2899,13 @@ function App() {
                                 })
                                 if (response.ok) {
                                   const result = await response.json()
-                                  // 鏇存柊娑堟伅涓烘垚鍔熺姸鎬?
+                                  // 更新消息为成功状态
                                   setMessages(prev => prev.map(m => 
                                     m.id === msg.id 
                                       ? { ...m, type: 'system', content: `✅ 提料单创建成功！\n\n单号：${result.withdrawal_no}\n客户：${wd.customer.name}\n克重：${wd.gold_weight.toFixed(2)}克\n（待料部确认发出）` }
                                       : m
                                   ))
-                                  // 鎵撳紑鎵撳嵃椤甸潰
+                                  // 打开打印页面
                                   if (result.id) {
                                     window.open(`${API_BASE_URL}/api/gold-material/withdrawals/${result.id}/download?format=html`, '_blank')
                                   }
@@ -2924,12 +2924,12 @@ function App() {
                           </button>
                           <button
                             onClick={() => {
-                              // 鍙栨秷纭锛岀Щ闄ゆ娑堟伅
+                              // 取消确认，移除此消息
                               setMessages(prev => prev.filter(m => m.id !== msg.id))
                             }}
                             className="px-4 py-2.5 border border-gray-300 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors"
                           >
-                            鍙栨秷
+                            取消
                           </button>
                         </div>
                       </div>
@@ -2938,7 +2938,7 @@ function App() {
                 )
               }
 
-              // 鎻愭枡鍗曡褰曞崱鐗囷紙宸插畬鎴愮殑鎻愭枡鍗曪級
+              // 提料单记录卡片（已完成的提料单）
               if (msg.type === 'withdrawal_record' && msg.withdrawalData) {
                 const wd = msg.withdrawalData
                 return (
@@ -2954,9 +2954,9 @@ function App() {
                         </div>
                       </div>
                       
-                      {/* 鍐呭鍖?*/}
+                      {/* 内容?*/}
                       <div className="p-5 space-y-4">
-                        {/* 鍗曞彿淇℃伅 */}
+                        {/* 单号信息 */}
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-gray-500">鍗曞彿</span>
                           <span className="font-mono font-semibold text-green-700">{wd.withdrawal_no}</span>
@@ -3005,7 +3005,7 @@ function App() {
                 )
               }
               
-              // 鐢ㄦ埛娑堟伅
+              // 用户消息
               if (msg.type === 'user') {
                 return (
                   <div key={msg.id || idx} className="flex justify-end">
@@ -3016,7 +3016,7 @@ function App() {
                 )
               }
               
-              // 绯荤粺娑堟伅锛堟祦寮忓唴瀹规垨鏅€氬唴瀹癸級- 甯I澶村儚
+              // 系统消息（流式内容或普通内容）- 甯I澶村儚
               if (msg.type === 'system') {
                 return (
                   <React.Fragment key={msg.id || idx}>
@@ -3027,37 +3027,37 @@ function App() {
                         ${msg.id ? 'max-w-2xl' : 'max-w-[85%] md:max-w-[75%]'}
                         rounded-3xl px-5 py-4 shadow-sm border border-jewelry-gold/20 bg-gradient-to-br from-amber-50/80 to-yellow-50/80
                       `}>
-                        {/* 鎰忓浘璇嗗埆鍙鍖栨爣绛?- 鐝犲疂椋庢牸 */}
+                        {/* 意图识别可视化标签?- 珠宝风格 */}
                         {msg.detectedIntent && (
                           <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-gray-100">
-                            <span className="text-xs text-gray-400">馃幆 璇嗗埆鍒帮細</span>
+                            <span className="text-xs text-gray-400">🎯 璇嗗埆鍒帮細</span>
                             <span className="px-2 py-0.5 text-xs font-medium bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 rounded-full">
                               {msg.detectedIntent}
                             </span>
                           </div>
                         )}
                         <div className="text-[15px] leading-relaxed whitespace-pre-wrap text-gray-800">
-                          {/* 闅愯棌鍐呭涓殑鐗规畩鏍囪 */}
+                          {/* 隐藏内容中的特殊标记 */}
                           {msg.content?.replace(/\n*<!-- (RETURN_ORDER|INBOUND_ORDER|SALES_ORDER|SETTLEMENT_ORDER|CUSTOMER_DEBT|EXPORT_INBOUND|WITHDRAWAL_ORDER|GOLD_RECEIPT):[^>]+ -->/g, '')}
-                          {/* 娴佸紡鐢熸垚鏃剁殑闂儊鍏夋爣 */}
+                          {/* 流式生成时的闪烁光标 */}
                           {msg.isStreaming && (
                             <span className="inline-block w-0.5 h-4 bg-blue-500 ml-1 animate-pulse"></span>
                           )}
                         </div>
-                {/* 濡傛灉鏈夊浘鐗囷紝鏄剧ず棰勮 */}
+                {/* 如果有图片，显示预览 */}
                 {msg.image && (
                           <div className="mt-3">
                     <img 
                       src={msg.image} 
-                      alt="涓婁紶鐨勫叆搴撳崟" 
+                      alt="上传的入库单" 
                               className="max-w-full h-auto rounded-2xl border border-gray-200/60"
                       style={{ maxHeight: '300px' }}
                     />
                   </div>
                 )}
-                        {/* 鎻愭枡鍗曟搷浣滄寜閽?- 鏀寔浠庡璞℃垨浠庡唴瀹硅В鏋?*/}
+                        {/* 提料单操作按钮 - 支持从对象或从内容解析 */}
                         {(() => {
-                          // 灏濊瘯浠庢秷鎭璞¤幏鍙栵紝鎴栦粠鍐呭涓В鏋愰殣钘忔爣璁?
+                          // 尝试从消息对象获取，或从内容中解析隐藏标签?
                           let withdrawalId = msg.withdrawalId
                           let downloadUrl = msg.withdrawalDownloadUrl
                           if (!withdrawalId && msg.content) {
@@ -3082,9 +3082,9 @@ function App() {
                             </div>
                           )
                         })()}
-                        {/* 鏀舵枡鍗曟搷浣滄寜閽?- 鏀寔浠庡璞℃垨浠庡唴瀹硅В鏋?*/}
+                        {/* 收料单操作按钮 - 支持从对象或从内容解析 */}
                         {(() => {
-                          // 灏濊瘯浠庢秷鎭璞¤幏鍙栵紝鎴栦粠鍐呭涓В鏋愰殣钘忔爣璁?
+                          // 尝试从消息对象获取，或从内容中解析隐藏标签?
                           let receiptId = msg.goldReceiptId
                           let downloadUrl = msg.goldReceiptDownloadUrl
                           if (!receiptId && msg.content) {
@@ -3109,9 +3109,9 @@ function App() {
                             </div>
                           )
                         })()}
-                        {/* 閫€璐у崟操作按钮 - 鏀寔浠庡璞℃垨浠庡唴瀹硅В鏋?*/}
+                        {/* 退货单操作按钮 - 支持从对象或从内容解析 */}
                         {(() => {
-                          // 灏濊瘯浠庢秷鎭璞¤幏鍙栵紝鎴栦粠鍐呭涓В鏋愰殣钘忔爣璁?
+                          // 尝试从消息对象获取，或从内容中解析隐藏标签?
                           let returnId = msg.returnOrder?.id
                           if (!returnId && msg.content) {
                             const match = msg.content.match(/<!-- RETURN_ORDER:(\d+):/)
@@ -3141,9 +3141,9 @@ function App() {
                             </div>
                           )
                         })()}
-                        {/* 鍏ュ簱鍗曟搷浣滄寜閽?- 鏀寔浠庡璞℃垨浠庡唴瀹硅В鏋?*/}
+                        {/* 入库单操作按钮 - 支持从对象或从内容解析 */}
                         {(() => {
-                          // 灏濊瘯浠庢秷鎭璞¤幏鍙栵紝鎴栦粠鍐呭涓В鏋愰殣钘忔爣璁?
+                          // 尝试从消息对象获取，或从内容中解析隐藏标签?
                           let inboundId = msg.inboundOrder?.id
                           if (!inboundId && msg.content) {
                             const match = msg.content.match(/<!-- INBOUND_ORDER:(\d+):/)
@@ -3173,9 +3173,9 @@ function App() {
                             </div>
                           )
                         })()}
-                        {/* 閿€鍞崟操作按钮 - 鏀寔浠庡璞℃垨浠庡唴瀹硅В鏋?*/}
+                        {/* 销售单操作按钮 - 支持从对象或从内容解析 */}
                         {(() => {
-                          // 灏濊瘯浠庢秷鎭璞¤幏鍙栵紝鎴栦粠鍐呭涓В鏋愰殣钘忔爣璁?
+                          // 尝试从消息对象获取，或从内容中解析隐藏标签?
                           let salesId = msg.salesOrderId
                           if (!salesId && msg.content) {
                             const match = msg.content.match(/<!-- SALES_ORDER:(\d+):/)
@@ -3205,9 +3205,9 @@ function App() {
                             </div>
                           )
                         })()}
-                        {/* 缁撶畻鍗曟搷浣滄寜閽?- 鏀寔浠庡璞℃垨浠庡唴瀹硅В鏋?*/}
+                        {/* 结算单操作按钮 - 支持从对象或从内容解析 */}
                         {(() => {
-                          // 灏濊瘯浠庢秷鎭璞¤幏鍙栵紝鎴栦粠鍐呭涓В鏋愰殣钘忔爣璁?
+                          // 尝试从消息对象获取，或从内容中解析隐藏标签?
                           let settlementId = msg.settlementOrderId
                           if (!settlementId && msg.content) {
                             const match = msg.content.match(/<!-- SETTLEMENT_ORDER:(\d+):/)
@@ -3234,7 +3234,7 @@ function App() {
                                 </svg>
                                 下载
                               </button>
-                              {/* 重新结算鎸夐挳 - 浠呯粨绠椾笓鍛樺拰绠＄悊灞傚彲瑙?*/}
+                              {/* ½按钮 - 仅结算专员和管理层可?*/}
                               {(userRole === 'settlement' || userRole === 'manager') && (
                                 <button
                                   onClick={async () => {
@@ -3246,7 +3246,7 @@ function App() {
                                       if (response.ok) {
                                         const result = await response.json()
                                         alert(result.message || '结算单已撤销')
-                                        // 璺宠浆鍒扮粨绠楃鐞嗛〉闈?
+                                        // 跳转到结算管理页?
                                         setCurrentPage('settlement')
                                       } else {
                                         const error = await response.json()
@@ -3289,7 +3289,7 @@ function App() {
                             </div>
                           )
                         })()}
-                        {/* 鍏ュ簱鍗曟煡璇㈠鍑烘寜閽?- 浠庡唴瀹逛腑瑙ｆ瀽闅愯棌鏍囪 */}
+                        {/* 入库单查询导出按钮?- 从内容中解析隐藏标记 */}
                         {(() => {
                           if (!msg.content) return null
                           const match = msg.content.match(/<!-- EXPORT_INBOUND:([^:]*):([^:]*):([^:]*):([^>]*) -->/)
@@ -3298,7 +3298,7 @@ function App() {
                           const dateEnd = match[2] || ''
                           const supplier = match[3] || ''
                           const product = match[4] || ''
-                          // 鏋勫缓鏌ヨ鍙傛暟
+                          // 构建查询参数
                           const params = new URLSearchParams()
                           if (dateStart) params.append('date_start', dateStart)
                           if (dateEnd) params.append('date_end', dateEnd)
@@ -3321,7 +3321,7 @@ function App() {
                         })()}
               </div>
             </div>
-            {/* 宸ヨ垂鏄庣粏琛ㄦ牸锛堝崟涓晢鍝佹煡璇級 */}
+            {/* 工费明细表格（单个商品查询） */}
             {Array.isArray(msg.laborCostDetails) && msg.laborCostDetails.length > 0 && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-4xl w-full bg-white rounded-2xl shadow-sm border border-gray-200/60 p-6">
@@ -3355,7 +3355,7 @@ function App() {
                 </div>
               </div>
             )}
-                    {/* 鍏ュ簱鏍稿鍗＄墖灞曠ず */}
+                    {/* 入库核对卡片展示 */}
                     {msg.inboundCard && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-2xl w-full">
@@ -3363,7 +3363,7 @@ function App() {
                             data={msg.inboundCard}
                             actions={{
                               onConfirm: async (card) => {
-                                // 鏂规B锛氳皟鐢ㄧ湡瀹炵殑鍏ュ簱API
+                                // 鏂规B：调用真实的入库API
                                 console.log('Confirm inbound:', card)
                                 try {
                                   // 更新卡片状态为处理中
@@ -3374,7 +3374,7 @@ function App() {
                                     return m
                                   }))
                                   
-                                  // 璋冪敤鍏ュ簱API
+                                  // 调用入库API
                                   const { confirmInbound } = await import('./services/inboundService')
                                   // 涓嶄娇鐢∕ock妯″紡锛岀‘淇濊幏鍙栫湡瀹炵殑orderId
                                   const useMock = false
@@ -3401,14 +3401,14 @@ function App() {
                                   }))
                                 } catch (error) {
                                   console.error('Confirm inbound failed:', error)
-                                  // 鏇存柊鐘舵€佷负閿欒
+                                  // 更新状态为错误
                                   setMessages(prev => prev.map(m => {
                                     if (m.id === msg.id) {
                                       return { 
                                         ...m, 
                                         inboundCard: updateCard(card, { 
                                           status: 'error', 
-                                          errorMessage: error instanceof Error ? error.message : '鍏ュ簱澶辫触'
+                                          errorMessage: error instanceof Error ? error.message : '入库失败'
                                         }) 
                                       }
                                     }
@@ -3417,7 +3417,7 @@ function App() {
                                 }
                               },
                               onReportError: async (card, errorReason) => {
-                                // 鎶ュ憡鏁版嵁閿欒
+                                // 报告数据错误
                                 console.log('Report inbound data error:', card, errorReason)
                                 try {
                                   const useMock = import.meta.env.DEV && import.meta.env.VITE_USE_MOCK !== 'false'
@@ -3437,12 +3437,12 @@ function App() {
                         </div>
                       </div>
                     )}
-                    {/* 澶氬晢鍝佸叆搴撳崱鐗囧睍绀?*/}
+                    {/* 多商品入库卡片展示?*/}
                     {Array.isArray(msg.inboundCards) && msg.inboundCards.length > 0 && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-4xl w-full space-y-4">
                           <div className="text-sm text-gray-600 mb-2 font-medium">
-                            克{msg.inboundCards.length} 涓晢鍝佸緟鍏ュ簱
+                            克{msg.inboundCards.length} 个商品待入库
                           </div>
                           {msg.inboundCards.map((card, cardIndex) => (
                             <div key={card.id || cardIndex} className="border-l-4 border-amber-400 pl-3">
@@ -3463,7 +3463,7 @@ function App() {
                                         return m
                                       }))
                                       
-                                      // 璋冪敤鍏ュ簱API
+                                      // 调用入库API
                                       const { confirmInbound } = await import('./services/inboundService')
                                       const result = await confirmInbound(cardToConfirm, false)
                                       
@@ -3491,7 +3491,7 @@ function App() {
                                           const updatedCards = m.inboundCards.map((c, i) => 
                                             i === cardIndex ? updateCard(c, { 
                                               status: 'error', 
-                                              errorMessage: error instanceof Error ? error.message : '鍏ュ簱澶辫触'
+                                              errorMessage: error instanceof Error ? error.message : '入库失败'
                                             }) : c
                                           )
                                           return { ...m, inboundCards: updatedCards }
@@ -3524,7 +3524,7 @@ function App() {
                               />
                             </div>
                           ))}
-                          {/* 鎵归噺纭鎸夐挳 */}
+                          {/* 批量确认按钮 */}
                           {msg.inboundCards.some(c => c.status === 'pending') && (
                             <div className="flex gap-3 mt-4 pt-4 border-t border-gray-200">
                               <button
@@ -3537,7 +3537,7 @@ function App() {
                                     if (card.status !== 'pending') continue
                                     
                                     try {
-                                      // 鏇存柊鐘舵€佷负澶勭悊涓?
+                                      // 更新状态为处理?
                                       setMessages(prev => prev.map(m => {
                                         if (m.id === msg.id && m.inboundCards) {
                                           const updatedCards = m.inboundCards.map((c, idx) => 
@@ -3550,7 +3550,7 @@ function App() {
                                       
                                       const result = await confirmInbound(card, false)
                                       
-                                      // 鏇存柊鐘舵€佷负宸茬‘璁?
+                                      // 更新状态为已确认?
                                       setMessages(prev => prev.map(m => {
                                         if (m.id === msg.id && m.inboundCards) {
                                           const updatedCards = m.inboundCards.map((c, idx) => 
@@ -3571,7 +3571,7 @@ function App() {
                                           const updatedCards = m.inboundCards.map((c, idx) => 
                                             idx === i ? updateCard(c, { 
                                               status: 'error',
-                                              errorMessage: error instanceof Error ? error.message : '鍏ュ簱澶辫触'
+                                              errorMessage: error instanceof Error ? error.message : '入库失败'
                                             }) : c
                                           )
                                           return { ...m, inboundCards: updatedCards }
@@ -3583,18 +3583,18 @@ function App() {
                                 }}
                                 className="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-medium hover:from-amber-600 hover:to-orange-600 transition-all shadow-md"
                               >
-                                ✅ 鍏ㄩ儴纭鍏ュ簱
+                                ✅ 全部确认入库
                               </button>
                             </div>
                           )}
                         </div>
                       </div>
                     )}
-                    {/* 閿€鍞崟鍗＄墖灞曠ず */}
+                    {/* 销售单卡片展示 */}
                     {msg.salesOrder && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-4xl w-full bg-gradient-to-r from-green-50 to-blue-50 rounded-2xl shadow-lg p-6 border border-green-200/60">
-                          <h3 className="text-xl font-bold text-gray-800 mb-4">📋 閿€鍞崟璇︽儏</h3>
+                          <h3 className="text-xl font-bold text-gray-800 mb-4">📋 销售单详情</h3>
                           <div className="grid grid-cols-2 gap-4 mb-4">
                             <div>
                               <span className="text-gray-600">销售单号：</span>
@@ -3631,7 +3631,7 @@ function App() {
                               </span>
                             </div>
                           </div>
-                          {/* 商品明细琛ㄦ牸 */}
+                          {/* 商品明细表格 */}
                           {Array.isArray(msg.salesOrder?.details) && msg.salesOrder.details.length > 0 && (
                             <div className="mt-4">
                               <h4 className="font-semibold mb-2 text-gray-700">商品明细</h4>
@@ -3666,7 +3666,7 @@ function App() {
                         </div>
                       </div>
                     )}
-                    {/* 搴撳瓨妫€鏌ラ敊璇彁绀哄崱鐗?*/}
+                    {/* 库存检查错误提示卡片?*/}
                     {Array.isArray(msg.inventoryErrors) && msg.inventoryErrors.length > 0 && (
                       <div className="flex justify-start mt-2">
                         <div className="max-w-4xl w-full bg-red-50 rounded-2xl shadow-sm p-6 border border-red-200/60">
@@ -3816,14 +3816,14 @@ function App() {
                     </div>
                   )}
                       </div>
-                          {/* 鏌ョ湅璇︾粏鏁版嵁鎶樺彔闈㈡澘 */}
+                          {/* 查看详细数据折叠面板 */}
                           {msg.rawData && (msg.rawData.suppliers || msg.rawData.inventory) && (
                             <details className="mt-4 border-t border-gray-100 pt-4">
                               <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
                                 <span>📊 查看详细数据</span>
                               </summary>
                               <div className="mt-3 overflow-x-auto">
-                                {/* 渚涘簲鍟嗘暟鎹〃鏍?*/}
+                                {/* 供应商数据表?*/}
                                 {msg.rawData.suppliers && msg.rawData.suppliers.length > 0 && (
                                   <table className="min-w-full text-sm">
                                     <thead className="bg-gray-50">
@@ -3846,7 +3846,7 @@ function App() {
                                     </tbody>
                                   </table>
                                 )}
-                                {/* 搴撳瓨鏁版嵁琛ㄦ牸 */}
+                                {/* 库存数据表格 */}
                                 {msg.rawData.inventory && msg.rawData.inventory.length > 0 && (
                                   <table className="min-w-full text-sm">
                                     <thead className="bg-gray-50">
@@ -3908,12 +3908,12 @@ function App() {
           </div>
       </div>
 
-      {/* OCR璇嗗埆缂栬緫瀵硅瘽妗?*/}
+      {/* OCR识别编辑对话?*/}
       {showOCRModal && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4"
           onClick={(e) => {
-            // 鐐瑰嚮鑳屾櫙鍏抽棴瀵硅瘽妗?
+            // 点击背景关闭对话?
             if (e.target === e.currentTarget) {
               setShowOCRModal(false)
               setOcrResult('')
@@ -3922,12 +3922,12 @@ function App() {
           }}
         >
           <div className="bg-white rounded-lg shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
-            {/* 瀵硅瘽妗嗘爣棰樻爮 */}
+            {/* 对话框标题栏 */}
             <div className="px-4 sm:px-6 py-4 border-b flex justify-between items-center bg-gray-50">
               <div className="flex items-center space-x-2">
-                <span className="text-2xl">馃摑</span>
+                <span className="text-2xl">📝</span>
                 <h2 className="text-lg sm:text-xl font-semibold text-gray-800">
-                  瀹℃牳骞剁紪杈戣瘑鍒唴瀹?
+                  审核并编辑识别内容
                 </h2>
               </div>
               <button
@@ -3937,34 +3937,34 @@ function App() {
                   setUploadedImage(null)
                 }}
                 className="text-gray-400 hover:text-gray-600 text-3xl font-light w-8 h-8 flex items-center justify-center transition-colors"
-                title="鍏抽棴"
+                title="关闭"
               >
                 ×
               </button>
             </div>
             
-            {/* 瀵硅瘽妗嗗唴瀹瑰尯鍩?*/}
+            {/* 对话框内容区域?*/}
             <div className="flex-1 overflow-hidden flex flex-col sm:flex-row">
-              {/* 宸︿晶锛氬浘鐗囬瑙堬紙妗岄潰绔樉绀猴紝绉诲姩绔殣钘忔垨鎶樺彔：*/}
+              {/* 左侧：图片预览（桌面端显示，移动端隐藏或折叠）*/}
               {uploadedImage && (
                 <div className="hidden sm:block w-80 border-r bg-gray-50 p-4 overflow-y-auto">
                   <h3 className="text-sm font-semibold text-gray-700 mb-3">鍘熷鍥剧墖</h3>
                   <div className="bg-white rounded-lg p-2 shadow-sm">
                     <img 
                       src={uploadedImage} 
-                      alt="涓婁紶鐨勫叆搴撳崟" 
+                      alt="上传的入库单" 
                       className="w-full h-auto rounded border border-gray-200"
                     />
                   </div>
                   <p className="text-xs text-gray-500 mt-3">
-                    璇峰鐓у浘鐗囨鏌ヨ瘑鍒唴瀹规槸鍚︽纭?
+                    请对照图片检查识别内容是否正确?
                   </p>
                 </div>
               )}
               
               {/* 鍙充晶锛氱紪杈戝尯鍩?*/}
               <div className="flex-1 flex flex-col overflow-hidden">
-                {/* 鎻愮ず淇℃伅 */}
+                {/* 提示信息 */}
                 <div className="px-4 sm:px-6 py-3 sm:py-4 border-b bg-blue-50">
                   <p className="text-xs sm:text-sm text-blue-800 font-medium mb-1">
                     ⚠️ 请检查并编辑识别内容，确认无误后点击"确认入库"
@@ -3989,19 +3989,19 @@ function App() {
               </div>
             </div>
             
-            {/* 绉诲姩绔浘鐗囬瑙堬紙鍙€夛紝鍦ㄧ紪杈戝尯鍩熶笅鏂规樉绀猴級 */}
+            {/* 移动端图片预览（可选，在编辑区域下方显示） */}
             {uploadedImage && (
               <div className="sm:hidden border-t bg-gray-50 p-4 max-h-48 overflow-y-auto">
                 <h3 className="text-xs font-semibold text-gray-700 mb-2">鍘熷鍥剧墖</h3>
                 <img 
                   src={uploadedImage} 
-                  alt="涓婁紶鐨勫叆搴撳崟" 
+                  alt="上传的入库单" 
                   className="w-full h-auto rounded border border-gray-200"
                 />
               </div>
             )}
             
-            {/* 瀵硅瘽妗嗗簳閮ㄦ寜閽?*/}
+            {/* 对话框底部按钮?*/}
             <div className="px-4 sm:px-6 py-4 border-t bg-gray-50 flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-4">
               <button
                 onClick={() => {
@@ -4011,25 +4011,25 @@ function App() {
                 }}
                 className="w-full sm:w-auto px-6 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-white transition-colors font-medium order-2 sm:order-1"
               >
-                鍙栨秷
+                取消
               </button>
               <button
                 onClick={handleConfirmInbound}
                 disabled={loading || !ocrResult.trim()}
                 className="w-full sm:w-auto px-8 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium order-1 sm:order-2"
               >
-                {loading ? '澶勭悊涓?..' : '纭鍏ュ簱'}
+                {loading ? '处理中...' : '确认入库'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-        {/* 杈撳叆鍖哄煙 - 鑻规灉椋庢牸 */}
+        {/* 输入区域 - 鑻规灉椋庢牸 */}
         <footer className="bg-white/80 backdrop-blur-xl border-t border-gray-200/60 px-6 py-5">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-end space-x-3">
-              {/* 蹇嵎鍏ュ簱鎸夐挳 - 浠呭晢鍝佷笓鍛樺彲瑙?*/}
+              {/* 快捷入库按钮 - 浠呭晢鍝佷笓鍛樺彲瑙?*/}
               {userRole === 'product' && (
                 <button
                   onClick={() => setShowQuickInboundModal(true)}
@@ -4239,7 +4239,7 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
                   }).catch(err => console.error('Save settlement message failed:', err))
                 }
                 
-                // 鍒囨崲鍥炶亰澶╅〉闈?
+                // 切换回聊天页?
                 setCurrentPage('chat')
               }}
             />
@@ -4323,7 +4323,7 @@ ${data.material_amount > 0 ? `- 金料金额：¥${data.material_amount.toFixed(
         )}
       </div>
 
-      {/* 蹇嵎寮€鍗曞脊绐?- 浠呮煖鍙板彲鐢紙缁撶畻涓撳憳涓嶉渶瑕侊級 */}
+      {/* 快捷开单弹窗 - 仅柜台可用（结算专员不需要） */}
       {userRole === 'counter' && (
         <QuickOrderModal
           isOpen={showQuickOrderModal}
@@ -4435,9 +4435,9 @@ ${itemsList}
               } : null
             }])
             
-            // 淇濆瓨鍒板悗绔亰澶╁巻鍙诧紙鍖呭惈ID鏍囪：
+            // 保存到后端聊天历史（包含ID标记）
             try {
-              await fetch(`${API_BASE_URL}/api/chat-logs/message?session_id=${encodeURIComponent(currentSessionId)}&message_type=assistant&content=${encodeURIComponent(inboundMessage)}&user_role=${userRole}&intent=鍏ュ簱`, {
+              await fetch(`${API_BASE_URL}/api/chat-logs/message?session_id=${encodeURIComponent(currentSessionId)}&message_type=assistant&content=${encodeURIComponent(inboundMessage)}&user_role=${userRole}&intent=入库`, {
                 method: 'POST'
               })
             } catch (error) {
@@ -4448,29 +4448,29 @@ ${itemsList}
         />
       )}
 
-      {/* 閿€鍞鐞嗗脊绐?- 鏌滃彴銆佺粨绠椼€佷笟鍔″彲鐢?*/}
+      {/* 销售管理弹窗 - 柜台、结算、业务可用 */}
       {showSalesSearchModal && ['counter', 'settlement', 'sales'].includes(userRole) && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><SalesOrdersPage userRole={userRole} onClose={() => setShowSalesSearchModal(false)} /></div>
       )}
 
-      {/* 历史回顾面板 - 鎵€鏈夎鑹插彲鐢?*/}
+      {/* 历史回顾面板 - 所有角色可?*/}
       <ChatHistoryPanel
         isOpen={showHistoryPanel}
         onClose={() => setShowHistoryPanel(false)}
         userRole={userRole}
         onLoadSession={(sessionId, sessionMessages) => {
-          // 鍔犺浇鍘嗗彶瀵硅瘽鍒板綋鍓嶈亰澶?
+          // 加载历史对话到当前聊?
           if (sessionMessages && sessionMessages.length > 0) {
             const formattedMessages = sessionMessages.map(msg => ({
-              type: msg.message_type === 'user' ? 'user' : 'system',  // 浣跨敤 type 鍜?system锛堜笌娓叉煋閫昏緫涓€鑷达級
+              type: msg.message_type === 'user' ? 'user' : 'system',  // 浣跨敤 type 鍜?system（与渲染逻辑一致）
               content: msg.content,
               timestamp: msg.created_at
             }))
-            // 瑙ｆ瀽娑堟伅涓殑闅愯棌鏍囪锛屾仮澶嶆墍鏈夌壒娈婃秷鎭殑棰濆瀛楁
+            // 解析消息中的隐藏标记，恢复所有特殊消息的额外字段
             const parsedMessages = parseMessageHiddenMarkers(formattedMessages)
             setMessages(parsedMessages)
             
-            // 璁剧疆褰撳墠 session_id锛岀‘淇濆悗缁秷鎭户缁娇鐢ㄧ浉鍚岀殑浼氳瘽
+            // 设置当前 session_id，确保后续消息继续使用相同的会话
             setCurrentSessionId(sessionId)
             localStorage.setItem('current_session_id', sessionId)
             setCurrentConversationId(sessionId)
@@ -4480,14 +4480,14 @@ ${itemsList}
         }}
       />
 
-      {/* 蹇嵎鏀舵枡寮圭獥 */}
+      {/* 快捷收料弹窗 */}
       {showQuickReceiptModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold flex items-center">
                 <span className="text-xl mr-2">📦</span>
-                蹇嵎鏀舵枡
+                快捷收料
               </h3>
               <button onClick={() => setShowQuickReceiptModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
             </div>
@@ -4572,14 +4572,14 @@ ${itemsList}
         </div>
       )}
 
-      {/* 蹇嵎鎻愭枡寮圭獥 */}
+      {/* 快捷提料弹窗 */}
       {showQuickWithdrawalModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold flex items-center">
                 <span className="text-xl mr-2">⬆️</span>
-                蹇嵎鎻愭枡
+                快捷提料
               </h3>
               <button onClick={() => setShowQuickWithdrawalModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
             </div>
@@ -4621,24 +4621,24 @@ ${itemsList}
                   </div>
                 )}
               </div>
-              {/* 瀛樻枡浣欓鏄剧ず */}
+              {/* 存料余额显示 */}
               {quickWithdrawalForm.customer_id && (
                 <div className={`p-4 rounded-lg ${
                   depositLoading ? 'bg-gray-100' : 
                   (selectedCustomerDeposit?.current_balance || 0) > 0 ? 'bg-blue-50 border border-blue-200' : 'bg-red-50 border border-red-200'
                 }`}>
                   {depositLoading ? (
-                    <div className="text-center text-gray-500">鏌ヨ涓?..</div>
+                    <div className="text-center text-gray-500">查询中...</div>
                   ) : (
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">褰撳墠瀛樻枡浣欓</span>
+                      <span className="text-sm font-medium text-gray-700">当前存料余额</span>
                       <span className={`text-xl font-bold ${(selectedCustomerDeposit?.current_balance || 0) > 0 ? 'text-blue-600' : 'text-red-600'}`}>
                         {selectedCustomerDeposit?.current_balance?.toFixed(2) || '0.00'} 克
                       </span>
                     </div>
                   )}
                   {!depositLoading && (selectedCustomerDeposit?.current_balance || 0) === 0 && (
-                    <div className="mt-2 text-xs text-red-600">⚠️ 璇ュ鎴锋殏鏃犲瓨鏂欙紝鏃犳硶鎻愭枡</div>
+                    <div className="mt-2 text-xs text-red-600">⚠️ 该客户暂无存料，无法提料</div>
                   )}
                 </div>
               )}
@@ -4669,7 +4669,7 @@ ${itemsList}
                 />
               </div>
               <div className="flex space-x-3 pt-4">
-                <button type="button" onClick={() => setShowQuickWithdrawalModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">鍙栨秷</button>
+                <button type="button" onClick={() => setShowQuickWithdrawalModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">取消</button>
                 <button 
                   type="submit" 
                   disabled={!quickWithdrawalForm.customer_id || 
@@ -4709,7 +4709,7 @@ ${itemsList}
         }}
       />
       
-      {/* Toast 鎻愮ず缁勪欢 */}
+      {/* Toast 提示组件 */}
       {toastMessage && (
         <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
           <div className="bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
