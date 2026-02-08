@@ -26,11 +26,11 @@ export const ROLE_PERMISSIONS = {
     // 暂借单权限
     canCreateLoan: true,            // 可以创建暂借单
     canManageLoan: true,            // 可以管理暂借单（确认借出、归还、撤销）
-    
+
     // 可访问页面
     pages: ['chat', 'warehouse', 'customer', 'return', 'loan'],
   },
-  
+
   // 商品专员
   product: {
     canInbound: true,               // 可以入库
@@ -53,10 +53,10 @@ export const ROLE_PERMISSIONS = {
     canViewPurchaseOrders: true,    // 可以查看采购单
     canViewPurchaseReturns: true,   // 可以查看采购退货单
     canAuditInbound: false,         // 不能审核入库单
-    
+
     pages: ['chat', 'warehouse', 'supplier', 'return', 'product-codes', 'document-center'],
   },
-  
+
   // 结算专员
   settlement: {
     canInbound: false,
@@ -89,10 +89,10 @@ export const ROLE_PERMISSIONS = {
     // 暂借单权限
     canCreateLoan: true,            // 可以创建暂借单
     canManageLoan: true,            // 可以管理暂借单（确认借出、归还、撤销）
-    
+
     pages: ['chat', 'settlement', 'gold-material', 'customer', 'loan', 'returns'],
   },
-  
+
   // 业务员 - 只能查询客户相关信息
   sales: {
     // 操作权限全部关闭
@@ -110,17 +110,17 @@ export const ROLE_PERMISSIONS = {
     canReturnToSupplier: false,
     canReturnToWarehouse: false,
     canViewFinance: false,
-    
+
     // 查询权限开启
     canViewCustomers: true,              // 可以查看客户列表
     canQueryCustomerSales: true,         // 可以查询客户销售记录
     canQueryCustomerReturns: true,       // 可以查询客户退货记录
     canQueryCustomerBalance: true,       // 可以查询客户欠款/存料余额
     canQueryCustomerTransactions: true,  // 可以查询客户往来账目
-    
+
     pages: ['chat', 'customer'],
   },
-  
+
   // 财务 - 权限与管理层一致
   finance: {
     canInbound: true,               // 可以查看入库单
@@ -160,10 +160,11 @@ export const ROLE_PERMISSIONS = {
     canViewPurchaseReturns: true,
     canAuditInbound: true,          // 可以审核入库单
     canAuditReturn: true,           // 可以审核退货单
-    
-    pages: ['chat', 'warehouse', 'settlement', 'finance', 'analytics', 'export', 'salesperson', 'customer', 'supplier', 'return', 'gold-material', 'product-codes', 'loan', 'document-center'],
+    canManageVouchers: true,        // 可以管理财务凭证
+
+    pages: ['chat', 'warehouse', 'settlement', 'finance', 'analytics', 'export', 'salesperson', 'customer', 'supplier', 'return', 'gold-material', 'product-codes', 'loan', 'document-center', 'voucher'],
   },
-  
+
   // 料部 - 管理金料的收发
   material: {
     canInbound: false,
@@ -193,10 +194,10 @@ export const ROLE_PERMISSIONS = {
     canCompleteWithdrawal: true,    // 可以完成取料（发出金料）
     canCreateTransfer: false,       // 不能创建转料单（结算职责）
     canConfirmTransfer: true,       // 可以确认转料
-    
+
     pages: ['chat', 'gold-material', 'customer', 'supplier'],
   },
-  
+
   // 管理层 - 拥有所有权限
   manager: {
     canInbound: true,
@@ -236,8 +237,9 @@ export const ROLE_PERMISSIONS = {
     canViewPurchaseReturns: true,   // 可以查看采购退货单
     canAuditInbound: true,          // 可以审核入库单
     canAuditReturn: true,           // 可以审核退货单
-    
-    pages: ['chat', 'warehouse', 'settlement', 'finance', 'analytics', 'export', 'salesperson', 'customer', 'supplier', 'return', 'gold-material', 'product-codes', 'loan', 'document-center'],
+    canManageFinanceAdmins: true,   // 可以管理财务人员
+
+    pages: ['chat', 'warehouse', 'settlement', 'finance', 'analytics', 'export', 'salesperson', 'customer', 'supplier', 'return', 'gold-material', 'product-codes', 'loan', 'document-center', 'finance-admins'],
   }
 };
 
@@ -313,7 +315,7 @@ export function getPermissionDeniedMessage(action) {
     'createLoan': '您没有创建暂借单的权限，请联系结算专员或管理层',
     'manageLoan': '您没有管理暂借单的权限，请联系结算专员或管理层',
   };
-  
+
   return actionMessages[action] || '您没有执行此操作的权限';
 }
 

@@ -1,0 +1,158 @@
+Analyzing tables: ['gl_doc', 'gl_entry', 'aa_account']
+
+--- Table: gl_doc ---
+Column: code | Type: VARCHAR(30) | Nullable: True | Default: None
+Column: name | Type: VARCHAR(200) | Nullable: True | Default: None
+Column: accuorigamountdr | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: accuorigamountcr | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: accuamountdr | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: accuamountcr | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: iscashieraudit | Type: INTEGER | Nullable: True | Default: None
+Column: cashiername | Type: VARCHAR(50) | Nullable: True | Default: None
+Column: ispost | Type: INTEGER | Nullable: True | Default: None
+Column: bookkeepername | Type: VARCHAR(50) | Nullable: True | Default: None
+Column: iserror | Type: INTEGER | Nullable: True | Default: None
+Column: isinvalidate | Type: INTEGER | Nullable: True | Default: None
+Column: invalidatorname | Type: VARCHAR(50) | Nullable: True | Default: None
+Column: iscashflowed | Type: INTEGER | Nullable: True | Default: None
+Column: isquantitydoc | Type: INTEGER | Nullable: True | Default: None
+Column: isforeigncurrencydoc | Type: INTEGER | Nullable: True | Default: None
+Column: attachedvouchernum | Type: INTEGER | Nullable: True | Default: None
+Column: accountingperiod | Type: INTEGER | Nullable: True | Default: None
+Column: accountingyear | Type: INTEGER | Nullable: True | Default: None
+Column: maker | Type: VARCHAR(50) | Nullable: True | Default: None
+Column: auditor | Type: VARCHAR(50) | Nullable: True | Default: None
+Column: reviser | Type: VARCHAR(50) | Nullable: True | Default: None
+Column: iscarriedforwardout | Type: INTEGER | Nullable: True | Default: None
+Column: iscarriedforwardin | Type: INTEGER | Nullable: True | Default: None
+Column: ismodifiedcode | Type: INTEGER | Nullable: True | Default: None
+Column: ts | Type: BYTEA | Nullable: True | Default: None
+Column: priuserdefnvc1 | Type: VARCHAR(500) | Nullable: True | Default: None
+Column: priuserdefdecm1 | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: priuserdefdecm2 | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: priuserdefnvc2 | Type: VARCHAR(500) | Nullable: True | Default: None
+Column: priuserdefnvc3 | Type: VARCHAR(500) | Nullable: True | Default: None
+Column: priuserdefdecm3 | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: priuserdefnvc4 | Type: VARCHAR(500) | Nullable: True | Default: None
+Column: priuserdefdecm4 | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: priuserdefnvc5 | Type: VARCHAR(500) | Nullable: True | Default: None
+Column: priuserdefdecm5 | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: priuserdefnvc6 | Type: VARCHAR(500) | Nullable: True | Default: None
+Column: priuserdefdecm6 | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: isCashierDoc | Type: INTEGER | Nullable: True | Default: None
+Column: DocOrderNum | Type: VARCHAR(200) | Nullable: True | Default: None
+Column: SourceType | Type: VARCHAR(200) | Nullable: True | Default: None
+Column: SourceContent | Type: VARCHAR(200) | Nullable: True | Default: None
+Column: PrintCount | Type: INTEGER | Nullable: False | Default: None
+Column: isCashflowByHand | Type: INTEGER | Nullable: True | Default: None
+Column: externalCode | Type: VARCHAR(50) | Nullable: True | Default: None
+Column: businessDocMoney | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: batch | Type: TIMESTAMP | Nullable: True | Default: None
+Column: id | Type: INTEGER | Nullable: False | Default: None
+Column: iddoctype | Type: INTEGER | Nullable: True | Default: None
+Column: isdefrence | Type: INTEGER | Nullable: True | Default: None
+Column: cashflowedstate | Type: INTEGER | Nullable: True | Default: None
+Column: docbusinesstype | Type: INTEGER | Nullable: True | Default: None
+Column: docsourcetype | Type: INTEGER | Nullable: True | Default: None
+Column: invalidateState | Type: INTEGER | Nullable: True | Default: None
+Column: makeErrorState | Type: INTEGER | Nullable: True | Default: None
+Column: voucherstate | Type: INTEGER | Nullable: True | Default: None
+Column: tempDocGenerate | Type: INTEGER | Nullable: True | Default: None
+Column: auditorid | Type: INTEGER | Nullable: True | Default: None
+Column: makerid | Type: INTEGER | Nullable: True | Default: None
+Column: bookkeeperid | Type: INTEGER | Nullable: True | Default: None
+Column: cashierid | Type: INTEGER | Nullable: True | Default: None
+Column: invalidatorid | Type: INTEGER | Nullable: True | Default: None
+Column: idperiod | Type: INTEGER | Nullable: True | Default: None
+Column: transDocId | Type: VARCHAR(50) | Nullable: True | Default: None
+Column: cashierauditdate | Type: TIMESTAMP | Nullable: True | Default: None
+Column: postdate | Type: TIMESTAMP | Nullable: True | Default: None
+Column: invalidatedate | Type: TIMESTAMP | Nullable: True | Default: None
+Column: voucherdate | Type: TIMESTAMP | Nullable: True | Default: None
+Column: madedate | Type: TIMESTAMP | Nullable: True | Default: None
+Column: auditeddate | Type: TIMESTAMP | Nullable: True | Default: None
+Column: createdtime | Type: TIMESTAMP | Nullable: True | Default: None
+Primary Key: {'name': None, 'constrained_columns': []}
+
+--- Table: gl_entry ---
+Column: code | Type: VARCHAR(30) | Nullable: True | Default: None
+Column: name | Type: VARCHAR(200) | Nullable: True | Default: None
+Column: summary | Type: VARCHAR(200) | Nullable: True | Default: None
+Column: exchangerate | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: origamountdr | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: origamountcr | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: amountdr | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: amountcr | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: quantitydr | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: quantitycr | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: price | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: sequencenumber | Type: INTEGER | Nullable: True | Default: None
+Column: ts | Type: BYTEA | Nullable: True | Default: None
+Column: priuserdefnvc1 | Type: VARCHAR(500) | Nullable: True | Default: None
+Column: priuserdefdecm1 | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: priuserdefnvc2 | Type: VARCHAR(500) | Nullable: True | Default: None
+Column: priuserdefdecm2 | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: priuserdefnvc3 | Type: VARCHAR(500) | Nullable: True | Default: None
+Column: priuserdefdecm3 | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: priuserdefnvc4 | Type: VARCHAR(500) | Nullable: True | Default: None
+Column: priuserdefdecm4 | Type: NUMERIC(28, 14) | Nullable: True | Default: None
+Column: AuxiliaryItems | Type: VARCHAR(200) | Nullable: True | Default: None
+Column: id | Type: INTEGER | Nullable: False | Default: None
+Column: idaccount | Type: INTEGER | Nullable: True | Default: None
+Column: idcurrency | Type: INTEGER | Nullable: True | Default: None
+Column: datafrom | Type: INTEGER | Nullable: True | Default: None
+Column: idDocDTO | Type: INTEGER | Nullable: True | Default: None
+Column: idUnit | Type: INTEGER | Nullable: True | Default: None
+Primary Key: {'name': None, 'constrained_columns': []}
+
+--- Table: aa_account ---
+Column: code | Type: VARCHAR(40) | Nullable: True | Default: None
+Column: name | Type: VARCHAR(50) | Nullable: True | Default: None
+Column: accountingyear | Type: INTEGER | Nullable: True | Default: None
+Column: shorthand | Type: VARCHAR(50) | Nullable: True | Default: None
+Column: isquantity | Type: INTEGER | Nullable: True | Default: None
+Column: isexchange | Type: INTEGER | Nullable: True | Default: None
+Column: isgatherprinting | Type: INTEGER | Nullable: True | Default: None
+Column: canmakedoc | Type: INTEGER | Nullable: True | Default: None
+Column: iscontrolled | Type: INTEGER | Nullable: True | Default: None
+Column: iscontrolledbussinesssys | Type: INTEGER | Nullable: True | Default: None
+Column: iscontrolledcash | Type: INTEGER | Nullable: True | Default: None
+Column: iscash | Type: INTEGER | Nullable: True | Default: None
+Column: isbank | Type: INTEGER | Nullable: True | Default: None
+Column: iscashequivalents | Type: INTEGER | Nullable: True | Default: None
+Column: isauxaccdepartment | Type: INTEGER | Nullable: True | Default: None
+Column: isauxaccperson | Type: INTEGER | Nullable: True | Default: None
+Column: isauxacccustomer | Type: INTEGER | Nullable: True | Default: None
+Column: isauxaccsupplier | Type: INTEGER | Nullable: True | Default: None
+Column: isauxaccproject | Type: INTEGER | Nullable: True | Default: None
+Column: isauxaccinventory | Type: INTEGER | Nullable: True | Default: None
+Column: isexauxacc1 | Type: INTEGER | Nullable: True | Default: None
+Column: isexauxacc2 | Type: INTEGER | Nullable: True | Default: None
+Column: isexauxacc3 | Type: INTEGER | Nullable: True | Default: None
+Column: isexauxacc4 | Type: INTEGER | Nullable: True | Default: None
+Column: isexauxacc5 | Type: INTEGER | Nullable: True | Default: None
+Column: isexauxacc6 | Type: INTEGER | Nullable: True | Default: None
+Column: isexauxacc7 | Type: INTEGER | Nullable: True | Default: None
+Column: isexauxacc8 | Type: INTEGER | Nullable: True | Default: None
+Column: isexauxacc9 | Type: INTEGER | Nullable: True | Default: None
+Column: isexauxacc10 | Type: INTEGER | Nullable: True | Default: None
+Column: isEndNode | Type: INTEGER | Nullable: True | Default: None
+Column: disabled | Type: INTEGER | Nullable: True | Default: None
+Column: depth | Type: INTEGER | Nullable: True | Default: None
+Column: inId | Type: VARCHAR(750) | Nullable: True | Default: None
+Column: ts | Type: BYTEA | Nullable: True | Default: None
+Column: IsAux | Type: INTEGER | Nullable: False | Default: None
+Column: isFinalTransferExchange | Type: INTEGER | Nullable: True | Default: None
+Column: isBillingInfo | Type: INTEGER | Nullable: True | Default: None
+Column: Remainder | Type: NUMERIC(32, 15) | Nullable: True | Default: None
+Column: ModifyLog | Type: VARCHAR(4000) | Nullable: True | Default: None
+Column: id | Type: INTEGER | Nullable: False | Default: None
+Column: idGatherPrintingAccountDTO | Type: INTEGER | Nullable: True | Default: None
+Column: idParent | Type: INTEGER | Nullable: True | Default: None
+Column: idaccounttypeDTO | Type: INTEGER | Nullable: True | Default: None
+Column: iddefaultcurrencyDTO | Type: INTEGER | Nullable: True | Default: None
+Column: bookformat | Type: INTEGER | Nullable: True | Default: None
+Column: dcdirection | Type: INTEGER | Nullable: True | Default: None
+Column: createdtime | Type: TIMESTAMP | Nullable: True | Default: None
+Column: idUnit | Type: INTEGER | Nullable: True | Default: None
+Primary Key: {'name': None, 'constrained_columns': []}

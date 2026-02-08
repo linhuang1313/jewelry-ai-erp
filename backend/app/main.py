@@ -128,6 +128,7 @@ from .routers.chat_history import router as chat_history_router
 from .routers.inventory_maintenance import router as inventory_maintenance_router
 from .routers.data_cleanup import router as data_cleanup_router
 from .routers.documents import router as documents_router
+from .routers.fbl_finance import router as fbl_finance_router
 
 # 注册已有路由
 app.include_router(finance_router)
@@ -153,6 +154,7 @@ app.include_router(chat_history_router)
 app.include_router(inventory_maintenance_router)
 app.include_router(data_cleanup_router)
 app.include_router(documents_router)
+app.include_router(fbl_finance_router)
 
 
 # ========== 通用操作日志查询 ==========

@@ -3,9 +3,10 @@ import { API_ENDPOINTS } from '../config';
 import {
   Package, MapPin, ArrowRight, ArrowLeft, Check, X, Clock, RefreshCw,
   Plus, Send, Inbox, AlertTriangle, ChevronDown, Search, Filter, FileText,
-  AlertCircle, Printer
+  AlertCircle, Printer, Tag
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { printJewelryLabel, printJewelryLabels } from '../utils/lodopPrint';
 
 // 带超时的 fetch 封装（默认 10 秒超时）
 const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout = 10000): Promise<Response> => {
@@ -110,18 +111,16 @@ const TabButton: React.FC<{
 }> = ({ active, onClick, icon, label, count }) => (
   <button
     onClick={onClick}
-    className={`flex items-center space-x-2 px-5 py-3 rounded-xl font-medium transition-all ${
-      active
-        ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-lg shadow-amber-200/50'
-        : 'bg-white text-gray-600 hover:bg-amber-50 border border-gray-200'
-    }`}
+    className={`flex items-center space-x-2 px-5 py-3 rounded-xl font-medium transition-all ${active
+      ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-lg shadow-amber-200/50'
+      : 'bg-white text-gray-600 hover:bg-amber-50 border border-gray-200'
+      }`}
   >
     {icon}
     <span>{label}</span>
     {count !== undefined && count > 0 && (
-      <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${
-        active ? 'bg-white/20' : 'bg-red-500 text-white'
-      }`}>
+      <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${active ? 'bg-white/20' : 'bg-red-500 text-white'
+        }`}>
         {count}
       </span>
     )}
@@ -138,7 +137,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     returned: { bg: 'bg-purple-100', text: 'text-purple-700', label: '已退回' },
   };
   const { bg, text, label } = config[status] || { bg: 'bg-gray-100', text: 'text-gray-700', label: status };
-  
+
   return (
     <span className={`px-2 py-1 rounded-full text-xs font-medium ${bg} ${text}`}>
       {label}
@@ -161,7 +160,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
   const hasAutoSwitched = useRef(false);  // 跟踪是否已自动切换标签页
   const [locations, setLocations] = useState<Location[]>([]);
   const [inventorySummary, setInventorySummary] = useState<InventorySummary[]>([]);
-  
+
   // 转移单状态（支持多商品）
   const [transferOrders, setTransferOrders] = useState<TransferOrder[]>([]);
   const [pendingTransferOrders, setPendingTransferOrders] = useState<TransferOrder[]>([]);
@@ -180,12 +179,12 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
   const [inboundError, setInboundError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocation, setSelectedLocation] = useState<number | null>(null);
-  
+
   // 视图切换：按品名 / 按条码
   const [inventoryViewMode, setInventoryViewMode] = useState<'byName' | 'byBarcode'>('byName');
   const [barcodeInventory, setBarcodeInventory] = useState<BarcodeInventoryItem[]>([]);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
-  
+
   // 展开的商品名称（用于按品名视图中查看条码明细）
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
 
@@ -198,7 +197,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     to_location_id: '',
     remark: ''
   });
-  
+
   // 批量转移商品列表
   const [transferItems, setTransferItems] = useState<Array<{ product_name: string; weight: number }>>([]);
 
@@ -237,7 +236,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       craft?: string;
     }>;
   }>>([]);
-  
+
   // 日期筛选
   const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'month' | 'all'>('all');
   // 隐藏已转移入库单
@@ -267,11 +266,11 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       if (response.ok) {
         const data = await response.json();
         setLocations(data);
-        
+
         // 根据角色设置默认的发出位置和目标位置
         const productLoc = data.find((l: Location) => l.name === '商品部仓库');
         const showroomLoc = data.find((l: Location) => l.name === '展厅');
-        
+
         if (userRole === 'product' && productLoc && showroomLoc) {
           // 商品专员：发出位置默认商品部，目标位置默认展厅
           setTransferForm(prev => ({
@@ -332,7 +331,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     }
     setExpandedProducts(newSet);
   };
-  
+
   // 获取某个商品名称下的所有条码明细
   const getProductBarcodes = (productName: string) => {
     return barcodeInventory.filter(item => item.product_name === productName);
@@ -342,7 +341,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
   const loadBarcodeInventory = async (search?: string) => {
     setBarcodeLoading(true);
     try {
-      const url = search 
+      const url = search
         ? `${API_ENDPOINTS.API_BASE_URL}/api/inventory/by-barcode?search=${encodeURIComponent(search)}&limit=200`
         : `${API_ENDPOINTS.API_BASE_URL}/api/inventory/by-barcode?limit=200`;
       const response = await fetch(url);
@@ -367,19 +366,19 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       if (response.ok) {
         const data = await response.json();
         setTransferOrders(data);
-        
+
         // 根据角色过滤待接收的转移单（柜台看到的"待接收" = 商品专员看到的"待确认"）
         const myResponsibleLocation = ROLE_LOCATION_MAP[userRole];
         if (myResponsibleLocation) {
           setPendingTransferOrders(
-            data.filter((t: TransferOrder) => 
+            data.filter((t: TransferOrder) =>
               t.status === 'pending_confirm' && t.to_location_name === myResponsibleLocation
             )
           );
         } else {
           setPendingTransferOrders(data.filter((t: TransferOrder) => t.status === 'pending_confirm'));
         }
-        
+
         // 待确认转移单（商品专员和管理员）
         if (userRole === 'product' || userRole === 'manager') {
           setPendingConfirmTransferOrders(
@@ -393,14 +392,14 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
           setPendingConfirmTransferOrders([]);
           setConfirmedTransferOrders([]);
         }
-        
+
         // 已接收的转移单（柜台和管理员）
         if (userRole === 'counter' || userRole === 'manager') {
           // 柜台只看目标是展厅的已接收单
           const myResponsibleLocation = userRole === 'counter' ? '展厅' : null;
           if (myResponsibleLocation) {
             setReceivedTransferOrders(
-              data.filter((t: TransferOrder) => 
+              data.filter((t: TransferOrder) =>
                 t.status === 'received' && t.to_location_name === myResponsibleLocation
               )
             );
@@ -426,7 +425,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
   // 自动切换到有待处理数据的标签页（仅首次加载时）
   useEffect(() => {
     if (hasAutoSwitched.current) return;
-    
+
     // 柜台用户：如果有待接收的转移单，自动切换到"待接收"标签页
     if ((userRole === 'counter' || userRole === 'manager') && pendingTransferOrders.length > 0) {
       setActiveTab('receive');
@@ -495,16 +494,16 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       toast.error('请输入入库单号');
       return;
     }
-    
+
     if (orderNoOverride) {
       setBatchOrderNo(orderNoOverride);
     }
-    
+
     setBatchLoading(true);
     try {
       const response = await fetch(`${API_ENDPOINTS.API_BASE_URL}/api/inbound-orders?order_no=${encodeURIComponent(orderNoToSearch)}&limit=1`);
       const data = await response.json();
-      
+
       if (data.success && data.data && data.data.length > 0) {
         const order = data.data[0];
         const items = order.details.map((d: any, idx: number) => ({
@@ -536,11 +535,11 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       toast.error('请先选择入库单');
       return;
     }
-    
+
     const selectedOrders = recentInboundOrders.filter(o => selectedOrderIds.has(o.id));
     let itemId = 0;
     const allItems: typeof batchItems = [];
-    
+
     selectedOrders.forEach(order => {
       order.details.forEach(d => {
         allItems.push({
@@ -553,7 +552,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
         });
       });
     });
-    
+
     setBatchItems(allItems);
     toast.success(`已加载 ${selectedOrders.length} 个入库单，共 ${allItems.length} 个商品`);
   };
@@ -564,11 +563,11 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       toast.error('请先选择入库单');
       return;
     }
-    
+
     const selectedOrders = recentInboundOrders.filter(o => selectedOrderIds.has(o.id));
     let itemId = 0;
     const allItems: typeof batchItems = [];
-    
+
     selectedOrders.forEach(order => {
       order.details.forEach(d => {
         allItems.push({
@@ -581,32 +580,32 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
         });
       });
     });
-    
+
     if (allItems.length === 0) {
       toast.error('选中的入库单没有商品');
       return;
     }
-    
+
     // 获取默认位置
     const productLoc = locations.find(l => l.name === '商品部仓库');
     const showroomLoc = locations.find(l => l.name === '展厅');
-    
+
     let fromLocationId = productLoc?.id;
     let toLocationId = showroomLoc?.id;
-    
+
     if (userRole === 'counter') {
       fromLocationId = showroomLoc?.id;
       toLocationId = productLoc?.id;
     }
-    
+
     if (!fromLocationId || !toLocationId) {
       toast.error('位置配置错误');
       return;
     }
-    
+
     // 构建备注（包含所有入库单号）
     const orderNos = selectedOrders.map(o => o.order_no).join('、');
-    
+
     setBatchLoading(true);
     try {
       // 使用 /transfer-orders 端点，initial_status=pending_confirm 使转移单直接进入"待确认"状态
@@ -623,13 +622,13 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
           remark: `来自入库单 ${orderNos}`
         })
       });
-      
+
       const result = await response.json();
-      
+
       // 检查成功响应 - 支持多种返回格式
       const isSuccess = response.ok && (result.id || result.data?.id || result.success);
       const transferNo = result.transfer_no || result.data?.transfer_no;
-      
+
       if (isSuccess && (result.id || result.data?.id)) {
         // 成功创建转移单
         toast.success(`批量转移成功，已创建转移单 ${transferNo}，请在"待确认"中查看`);
@@ -670,7 +669,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       const orderDate = new Date(order.create_time);
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      
+
       if (dateFilter === 'today') {
         if (orderDate < todayStart) return false;
       } else if (dateFilter === 'week') {
@@ -683,12 +682,12 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
         if (orderDate < monthAgo) return false;
       }
     }
-    
+
     // 隐藏已转移
     if (hideTransferred && order.transferred_weight >= order.total_weight) {
       return false;
     }
-    
+
     return true;
   });
 
@@ -722,35 +721,35 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
   // 批量创建转移单
   const handleBatchTransfer = async () => {
     const selectedItems = batchItems.filter(item => item.selected && item.transfer_weight > 0);
-    
+
     if (selectedItems.length === 0) {
       toast.error('请选择要转移的商品');
       return;
     }
-    
+
     // 获取默认位置
     const productLoc = locations.find(l => l.name === '商品部仓库');
     const showroomLoc = locations.find(l => l.name === '展厅');
-    
+
     let fromLocationId = productLoc?.id;
     let toLocationId = showroomLoc?.id;
-    
+
     if (userRole === 'counter') {
       fromLocationId = showroomLoc?.id;
       toLocationId = productLoc?.id;
     }
-    
+
     if (!fromLocationId || !toLocationId) {
       toast.error('位置配置错误');
       return;
     }
-    
+
     // 构建备注（收集所有不同的入库单号）
     const orderNos = [...new Set(selectedItems.map(item => item.order_no).filter(Boolean))];
-    const remarkText = orderNos.length > 0 
+    const remarkText = orderNos.length > 0
       ? `来自入库单 ${orderNos.join('、')}`
       : (batchOrderNo ? `来自入库单 ${batchOrderNo}` : '批量转移');
-    
+
     setBatchLoading(true);
     try {
       // 使用 /transfer-orders 端点，initial_status=pending_confirm 使转移单直接进入"待确认"状态
@@ -767,13 +766,13 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
           remark: remarkText
         })
       });
-      
+
       const result = await response.json();
-      
+
       // 检查成功响应 - 支持多种返回格式
       const isSuccess = response.ok && (result.id || result.data?.id || result.success);
       const transferNo = result.transfer_no || result.data?.transfer_no;
-      
+
       if (isSuccess && (result.id || result.data?.id)) {
         // 成功创建转移单
         toast.success(`批量转移成功，已创建转移单 ${transferNo}，请在"待确认"中查看`);
@@ -804,52 +803,52 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       toast.error('请选择商品并输入重量');
       return;
     }
-    
+
     const weight = parseFloat(transferForm.weight);
     if (weight <= 0) {
       toast.error('重量必须大于0');
       return;
     }
-    
+
     // 检查是否超出可转移重量
     const fromLocationName = locations.find(l => l.id.toString() === transferForm.from_location_id)?.name;
     const item = inventorySummary.find(i => i.product_name === transferForm.product_name);
     const locInventory = item?.locations.find(loc => loc.location_name === fromLocationName);
     const availableWeight = locInventory?.weight || 0;
-    
+
     // 计算已添加到列表中的同商品重量
     const alreadyAdded = transferItems
       .filter(i => i.product_name === transferForm.product_name)
       .reduce((sum, i) => sum + i.weight, 0);
-    
+
     if (weight + alreadyAdded > availableWeight) {
       toast.error(`超出可转移重量！${fromLocationName}仅有 ${availableWeight.toFixed(2)}g，已添加 ${alreadyAdded.toFixed(2)}g`);
       return;
     }
-    
+
     // 添加到列表
     setTransferItems([...transferItems, { product_name: transferForm.product_name, weight }]);
-    
+
     // 清空当前选择但保留位置
     setTransferForm({ ...transferForm, product_name: '', weight: '' });
     toast.success(`已添加 ${transferForm.product_name} ${weight}g 到转移列表`);
   };
-  
+
   // 从批量转移列表移除商品
   const handleRemoveFromTransferList = (index: number) => {
     const newItems = [...transferItems];
     newItems.splice(index, 1);
     setTransferItems(newItems);
   };
-  
+
   const handleCreateTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!transferForm.from_location_id || !transferForm.to_location_id) {
       toast.error('请选择转移位置');
       return;
     }
-    
+
     // 如果列表为空但表单有数据，先添加到列表
     let itemsToTransfer = [...transferItems];
     if (transferForm.product_name && transferForm.weight) {
@@ -858,7 +857,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
         itemsToTransfer.push({ product_name: transferForm.product_name, weight });
       }
     }
-    
+
     if (itemsToTransfer.length === 0) {
       toast.error('请添加至少一个商品');
       return;
@@ -908,7 +907,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
   };
 
   // ============= 转移单操作函数 =============
-  
+
   // 打开新版接收弹窗
   const openReceiveOrderModal = (order: TransferOrder) => {
     setReceivingOrder(order);
@@ -919,11 +918,11 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     });
     setReceiveItemForms(forms);
   };
-  
+
   // 接收转移单（新版多商品）
   const handleReceiveTransferOrder = async () => {
     if (!receivingOrder) return;
-    
+
     // 验证所有商品都填写了实际重量
     const items = receivingOrder.items.map(item => {
       const form = receiveItemForms[item.id];
@@ -935,7 +934,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
         diff_reason: hasDiff ? (form?.diff_reason || '') : null
       };
     });
-    
+
     // 检查有差异的商品是否填写了原因
     for (const item of items) {
       const originalItem = receivingOrder.items.find(i => i.id === item.item_id);
@@ -947,7 +946,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
         }
       }
     }
-    
+
     try {
       const response = await fetch(`${API_ENDPOINTS.TRANSFER_ORDER_RECEIVE(receivingOrder.id)}?user_role=${userRole}`, {
         method: 'POST',
@@ -957,13 +956,13 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
 
       if (response.ok) {
         const result = await response.json();
-        
+
         if (result.status === 'pending_confirm') {
           toast.success('转移单已退回商品部待审核');
         } else {
           toast.success('接收成功');
         }
-        
+
         setReceivingOrder(null);
         setReceiveItemForms({});
         loadTransfers();
@@ -976,7 +975,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       toast.error('接收失败');
     }
   };
-  
+
   // 拒收转移单（新版）
   const handleRejectTransferOrder = async (order: TransferOrder) => {
     const reason = prompt('请输入拒收原因:');
@@ -999,7 +998,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       toast.error('拒收失败');
     }
   };
-  
+
   const startEditConfirmOrder = (order: TransferOrder) => {
     const forms: Record<number, { actual_weight: string; diff_reason: string }> = {};
     order.items.forEach(item => {
@@ -1085,7 +1084,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       toast.error('确认失败');
     }
   };
-  
+
   // 商品部拒绝确认转移单（库存退回商品部仓库）
   const handleRejectConfirmTransferOrder = async (order: TransferOrder) => {
     const reason = prompt('请输入拒绝原因（库存将退回商品部仓库）:');
@@ -1110,7 +1109,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       toast.error('拒绝失败');
     }
   };
-  
+
   // 重新发起退回的转移单
   const handleResubmitTransferOrder = async (order: TransferOrder) => {
     if (!confirm(`确定要重新发起转移单 ${order.transfer_no} 吗？\n\n将基于原单创建新的转移单，原单记录保留用于审计追溯。`)) {
@@ -1268,11 +1267,10 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                     onClick={() => {
                       setInventoryViewMode('byName');
                     }}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                      inventoryViewMode === 'byName'
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${inventoryViewMode === 'byName'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                      }`}
                   >
                     按品名
                   </button>
@@ -1283,21 +1281,45 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                         loadBarcodeInventory(searchTerm || undefined);
                       }
                     }}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                      inventoryViewMode === 'byBarcode'
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${inventoryViewMode === 'byBarcode'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                      }`}
                   >
                     按条码
                   </button>
                 </div>
-                <span className="text-sm text-gray-500">
-                  {inventoryViewMode === 'byName' 
-                    ? `${filteredInventory.length} 种商品`
-                    : `${barcodeInventory.length} 条记录`
-                  }
-                </span>
+                <div className="flex items-center space-x-3">
+                  <span className="text-sm text-gray-500">
+                    {inventoryViewMode === 'byName'
+                      ? `${filteredInventory.length} 种商品`
+                      : `${barcodeInventory.length} 条记录`
+                    }
+                  </span>
+                  {/* 批量打印标签按钮 - 仅按条码视图可用 */}
+                  {inventoryViewMode === 'byBarcode' && barcodeInventory.length > 0 && (
+                    <button
+                      onClick={() => {
+                        const products = barcodeInventory.map(item => ({
+                          barcode: item.product_code || '',
+                          productName: item.product_name,
+                          goldWeight: item.weight,
+                          laborCost: item.labor_cost,
+                          pieceLaborCost: item.piece_labor_cost || 0,
+                          mainStone: '',
+                          sideStone: '',
+                        }));
+                        const count = printJewelryLabels(products, { preview: true });
+                        if (count) toast.success(`已添加 ${count} 个标签到打印队列`);
+                      }}
+                      className="flex items-center space-x-1 px-3 py-1.5 text-sm bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
+                      title="批量打印所有显示的商品标签"
+                    >
+                      <Tag className="w-4 h-4" />
+                      <span>批量打印标签</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* 搜索和筛选 */}
@@ -1346,34 +1368,33 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       {locations
                         .filter(loc => userRole !== 'counter' || loc.location_type === 'showroom')
                         .map(loc => {
-                        const locInventory = getInventoryByLocation(loc.id);
-                        const totalWeight = locInventory.reduce((sum, item) => 
-                          sum + item.locations.reduce((s, l) => s + l.weight, 0), 0
-                        );
-                        const productCount = locInventory.length;
-                        
-                        return (
-                          <div
-                            key={loc.id}
-                            onClick={() => setSelectedLocation(loc.id)}
-                            className={`p-4 rounded-xl cursor-pointer transition-all hover:shadow-md ${
-                              loc.location_type === 'warehouse'
+                          const locInventory = getInventoryByLocation(loc.id);
+                          const totalWeight = locInventory.reduce((sum, item) =>
+                            sum + item.locations.reduce((s, l) => s + l.weight, 0), 0
+                          );
+                          const productCount = locInventory.length;
+
+                          return (
+                            <div
+                              key={loc.id}
+                              onClick={() => setSelectedLocation(loc.id)}
+                              className={`p-4 rounded-xl cursor-pointer transition-all hover:shadow-md ${loc.location_type === 'warehouse'
                                 ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white'
                                 : 'bg-gradient-to-br from-green-500 to-green-600 text-white'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between mb-3">
-                              <MapPin className="w-5 h-5 opacity-80" />
-                              <span className="text-xs opacity-80">{loc.code}</span>
+                                }`}
+                            >
+                              <div className="flex items-center justify-between mb-3">
+                                <MapPin className="w-5 h-5 opacity-80" />
+                                <span className="text-xs opacity-80">{loc.code}</span>
+                              </div>
+                              <h3 className="font-bold text-lg mb-2">{loc.name}</h3>
+                              <div className="flex justify-between text-sm opacity-90">
+                                <span>{productCount} 种商品</span>
+                                <span>{totalWeight.toFixed(1)}g</span>
+                              </div>
                             </div>
-                            <h3 className="font-bold text-lg mb-2">{loc.name}</h3>
-                            <div className="flex justify-between text-sm opacity-90">
-                              <span>{productCount} 种商品</span>
-                              <span>{totalWeight.toFixed(1)}g</span>
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
                     </div>
                   )}
 
@@ -1415,112 +1436,130 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                      {(selectedLocation 
-                        ? getInventoryByLocation(selectedLocation) 
-                        : filteredInventory
-                      )
-                      .filter(item => {
-                        // 柜台用户：只显示展厅有库存的商品
-                        if (userRole === 'counter') {
-                          const showroomWeight = item.locations
-                            .filter(l => l.location_name === '展厅')
-                            .reduce((s, l) => s + l.weight, 0);
-                          return showroomWeight > 0;
-                        }
-                        // 其他角色：显示总库存大于0的商品
-                        return item.total_weight > 0;
-                      })
-                      .map(item => (
-                        <React.Fragment key={item.product_name}>
-                          {/* 商品行 - 可点击展开 */}
-                          <tr 
-                            className="hover:bg-gray-50 cursor-pointer"
-                            onClick={() => toggleProductExpand(item.product_name)}
-                          >
-                            <td className="px-4 py-3">
-                              <ChevronDown 
-                                className={`w-4 h-4 text-gray-400 transition-transform ${
-                                  expandedProducts.has(item.product_name) ? 'rotate-180' : ''
-                                }`} 
-                              />
-                            </td>
-                            <td className="px-4 py-3 font-medium text-gray-900">{item.product_name}</td>
-                            <td className="px-4 py-3 text-right text-gray-700">{item.quantity || 0}</td>
-                            <td className="px-4 py-3 text-right font-semibold text-blue-600">
-                              {(userRole === 'counter'
-                                ? item.locations.filter(l => l.location_name === '展厅').reduce((s, l) => s + l.weight, 0)
-                                : item.total_weight
-                              ).toFixed(2)}g
-                            </td>
-                            {userRole !== 'counter' && (
-                              <td className="px-4 py-3 text-right text-green-600">¥{(item.total_amount || 0).toFixed(2)}</td>
-                            )}
-                            <td className="px-4 py-3">
-                              <div className="flex flex-wrap gap-1">
-                                {item.locations
-                                  .filter(loc => userRole !== 'counter' || loc.location_name === '展厅')
-                                  .map(loc => (
-                                    <span
-                                      key={loc.id}
-                                      className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600"
-                                    >
-                                      {loc.location_name}: {loc.weight.toFixed(1)}g
-                                    </span>
-                                  ))}
-                              </div>
-                            </td>
-                          </tr>
-                          
-                          {/* 条码明细 - 展开时显示 */}
-                          {expandedProducts.has(item.product_name) && (
-                            <tr>
-                              <td colSpan={6} className="bg-blue-50 p-0">
-                                <div className="p-4">
-                                  <div className="text-xs text-gray-500 mb-2 font-medium">条码明细：</div>
-                                  {getProductBarcodes(item.product_name).length === 0 ? (
-                                    <div className="text-sm text-gray-400 py-2">
-                                      {barcodeLoading ? '加载中...' : '暂无条码明细数据'}
-                                    </div>
-                                  ) : (
-                                    <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
-                                      <table className="w-full text-sm">
-                                        <thead className="bg-gray-50">
-                                          <tr>
-                                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">条码</th>
-                                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">克重</th>
-                                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">克工费</th>
-                                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">件工费</th>
-                                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">金额小计</th>
-                                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">供应商</th>
-                                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">入库时间</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100">
-                                          {getProductBarcodes(item.product_name).map((barcode, idx) => (
-                                            <tr key={barcode.id || idx} className="bg-white hover:bg-gray-50">
-                                              <td className="px-3 py-2">
-                                                <span className="font-mono text-blue-600">
-                                                  {barcode.product_code || '-（无编码）'}
-                                                </span>
-                                              </td>
-                                              <td className="px-3 py-2 text-right">{barcode.weight.toFixed(2)}g</td>
-                                              <td className="px-3 py-2 text-right">¥{barcode.labor_cost}/g</td>
-                                              <td className="px-3 py-2 text-right">{barcode.piece_labor_cost ? `¥${barcode.piece_labor_cost}/件` : '-'}</td>
-                                              <td className="px-3 py-2 text-right text-green-600">¥{barcode.total_cost.toFixed(2)}</td>
-                                              <td className="px-3 py-2 text-gray-600">{barcode.supplier || '-'}</td>
-                                              <td className="px-3 py-2 text-gray-500 text-xs">{barcode.inbound_time || '-'}</td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
+                          {(selectedLocation
+                            ? getInventoryByLocation(selectedLocation)
+                            : filteredInventory
+                          )
+                            .filter(item => {
+                              // 柜台用户：只显示展厅有库存的商品
+                              if (userRole === 'counter') {
+                                const showroomWeight = item.locations
+                                  .filter(l => l.location_name === '展厅')
+                                  .reduce((s, l) => s + l.weight, 0);
+                                return showroomWeight > 0;
+                              }
+                              // 其他角色：显示总库存大于0的商品
+                              return item.total_weight > 0;
+                            })
+                            .map(item => (
+                              <React.Fragment key={item.product_name}>
+                                {/* 商品行 - 可点击展开 */}
+                                <tr
+                                  className="hover:bg-gray-50 cursor-pointer"
+                                  onClick={() => toggleProductExpand(item.product_name)}
+                                >
+                                  <td className="px-4 py-3">
+                                    <ChevronDown
+                                      className={`w-4 h-4 text-gray-400 transition-transform ${expandedProducts.has(item.product_name) ? 'rotate-180' : ''
+                                        }`}
+                                    />
+                                  </td>
+                                  <td className="px-4 py-3 font-medium text-gray-900">{item.product_name}</td>
+                                  <td className="px-4 py-3 text-right text-gray-700">{item.quantity || 0}</td>
+                                  <td className="px-4 py-3 text-right font-semibold text-blue-600">
+                                    {(userRole === 'counter'
+                                      ? item.locations.filter(l => l.location_name === '展厅').reduce((s, l) => s + l.weight, 0)
+                                      : item.total_weight
+                                    ).toFixed(2)}g
+                                  </td>
+                                  {userRole !== 'counter' && (
+                                    <td className="px-4 py-3 text-right text-green-600">¥{(item.total_amount || 0).toFixed(2)}</td>
                                   )}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      ))}
+                                  <td className="px-4 py-3">
+                                    <div className="flex flex-wrap gap-1">
+                                      {item.locations
+                                        .filter(loc => userRole !== 'counter' || loc.location_name === '展厅')
+                                        .map(loc => (
+                                          <span
+                                            key={loc.id}
+                                            className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600"
+                                          >
+                                            {loc.location_name}: {loc.weight.toFixed(1)}g
+                                          </span>
+                                        ))}
+                                    </div>
+                                  </td>
+                                </tr>
+
+                                {/* 条码明细 - 展开时显示 */}
+                                {expandedProducts.has(item.product_name) && (
+                                  <tr>
+                                    <td colSpan={6} className="bg-blue-50 p-0">
+                                      <div className="p-4">
+                                        <div className="text-xs text-gray-500 mb-2 font-medium">条码明细：</div>
+                                        {getProductBarcodes(item.product_name).length === 0 ? (
+                                          <div className="text-sm text-gray-400 py-2">
+                                            {barcodeLoading ? '加载中...' : '暂无条码明细数据'}
+                                          </div>
+                                        ) : (
+                                          <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
+                                            <table className="w-full text-sm">
+                                              <thead className="bg-gray-50">
+                                                <tr>
+                                                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">条码</th>
+                                                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">克重</th>
+                                                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">克工费</th>
+                                                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">件工费</th>
+                                                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">金额小计</th>
+                                                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">供应商</th>
+                                                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">入库时间</th>
+                                                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">操作</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody className="divide-y divide-gray-100">
+                                                {getProductBarcodes(item.product_name).map((barcode, idx) => (
+                                                  <tr key={barcode.id || idx} className="bg-white hover:bg-gray-50">
+                                                    <td className="px-3 py-2">
+                                                      <span className="font-mono text-blue-600">
+                                                        {barcode.product_code || '-（无编码）'}
+                                                      </span>
+                                                    </td>
+                                                    <td className="px-3 py-2 text-right">{barcode.weight.toFixed(2)}g</td>
+                                                    <td className="px-3 py-2 text-right">¥{barcode.labor_cost}/g</td>
+                                                    <td className="px-3 py-2 text-right">{barcode.piece_labor_cost ? `¥${barcode.piece_labor_cost}/件` : '-'}</td>
+                                                    <td className="px-3 py-2 text-right text-green-600">¥{barcode.total_cost.toFixed(2)}</td>
+                                                    <td className="px-3 py-2 text-gray-600">{barcode.supplier || '-'}</td>
+                                                    <td className="px-3 py-2 text-gray-500 text-xs">{barcode.inbound_time || '-'}</td>
+                                                    <td className="px-3 py-2">
+                                                      <button
+                                                        onClick={() => printJewelryLabel({
+                                                          barcode: barcode.product_code || '',
+                                                          productName: item.product_name,
+                                                          goldWeight: barcode.weight,
+                                                          laborCost: barcode.labor_cost,
+                                                          pieceLaborCost: barcode.piece_labor_cost || 0,
+                                                          mainStone: '',
+                                                          sideStone: '',
+                                                        })}
+                                                        className="flex items-center space-x-1 px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
+                                                        title="打印标签"
+                                                      >
+                                                        <Tag className="w-3 h-3" />
+                                                        <span>打印</span>
+                                                      </button>
+                                                    </td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            ))}
                         </tbody>
                         {/* 汇总行 */}
                         <tfoot className="bg-gray-100 font-medium">
@@ -1528,20 +1567,20 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                             <td className="px-4 py-3"></td>
                             <td className="px-4 py-3 text-gray-700">合计</td>
                             <td className="px-4 py-3 text-right text-gray-700">
-                              {(selectedLocation 
-                                ? getInventoryByLocation(selectedLocation) 
+                              {(selectedLocation
+                                ? getInventoryByLocation(selectedLocation)
                                 : filteredInventory
                               ).reduce((sum, item) => sum + (item.quantity || 0), 0)}
                             </td>
                             <td className="px-4 py-3 text-right font-semibold text-blue-600">
-                              {(selectedLocation 
-                                ? getInventoryByLocation(selectedLocation) 
+                              {(selectedLocation
+                                ? getInventoryByLocation(selectedLocation)
                                 : filteredInventory
                               ).reduce((sum, item) => sum + item.total_weight, 0).toFixed(2)}g
                             </td>
                             <td className="px-4 py-3 text-right font-semibold text-green-600">
-                              ¥{(selectedLocation 
-                                ? getInventoryByLocation(selectedLocation) 
+                              ¥{(selectedLocation
+                                ? getInventoryByLocation(selectedLocation)
                                 : filteredInventory
                               ).reduce((sum, item) => sum + (item.total_amount || 0), 0).toFixed(2)}
                             </td>
@@ -1550,7 +1589,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                         </tfoot>
                       </table>
                     </div>
-              )}
+                  )}
                 </>
               )}
 
@@ -1581,6 +1620,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                             <th className="px-3 py-3 text-left font-medium text-gray-600">供应商</th>
                             <th className="px-3 py-3 text-left font-medium text-gray-600">入库单号</th>
                             <th className="px-3 py-3 text-left font-medium text-gray-600">入库时间</th>
+                            <th className="px-3 py-3 text-left font-medium text-gray-600">操作</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -1599,6 +1639,24 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                                 <span className="text-xs text-gray-500">{item.order_no}</span>
                               </td>
                               <td className="px-3 py-3 text-gray-500">{item.inbound_time || '-'}</td>
+                              <td className="px-3 py-3">
+                                <button
+                                  onClick={() => printJewelryLabel({
+                                    barcode: item.product_code || '',
+                                    productName: item.product_name,
+                                    goldWeight: item.weight,
+                                    laborCost: item.labor_cost,
+                                    pieceLaborCost: item.piece_labor_cost || 0,
+                                    mainStone: '',
+                                    sideStone: '',
+                                  })}
+                                  className="flex items-center space-x-1 px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
+                                  title="打印标签"
+                                >
+                                  <Tag className="w-3 h-3" />
+                                  <span>打印标签</span>
+                                </button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -1615,7 +1673,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                             <td className="px-3 py-3 text-right font-semibold text-green-600">
                               ¥{barcodeInventory.reduce((sum, item) => sum + item.total_cost, 0).toFixed(2)}
                             </td>
-                            <td colSpan={3} className="px-3 py-3"></td>
+                            <td colSpan={4} className="px-3 py-3"></td>
                           </tr>
                         </tfoot>
                       </table>
@@ -1644,7 +1702,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
               ) : (
                 <form onSubmit={handleCreateTransfer} className="max-w-lg mx-auto space-y-4">
                   <h3 className="text-lg font-semibold mb-4">新建货品转移单</h3>
-                  
+
                   {/* 根据角色显示固定的位置信息 */}
                   {(userRole === 'product' || userRole === 'counter') && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
@@ -1659,7 +1717,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       </div>
                     </div>
                   )}
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">商品名称</label>
                     <select
@@ -1671,7 +1729,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       {(() => {
                         // 获取当前发出位置名称
                         const fromLocationName = locations.find(l => l.id.toString() === transferForm.from_location_id)?.name;
-                        
+
                         // 根据角色过滤：只显示发出位置有库存的商品
                         return inventorySummary
                           .filter(item => {
@@ -1684,7 +1742,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                             // 获取发出位置的库存
                             const locInventory = item.locations.find(loc => loc.location_name === fromLocationName);
                             const availableWeight = locInventory?.weight || 0;
-                            
+
                             return (
                               <option key={item.product_name} value={item.product_name}>
                                 {item.product_name} ({fromLocationName || '总库存'}: {availableWeight.toFixed(1)}g)
@@ -1703,7 +1761,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                     const availableWeight = locInventory?.weight || 0;
                     const inputWeight = parseFloat(transferForm.weight) || 0;
                     const isOverLimit = inputWeight > availableWeight;
-                    
+
                     return (
                       <div className={`text-sm px-3 py-2 rounded-lg ${isOverLimit ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
                         {isOverLimit ? (
@@ -1740,7 +1798,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       </button>
                     </div>
                   </div>
-                  
+
                   {/* 已添加的商品列表 */}
                   {transferItems.length > 0 && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -1847,7 +1905,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       disabled={transferItems.length === 0 && (!transferForm.product_name || !transferForm.weight)}
                       className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                     >
-                      {transferItems.length > 0 
+                      {transferItems.length > 0
                         ? `确认转移 (${transferItems.length} 项，${transferItems.reduce((sum, i) => sum + i.weight, 0).toFixed(1)}g)`
                         : '确认转移'
                       }
@@ -1921,7 +1979,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                   </div>
                 </div>
               )}
-              
+
             </div>
           )}
 
@@ -2013,7 +2071,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       <span className="text-gray-600">隐藏已全部转移</span>
                     </label>
                   </div>
-                  
+
                   {/* 操作栏 */}
                   <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center space-x-4">
@@ -2045,9 +2103,48 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                         <Send className="w-4 h-4" />
                         <span>{batchLoading ? '转移中...' : '一键全量转移'}</span>
                       </button>
+                      {/* 批量打印标签按钮 */}
+                      <button
+                        onClick={() => {
+                          const selectedOrders = recentInboundOrders.filter(o => selectedOrderIds.has(o.id));
+                          const products: Array<{
+                            barcode: string;
+                            productName: string;
+                            goldWeight: number;
+                            laborCost: number;
+                            pieceLaborCost: number;
+                            mainStone: string;
+                            sideStone: string;
+                          }> = [];
+                          selectedOrders.forEach(order => {
+                            order.details.forEach(d => {
+                              products.push({
+                                barcode: '',
+                                productName: d.product_name,
+                                goldWeight: d.weight,
+                                laborCost: 0,
+                                pieceLaborCost: 0,
+                                mainStone: '',
+                                sideStone: '',
+                              });
+                            });
+                          });
+                          if (products.length === 0) {
+                            toast.error('请先选择入库单');
+                            return;
+                          }
+                          const count = printJewelryLabels(products, { preview: true });
+                          if (count) toast.success(`已添加 ${count} 个标签到打印队列`);
+                        }}
+                        disabled={selectedOrderIds.size === 0}
+                        className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400 flex items-center space-x-1"
+                      >
+                        <Tag className="w-4 h-4" />
+                        <span>批量打印标签</span>
+                      </button>
                     </div>
                   </div>
-                  
+
                   {/* 入库单列表 */}
                   <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
                     {filteredInboundOrders.length === 0 ? (
@@ -2058,7 +2155,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       // 获取商品名称预览（最多显示3个）
                       const productNames = order.details.slice(0, 3).map(d => d.product_name);
                       const hasMore = order.details.length > 3;
-                      
+
                       // 获取唯一的成色和工艺标签
                       const tags = new Set<string>();
                       order.details.forEach(d => {
@@ -2066,11 +2163,11 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                         if (d.craft) tags.add(d.craft);
                       });
                       const tagList = Array.from(tags).slice(0, 4);
-                      
+
                       const isSelected = selectedOrderIds.has(order.id);
-                      
+
                       return (
-                        <div 
+                        <div
                           key={order.id}
                           className={`px-6 py-4 hover:bg-blue-50 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
                         >
@@ -2083,7 +2180,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                                 onClick={(e) => e.stopPropagation()}
                                 className="w-5 h-5 text-blue-600 rounded"
                               />
-                              <div 
+                              <div
                                 className="flex items-center space-x-3 flex-1"
                                 onClick={() => handleSearchByOrderNo(order.order_no)}
                               >
@@ -2113,7 +2210,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                               )}
                             </div>
                           </div>
-                          
+
                           <div className="ml-8">
                             {/* 供应商信息 */}
                             {order.suppliers && order.suppliers.length > 0 && (
@@ -2122,7 +2219,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                                 <span className="text-blue-600 font-medium">{order.suppliers.join('、')}</span>
                               </div>
                             )}
-                            
+
                             {/* 商品预览 */}
                             {productNames.length > 0 && (
                               <div className="mb-2 text-sm text-gray-600">
@@ -2130,13 +2227,13 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                                 {productNames.join('、')}{hasMore ? '...' : ''}
                               </div>
                             )}
-                            
+
                             {/* 成色/工艺标签 */}
                             {tagList.length > 0 && (
                               <div className="flex flex-wrap gap-1">
                                 {tagList.map((tag, idx) => (
-                                  <span 
-                                    key={idx} 
+                                  <span
+                                    key={idx}
                                     className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700"
                                   >
                                     {tag}
@@ -2332,7 +2429,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       </div>
                     </div>
                   ))}
-                  
+
                 </div>
               )}
             </div>
@@ -2370,7 +2467,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       <span className="font-medium">以下进货单已确认接收</span>
                     </div>
                   </div>
-                  
+
                   {/* 已接收转移单列表 */}
                   {receivedTransferOrders.map(order => (
                     <div key={order.id} className="border border-green-200 bg-green-50 rounded-lg overflow-hidden">
@@ -2447,7 +2544,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       </div>
                     </div>
                   ))}
-                  
+
                 </div>
               )}
             </div>
@@ -2485,7 +2582,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       <span className="font-medium">以下转移单的实际接收重量与预期不符，请审核后确认或拒绝</span>
                     </div>
                   </div>
-                  
+
                   {/* 新版转移单（多商品） */}
                   {pendingConfirmTransferOrders.map(order => (
                     <div key={order.id} className="border border-orange-200 bg-orange-50 rounded-lg overflow-hidden">
@@ -2600,11 +2697,10 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                                           ...prev,
                                           [item.id]: { ...editForm, actual_weight: e.target.value }
                                         }))}
-                                        className={`w-24 px-2 py-1 border rounded text-right ${
-                                          Number.isNaN(actualWeightNum) || actualWeightNum <= 0
-                                            ? 'border-red-400'
-                                            : 'border-gray-200'
-                                        }`}
+                                        className={`w-24 px-2 py-1 border rounded text-right ${Number.isNaN(actualWeightNum) || actualWeightNum <= 0
+                                          ? 'border-red-400'
+                                          : 'border-gray-200'
+                                          }`}
                                       />
                                     ) : (
                                       <span className="font-medium text-blue-600">{item.actual_weight ?? '-'}g</span>
@@ -2622,11 +2718,10 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                                           ...prev,
                                           [item.id]: { ...editForm, diff_reason: e.target.value }
                                         }))}
-                                        className={`w-full px-2 py-1 border rounded ${
-                                          hasDiff && !editForm.diff_reason?.trim()
-                                            ? 'border-red-400'
-                                            : 'border-gray-200'
-                                        }`}
+                                        className={`w-full px-2 py-1 border rounded ${hasDiff && !editForm.diff_reason?.trim()
+                                          ? 'border-red-400'
+                                          : 'border-gray-200'
+                                          }`}
                                         placeholder={hasDiff ? '差异原因（必填）' : '可选'}
                                       />
                                     ) : (
@@ -2641,7 +2736,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       </div>
                     </div>
                   ))}
-                  
+
                 </div>
               )}
             </div>
@@ -2679,7 +2774,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       <span className="font-medium">以下进货单已被展厅确认接收</span>
                     </div>
                   </div>
-                  
+
                   {/* 已确认转移单列表 */}
                   {confirmedTransferOrders.map(order => (
                     <div key={order.id} className="border border-green-200 bg-green-50 rounded-lg overflow-hidden">
@@ -2750,7 +2845,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       </div>
                     </div>
                   ))}
-                  
+
                 </div>
               )}
             </div>
@@ -2765,7 +2860,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
             const actualWeight = parseFloat(form?.actual_weight || '0');
             return Math.abs(actualWeight - item.weight) >= 0.01;
           });
-          
+
           // 检查所有有差异的商品是否都填写了原因
           const allDiffReasonsProvided = receivingOrder.items.every(item => {
             const form = receiveItemForms[item.id];
@@ -2773,12 +2868,12 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
             const hasDiff = Math.abs(actualWeight - item.weight) >= 0.01;
             return !hasDiff || (form?.diff_reason?.trim() || '');
           });
-          
+
           return (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
               <div className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                 <h3 className="text-lg font-semibold mb-4">确认接收货品</h3>
-                
+
                 <div className="bg-gray-50 rounded-lg p-4 mb-4">
                   <p className="text-sm text-gray-600 mb-1">转移单号: {receivingOrder.transfer_no}</p>
                   <p className="text-sm text-gray-600">
@@ -2794,14 +2889,14 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                     const actualWeight = parseFloat(form.actual_weight) || 0;
                     const hasDiff = Math.abs(actualWeight - item.weight) >= 0.01;
                     const diffValue = actualWeight - item.weight;
-                    
+
                     return (
                       <div key={item.id} className={`border rounded-lg p-4 ${hasDiff ? 'border-orange-300 bg-orange-50' : 'border-gray-200'}`}>
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-medium">{item.product_name}</span>
                           <span className="text-sm text-gray-500">预期: {item.weight}g</span>
                         </div>
-                        
+
                         <div className="flex items-center space-x-4">
                           <div className="flex-1">
                             <input
@@ -2812,9 +2907,8 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                                 ...receiveItemForms,
                                 [item.id]: { ...form, actual_weight: e.target.value }
                               })}
-                              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                                hasDiff ? 'border-orange-300 focus:ring-orange-500' : 'border-gray-200 focus:ring-blue-500'
-                              }`}
+                              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${hasDiff ? 'border-orange-300 focus:ring-orange-500' : 'border-gray-200 focus:ring-blue-500'
+                                }`}
                               placeholder="实际重量 (g)"
                             />
                           </div>
@@ -2824,7 +2918,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                             </span>
                           )}
                         </div>
-                        
+
                         {hasDiff && (
                           <div className="mt-2">
                             <input
@@ -2866,11 +2960,10 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                   <button
                     onClick={handleReceiveTransferOrder}
                     disabled={hasAnyDiff && !allDiffReasonsProvided}
-                    className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors ${
-                      hasAnyDiff 
-                        ? 'bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400' 
-                        : 'bg-green-600 hover:bg-green-700'
-                    }`}
+                    className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors ${hasAnyDiff
+                      ? 'bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400'
+                      : 'bg-green-600 hover:bg-green-700'
+                      }`}
                   >
                     {hasAnyDiff ? '提交待商品部确认' : '确认接收'}
                   </button>
@@ -2892,7 +2985,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                   <p className="text-gray-700 mb-4">
                     确定要将以下入库单的商品全部转移到{userRole === 'counter' ? '商品部仓库' : '展厅'}吗？
                   </p>
-                  
+
                   <div className="bg-gray-50 rounded-lg p-4 max-h-[300px] overflow-y-auto">
                     <div className="space-y-2">
                       {recentInboundOrders.filter(o => selectedOrderIds.has(o.id)).map(order => (
@@ -2906,7 +2999,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                       ))}
                     </div>
                   </div>
-                  
+
                   <div className="mt-4 p-3 bg-blue-50 rounded-lg">
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">入库单数量：</span>
@@ -2926,7 +3019,7 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="flex space-x-3">
                   <button
                     onClick={() => setShowConfirmModal(false)}

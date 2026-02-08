@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  Package, Search, Calendar, Filter, Edit2, Save, X, 
+import {
+  Package, Search, Calendar, Filter, Edit2, Save, X,
   ChevronDown, ChevronUp, Download, Printer, RefreshCw, FileText,
-  Check, Undo2, ClipboardList
+  Check, Undo2, ClipboardList, Tag
 } from 'lucide-react';
+import { printJewelryLabel, printJewelryLabels } from '../utils/lodopPrint';
 import toast from 'react-hot-toast';
 import { hasPermission } from '../config/permissions';
 
@@ -72,7 +73,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [editingDetails, setEditingDetails] = useState<InboundDetail[]>([]);
-  
+
   // 筛选条件
   const [filters, setFilters] = useState({
     startDate: '',
@@ -99,7 +100,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
   const downloadMenuRef = useRef<HTMLDivElement>(null);
   const canAuditInbound = hasPermission(userRole, 'canAuditInbound');
   const canEditInbound = hasPermission(userRole, 'canInbound');
-  
+
   // 筛选选项（用于下拉框）
   const [filterOptions, setFilterOptions] = useState<{
     product_names: string[];
@@ -156,7 +157,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
 
       const res = await fetch(`${API_BASE_URL}/api/inbound-orders?${params}`);
       const data = await res.json();
-      
+
       if (data.success) {
         setOrders(data.data || []);
       } else {
@@ -226,7 +227,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ details: editingDetails })
       });
-      
+
       const data = await res.json();
       if (data.success) {
         toast.success('保存成功');
@@ -243,7 +244,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
 
   // 更新编辑中的明细
   const updateEditingDetail = (detailId: number, field: string, value: any) => {
-    setEditingDetails(prev => 
+    setEditingDetails(prev =>
       prev.map(d => d.id === detailId ? { ...d, [field]: value } : d)
     );
   };
@@ -268,7 +269,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
     window.open(`${API_BASE_URL}/api/inbound-orders/${orderId}/download?format=pdf&doc_type=${docType}`, '_blank');
     setDownloadMenuOrderId(null);
   };
-  
+
   const handleAudit = async (orderId: number) => {
     try {
       const res = await fetch(
@@ -286,7 +287,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
       toast.error('审核失败');
     }
   };
-  
+
   const handleUnaudit = async (orderId: number) => {
     try {
       const res = await fetch(
@@ -428,7 +429,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
           </div>
           {showFilters ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
         </button>
-        
+
         {showFilters && (
           <div className="px-6 pb-4 border-t border-gray-100 pt-4">
             {/* 基础筛选 */}
@@ -603,7 +604,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                     </datalist>
                   </div>
                 </div>
-                
+
                 {/* 数值范围筛选 */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
@@ -733,7 +734,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                       <div className="text-sm text-gray-500">{formatDate(order.create_time)}</div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center space-x-8">
                     <div className="text-center">
                       <div className="text-sm text-gray-500">商品数</div>
@@ -751,25 +752,22 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                     </div>
                     <div className="text-center">
                       <div className="text-sm text-gray-500">状态</div>
-                      <span className={`px-2 py-0.5 text-sm rounded-full ${
-                        INBOUND_STATUS_MAP[order.status]?.bgColor || 'bg-gray-100'
-                      } ${
-                        INBOUND_STATUS_MAP[order.status]?.textColor || 'text-gray-600'
-                      }`}>
+                      <span className={`px-2 py-0.5 text-sm rounded-full ${INBOUND_STATUS_MAP[order.status]?.bgColor || 'bg-gray-100'
+                        } ${INBOUND_STATUS_MAP[order.status]?.textColor || 'text-gray-600'
+                        }`}>
                         {INBOUND_STATUS_MAP[order.status]?.label || order.status}
                       </span>
                     </div>
                     <div className="text-center">
                       <div className="text-sm text-gray-500">审核</div>
-                      <span className={`px-2 py-0.5 text-sm rounded-full ${
-                        order.is_audited
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-gray-100 text-gray-600'
-                      }`}>
+                      <span className={`px-2 py-0.5 text-sm rounded-full ${order.is_audited
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-gray-100 text-gray-600'
+                        }`}>
                         {order.is_audited ? '已审核' : '未审核'}
                       </span>
                     </div>
-                    
+
                     <div className="flex items-center space-x-2">
                       {editingOrderId === order.id ? (
                         <>
@@ -814,11 +812,10 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                           {/* 编辑按钮 - 仅draft状态可编辑 */}
                           <button
                             onClick={() => startEdit(order)}
-                            className={`p-2 rounded-lg transition-colors ${
-                              (order.status !== 'draft' && order.status !== '已入库') || order.is_audited || !canEditInbound
-                                ? 'text-gray-300 cursor-not-allowed'
-                                : 'text-blue-600 hover:bg-blue-50'
-                            }`}
+                            className={`p-2 rounded-lg transition-colors ${(order.status !== 'draft' && order.status !== '已入库') || order.is_audited || !canEditInbound
+                              ? 'text-gray-300 cursor-not-allowed'
+                              : 'text-blue-600 hover:bg-blue-50'
+                              }`}
                             title={order.is_audited ? '已审核不可编辑' : order.status !== 'draft' && order.status !== '已入库' ? '已确认不可编辑' : '编辑'}
                             disabled={(order.status !== 'draft' && order.status !== '已入库') || order.is_audited || !canEditInbound}
                           >
@@ -850,6 +847,27 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                           >
                             <Printer className="w-5 h-5" />
                           </button>
+                          {/* 批量打印标签按钮 */}
+                          <button
+                            onClick={() => {
+                              const products = order.details.map(d => ({
+                                barcode: d.product_code || '',
+                                productName: d.product_name,
+                                goldWeight: d.weight,
+                                laborCost: d.labor_cost,
+                                pieceLaborCost: d.piece_labor_cost || 0,
+                                mainStone: d.main_stone_mark || '',
+                                sideStone: d.sub_stone_mark || '',
+                              }));
+                              const count = printJewelryLabels(products, { preview: true });
+                              if (count) toast.success(`已添加 ${count} 个标签到打印队列`);
+                            }}
+                            className="flex items-center space-x-1 px-3 py-1.5 text-sm bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
+                            title="批量打印所有商品标签"
+                          >
+                            <Tag className="w-4 h-4" />
+                            <span>批量打印标签</span>
+                          </button>
                           {/* 下载按钮组 */}
                           <div className="relative" ref={downloadMenuOrderId === order.id ? downloadMenuRef : null}>
                             <button
@@ -878,7 +896,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                                 </button>
                                 <div className="border-t border-gray-100 my-1"></div>
                                 <div className="px-4 py-1 text-xs text-gray-400">
-                                  入库单：内部使用<br/>
+                                  入库单：内部使用<br />
                                   采购单：供应商对账
                                 </div>
                               </div>
@@ -893,11 +911,11 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                 {/* 明细展开 */}
                 {expandedOrderId === order.id && (() => {
                   // 判断是否为镶嵌入库（任一明细有镶嵌相关字段）
-                  const isInlayOrder = order.details.some(d => 
+                  const isInlayOrder = order.details.some(d =>
                     d.main_stone_amount || d.sub_stone_amount || d.stone_setting_fee || d.total_amount
                   );
                   const currentDetails = editingOrderId === order.id ? editingDetails : order.details;
-                  
+
                   return (
                     <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 overflow-x-auto">
                       <table className="w-full text-sm">
@@ -921,6 +939,7 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                             )}
                             <th className="pb-2 font-medium whitespace-nowrap">供应商</th>
                             <th className="pb-2 font-medium whitespace-nowrap">{isInlayOrder ? '总金额' : '总成本'}</th>
+                            <th className="pb-2 font-medium whitespace-nowrap">操作</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
@@ -1017,16 +1036,34 @@ export const InboundOrdersPage: React.FC<InboundOrdersPageProps> = ({ userRole =
                                 )}
                               </td>
                               <td className="py-2 text-orange-600 font-medium">
-                                {isInlayOrder 
+                                {isInlayOrder
                                   ? (detail.total_amount?.toFixed(2) || detail.total_cost?.toFixed(2) || '-')
                                   : (detail.total_cost?.toFixed(2) || '-')
                                 }
+                              </td>
+                              <td className="py-2">
+                                <button
+                                  onClick={() => printJewelryLabel({
+                                    barcode: detail.product_code || '',
+                                    productName: detail.product_name,
+                                    goldWeight: detail.weight,
+                                    laborCost: detail.labor_cost,
+                                    pieceLaborCost: detail.piece_labor_cost || 0,
+                                    mainStone: detail.main_stone_mark || '',
+                                    sideStone: detail.sub_stone_mark || '',
+                                  })}
+                                  className="flex items-center space-x-1 px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
+                                  title="打印标签"
+                                >
+                                  <Tag className="w-3 h-3" />
+                                  <span>打印标签</span>
+                                </button>
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                      
+
                       {/* 操作记录 */}
                       <OrderLogsPanel orderType="inbound" orderId={order.id} />
                     </div>

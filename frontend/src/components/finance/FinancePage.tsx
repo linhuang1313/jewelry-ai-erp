@@ -6,7 +6,7 @@ import { AccountReceivableTable, ReceivableFilterParams } from './AccountReceiva
 import { PaymentRecordTable, PaymentFilterParams } from './PaymentRecordTable';
 import { ReminderManagement } from './ReminderManagement';
 import { ReconciliationGenerator } from './ReconciliationGenerator';
-import { 
+import {
   getReceivables, ReceivableItem, getPaymentRecords, PaymentRecordItem,
   getPayables, PayableItem, getPayablesStatistics, recordSupplierPayment,
   getBankAccounts, BankAccountItem, getCashFlows, CashFlowItem, getCashFlowSummary,
@@ -29,24 +29,24 @@ export const FinancePage: React.FC = () => {
   const [paymentRecords, setPaymentRecords] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [paymentsLoading, setPaymentsLoading] = useState(false);
-  
+
   // 新增状态 - 应付账款
   const [payables, setPayables] = useState<PayableItem[]>([]);
   const [payablesLoading, setPayablesLoading] = useState(false);
   const [payablesStats, setPayablesStats] = useState<any>(null);
-  
+
   // 新增状态 - 资金流水
   const [bankAccounts, setBankAccounts] = useState<BankAccountItem[]>([]);
   const [cashFlows, setCashFlows] = useState<CashFlowItem[]>([]);
   const [cashFlowSummary, setCashFlowSummary] = useState<any>(null);
   const [cashFlowLoading, setCashFlowLoading] = useState(false);
-  
+
   // 新增状态 - 费用管理
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
   const [expensesSummary, setExpensesSummary] = useState<any>(null);
   const [expensesLoading, setExpensesLoading] = useState(false);
-  
+
   // 供应商付款对话框状态
   const [showSupplierPaymentDialog, setShowSupplierPaymentDialog] = useState(false);
   const [selectedPayable, setSelectedPayable] = useState<PayableItem | null>(null);
@@ -83,8 +83,8 @@ export const FinancePage: React.FC = () => {
       unpaidAmount: item.unpaidAmount,
       creditDays: (item as any).creditDays || 30,
       status: item.status === 'paid' ? AccountReceivableStatus.PAID :
-              item.status === 'overdue' ? AccountReceivableStatus.OVERDUE :
-              AccountReceivableStatus.UNPAID,
+        item.status === 'overdue' ? AccountReceivableStatus.OVERDUE :
+          AccountReceivableStatus.UNPAID,
       isOverdue: item.isOverdue,
       overdueDays: item.overdueDays,
       creditStartDate: safeParseDate(item.creditStartDate),
@@ -224,7 +224,7 @@ export const FinancePage: React.FC = () => {
     loadReceivables();
     loadPaymentRecords();
   }, [loadReceivables]);
-  
+
   // 获取逾期客户列表（添加数组安全检查）
   const overdueAccounts = (Array.isArray(receivables) ? receivables : []).filter((ar) => ar.isOverdue);
 
@@ -232,7 +232,7 @@ export const FinancePage: React.FC = () => {
   const customers: CustomerReference[] = (Array.isArray(receivables) ? receivables : [])
     .filter((ar) => ar.customer)
     .map((ar) => ar.customer!)
-    .filter((customer, index, self) => 
+    .filter((customer, index, self) =>
       self.findIndex(c => c.id === customer.id) === index
     );
 
@@ -282,18 +282,18 @@ export const FinancePage: React.FC = () => {
   // 提交供应商付款
   const handleSubmitSupplierPayment = async () => {
     if (!selectedPayable) return;
-    
+
     const amount = parseFloat(paymentAmount);
     if (isNaN(amount) || amount <= 0) {
       toast.error('请输入有效的付款金额');
       return;
     }
-    
+
     if (amount > selectedPayable.unpaid_amount) {
       toast.error('付款金额不能超过未付金额');
       return;
     }
-    
+
     setPaymentSubmitting(true);
     try {
       const result = await recordSupplierPayment(
@@ -303,7 +303,7 @@ export const FinancePage: React.FC = () => {
         undefined,
         paymentRemark || `付款：${selectedPayable.payable_no}`
       );
-      
+
       if (result.success) {
         toast.success(result.message || '付款成功');
         setShowSupplierPaymentDialog(false);
@@ -340,7 +340,7 @@ export const FinancePage: React.FC = () => {
       setPayablesLoading(false);
     }
   }, []);
-  
+
   // 加载资金流水
   const loadCashFlows = useCallback(async () => {
     setCashFlowLoading(true);
@@ -365,7 +365,7 @@ export const FinancePage: React.FC = () => {
       setCashFlowLoading(false);
     }
   }, []);
-  
+
   // 加载费用
   const loadExpenses = useCallback(async () => {
     setExpensesLoading(true);
@@ -390,7 +390,7 @@ export const FinancePage: React.FC = () => {
       setExpensesLoading(false);
     }
   }, []);
-  
+
   // 切换Tab时加载数据
   useEffect(() => {
     if (activeTab === 'payables' && payables.length === 0) {
@@ -568,12 +568,12 @@ export const FinancePage: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* 应付账款列表 */}
                   <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                     <div className="p-4 border-b border-gray-100 flex justify-between items-center">
                       <h3 className="font-semibold text-gray-900">应付账款列表</h3>
-                      <button 
+                      <button
                         onClick={loadPayables}
                         className="text-sm text-blue-600 hover:text-blue-700"
                       >
@@ -611,15 +611,14 @@ export const FinancePage: React.FC = () => {
                                 <td className="px-4 py-3 text-sm text-right text-red-600 font-medium">¥{item.unpaid_amount?.toLocaleString()}</td>
                                 <td className="px-4 py-3 text-sm text-center text-gray-500">{item.due_date}</td>
                                 <td className="px-4 py-3 text-center">
-                                  <span className={`px-2 py-1 text-xs rounded-full ${
-                                    item.status === 'paid' ? 'bg-green-100 text-green-700' :
-                                    item.is_overdue ? 'bg-red-100 text-red-700' :
-                                    item.status === 'partial' ? 'bg-yellow-100 text-yellow-700' :
-                                    'bg-gray-100 text-gray-700'
-                                  }`}>
+                                  <span className={`px-2 py-1 text-xs rounded-full ${item.status === 'paid' ? 'bg-green-100 text-green-700' :
+                                      item.is_overdue ? 'bg-red-100 text-red-700' :
+                                        item.status === 'partial' ? 'bg-yellow-100 text-yellow-700' :
+                                          'bg-gray-100 text-gray-700'
+                                    }`}>
                                     {item.status === 'paid' ? '已付清' :
-                                     item.is_overdue ? `逾期${item.overdue_days}天` :
-                                     item.status === 'partial' ? '部分付款' : '待付款'}
+                                      item.is_overdue ? `逾期${item.overdue_days}天` :
+                                        item.status === 'partial' ? '部分付款' : '待付款'}
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-center">
@@ -675,7 +674,7 @@ export const FinancePage: React.FC = () => {
                       </>
                     )}
                   </div>
-                  
+
                   {/* 账户列表 */}
                   <div className="bg-white rounded-xl border border-gray-200 p-4">
                     <h3 className="font-semibold text-gray-900 mb-4">账户列表</h3>
@@ -689,9 +688,9 @@ export const FinancePage: React.FC = () => {
                               <div>
                                 <div className="font-medium text-gray-900">{account.account_name}</div>
                                 <div className="text-xs text-gray-500">
-                                  {account.account_type === 'bank' ? '银行账户' : 
-                                   account.account_type === 'cash' ? '现金' :
-                                   account.account_type === 'alipay' ? '支付宝' : '微信'}
+                                  {account.account_type === 'bank' ? '银行账户' :
+                                    account.account_type === 'cash' ? '现金' :
+                                      account.account_type === 'alipay' ? '支付宝' : '微信'}
                                 </div>
                               </div>
                               {account.is_default && <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded">默认</span>}
@@ -702,12 +701,12 @@ export const FinancePage: React.FC = () => {
                       )}
                     </div>
                   </div>
-                  
+
                   {/* 流水列表 */}
                   <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                     <div className="p-4 border-b border-gray-100 flex justify-between items-center">
                       <h3 className="font-semibold text-gray-900">资金流水</h3>
-                      <button 
+                      <button
                         onClick={loadCashFlows}
                         className="text-sm text-blue-600 hover:text-blue-700"
                       >
@@ -739,16 +738,14 @@ export const FinancePage: React.FC = () => {
                                 <td className="px-4 py-3 text-sm font-medium text-gray-900">{flow.flow_no}</td>
                                 <td className="px-4 py-3 text-sm text-gray-700">{flow.account_name}</td>
                                 <td className="px-4 py-3 text-center">
-                                  <span className={`px-2 py-0.5 text-xs rounded ${
-                                    flow.flow_type === 'income' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                  }`}>
+                                  <span className={`px-2 py-0.5 text-xs rounded ${flow.flow_type === 'income' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                    }`}>
                                     {flow.flow_type === 'income' ? '收入' : '支出'}
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-sm text-gray-600">{flow.category}</td>
-                                <td className={`px-4 py-3 text-sm text-right font-medium ${
-                                  flow.flow_type === 'income' ? 'text-green-600' : 'text-red-600'
-                                }`}>
+                                <td className={`px-4 py-3 text-sm text-right font-medium ${flow.flow_type === 'income' ? 'text-green-600' : 'text-red-600'
+                                  }`}>
                                   {flow.flow_type === 'income' ? '+' : '-'}¥{flow.amount?.toLocaleString()}
                                 </td>
                                 <td className="px-4 py-3 text-sm text-right text-gray-900">¥{flow.balance_after?.toLocaleString()}</td>
@@ -792,13 +789,13 @@ export const FinancePage: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* 费用列表 */}
                   <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                     <div className="p-4 border-b border-gray-100 flex justify-between items-center">
                       <h3 className="font-semibold text-gray-900">费用记录</h3>
                       <div className="flex gap-2">
-                        <button 
+                        <button
                           onClick={async () => {
                             const result = await initExpenseCategories();
                             if (result.success) {
@@ -810,7 +807,7 @@ export const FinancePage: React.FC = () => {
                         >
                           初始化类别
                         </button>
-                        <button 
+                        <button
                           onClick={loadExpenses}
                           className="text-sm text-blue-600 hover:text-blue-700"
                         >
@@ -845,13 +842,12 @@ export const FinancePage: React.FC = () => {
                                 <td className="px-4 py-3 text-sm text-gray-600">{item.payee || '-'}</td>
                                 <td className="px-4 py-3 text-sm text-center text-gray-500">{item.expense_date}</td>
                                 <td className="px-4 py-3 text-center">
-                                  <span className={`px-2 py-1 text-xs rounded-full ${
-                                    item.status === 'approved' ? 'bg-green-100 text-green-700' :
-                                    item.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                                    'bg-yellow-100 text-yellow-700'
-                                  }`}>
+                                  <span className={`px-2 py-1 text-xs rounded-full ${item.status === 'approved' ? 'bg-green-100 text-green-700' :
+                                      item.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                                        'bg-yellow-100 text-yellow-700'
+                                    }`}>
                                     {item.status === 'approved' ? '已审批' :
-                                     item.status === 'rejected' ? '已驳回' : '待审批'}
+                                      item.status === 'rejected' ? '已驳回' : '待审批'}
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-sm text-gray-500">{item.remark || '-'}</td>
@@ -877,7 +873,7 @@ export const FinancePage: React.FC = () => {
               <h3 className="text-lg font-semibold text-gray-900">供应商付款</h3>
               <p className="text-sm text-gray-500 mt-1">应付单号：{selectedPayable.payable_no}</p>
             </div>
-            
+
             <div className="p-6 space-y-4">
               {/* 供应商信息 */}
               <div className="bg-gray-50 rounded-lg p-4">
@@ -898,7 +894,7 @@ export const FinancePage: React.FC = () => {
                   <span className="font-medium text-red-600">¥{selectedPayable.unpaid_amount?.toLocaleString()}</span>
                 </div>
               </div>
-              
+
               {/* 付款金额 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">付款金额</label>
@@ -910,7 +906,7 @@ export const FinancePage: React.FC = () => {
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              
+
               {/* 付款方式 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">付款方式</label>
@@ -925,7 +921,7 @@ export const FinancePage: React.FC = () => {
                   <option value="acceptance">承兑</option>
                 </select>
               </div>
-              
+
               {/* 备注 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
@@ -938,7 +934,7 @@ export const FinancePage: React.FC = () => {
                 />
               </div>
             </div>
-            
+
             <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
               <button
                 onClick={() => setShowSupplierPaymentDialog(false)}
