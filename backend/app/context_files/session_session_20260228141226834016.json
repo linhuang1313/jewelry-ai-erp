@@ -1,0 +1,27 @@
+{
+  "session_id": "session_20260228141226834016",
+  "created_at": "2026-02-28T14:12:29.611373",
+  "last_updated": "2026-02-28T14:12:29.611373",
+  "goal": null,
+  "current_task": null,
+  "task_phases": [],
+  "current_phase": 0,
+  "completed_actions": [
+    {
+      "action": "收料",
+      "result": "未找到客户「张老板」，请先在客户管理中创建该客户",
+      "success": false,
+      "timestamp": "2026-02-28T14:12:29.611373",
+      "data": {}
+    }
+  ],
+  "errors": [
+    {
+      "action": "收料",
+      "error": "未找到客户「张老板」，请先在客户管理中创建该客户",
+      "timestamp": "2026-02-28T14:12:29.611373"
+    }
+  ],
+  "notes": [],
+  "entities": {}
+}

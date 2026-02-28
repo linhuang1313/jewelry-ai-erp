@@ -1,0 +1,21 @@
+{
+  "session_id": "session_20260228141247033931",
+  "created_at": "2026-02-28T14:12:53.722048",
+  "last_updated": "2026-02-28T14:12:53.722048",
+  "goal": null,
+  "current_task": null,
+  "task_phases": [],
+  "current_phase": 0,
+  "completed_actions": [
+    {
+      "action": "查询库存",
+      "result": "没有找到相关库存数据。",
+      "success": true,
+      "timestamp": "2026-02-28T14:12:53.722048",
+      "data": {}
+    }
+  ],
+  "errors": [],
+  "notes": [],
+  "entities": {}
+}

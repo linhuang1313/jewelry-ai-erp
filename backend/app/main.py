@@ -537,8 +537,9 @@ async def startup_event():
 
     # ========== Agent 注册 ==========
     from .agents.registry import registry as agent_registry
-    from .agents.settlement_agent import SettlementAgent
-    agent_registry.register(SettlementAgent())
+    from .agents import ALL_AGENTS
+    for agent_cls in ALL_AGENTS:
+        agent_registry.register(agent_cls())
     logger.info(f"已注册 Agent: {agent_registry.list_agents()}")
 
 
