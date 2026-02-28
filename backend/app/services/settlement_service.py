@@ -107,10 +107,10 @@ class SettlementService:
                     if customer_deposit:
                         balance_before = customer_deposit.current_balance
                         customer_deposit.current_balance = round(
-                            customer_deposit.current_balance - gold_weight, 3
+                            float(customer_deposit.current_balance or 0) - float(gold_weight or 0), 3
                         )
                         customer_deposit.total_used = round(
-                            customer_deposit.total_used + gold_weight, 3
+                            float(customer_deposit.total_used or 0) + float(gold_weight or 0), 3
                         )
                         customer_deposit.last_transaction_at = china_now()
                         
@@ -318,10 +318,10 @@ class SettlementService:
                         balance_before = customer_deposit.current_balance
                         # 恢复余额（加回扣减的金料）
                         customer_deposit.current_balance = round(
-                            customer_deposit.current_balance + gold_weight, 3
+                            float(customer_deposit.current_balance or 0) + float(gold_weight or 0), 3
                         )
                         customer_deposit.total_used = round(
-                            max(0, customer_deposit.total_used - gold_weight), 3
+                            max(0, float(customer_deposit.total_used or 0) - float(gold_weight or 0)), 3
                         )
                         customer_deposit.last_transaction_at = china_now()
                         
@@ -455,7 +455,7 @@ class SettlementService:
         elif settlement.payment_method == "mixed":
             # 混合支付：结价部分的料价 + 工费
             cash_material_amount = (settlement.cash_payment_weight or 0) * (settlement.gold_price or 0)
-            return cash_material_amount + (settlement.labor_amount or 0)
+            return cash_material_amount + float(settlement.labor_amount or 0)
         else:
             return settlement.total_amount or 0
 

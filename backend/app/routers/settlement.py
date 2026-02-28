@@ -2140,8 +2140,8 @@ async def revert_settlement_order(
                     gold_to_rollback = deposit_tx.amount or 0
                     if gold_to_rollback > 0:
                         balance_before = customer_deposit.current_balance
-                        customer_deposit.current_balance = round(customer_deposit.current_balance + gold_to_rollback, 3)
-                        customer_deposit.total_used = round(max(0, customer_deposit.total_used - gold_to_rollback), 3)
+                        customer_deposit.current_balance = round(float(customer_deposit.current_balance) + gold_to_rollback, 3)
+                        customer_deposit.total_used = round(max(0, float(customer_deposit.total_used) - gold_to_rollback), 3)
                         
                         deposit_tx.status = 'cancelled'
                         
@@ -2321,7 +2321,7 @@ async def refund_sales_order(
                 LocationInventory.product_name == detail.product_name
             ).first()
             if inventory:
-                inventory.weight += detail.weight
+                inventory.weight = float(inventory.weight or 0) + float(detail.weight or 0)
             else:
                 # 如果库存记录不存在，创建新记录
                 new_inventory = LocationInventory(
@@ -2414,7 +2414,7 @@ async def create_deposit_settlement(
     now = china_now()
     settlement_no = _generate_sequential_no(db, DepositSettlement, DepositSettlement.settlement_no, "CJ")
     
-    total_amount = round(data.gold_weight * data.gold_price, 2)
+    total_amount = round(float(data.gold_weight) * float(data.gold_price), 2)
     
     new_settlement = DepositSettlement(
         settlement_no=settlement_no,
@@ -2492,8 +2492,8 @@ async def confirm_deposit_settlement(
         
         # 1. 扣减存料余额（同步更新 CustomerGoldDeposit 缓存字段）
         balance_before = deposit.current_balance
-        deposit.current_balance = round(deposit.current_balance - settlement.gold_weight, 3)
-        deposit.total_used = round((deposit.total_used or 0) + settlement.gold_weight, 3)
+        deposit.current_balance = round(float(deposit.current_balance) - float(settlement.gold_weight), 3)
+        deposit.total_used = round(float(deposit.total_used or 0) + float(settlement.gold_weight), 3)
         deposit.last_transaction_at = now
         
         # 2. 创建存料交易记录
@@ -2540,8 +2540,8 @@ async def confirm_deposit_settlement(
             if unpaid <= 0:
                 continue
             apply_amount = min(remaining, unpaid)
-            ar.received_amount = round((ar.received_amount or 0) + apply_amount, 2)
-            ar.unpaid_amount = round(unpaid - apply_amount, 2)
+            ar.received_amount = round(float(ar.received_amount or 0) + apply_amount, 2)
+            ar.unpaid_amount = round(float(unpaid) - apply_amount, 2)
             if ar.unpaid_amount <= 0:
                 ar.status = 'paid'
             remaining -= apply_amount

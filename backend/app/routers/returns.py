@@ -393,7 +393,7 @@ async def confirm_return_order(
             if not inventory or inventory.weight < detail.return_weight:
                 available = inventory.weight if inventory else 0
                 return {"success": False, "message": f"库存不足：{location.name if location else ''} 的 {detail.product_name} 仅有 {available:.2f}g"}
-            inventory.weight -= detail.return_weight
+            inventory.weight = float(inventory.weight or 0) - float(detail.return_weight or 0)
             logger.info(f"扣减库存: {detail.product_name} -{detail.return_weight}g")
     
     # 如果是退给商品部，增加商品部库存
@@ -406,7 +406,7 @@ async def confirm_return_order(
                     LocationInventory.product_name == detail.product_name
                 ).first()
                 if target_inv:
-                    target_inv.weight += detail.return_weight
+                    target_inv.weight = float(target_inv.weight or 0) + float(detail.return_weight or 0)
                 else:
                     target_inv = LocationInventory(product_name=detail.product_name, location_id=warehouse_location.id, weight=detail.return_weight)
                     db.add(target_inv)
@@ -428,8 +428,8 @@ async def confirm_return_order(
                 db.flush()
             
             balance_before = supplier_gold_account.current_balance
-            supplier_gold_account.current_balance = round(supplier_gold_account.current_balance - total_weight, 3)
-            supplier_gold_account.total_received = round(supplier_gold_account.total_received - total_weight, 3)
+            supplier_gold_account.current_balance = round(float(supplier_gold_account.current_balance) - total_weight, 3)
+            supplier_gold_account.total_received = round(float(supplier_gold_account.total_received) - total_weight, 3)
             supplier_gold_account.last_transaction_at = china_now()
             
             supplier_gold_tx = SupplierGoldTransaction(supplier_id=return_order.supplier_id, supplier_name=supplier.name, transaction_type='return', gold_weight=total_weight, balance_before=balance_before, balance_after=supplier_gold_account.current_balance, status='active', created_by=confirmed_by, remark=f"退货单确认：{return_order.return_no}")
@@ -488,7 +488,7 @@ async def unconfirm_return_order(
                 LocationInventory.product_name == detail.product_name
             ).first()
             if inventory:
-                inventory.weight += detail.return_weight
+                inventory.weight = float(inventory.weight or 0) + float(detail.return_weight or 0)
     
     # 回滚商品部库存（扣回去）
     if return_order.return_type == "to_warehouse":
@@ -500,7 +500,7 @@ async def unconfirm_return_order(
                     LocationInventory.product_name == detail.product_name
                 ).first()
                 if target_inv:
-                    target_inv.weight -= detail.return_weight
+                    target_inv.weight = float(target_inv.weight or 0) - float(detail.return_weight or 0)
     
     # 回滚供应商统计和金料账户
     if return_order.return_type == "to_supplier" and return_order.supplier_id:
@@ -514,8 +514,8 @@ async def unconfirm_return_order(
             supplier_gold_account = db.query(SupplierGoldAccount).filter(SupplierGoldAccount.supplier_id == return_order.supplier_id).first()
             if supplier_gold_account:
                 balance_before = supplier_gold_account.current_balance
-                supplier_gold_account.current_balance = round(supplier_gold_account.current_balance + total_weight, 3)
-                supplier_gold_account.total_received = round(supplier_gold_account.total_received + total_weight, 3)
+                supplier_gold_account.current_balance = round(float(supplier_gold_account.current_balance) + total_weight, 3)
+                supplier_gold_account.total_received = round(float(supplier_gold_account.total_received) + total_weight, 3)
                 supplier_gold_account.last_transaction_at = china_now()
                 
                 supplier_gold_tx = SupplierGoldTransaction(supplier_id=return_order.supplier_id, supplier_name=supplier.name, transaction_type='receive', gold_weight=total_weight, balance_before=balance_before, balance_after=supplier_gold_account.current_balance, status='active', created_by=operated_by, remark=f"退货单反确认：{return_order.return_no}")

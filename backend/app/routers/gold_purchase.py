@@ -107,7 +107,7 @@ async def create_purchase_order(
     if data.gold_weight <= 0:
         raise HTTPException(status_code=400, detail="金重必须大于0")
 
-    settled_weight = round(data.gold_weight * data.conversion_rate, 4)
+    settled_weight = round(float(data.gold_weight) * float(data.conversion_rate), 4)
 
     order = GoldPurchaseOrder(
         order_no=_generate_order_no(db),
@@ -218,7 +218,7 @@ async def update_purchase_order(
     order.gold_weight = data.gold_weight
     order.gold_fineness = data.gold_fineness
     order.conversion_rate = data.conversion_rate
-    order.settled_weight = round(data.gold_weight * data.conversion_rate, 4)
+    order.settled_weight = round(float(data.gold_weight) * float(data.conversion_rate), 4)
     order.receive_date = data.receive_date or order.receive_date
     order.remark = data.remark
     db.commit()
@@ -260,7 +260,7 @@ async def price_purchase_order(
         raise HTTPException(status_code=400, detail="金价必须大于0")
 
     settled_weight = float(order.settled_weight or order.gold_weight)
-    total_amount = round(settled_weight * data.gold_price, 2)
+    total_amount = round(settled_weight * float(data.gold_price), 2)
 
     order.gold_price = data.gold_price
     order.total_amount = total_amount

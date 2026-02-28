@@ -304,8 +304,8 @@ class FinanceService:
             self.db.add(payment)
             
             # 更新应收账款
-            receivable.received_amount += payment_data.amount
-            receivable.unpaid_amount = receivable.total_amount - receivable.received_amount
+            receivable.received_amount = float(receivable.received_amount or 0) + payment_data.amount
+            receivable.unpaid_amount = float(receivable.total_amount or 0) - float(receivable.received_amount or 0)
             receivable.update_time = datetime.now()
             
             # 更新状态
@@ -591,7 +591,7 @@ class FinanceService:
             elif s.payment_method == 'mixed':
                 # 混合支付：现金部分 + 工费
                 if s.cash_payment_weight and s.gold_price:
-                    total_settlement_cash += s.cash_payment_weight * s.gold_price
+                    total_settlement_cash += float(s.cash_payment_weight or 0) * float(s.gold_price or 0)
                 total_settlement_cash += s.labor_amount or 0
                 # 金料部分
                 total_settlement_gold += s.gold_payment_weight or 0

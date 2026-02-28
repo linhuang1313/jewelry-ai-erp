@@ -534,7 +534,7 @@ async def handle_confirm_order(ai_response, db: Session, user_role: str = "manag
             for detail in details:
                 inv = inv_map.get(detail.product_name)
                 if inv:
-                    inv.total_weight = round(inv.total_weight + detail.weight, 3)
+                    inv.total_weight = round(float(inv.total_weight or 0) + float(detail.weight or 0), 3)
                 else:
                     inv = Inventory(product_name=detail.product_name, total_weight=detail.weight)
                     db.add(inv)
@@ -542,7 +542,7 @@ async def handle_confirm_order(ai_response, db: Session, user_role: str = "manag
                 
                 loc_inv = loc_inv_map.get(detail.product_name)
                 if loc_inv:
-                    loc_inv.weight += detail.weight
+                    loc_inv.weight = float(loc_inv.weight or 0) + float(detail.weight or 0)
                 else:
                     loc_inv = LocationInventory(product_name=detail.product_name, location_id=default_location.id, weight=detail.weight)
                     db.add(loc_inv)
@@ -583,10 +583,10 @@ async def handle_confirm_order(ai_response, db: Session, user_role: str = "manag
             for detail in details:
                 inv = inv_map.get(detail.product_name)
                 if inv:
-                    inv.total_weight = round(inv.total_weight - detail.weight, 3)
+                    inv.total_weight = round(float(inv.total_weight or 0) - float(detail.weight or 0), 3)
                 loc_inv = loc_inv_map.get(detail.product_name)
                 if loc_inv:
-                    loc_inv.weight -= detail.weight
+                    loc_inv.weight = float(loc_inv.weight or 0) - float(detail.weight or 0)
             
             order.status = "confirmed"
             status_log = OrderStatusLog(order_type="sales", order_id=order.id, action="confirm", old_status="draft", new_status="confirmed", operated_by=user_role, operated_at=china_now())
@@ -614,7 +614,7 @@ async def handle_confirm_order(ai_response, db: Session, user_role: str = "manag
                 for detail in details:
                     inv = from_loc_map.get(detail.product_name)
                     if inv:
-                        inv.weight -= detail.return_weight
+                        inv.weight = float(inv.weight or 0) - float(detail.return_weight or 0)
             
             if order.return_type == "to_warehouse":
                 wh = db.query(Location).filter(Location.code == "warehouse", Location.is_active == 1).first()
@@ -625,7 +625,7 @@ async def handle_confirm_order(ai_response, db: Session, user_role: str = "manag
                     for detail in details:
                         target = wh_map.get(detail.product_name)
                         if target:
-                            target.weight += detail.return_weight
+                            target.weight = float(target.weight or 0) + float(detail.return_weight or 0)
                         else:
                             target = LocationInventory(product_name=detail.product_name, location_id=wh.id, weight=detail.return_weight)
                             db.add(target)
@@ -687,10 +687,10 @@ async def handle_unconfirm_order(ai_response, db: Session, user_role: str = "man
             for detail in details:
                 inv = inv_map.get(detail.product_name)
                 if inv:
-                    inv.total_weight = round(inv.total_weight - detail.weight, 3)
+                    inv.total_weight = round(float(inv.total_weight or 0) - float(detail.weight or 0), 3)
                 loc_inv = loc_inv_map.get(detail.product_name)
                 if loc_inv:
-                    loc_inv.weight -= detail.weight
+                    loc_inv.weight = float(loc_inv.weight or 0) - float(detail.weight or 0)
             
             order.status = "draft"
             status_log = OrderStatusLog(order_type="inbound", order_id=order.id, action="unconfirm", old_status="confirmed", new_status="draft", operated_by=user_role, operated_at=china_now())
@@ -720,10 +720,10 @@ async def handle_unconfirm_order(ai_response, db: Session, user_role: str = "man
             for detail in details:
                 inv = inv_map.get(detail.product_name)
                 if inv:
-                    inv.total_weight = round(inv.total_weight + detail.weight, 3)
+                    inv.total_weight = round(float(inv.total_weight or 0) + float(detail.weight or 0), 3)
                 loc_inv = loc_inv_map.get(detail.product_name)
                 if loc_inv:
-                    loc_inv.weight += detail.weight
+                    loc_inv.weight = float(loc_inv.weight or 0) + float(detail.weight or 0)
             
             order.status = "draft"
             status_log = OrderStatusLog(order_type="sales", order_id=order.id, action="unconfirm", old_status="confirmed", new_status="draft", operated_by=user_role, operated_at=china_now())
@@ -751,7 +751,7 @@ async def handle_unconfirm_order(ai_response, db: Session, user_role: str = "man
                 for detail in details:
                     inv = from_loc_map.get(detail.product_name)
                     if inv:
-                        inv.weight += detail.return_weight
+                        inv.weight = float(inv.weight or 0) + float(detail.return_weight or 0)
             
             if order.return_type == "to_warehouse":
                 wh = db.query(Location).filter(Location.code == "warehouse", Location.is_active == 1).first()
@@ -762,7 +762,7 @@ async def handle_unconfirm_order(ai_response, db: Session, user_role: str = "man
                     for detail in details:
                         target = wh_map.get(detail.product_name)
                         if target:
-                            target.weight -= detail.return_weight
+                            target.weight = float(target.weight or 0) - float(detail.return_weight or 0)
             
             order.status = "draft"
             order.completed_by = None
@@ -1502,7 +1502,7 @@ async def handle_batch_transfer(ai_response, db: Session, user_role: str) -> Dic
                     continue
                 
                 # 扣减源位置库存
-                inventory.weight -= detail.weight
+                inventory.weight = float(inventory.weight or 0) - float(detail.weight or 0)
                 inventory.last_update = now
                 
                 # 生成转移单号

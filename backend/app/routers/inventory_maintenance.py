@@ -49,7 +49,7 @@ async def merge_duplicate_inventory(db: Session = Depends(get_db)):
             name_inventory = db.query(Inventory).filter(Inventory.product_name == name).first()
             
             if name_inventory:
-                name_inventory.total_weight = round(name_inventory.total_weight + code_inventory.total_weight, 3)
+                name_inventory.total_weight = round(float(name_inventory.total_weight or 0) + float(code_inventory.total_weight or 0), 3)
                 db.delete(code_inventory)
             else:
                 code_inventory.product_name = name
@@ -65,7 +65,7 @@ async def merge_duplicate_inventory(db: Session = Depends(get_db)):
                 ).first()
                 
                 if name_location_inventory:
-                    name_location_inventory.weight += cli.weight
+                    name_location_inventory.weight = float(name_location_inventory.weight or 0) + float(cli.weight or 0)
                     db.delete(cli)
                 else:
                     cli.product_name = name
@@ -109,10 +109,10 @@ async def merge_inventory_manual(
         
         target_inventory = db.query(Inventory).filter(Inventory.product_name == target_name).first()
         
-        source_weight =source_inventory.total_weight
+        source_weight = float(source_inventory.total_weight or 0)
         
         if target_inventory:
-            target_inventory.total_weight = round(target_inventory.total_weight + source_weight, 3)
+            target_inventory.total_weight = round(float(target_inventory.total_weight or 0) + source_weight, 3)
             db.delete(source_inventory)
         else:
             source_inventory.product_name = target_name
@@ -128,7 +128,7 @@ async def merge_inventory_manual(
             ).first()
             
             if target_li:
-                target_li.weight += sli.weight
+                target_li.weight = float(target_li.weight or 0) + float(sli.weight or 0)
                 db.delete(sli)
             else:
                 sli.product_name = target_name
@@ -452,7 +452,7 @@ async def merge_product_names(
         
         if old_inv:
             if new_inv:
-                new_inv.total_weight = round(new_inv.total_weight + old_inv.total_weight, 3)
+                new_inv.total_weight = round(float(new_inv.total_weight or 0) + float(old_inv.total_weight or 0), 3)
                 db.delete(old_inv)
                 changes["inventory"] = 1
                 logger.info(f"库存合并: {old_name} ({old_inv.total_weight}g) -> {new_name}")
@@ -469,7 +469,7 @@ async def merge_product_names(
             ).first()
             
             if new_loc:
-                new_loc.weight += old_loc.weight
+                new_loc.weight = float(new_loc.weight or 0) + float(old_loc.weight or 0)
                 db.delete(old_loc)
             else:
                 old_loc.product_name = new_name
@@ -584,7 +584,7 @@ async def sync_inventory_to_location(db: Session = Depends(get_db)):
             
             if location_inv:
                 old_weight = location_inv.weight
-                location_inv.weight += difference
+                location_inv.weight = float(location_inv.weight or 0) + difference
                 sync_results.append({
                     "product_name": inv.product_name,
                     "action": "updated",

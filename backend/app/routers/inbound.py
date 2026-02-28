@@ -1251,7 +1251,7 @@ async def update_inbound_order(
                                 setattr(detail, str_field, detail_update[str_field] or None)
 
                         # 重算总成本
-                        gram_cost = detail.weight * detail.labor_cost
+                        gram_cost = float(detail.weight or 0) * float(detail.labor_cost or 0)
                         piece_cost = (detail.piece_count or 0) * (detail.piece_labor_cost or 0)
                         detail.total_cost = round(gram_cost + piece_cost, 2)
         

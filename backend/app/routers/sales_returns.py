@@ -586,7 +586,7 @@ async def confirm_sales_return_order(
                 Inventory.product_name == detail.product_name
             ).first()
             if inventory:
-                inventory.total_weight = round(inventory.total_weight + detail.weight, 3)
+                inventory.total_weight = round(float(inventory.total_weight or 0) + float(detail.weight or 0), 3)
             else:
                 # 库存记录不存在，创建新记录
                 inventory = Inventory(
@@ -602,7 +602,7 @@ async def confirm_sales_return_order(
                     LocationInventory.location_id == target_location.id
                 ).first()
                 if location_inv:
-                    location_inv.weight = round(location_inv.weight + detail.weight, 3)
+                    location_inv.weight = round(float(location_inv.weight or 0) + float(detail.weight or 0), 3)
                 else:
                     location_inv = LocationInventory(
                         product_name=detail.product_name,
@@ -684,7 +684,7 @@ async def unconfirm_sales_return_order(
                 Inventory.product_name == detail.product_name
             ).first()
             if inventory:
-                inventory.total_weight = round(inventory.total_weight - detail.weight, 3)
+                inventory.total_weight = round(float(inventory.total_weight or 0) - float(detail.weight or 0), 3)
 
             # 扣减库位库存
             if target_location:
@@ -1004,7 +1004,7 @@ async def confirm_sales_return_settlement(
                 customer_deposit = get_or_create_customer_deposit(customer_id, customer_name, db)
 
                 balance_before = customer_deposit.current_balance
-                customer_deposit.current_balance = round(customer_deposit.current_balance + refund_gold_weight, 3)
+                customer_deposit.current_balance = round(float(customer_deposit.current_balance) + refund_gold_weight, 3)
                 customer_deposit.last_transaction_at = now
 
                 # 创建金料账户变动记录
@@ -1047,7 +1047,7 @@ async def confirm_sales_return_settlement(
                 customer_deposit = get_or_create_customer_deposit(customer_id, customer_name, db)
 
                 balance_before = customer_deposit.current_balance
-                customer_deposit.current_balance = round(customer_deposit.current_balance + gold_refund_weight, 3)
+                customer_deposit.current_balance = round(float(customer_deposit.current_balance) + gold_refund_weight, 3)
                 customer_deposit.last_transaction_at = now
 
                 deposit_tx = CustomerGoldDepositTransaction(
@@ -1194,7 +1194,7 @@ async def revert_sales_return_settlement(
                 customer_deposit = get_or_create_customer_deposit(customer_id, customer_name, db)
 
                 balance_before = customer_deposit.current_balance
-                customer_deposit.current_balance = round(customer_deposit.current_balance - refund_gold_weight, 3)
+                customer_deposit.current_balance = round(float(customer_deposit.current_balance) - refund_gold_weight, 3)
                 customer_deposit.last_transaction_at = now
 
                 rollback_tx = CustomerGoldDepositTransaction(
@@ -1224,7 +1224,7 @@ async def revert_sales_return_settlement(
                 customer_deposit = get_or_create_customer_deposit(customer_id, customer_name, db)
 
                 balance_before = customer_deposit.current_balance
-                customer_deposit.current_balance = round(customer_deposit.current_balance - gold_refund_weight, 3)
+                customer_deposit.current_balance = round(float(customer_deposit.current_balance) - gold_refund_weight, 3)
                 customer_deposit.last_transaction_at = now
 
                 rollback_tx = CustomerGoldDepositTransaction(

@@ -884,7 +884,7 @@ async def confirm_sales_order(
         for detail in details:
             inventory = db.query(Inventory).filter(Inventory.product_name == detail.product_name).with_for_update().first()
             if inventory:
-                inventory.total_weight = round(max(0, inventory.total_weight - detail.weight), 3)
+                inventory.total_weight = round(max(0, float(inventory.total_weight or 0) - float(detail.weight or 0)), 3)
             
             location_inv = db.query(LocationInventory).filter(
                 LocationInventory.product_name == detail.product_name,
@@ -939,7 +939,7 @@ async def unconfirm_sales_order(
             # 锁定并回滚总库存
             inventory = db.query(Inventory).filter(Inventory.product_name == detail.product_name).with_for_update().first()
             if inventory:
-                inventory.total_weight = round(inventory.total_weight + detail.weight, 3)
+                inventory.total_weight = round(float(inventory.total_weight or 0) + float(detail.weight or 0), 3)
             
             # 锁定并回滚展厅库存
             if showroom_location:
@@ -948,7 +948,7 @@ async def unconfirm_sales_order(
                     LocationInventory.location_id == showroom_location.id
                 ).with_for_update().first()
                 if location_inv:
-                    location_inv.weight += detail.weight
+                    location_inv.weight = float(location_inv.weight or 0) + float(detail.weight or 0)
         
         order.status = "draft"
         

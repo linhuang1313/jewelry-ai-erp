@@ -796,7 +796,7 @@ async def reject_transfer(
     ).first()
     
     if from_inventory:
-        from_inventory.weight += transfer.weight
+        from_inventory.weight = float(from_inventory.weight or 0) + float(transfer.weight or 0)
     else:
         from_inventory = LocationInventory(
             product_name=transfer.product_name,
@@ -1120,7 +1120,7 @@ async def create_transfer_order(
             weight=item.weight
         )
         db.add(transfer_item)
-        total_weight += item.weight
+        total_weight += float(item.weight or 0)
     
     db.commit()
     db.refresh(order)
@@ -1324,7 +1324,7 @@ async def receive_transfer_order(
             ).first()
             
             if to_inventory:
-                to_inventory.weight += item.weight
+                to_inventory.weight = float(to_inventory.weight or 0) + float(item.weight or 0)
             else:
                 to_inventory = LocationInventory(
                     product_name=item.product_name,
@@ -1415,7 +1415,7 @@ async def reject_transfer_order(
         ).first()
         
         if from_inventory:
-            from_inventory.weight += item.weight
+            from_inventory.weight = float(from_inventory.weight or 0) + float(item.weight or 0)
         else:
             from_inventory = LocationInventory(
                 product_name=item.product_name,
@@ -1477,7 +1477,7 @@ async def confirm_transfer_order(
         ).first()
         
         if to_inventory:
-            to_inventory.weight += transfer_weight
+            to_inventory.weight = float(to_inventory.weight or 0) + transfer_weight
         else:
             to_inventory = LocationInventory(
                 product_name=item.product_name,
@@ -1595,7 +1595,7 @@ async def update_transfer_order_actual(
                 if weight_diff < 0:
                     # 新重量更少，差额退回商品部
                     if from_inventory:
-                        from_inventory.weight += abs(weight_diff)
+                        from_inventory.weight = float(from_inventory.weight or 0) + abs(weight_diff)
                     else:
                         from_inventory = LocationInventory(
                             product_name=item.product_name,
@@ -1611,7 +1611,7 @@ async def update_transfer_order_actual(
                             status_code=400, 
                             detail=f"{item.product_name}: 商品部库存不足（可用 {available}g，需额外扣除 {weight_diff:.3f}g）"
                         )
-                    from_inventory.weight -= weight_diff
+                    from_inventory.weight = float(from_inventory.weight or 0) - weight_diff
                 
                 remark_parts.append(f"{item.product_name}: {old_weight}g → {new_weight}g")
             
@@ -1636,7 +1636,7 @@ async def update_transfer_order_actual(
                         status_code=400, 
                         detail=f"{item.product_name}: 商品部库存不足（可用 {available}g，需要 {item.weight}g）"
                     )
-                from_inventory.weight -= item.weight
+                from_inventory.weight = float(from_inventory.weight or 0) - float(item.weight or 0)
         
         # 记录操作日志
         log_remark = "编辑转移单"
@@ -1734,7 +1734,7 @@ async def delete_transfer_order(
                 ).first()
                 
                 if from_inventory:
-                    from_inventory.weight += item.weight
+                    from_inventory.weight = float(from_inventory.weight or 0) + float(item.weight or 0)
                 else:
                     from_inventory = LocationInventory(
                         product_name=item.product_name,
@@ -1821,7 +1821,7 @@ async def reject_confirm_transfer_order(
         ).first()
         
         if from_inventory:
-            from_inventory.weight += item.weight
+            from_inventory.weight = float(from_inventory.weight or 0) + float(item.weight or 0)
         else:
             from_inventory = LocationInventory(
                 product_name=item.product_name,
@@ -1911,7 +1911,7 @@ async def resubmit_transfer_order(
                 detail=f"发出位置库存不足：{item.product_name} 需要 {item.weight}g，可用 {available}g"
             )
         
-        from_inventory.weight -= item.weight
+        from_inventory.weight = float(from_inventory.weight or 0) - float(item.weight or 0)
     
     # 创建新转移单
     new_order = InventoryTransferOrder(

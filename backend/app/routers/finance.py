@@ -302,8 +302,8 @@ async def record_payment_from_chat(
             offset_amount = min(remaining_amount, receivable.unpaid_amount)
             
             # 更新应收账款
-            receivable.received_amount += offset_amount
-            receivable.unpaid_amount = receivable.total_amount - receivable.received_amount
+            receivable.received_amount = float(receivable.received_amount or 0) + offset_amount
+            receivable.unpaid_amount = float(receivable.total_amount or 0) - float(receivable.received_amount or 0)
             
             # 更新状态
             if receivable.unpaid_amount <= 0:

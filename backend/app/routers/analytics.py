@@ -496,8 +496,8 @@ async def get_inventory_value(
                 InboundDetail.product_name == inv.product_name
             ).order_by(InboundDetail.id.desc()).first()
             
-            labor_cost = latest_detail.labor_cost if latest_detail else 0
-            value = inv.total_weight * labor_cost
+            labor_cost = float(latest_detail.labor_cost) if latest_detail else 0
+            value = float(inv.total_weight or 0) * labor_cost
             
             product_values.append({
                 "product_name": inv.product_name,
@@ -532,7 +532,7 @@ async def get_inventory_value(
                     InboundDetail.product_name == ld.product_name
                 ).order_by(InboundDetail.id.desc()).first()
                 if latest:
-                    total_value += ld.weight * latest.labor_cost
+                    total_value += float(ld.weight or 0) * float(latest.labor_cost or 0)
             
             location_values.append({
                 "location_id": loc.id,

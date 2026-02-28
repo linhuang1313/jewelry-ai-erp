@@ -151,7 +151,7 @@ async def execute_payment_confirm(payload: dict, db: Session) -> Dict[str, Any]:
             break
         offset = min(remaining, recv.unpaid_amount)
         recv.received_amount = round((recv.received_amount or 0) + offset, 2)
-        recv.unpaid_amount = round(recv.total_amount - recv.received_amount, 2)
+        recv.unpaid_amount = round(float(recv.total_amount or 0) - float(recv.received_amount or 0), 2)
         if recv.unpaid_amount <= 0:
             recv.status = "paid"
         offset_details.append({"receivable_id": recv.id, "amount": round(offset, 2)})
@@ -169,8 +169,8 @@ async def execute_payment_confirm(payload: dict, db: Session) -> Dict[str, Any]:
         )
         if deposit:
             balance_before = deposit.current_balance
-            deposit.current_balance = round(deposit.current_balance - gold_amount, 3)
-            deposit.total_used = round((deposit.total_used or 0) + gold_amount, 3)
+            deposit.current_balance = round(float(deposit.current_balance or 0) - gold_amount, 3)
+            deposit.total_used = round(float(deposit.total_used or 0) + gold_amount, 3)
             deposit.last_transaction_at = now
 
             tx = CustomerGoldDepositTransaction(
@@ -289,7 +289,7 @@ async def execute_settlement_confirm(payload: dict, db: Session) -> Dict[str, An
     if payment_method == "cash_price":
         if gold_price <= 0:
             return {"success": False, "summary": "结价方式需要提供金价"}
-        material_amount = gold_price * so_total_weight
+        material_amount = float(gold_price or 0) * float(so_total_weight or 0)
         physical_gold_weight = 0.0
     elif payment_method == "physical_gold":
         material_amount = 0
@@ -305,7 +305,7 @@ async def execute_settlement_confirm(payload: dict, db: Session) -> Dict[str, An
     settlement_no = f"JS{now.strftime('%Y%m%d')}{count + 1:03d}"
 
     labor_amount = so_total_labor_cost
-    total_amount = material_amount + labor_amount
+    total_amount = material_amount + float(labor_amount or 0)
 
     confirmed_roles = payload.get("confirmed_by_roles", [])
     confirmed_by = "、".join(confirmed_roles) if confirmed_roles else "协同确认"

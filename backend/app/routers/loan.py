@@ -288,7 +288,7 @@ def deduct_inventory(db: Session, product_name: str, weight: float):
             detail=f"库存不足：{product_name} 当前库存 {available:.2f}克，需要 {weight:.2f}克"
         )
     
-    inventory.total_weight = round(inventory.total_weight - weight, 3)
+    inventory.total_weight = round(float(inventory.total_weight or 0) - weight, 3)
     inventory.last_update = china_now()
     
     # 展厅优先扣减
@@ -320,7 +320,7 @@ def deduct_inventory(db: Session, product_name: str, weight: float):
         loc_inv = loc_inv_map.get(location.id)
         if loc_inv and loc_inv.weight > 0:
             deduct = min(loc_inv.weight, remaining)
-            loc_inv.weight -= deduct
+            loc_inv.weight = float(loc_inv.weight or 0) - deduct
             loc_inv.last_update = china_now()
             remaining -= deduct
     
@@ -332,7 +332,7 @@ def deduct_inventory(db: Session, product_name: str, weight: float):
             loc_inv = loc_inv_map.get(location.id)
             if loc_inv and loc_inv.weight > 0:
                 deduct = min(loc_inv.weight, remaining)
-                loc_inv.weight -= deduct
+                loc_inv.weight = float(loc_inv.weight or 0) - deduct
                 loc_inv.last_update = china_now()
                 remaining -= deduct
 
@@ -344,7 +344,7 @@ def restore_inventory(db: Session, product_name: str, weight: float):
     ).first()
     
     if inventory:
-        inventory.total_weight = round(inventory.total_weight + weight, 3)
+        inventory.total_weight = round(float(inventory.total_weight or 0) + weight, 3)
         inventory.last_update = china_now()
     else:
         inventory = Inventory(
@@ -366,7 +366,7 @@ def restore_inventory(db: Session, product_name: str, weight: float):
             LocationInventory.product_name == product_name
         ).first()
         if loc_inv:
-            loc_inv.weight += weight
+            loc_inv.weight = float(loc_inv.weight or 0) + weight
             loc_inv.last_update = china_now()
         else:
             loc_inv = LocationInventory(
