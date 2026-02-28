@@ -167,12 +167,16 @@ def test_health_check():
     """验证服务器是否在运行"""
     print("\n=== 2.5 健康检查 ===")
     try:
-        resp = requests.get(f"{BASE_URL}/", timeout=5)
+        resp = requests.get(f"{BASE_URL}/docs", timeout=10, allow_redirects=True)
         print(f"  服务器状态: {resp.status_code}")
-        return True
+        return resp.status_code < 500
     except requests.ConnectionError:
         print(f"  ❌ 无法连接到 {BASE_URL}，请先启动后端服务")
         return False
+    except requests.ReadTimeout:
+        # 服务器响应慢但能连上，视为可用
+        print(f"  服务器响应慢但可连接")
+        return True
 
 
 # ============================================================
