@@ -1,0 +1,574 @@
+"""
+供应商管理路由
+"""
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from sqlalchemy import desc, func
+from datetime import datetime
+from time import time
+from ..timezone_utils import china_now
+import logging
+
+from ..database import get_db
+from ..models import Supplier, InboundDetail, GoldMaterialTransaction, InboundOrder, AccountPayable
+from ..models.finance import SupplierPayment
+from ..schemas import SupplierCreate, SupplierResponse
+from ..utils.response import success_response
+from ..utils.pinyin_utils import to_pinyin_initials
+from ..dependencies.auth import get_current_role, require_permission
+from typing import Optional
+from collections import defaultdict
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/suppliers", tags=["供应商管理"])
+
+SUPPLIER_CACHE_TTL = 60
+_SUPPLIER_CACHE: dict[str, dict] = {}
+
+
+def _get_supplier_cache_key(keyword: Optional[str], status: Optional[str], page: int = 1, page_size: int = 20) -> str:
+    return f"{keyword or ''}|{status or ''}|{page}|{page_size}"
+
+
+def _get_cached_suppliers(cache_key: str):
+    cached = _SUPPLIER_CACHE.get(cache_key)
+    if not cached:
+        return None
+    if time() - cached["timestamp"] > SUPPLIER_CACHE_TTL:
+        return None
+    return cached["data"]
+
+
+@router.get("")
+async def get_suppliers(
+    keyword: str = None,
+    status: str = "active",
+    page: int = Query(1, ge=1, description="页码（从1开始）"),
+    page_size: int = Query(20, ge=1, le=200, description="每页数量"),
+    db: Session = Depends(get_db)
+):
+    """获取供应商列表（分页）"""
+    try:
+        cache_key = f"{keyword or ''}|{status or ''}|{page}|{page_size}"
+        cached = _get_cached_suppliers(cache_key)
+        if cached is not None:
+            return cached
+
+        query = db.query(Supplier)
+        
+        if status:
+            query = query.filter(Supplier.status == status)
+        if keyword:
+            query = query.filter(
+                (Supplier.name.contains(keyword)) |
+                (Supplier.contact_person.contains(keyword)) |
+                (Supplier.phone.contains(keyword))
+            )
+        
+        total = query.count()
+        offset = (page - 1) * page_size
+        suppliers = query.order_by(desc(Supplier.create_time)).offset(offset).limit(page_size).all()
+        total_pages = (total + page_size - 1) // page_size if page_size > 0 else 0
+        
+        result = {
+            "success": True,
+            "suppliers": [
+                {
+                    "id": s.id,
+                    "supplier_no": s.supplier_no,
+                    "name": s.name,
+                    "pinyin_initials": to_pinyin_initials(s.name),
+                    "phone": s.phone,
+                    "address": s.address,
+                    "contact_person": s.contact_person,
+                    "supplier_type": s.supplier_type,
+                    "total_supply_amount": s.total_supply_amount,
+                    "total_supply_weight": s.total_supply_weight,
+                    "total_supply_count": s.total_supply_count,
+                    "last_supply_time": s.last_supply_time.isoformat() if s.last_supply_time else None,
+                    "status": s.status,
+                    "create_time": s.create_time.isoformat() if s.create_time else None,
+                    "remark": s.remark
+                }
+                for s in suppliers
+            ],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages
+        }
+        _SUPPLIER_CACHE[cache_key] = {
+            "timestamp": time(),
+            "data": result
+        }
+        return result
+    except Exception as e:
+        logger.error(f"获取供应商列表失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e), "suppliers": []}
+
+
+@router.post("")
+async def create_supplier(
+    supplier_data: SupplierCreate,
+    role: str = Depends(require_permission("can_manage_suppliers")),
+    db: Session = Depends(get_db)
+):
+    """创建供应商"""
+    try:
+        # 检查是否已存在同名供应商
+        existing = db.query(Supplier).filter(
+            Supplier.name == supplier_data.name,
+            Supplier.status == "active"
+        ).first()
+        if existing:
+            return {"success": False, "message": f"供应商【{supplier_data.name}】已存在"}
+        
+        # 生成供应商编号
+        now = china_now()
+        count = db.query(Supplier).filter(
+            Supplier.supplier_no.like(f"SUP{now.strftime('%Y%m%d')}%")
+        ).count()
+        supplier_no = f"SUP{now.strftime('%Y%m%d')}{count + 1:03d}"
+        
+        # 创建供应商
+        supplier = Supplier(
+            supplier_no=supplier_no,
+            name=supplier_data.name,
+            phone=supplier_data.phone,
+            address=supplier_data.address,
+            contact_person=supplier_data.contact_person,
+            supplier_type=supplier_data.supplier_type or "个人",
+            remark=supplier_data.remark,
+            status="active"
+        )
+        db.add(supplier)
+        db.commit()
+        db.refresh(supplier)
+        _SUPPLIER_CACHE.clear()
+        
+        logger.info(f"创建供应商成功: {supplier.name} ({supplier.supplier_no})")
+        
+        return {
+            "success": True,
+            "message": f"供应商【{supplier.name}】创建成功",
+            "supplier": {
+                "id": supplier.id,
+                "supplier_no": supplier.supplier_no,
+                "name": supplier.name,
+                "phone": supplier.phone,
+                "address": supplier.address,
+                "contact_person": supplier.contact_person
+            }
+        }
+    except Exception as e:
+        logger.error(f"创建供应商失败: {e}", exc_info=True)
+        db.rollback()
+        return {"success": False, "message": f"创建供应商失败: {str(e)}"}
+
+
+@router.put("/{supplier_id}")
+async def update_supplier(
+    supplier_id: int,
+    supplier_data: SupplierCreate,
+    role: str = Depends(require_permission("can_manage_suppliers")),
+    db: Session = Depends(get_db)
+):
+    """更新供应商信息"""
+    try:
+        supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+        if not supplier:
+            return {"success": False, "message": "供应商不存在"}
+        
+        # 检查是否有同名供应商
+        existing = db.query(Supplier).filter(
+            Supplier.name == supplier_data.name,
+            Supplier.id != supplier_id,
+            Supplier.status == "active"
+        ).first()
+        if existing:
+            return {"success": False, "message": f"供应商【{supplier_data.name}】已存在"}
+        
+        # 更新字段
+        supplier.name = supplier_data.name
+        supplier.phone = supplier_data.phone
+        supplier.address = supplier_data.address
+        supplier.contact_person = supplier_data.contact_person
+        supplier.supplier_type = supplier_data.supplier_type or supplier.supplier_type
+        supplier.remark = supplier_data.remark
+        
+        db.commit()
+        _SUPPLIER_CACHE.clear()
+        
+        logger.info(f"更新供应商成功: {supplier.name} ({supplier.supplier_no})")
+        
+        return {
+            "success": True,
+            "message": f"供应商【{supplier.name}】更新成功",
+            "supplier": {
+                "id": supplier.id,
+                "supplier_no": supplier.supplier_no,
+                "name": supplier.name,
+                "phone": supplier.phone,
+                "address": supplier.address,
+                "contact_person": supplier.contact_person
+            }
+        }
+    except Exception as e:
+        logger.error(f"更新供应商失败: {e}", exc_info=True)
+        db.rollback()
+        return {"success": False, "message": f"更新供应商失败: {str(e)}"}
+
+
+@router.delete("/{supplier_id}")
+async def delete_supplier(
+    supplier_id: int,
+    user_role: str = Query(default="sales", description="用户角色"),
+    role: str = Depends(require_permission("can_delete")),
+    db: Session = Depends(get_db)
+):
+    """删除供应商（软删除）"""
+    # 权限检查 - 只有管理层可以删除
+    from ..middleware.permissions import has_permission
+    if not has_permission(user_role, 'can_delete'):
+        raise HTTPException(status_code=403, detail="权限不足：您没有【删除数据】的权限")
+    
+    try:
+        supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+        if not supplier:
+            return {"success": False, "message": "供应商不存在"}
+        
+        # 软删除
+        supplier.status = "deleted"
+        db.commit()
+        _SUPPLIER_CACHE.clear()
+        
+        logger.info(f"删除供应商成功: {supplier.name} ({supplier.supplier_no})")
+        
+        return {
+            "success": True,
+            "message": f"供应商【{supplier.name}】已删除"
+        }
+    except Exception as e:
+        logger.error(f"删除供应商失败: {e}", exc_info=True)
+        db.rollback()
+        return {"success": False, "message": f"删除供应商失败: {str(e)}"}
+
+
+@router.get("/debt-summary")
+async def get_supplier_debt_summary(
+    user_role: str = Query(default="sales", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    获取供应商款料查询（已优化：批量查询避免 N+1）
+    
+    计算逻辑：
+    - 入库重量：从 InboundDetail 按 supplier_id 汇总
+    - 已付料重量：从 GoldMaterialTransaction (expense 类型，已确认) 按 supplier_id 汇总
+    - 欠料 = 入库重量 - 已付料重量
+    - 工费欠款：从 AccountPayable (未付/部分付) 按 supplier_id 汇总 unpaid_amount
+    """
+    try:
+        import math
+        def safe_float(val):
+            try:
+                f = float(val or 0)
+                return 0.0 if math.isnan(f) or math.isinf(f) else f
+            except (ValueError, TypeError):
+                return 0.0
+
+        # --- Inbound weights by supplier_id ---
+        inbound_by_id = db.query(
+            InboundDetail.supplier_id,
+            func.sum(InboundDetail.weight).label('total_weight')
+        ).filter(
+            InboundDetail.supplier_id.isnot(None)
+        ).group_by(InboundDetail.supplier_id).all()
+
+        inbound_map = {row.supplier_id: safe_float(row.total_weight) for row in inbound_by_id}
+
+        # --- Inbound weights where supplier_id IS NULL but supplier name exists ---
+        inbound_by_name = db.query(
+            InboundDetail.supplier,
+            func.sum(InboundDetail.weight).label('total_weight')
+        ).filter(
+            InboundDetail.supplier_id.is_(None),
+            InboundDetail.supplier.isnot(None),
+            InboundDetail.supplier != ""
+        ).group_by(InboundDetail.supplier).all()
+
+        # --- Build supplier name -> id mapping ---
+        suppliers = db.query(Supplier).filter(Supplier.status == "active").all()
+        name_to_id = {s.name: s.id for s in suppliers}
+
+        for row in inbound_by_name:
+            sid = name_to_id.get(row.supplier.strip() if row.supplier else "")
+            if sid:
+                inbound_map[sid] = inbound_map.get(sid, 0.0) + safe_float(row.total_weight)
+
+        # --- Paid weights ---
+        paid_weights = db.query(
+            GoldMaterialTransaction.supplier_id,
+            func.sum(GoldMaterialTransaction.gold_weight).label('total_weight')
+        ).filter(
+            GoldMaterialTransaction.supplier_id.isnot(None),
+            GoldMaterialTransaction.transaction_type == 'expense',
+            GoldMaterialTransaction.status == 'confirmed'
+        ).group_by(GoldMaterialTransaction.supplier_id).all()
+
+        paid_map = {row.supplier_id: safe_float(row.total_weight) for row in paid_weights}
+
+        # --- Labor costs from InboundDetail.total_cost ---
+        labor_total_by_id = db.query(
+            InboundDetail.supplier_id,
+            func.sum(InboundDetail.total_cost).label('total_labor')
+        ).filter(
+            InboundDetail.supplier_id.isnot(None)
+        ).group_by(InboundDetail.supplier_id).all()
+
+        labor_total_map = {row.supplier_id: safe_float(row.total_labor) for row in labor_total_by_id}
+
+        labor_total_by_name = db.query(
+            InboundDetail.supplier,
+            func.sum(InboundDetail.total_cost).label('total_labor')
+        ).filter(
+            InboundDetail.supplier_id.is_(None),
+            InboundDetail.supplier.isnot(None),
+            InboundDetail.supplier != ""
+        ).group_by(InboundDetail.supplier).all()
+
+        for row in labor_total_by_name:
+            sid = name_to_id.get(row.supplier.strip() if row.supplier else "")
+            if sid:
+                labor_total_map[sid] = labor_total_map.get(sid, 0.0) + safe_float(row.total_labor)
+
+        # --- Labor paid (SupplierPayment, confirmed only) ---
+        labor_paid = db.query(
+            SupplierPayment.supplier_id,
+            func.sum(SupplierPayment.amount).label('total_paid')
+        ).filter(
+            SupplierPayment.status == 'confirmed'
+        ).group_by(SupplierPayment.supplier_id).all()
+
+        labor_paid_map = {row.supplier_id: safe_float(row.total_paid) for row in labor_paid}
+
+        labor_debt_map = {}
+        for sid, total in labor_total_map.items():
+            paid = labor_paid_map.get(sid, 0.0)
+            labor_debt_map[sid] = total - paid
+
+        result = []
+        total_inbound = 0.0
+        total_paid = 0.0
+        total_debt = 0.0
+        total_labor_debt = 0.0
+
+        for supplier in suppliers:
+            inbound_weight = inbound_map.get(supplier.id, 0.0)
+            paid_weight = paid_map.get(supplier.id, 0.0)
+            initial_gold = safe_float(supplier.initial_gold_debt)
+            initial_labor = safe_float(supplier.initial_labor_debt)
+            debt_weight = (inbound_weight - paid_weight) + initial_gold
+            labor_debt = labor_debt_map.get(supplier.id, 0.0) + initial_labor
+
+            if inbound_weight > 0 or paid_weight > 0 or labor_debt != 0 or debt_weight != 0 or initial_gold != 0 or initial_labor != 0:
+                result.append({
+                    "supplier_id": supplier.id,
+                    "supplier_name": supplier.name,
+                    "supplier_no": supplier.supplier_no,
+                    "inbound_weight": float(round(inbound_weight, 2)),
+                    "paid_weight": float(round(paid_weight, 2)),
+                    "debt_weight": float(round(debt_weight, 2)),
+                    "labor_debt": float(round(labor_debt, 2))
+                })
+
+                total_inbound += inbound_weight
+                total_paid += paid_weight
+                total_debt += debt_weight
+                total_labor_debt += labor_debt
+
+        result.sort(key=lambda x: x["debt_weight"], reverse=True)
+
+        return {
+            "success": True,
+            "summary": {
+                "total_inbound_weight": safe_float(round(total_inbound, 2)),
+                "total_paid_weight": safe_float(round(total_paid, 2)),
+                "total_debt_weight": safe_float(round(total_debt, 2)),
+                "total_labor_debt": safe_float(round(total_labor_debt, 2)),
+                "supplier_count": len(result)
+            },
+            "suppliers": result
+        }
+    except Exception as e:
+        logger.error(f"获取供应商款料查询失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e), "suppliers": []}
+
+
+@router.get("/daily-transactions")
+async def get_supplier_daily_transactions(
+    start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+    supplier_id: Optional[int] = Query(None, description="供应商ID"),
+    user_role: str = Query(default="sales", description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """
+    获取供应商每日收料和付料明细
+    
+    返回按日期分组的数据，包括：
+    - 每日入库记录
+    - 每日付料记录
+    - 每日汇总
+    """
+    try:
+        # 解析日期
+        start_dt = None
+        end_dt = None
+        
+        if start_date:
+            try:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            except (ValueError, TypeError):
+                pass
+        
+        if end_date:
+            try:
+                end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            except (ValueError, TypeError):
+                pass
+        
+        # 查询入库记录（按日期分组）
+        inbound_query = db.query(
+            func.date(InboundOrder.create_time).label('date'),
+            InboundOrder.order_no,
+            InboundOrder.id.label('order_id'),
+            InboundDetail.supplier_id,
+            Supplier.name.label('supplier_name'),
+            func.sum(InboundDetail.weight).label('weight'),
+            InboundOrder.create_time
+        ).join(
+            InboundDetail, InboundOrder.id == InboundDetail.order_id
+        ).join(
+            Supplier, InboundDetail.supplier_id == Supplier.id
+        ).filter(
+            InboundDetail.supplier_id.isnot(None)
+        )
+        
+        if start_dt:
+            inbound_query = inbound_query.filter(InboundOrder.create_time >= start_dt)
+        if end_dt:
+            inbound_query = inbound_query.filter(InboundOrder.create_time <= end_dt)
+        if supplier_id:
+            inbound_query = inbound_query.filter(InboundDetail.supplier_id == supplier_id)
+        
+        inbound_records = inbound_query.group_by(
+            func.date(InboundOrder.create_time),
+            InboundOrder.order_no,
+            InboundOrder.id,
+            InboundDetail.supplier_id,
+            Supplier.name,
+            InboundOrder.create_time
+        ).order_by(desc(func.date(InboundOrder.create_time))).all()
+        
+        # 查询付料记录（按日期分组）
+        payment_query = db.query(
+            func.date(GoldMaterialTransaction.created_at).label('date'),
+            GoldMaterialTransaction.transaction_no,
+            GoldMaterialTransaction.id.label('transaction_id'),
+            GoldMaterialTransaction.supplier_id,
+            Supplier.name.label('supplier_name'),
+            GoldMaterialTransaction.gold_weight,
+            GoldMaterialTransaction.created_at,
+            GoldMaterialTransaction.remark
+        ).join(
+            Supplier, GoldMaterialTransaction.supplier_id == Supplier.id
+        ).filter(
+            GoldMaterialTransaction.transaction_type == 'expense',
+            GoldMaterialTransaction.status == 'confirmed',
+            GoldMaterialTransaction.supplier_id.isnot(None)
+        )
+        
+        if start_dt:
+            payment_query = payment_query.filter(GoldMaterialTransaction.created_at >= start_dt)
+        if end_dt:
+            payment_query = payment_query.filter(GoldMaterialTransaction.created_at <= end_dt)
+        if supplier_id:
+            payment_query = payment_query.filter(GoldMaterialTransaction.supplier_id == supplier_id)
+        
+        payment_records = payment_query.order_by(desc(func.date(GoldMaterialTransaction.created_at))).all()
+        
+        # 按日期分组
+        daily_data = defaultdict(lambda: {
+            'date': None,
+            'inbound_records': [],
+            'payment_records': [],
+            'total_inbound': 0.0,
+            'total_paid': 0.0,
+            'net_change': 0.0
+        })
+        
+        # 处理入库记录
+        for record in inbound_records:
+            date_str = record.date.strftime('%Y-%m-%d') if record.date else ''
+            if date_str not in daily_data:
+                daily_data[date_str]['date'] = date_str
+            
+            daily_data[date_str]['inbound_records'].append({
+                'order_no': record.order_no,
+                'order_id': record.order_id,
+                'supplier_id': record.supplier_id,
+                'supplier_name': record.supplier_name,
+                'weight': float(record.weight or 0),
+                'create_time': record.create_time.isoformat() if record.create_time else None
+            })
+            daily_data[date_str]['total_inbound'] += float(record.weight or 0)
+        
+        # 处理付料记录
+        for record in payment_records:
+            date_str = record.date.strftime('%Y-%m-%d') if record.date else ''
+            if date_str not in daily_data:
+                daily_data[date_str]['date'] = date_str
+            
+            daily_data[date_str]['payment_records'].append({
+                'transaction_no': record.transaction_no,
+                'transaction_id': record.transaction_id,
+                'supplier_id': record.supplier_id,
+                'supplier_name': record.supplier_name,
+                'gold_weight': float(record.gold_weight or 0),
+                'created_at': record.created_at.isoformat() if record.created_at else None,
+                'remark': record.remark
+            })
+            daily_data[date_str]['total_paid'] += float(record.gold_weight or 0)
+        
+        # 计算净变化
+        for date_str in daily_data:
+            daily_data[date_str]['net_change'] = daily_data[date_str]['total_inbound'] - daily_data[date_str]['total_paid']
+        
+        # 转换为列表并按日期排序
+        daily_summary = []
+        total_inbound = 0.0
+        total_paid = 0.0
+        
+        for date_str in sorted(daily_data.keys(), reverse=True):
+            data = daily_data[date_str]
+            daily_summary.append(data)
+            total_inbound += data['total_inbound']
+            total_paid += data['total_paid']
+        
+        return success_response(
+            data={
+                'daily_summary': daily_summary,
+                'summary': {
+                    'total_inbound': round(total_inbound, 2),
+                    'total_paid': round(total_paid, 2),
+                    'total_net_change': round(total_inbound - total_paid, 2)
+                }
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"获取供应商每日交易明细失败: {e}", exc_info=True)
+        return {"success": False, "message": str(e), "data": None}
+

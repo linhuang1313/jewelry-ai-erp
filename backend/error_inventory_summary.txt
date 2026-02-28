@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "D:\dev\jewelry-ai-erp\backend\scripts\import_inventory_xlsx.py", line 208, in bulk_insert_inventory
+    print(f"🎉 全部导入完成！全新落库入库单 {insert_count} 张。", flush=True)
+UnicodeEncodeError: 'gbk' codec can't encode character '\U0001f389' in position 0: illegal multibyte sequence

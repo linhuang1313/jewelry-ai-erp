@@ -1,0 +1,23 @@
+{
+  "gl_entry_dups": [
+    "{'idDocDTO': 43639, 'idaccount': 709, 'amountdr': Decimal('1.00000000000000'), 'amountcr': None, 'summary': '\u5e94\u6536\u7ed3\u4ef7\u79d1\u76ee\u5e73\u91cd\u91cf', 'count': 49}",
+    "{'idDocDTO': 43639, 'idaccount': 709, 'amountdr': None, 'amountcr': Decimal('1.00000000000000'), 'summary': '\u5e94\u6536\u7ed3\u4ef7\u79d1\u76ee\u5e73\u91cd\u91cf', 'count': 49}",
+    "{'idDocDTO': 43640, 'idaccount': 709, 'amountdr': None, 'amountcr': Decimal('1.00000000000000'), 'summary': '\u5e94\u6536\u7ed3\u4ef7\u79d1\u76ee\u5e73\u91cd\u91cf', 'count': 48}",
+    "{'idDocDTO': 43640, 'idaccount': 709, 'amountdr': Decimal('1.00000000000000'), 'amountcr': None, 'summary': '\u5e94\u6536\u7ed3\u4ef7\u79d1\u76ee\u5e73\u91cd\u91cf', 'count': 48}",
+    "{'idDocDTO': 43661, 'idaccount': 709, 'amountdr': Decimal('-1.00000000000000'), 'amountcr': None, 'summary': '\u5e94\u6536\u7ed3\u4ef7\u79d1\u76ee\u5e73\u91cd\u91cf', 'count': 48}"
+  ],
+  "aa_account_id_dups": [
+    "{'id': 1489, 'count': 2}",
+    "{'id': 1269, 'count': 2}",
+    "{'id': 652, 'count': 2}",
+    "{'id': 273, 'count': 2}",
+    "{'id': 1560, 'count': 2}"
+  ],
+  "aa_account_code_dups": [
+    "{'code': '660302', 'count': 10}",
+    "{'code': '100203', 'count': 6}",
+    "{'code': '6403', 'count': 10}",
+    "{'code': '660201', 'count': 10}",
+    "{'code': '224109', 'count': 10}"
+  ]
+}

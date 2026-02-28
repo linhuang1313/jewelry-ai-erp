@@ -1,0 +1,38 @@
+# 核心依赖
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+sqlalchemy>=2.0.0
+pydantic>=2.5.0
+python-dotenv>=1.0.0
+python-multipart>=0.0.6
+
+# 数据库迁移
+alembic>=1.13.0
+
+# 数据库驱动
+psycopg2-binary>=2.9.0  # PostgreSQL 驱动
+
+# HTTP 请求
+requests>=2.28.0  # 用于百度云 OCR API
+
+# AI 功能
+openai>=1.0.0  # DeepSeek 使用 OpenAI 兼容 API
+
+# 安全 & 限流
+slowapi>=0.1.9
+
+# 工具库
+pypinyin>=0.49.0
+reportlab>=4.0.0
+openpyxl>=3.1.0
+
+# 向量数据库 & 行为记录器
+pgvector>=0.4.0  # PostgreSQL 向量扩展 Python 绑定
+httpx>=0.25.0  # 异步 HTTP 客户端
+
+# 注意：以下 OCR 相关依赖已移除以减少云端部署大小
+# 如需 OCR 功能，请在本地运行时取消注释
+# paddleocr>=2.7.0
+# opencv-python>=4.8.0
+# numpy>=1.24.0
+# easyocr>=1.7.0

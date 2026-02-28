@@ -1,0 +1,150 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* React DatePicker 样式覆盖 */
+.react-datepicker-wrapper {
+  width: 100%;
+}
+
+.react-datepicker__input-container input {
+  width: 100%;
+}
+
+/* 打印样式 */
+@media print {
+  /* 隐藏不需要打印的元素 */
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  /* 对账单预览样式 */
+  .statement-preview {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 20mm !important;
+    box-shadow: none !important;
+    border: 2px solid #000 !important;
+    background: white !important;
+    page-break-after: always;
+  }
+
+  /* 确保边框打印 */
+  .statement-preview table,
+  .statement-preview th,
+  .statement-preview td {
+    border: 1px solid #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* 金额使用等宽字体 */
+  .statement-preview .font-mono {
+    font-family: 'Courier New', Courier, monospace !important;
+  }
+
+  /* 标题加粗加大 */
+  .statement-preview h1 {
+    font-size: 32pt !important;
+    font-weight: bold !important;
+  }
+
+  /* 期末欠款加粗加大 */
+  .statement-preview .text-xl {
+    font-size: 18pt !important;
+    font-weight: bold !important;
+  }
+
+  /* 表格标题加粗 */
+  .statement-preview h2,
+  .statement-preview h3 {
+    font-weight: bold !important;
+  }
+
+  /* 背景色在打印时保持 */
+  .statement-preview .bg-gray-100 {
+    background-color: #f3f4f6 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* 隐藏操作按钮 */
+  button,
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  /* 分页控制 */
+  .statement-preview {
+    page-break-inside: avoid;
+  }
+
+  /* 确保所有文本都是黑色 */
+  .statement-preview {
+    color: #000 !important;
+  }
+
+  /* 金额颜色在打印时保持 */
+  .statement-preview .text-blue-600,
+  .statement-preview .text-green-600,
+  .statement-preview .text-red-600 {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+/* 平滑滚动 */
+html {
+  scroll-behavior: smooth;
+}
+
+/* 模态框/面板内滚动容器防止滚动穿透 */
+.fixed {
+  overscroll-behavior: contain;
+}
+
+/* 自定义滚动条样式（苹果风格） */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+

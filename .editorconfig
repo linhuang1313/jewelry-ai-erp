@@ -1,0 +1,47 @@
+# EditorConfig - 统一编辑器配置，防止乱码
+# https://editorconfig.org
+
+root = true
+
+[*]
+# 统一使用 UTF-8 编码
+charset = utf-8
+# 统一换行符为 LF (Linux/Unix 风格)
+end_of_line = lf
+# 使用空格缩进
+indent_style = space
+indent_size = 4
+# 文件末尾添加换行符
+insert_final_newline = true
+# 去除尾随空格
+trim_trailing_whitespace = true
+
+# Markdown 文件
+[*.md]
+trim_trailing_whitespace = false
+max_line_length = off
+
+# JSON 文件
+[*.json]
+indent_size = 2
+
+# YAML 文件
+[*.{yml,yaml}]
+indent_size = 2
+
+# JavaScript/TypeScript
+[*.{js,jsx,ts,tsx}]
+indent_size = 2
+
+# Python
+[*.py]
+# Python 文件建议保留 UTF-8 编码头注释
+insert_final_newline = true
+
+# Bat/Shell 脚本
+[*.{bat,ps1}]
+end_of_line = crlf
+
+# CSS
+[*.css]
+indent_size = 2

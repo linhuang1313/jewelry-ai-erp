@@ -1,0 +1,26 @@
+Starting Verification...
+1. Getting voucher types...
+   Using voucher type ID: 1
+
+2. Getting accounts...
+   Using account IDs: 1, 1408
+
+3. Creating voucher (NO attachment count field)...
+   Creation Failed: 创建失败: (psycopg2.errors.DatatypeMismatch) column "ts" is of type bytea but expression is of type timestamp with time zone
+LINE 9:                 NOW(), NOW(), 0, 0
+                               ^
+HINT:  You will need to rewrite or cast the expression.
+
+[SQL: 
+            INSERT INTO gl_doc (
+                code, voucherdate, iddoctype, 
+                maker, accountingyear, accountingperiod, 
+                createdtime, ts, docbusinesstype, docsourcetype
+            ) VALUES (
+                %(code)s, %(date)s, %(type_id)s, 
+                %(maker)s, %(year)s, %(period)s, 
+                NOW(), NOW(), 0, 0
+            ) RETURNING id
+        ]
+[parameters: {'code': '0001', 'date': datetime.datetime(2026, 2, 7, 0, 0), 'type_id': 1, 'maker': 'TestBot', 'year': 2026, 'period': 2}]
+(Background on this error at: https://sqlalche.me/e/20/f405)

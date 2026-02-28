@@ -1,0 +1,38 @@
+[
+  {
+    "id": "150565",
+    "idDocDTO": "43639",
+    "idaccount": "709",
+    "amountdr": null,
+    "amountcr": "1.00000000000000",
+    "summary": "应收结价科目平重量",
+    "sequencenumber": "1"
+  },
+  {
+    "id": "150566",
+    "idDocDTO": "43639",
+    "idaccount": "709",
+    "amountdr": "1.00000000000000",
+    "amountcr": null,
+    "summary": "应收结价科目平重量",
+    "sequencenumber": "2"
+  },
+  {
+    "id": "150583",
+    "idDocDTO": "43639",
+    "idaccount": "709",
+    "amountdr": null,
+    "amountcr": "10.00000000000000",
+    "summary": "应收结价科目平重量",
+    "sequencenumber": "19"
+  },
+  {
+    "id": "150584",
+    "idDocDTO": "43639",
+    "idaccount": "709",
+    "amountdr": "10.00000000000000",
+    "amountcr": null,
+    "summary": "应收结价科目平重量",
+    "sequencenumber": "20"
+  }
+]
