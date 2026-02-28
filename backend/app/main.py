@@ -535,6 +535,12 @@ async def startup_event():
     finally:
         db.close()
 
+    # ========== Agent 注册 ==========
+    from .agents.registry import registry as agent_registry
+    from .agents.settlement_agent import SettlementAgent
+    agent_registry.register(SettlementAgent())
+    logger.info(f"已注册 Agent: {agent_registry.list_agents()}")
+
 
 # ========== 根路由 ==========
 

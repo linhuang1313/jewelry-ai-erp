@@ -23,6 +23,8 @@ from ..models import (
     Supplier, ChatLog, Location, LocationInventory, InventoryTransferOrder
 )
 from ..ai_parser import parse_user_message
+from ..agents.registry import registry as agent_registry
+from ..agents.agent_parser import parse_with_agent
 from .. import context_manager as ctx
 from ..timezone_utils import china_now
 from ..utils.response import sanitize_floats
@@ -215,7 +217,12 @@ async def chat(request: Request, ai_req: AIRequest, db: Session = Depends(get_db
         logger.info(f"收到用户消息: {ai_req.message}")
         user_role = ai_req.user_role or 'sales'
         
-        ai_response = parse_user_message(ai_req.message, user_role=ai_req.user_role or 'manager')
+        # Agent 路由：优先使用注册的 Agent 解析
+        _agent = agent_registry.route(user_role)
+        if _agent:
+            ai_response = parse_with_agent(_agent, ai_req.message)
+        else:
+            ai_response = parse_user_message(ai_req.message, user_role=ai_req.user_role or 'manager')
         logger.info(f"AI解析结果: action={ai_response.action}, products={ai_response.products}")
         
         # 业务员角色限制
@@ -779,8 +786,14 @@ async def chat_stream(request: Request, ai_req: AIRequest, db: Session = Depends
                 enhanced_message = "\n\n".join(context_parts)
             
             session_entities = session_context.get("entities", {})
-            ai_response = parse_user_message(ai_req.message, conversation_history, user_role=user_role, session_entities=session_entities)
-            logger.info(f"[流式] 识别到意图: {ai_response.action}")
+            # Agent 路由：优先使用注册的 Agent 解析
+            _agent = agent_registry.route(user_role)
+            if _agent:
+                ai_response = parse_with_agent(_agent, ai_req.message, conversation_history, session_entities)
+                logger.info(f"[流式] Agent={_agent.role_id} 识别到意图: {ai_response.action}")
+            else:
+                ai_response = parse_user_message(ai_req.message, conversation_history, user_role=user_role, session_entities=session_entities)
+                logger.info(f"[流式] 旧路径识别到意图: {ai_response.action}")
             
             yield f"data: {json.dumps({'type': 'thinking', 'step': '意图解析', 'message': f'已识别意图：{ai_response.action}', 'progress': 20, 'status': 'complete'}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0.05)
