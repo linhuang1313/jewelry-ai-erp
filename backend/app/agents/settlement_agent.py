@@ -14,18 +14,11 @@
   - 系统管理
 """
 
-import re
 import logging
 from typing import List, Optional
 from datetime import datetime, timedelta
 
 from .base import BaseAgent
-from .skills.prompt_skill import PromptSkill
-from .skills.system_prompt_skill import SystemPromptSkill
-from .skills.settlement_prompt_skill import SettlementPromptSkill
-from .skills.finance_prompt_skill import FinancePromptSkill
-from .skills.sales_prompt_skill import SalesPromptSkill
-from .skills.query_prompt_skill import QueryPromptSkill
 
 logger = logging.getLogger(__name__)
 
@@ -43,13 +36,7 @@ def _week_start() -> str:
 class SettlementAgent(BaseAgent):
     """结算专员 Agent — 通过 Skill 组合实现分类和 Prompt 生成"""
 
-    skills: List[PromptSkill] = [
-        SystemPromptSkill(),
-        SettlementPromptSkill(),
-        SalesPromptSkill(),
-        FinancePromptSkill(),
-        QueryPromptSkill(),
-    ]
+    skill_names: List[str] = ["system", "settlement", "sales", "finance", "query"]
 
     @property
     def role_id(self) -> str:
@@ -79,10 +66,7 @@ class SettlementAgent(BaseAgent):
     def get_prompt(self, category: str, message: str, context: str) -> str:
         if category == "sales":
             return self._get_sales_query_only_prompt(message, context)
-        for skill in self.skills:
-            if skill.name == category:
-                return skill.get_prompt(message, context, self.role_name, self.system_prompt)
-        return self.skills[0].get_prompt(message, context, self.role_name, self.system_prompt)
+        return super().get_prompt(category, message, context)
 
     def _get_sales_query_only_prompt(self, message: str, context: str) -> str:
         """结算专员的销售 Prompt — 只包含查询，不包含创建销售单"""
@@ -137,38 +121,3 @@ class SettlementAgent(BaseAgent):
             "customers", "customer_debt",
         ]
 
-    def _fallback_classify(self, message: str, conversation_history: Optional[List[dict]] = None) -> str:
-        context_str = ""
-        if conversation_history:
-            context_str = "最近对话：\n"
-            for h in conversation_history[-4:]:
-                role = "用户" if h.get("role") == "user" else "系统"
-                context_str += f"  {role}: {h.get('content', '')[:150]}\n"
-            context_str += "\n"
-
-        categories = ", ".join(skill.name for skill in self.skills)
-        prompt = f"""用户是珠宝ERP系统的**结算专员**，请判断这句话属于以下哪个类别：
-{chr(10).join(f'- {s.name}（{s.display_name}）' for s in self.skills)}
-
-{context_str}用户消息：「{message}」
-
-重要：结算专员最常做的是结算和客户账务，优先考虑 settlement 和 finance。
-只返回类别名称，不要解释。"""
-
-        try:
-            from ..ai_parser import get_client
-            response = get_client().chat.completions.create(
-                model="deepseek-chat",
-                max_tokens=20,
-                temperature=0.0,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            result = response.choices[0].message.content.strip().lower()
-            valid = {s.name for s in self.skills}
-            if result in valid:
-                logger.info(f"[SettlementAgent] AI 兜底分类: '{message[:30]}...' → {result}")
-                return result
-            return "system"
-        except Exception as e:
-            logger.warning(f"[SettlementAgent] AI 兜底分类失败: {e}")
-            return "system"

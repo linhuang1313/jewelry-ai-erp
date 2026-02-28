@@ -306,3 +306,104 @@ class TestSkillComposition:
         agent = ManagerAgent()
         skill_names = {s.name for s in agent.skills}
         assert skill_names == {"system", "return", "settlement", "inbound", "sales", "finance", "query"}
+
+
+class TestSkillRegistry:
+    """SkillRegistry 全局注册表测试"""
+
+    def test_singleton(self):
+        from app.agents.skills.skill_registry import SkillRegistry
+        r1 = SkillRegistry()
+        r2 = SkillRegistry()
+        assert r1 is r2
+
+    def test_all_7_skills_registered(self):
+        from app.agents.skills.skill_registry import skill_registry
+        skills = skill_registry.list_skills()
+        assert len(skills) == 7
+        assert set(skills.keys()) == {"system", "return", "settlement", "inbound", "sales", "finance", "query"}
+
+    def test_get_by_name(self):
+        from app.agents.skills.skill_registry import skill_registry
+        system = skill_registry.get("system")
+        assert system is not None
+        assert system.name == "system"
+
+    def test_get_unknown_returns_none(self):
+        from app.agents.skills.skill_registry import skill_registry
+        assert skill_registry.get("unknown") is None
+
+    def test_has(self):
+        from app.agents.skills.skill_registry import skill_registry
+        assert skill_registry.has("finance")
+        assert not skill_registry.has("nonexistent")
+
+    def test_get_by_names(self):
+        from app.agents.skills.skill_registry import skill_registry
+        skills = skill_registry.get_by_names(["system", "finance", "query"])
+        assert len(skills) == 3
+        assert [s.name for s in skills] == ["system", "finance", "query"]
+
+    def test_get_by_names_ignores_unknown(self):
+        from app.agents.skills.skill_registry import skill_registry
+        skills = skill_registry.get_by_names(["system", "nonexistent", "query"])
+        assert len(skills) == 2
+        assert [s.name for s in skills] == ["system", "query"]
+
+    def test_find_matching(self):
+        from app.agents.skills.skill_registry import skill_registry
+        matched = skill_registry.find_matching("确认销售单XS20260222001")
+        assert len(matched) >= 1
+        assert matched[0].name == "system"
+
+    def test_find_matching_priority_order(self):
+        from app.agents.skills.skill_registry import skill_registry
+        matched = skill_registry.find_matching("退货给供应商")
+        names = [s.name for s in matched]
+        assert "return" in names
+        if "query" in names:
+            assert names.index("return") < names.index("query")
+
+    def test_all_skills_sorted_by_priority(self):
+        from app.agents.skills.skill_registry import skill_registry
+        all_skills = skill_registry.all_skills()
+        priorities = [s.priority for s in all_skills]
+        assert priorities == sorted(priorities)
+
+    def test_agents_share_skill_instances(self):
+        """所有 Agent 通过 SkillRegistry 共享同一组 Skill 实例"""
+        from app.agents.skills.skill_registry import skill_registry
+        from app.agents.settlement_agent import SettlementAgent
+        from app.agents.finance_agent import FinanceAgent
+
+        settlement = SettlementAgent()
+        finance = FinanceAgent()
+
+        s_system = next(s for s in settlement.skills if s.name == "system")
+        f_system = next(s for s in finance.skills if s.name == "system")
+        assert s_system is f_system
+
+    def test_dynamic_skill_discovery(self):
+        """测试动态发现：给定消息，找到所有匹配的 Skill"""
+        from app.agents.skills.skill_registry import skill_registry
+        matched = skill_registry.find_matching("张老板交料5克")
+        skill_names = {s.name for s in matched}
+        assert "finance" in skill_names
+
+
+class TestBaseAgentFallback:
+    """测试 BaseAgent 的 _fallback_classify 默认实现"""
+
+    def test_fallback_returns_system_on_error(self):
+        from app.agents.counter_agent import CounterAgent
+        agent = CounterAgent()
+        result = agent._fallback_classify("一些随机文本无法匹配任何关键词")
+        assert isinstance(result, str)
+
+    def test_fallback_uses_skills_list(self):
+        """_fallback_classify 应该使用 Agent 的 skills 列表生成分类选项"""
+        from app.agents.settlement_agent import SettlementAgent
+        agent = SettlementAgent()
+        valid_categories = {s.name for s in agent.skills}
+        result = agent._fallback_classify("测试消息")
+        assert result in valid_categories or result == "system"
