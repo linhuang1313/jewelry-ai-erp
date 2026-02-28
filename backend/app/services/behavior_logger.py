@@ -174,7 +174,7 @@ class BehaviorLoggerService:
 当前金价：{gold_price or '未知'} 元/克
 市场趋势：{market_trend or '未知'}
 操作时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}
-操作详情：{json.dumps(operation_details, ensure_ascii=False, indent=2)}
+操作详情：{json.dumps(operation_details, ensure_ascii=False, indent=2, default=str)}
 """
 
     async def _extract_decision_reasoning(self, context: str) -> Dict[str, Any]:

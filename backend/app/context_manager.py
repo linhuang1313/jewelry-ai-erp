@@ -76,7 +76,7 @@ def save_session_context(session_id: str, context: Dict[str, Any]):
     
     try:
         with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(context, f, ensure_ascii=False, indent=2)
+            json.dump(context, f, ensure_ascii=False, indent=2, default=str)
         logger.info(f"[Context] 保存会话上下文: {session_id}")
     except Exception as e:
         logger.error(f"[Context] 保存上下文失败: {e}")
