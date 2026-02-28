@@ -107,6 +107,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   const [productCodes, setProductCodes] = useState<ProductCode[]>([]);
   const [codeDropdownId, setCodeDropdownId] = useState<string | null>(null);
   const [codeSearchResults, setCodeSearchResults] = useState<ProductCode[]>([]);
+  const [fCodeDetails, setFCodeDetails] = useState<Record<string, any>>({});
 
   // 获取库存商品列表（展厅库存）
   const fetchInventory = async () => {
@@ -135,7 +136,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   // 获取商品编码列表
   const fetchProductCodes = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/product-codes`);
+      const response = await fetch(`${API_BASE_URL}/api/product-codes?limit=1000&include_used=true`);
       if (response.ok) {
         const data = await response.json();
         const codeList = Array.isArray(data) ? data : (data.codes || []);
@@ -162,13 +163,48 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
     setCodeDropdownId(results.length > 0 ? itemId : null);
   };
 
-  // 选择商品编码 → 自动填充商品名称
+  // 选择商品编码 → 自动填充商品名称 + 获取F码入库详情
   const selectProductCode = (itemId: string, pc: ProductCode) => {
     setItems(prev => prev.map(item =>
       item.id === itemId ? { ...item, product_code: pc.code, product_name: pc.name } : item
     ));
     setCodeDropdownId(null);
     setCodeSearchResults([]);
+    if (pc.code.toUpperCase().startsWith('F')) {
+      fetchFCodeDetail(itemId, pc.code);
+    }
+  };
+
+  // 获取 F码商品的入库详情（镶嵌字段）
+  const fetchFCodeDetail = async (itemId: string, code: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/inbound/detail-by-code/${encodeURIComponent(code)}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data) {
+          setFCodeDetails(prev => ({ ...prev, [itemId]: data.data }));
+        }
+      }
+    } catch (error) {
+      console.error('获取F码入库详情失败', error);
+    }
+  };
+
+  // 更新 F编码详情面板中的字段（销售工费联动上方输入框）
+  const updateFCodeDetail = (itemId: string, field: string, value: string) => {
+    setFCodeDetails(prev => ({
+      ...prev,
+      [itemId]: { ...prev[itemId], [field]: value === '' ? null : isNaN(Number(value)) ? value : Number(value) }
+    }));
+    if (field === 'sale_labor_cost') {
+      setItems(prev => prev.map(item =>
+        item.id === itemId ? { ...item, labor_cost: value } : item
+      ));
+    } else if (field === 'sale_piece_labor_cost') {
+      setItems(prev => prev.map(item =>
+        item.id === itemId ? { ...item, piece_labor_cost: value } : item
+      ));
+    }
   };
 
   // 商品名称变更时 → 反查编码
@@ -256,6 +292,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
       setInventoryErrors([]);
       setCodeDropdownId(null);
       setCodeSearchResults([]);
+      setFCodeDetails({});
     }
   }, [isOpen]);
 
@@ -709,6 +746,46 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
+                {/* F码入库详情面板 */}
+                {fCodeDetails[item.id] && (() => {
+                  const detail = fCodeDetails[item.id];
+                  return (
+                    <div className="ml-8 mr-2 -mt-1 mb-1 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs">
+                      <div className="text-amber-700 font-medium mb-2">入库详情</div>
+                      <div className="grid grid-cols-4 gap-x-4 gap-y-1.5 text-gray-600">
+                        {[
+                          { label: '主石重', field: 'main_stone_weight', type: 'number', readonly: true },
+                          { label: '主石粒数', field: 'main_stone_count', type: 'number', readonly: true },
+                          { label: '副石重', field: 'sub_stone_weight', type: 'number', readonly: true },
+                          { label: '副石粒数', field: 'sub_stone_count', type: 'number', readonly: true },
+                          { label: '主石字印', field: 'main_stone_mark', type: 'text', readonly: true },
+                          { label: '副石字印', field: 'sub_stone_mark', type: 'text', readonly: true },
+                          { label: '珍珠重', field: 'pearl_weight', type: 'number', readonly: true },
+                          { label: '轴承重', field: 'bearing_weight', type: 'number', readonly: true },
+                          { label: '销售克工费', field: 'sale_labor_cost', type: 'number', highlight: true, readonly: false },
+                          { label: '销售件工费', field: 'sale_piece_labor_cost', type: 'number', prefix: '¥', highlight: true, readonly: false },
+                        ].map(({ label, field, type, prefix, highlight, readonly }) => (
+                          <div key={field} className="flex items-center gap-1">
+                            <span className="text-gray-400 whitespace-nowrap">{label}:</span>
+                            <div className="flex items-center">
+                              {prefix && detail[field] != null && <span className="text-gray-400">{prefix}</span>}
+                              <input
+                                type={type}
+                                value={detail[field] ?? ''}
+                                onChange={(e) => !readonly && updateFCodeDetail(item.id, field, e.target.value)}
+                                readOnly={readonly}
+                                className={`w-16 px-1 py-0.5 border rounded text-xs text-center
+                                  ${readonly ? 'bg-gray-50 border-gray-100 text-gray-500 cursor-default' : 'bg-white border-gray-200'}
+                                  ${highlight ? 'border-emerald-300 text-emerald-700 font-medium bg-white' : ''}`}
+                                placeholder="-"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
                 );
               })}
             </div>

@@ -144,6 +144,8 @@ export const QuickReceiptModal = ({
               <option value="足金9999">足金9999</option>
               <option value="Au999">Au999</option>
               <option value="Au9999">Au9999</option>
+              <option value="板料">板料</option>
+              <option value="旧料">旧料</option>
             </select>
           </div>
           

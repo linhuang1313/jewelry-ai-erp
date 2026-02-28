@@ -1131,22 +1131,20 @@ async def get_customer_detail(
                     gold_price = s.gold_price or 0
                     if s.payment_method == 'cash_price':
                         type_code = "settle_cash"
-                        type_label = "欠料结价"
-                        # 显示克重 × 单价 = 总额
+                        type_label = "结价"
                         if settle_weight > 0 and gold_price > 0:
                             total_val = settle_weight * gold_price
                             method_desc = f"{settle_weight:.1f}g × ¥{gold_price:.0f}/g = ¥{total_val:,.0f}"
                         else:
                             method_desc = f"结价 ¥{gold_price}/克"
-                        gold_change = -settle_weight if settle_weight > 0 else None  # 料折算成钱，扣减克重
-                        # 只取料价部分，工费已在 sales_labor 中单独列出
-                        amount_change = (s.material_amount or 0)
+                        gold_change = -settle_weight if settle_weight > 0 else None
+                        amount_change = float(s.total_amount or 0)
                     elif s.payment_method == 'physical_gold':
                         type_code = "settle_gold"
-                        type_label = "欠料结料"
+                        type_label = "结料"
                         method_desc = f"结料 {s.physical_gold_weight or 0:.1f}克"
-                        gold_change = (s.physical_gold_weight or 0)
-                        amount_change = None
+                        gold_change = 0
+                        amount_change = float(s.labor_amount or 0)
                     else:  # mixed
                         type_code = "settle_mixed"
                         type_label = "混合结算"
@@ -1154,8 +1152,8 @@ async def get_customer_detail(
                         cash_part = s.cash_payment_weight or 0
                         cash_amount = cash_part * gold_price
                         method_desc = f"结料{gold_part:.1f}g + 结价{cash_part:.1f}g×¥{gold_price:.0f}/g=¥{cash_amount:,.0f}"
-                        gold_change = gold_part
-                        amount_change = cash_amount
+                        gold_change = 0
+                        amount_change = float(s.total_amount or 0)
                     
                     transactions_list.append({
                         "id": f"settlement_{s.id}",
@@ -1786,7 +1784,8 @@ async def get_customer_debt_history(
         
         transactions = []
         
-        # 1. 销售记录（优先 customer_id，兜底 customer_name）
+        # 1. 查询销售单（仅用于关联结算记录，不直接加入欠款明细）
+        # 业务规则：客户欠款只在结算确认时产生，销售单本身不产生应收
         _debt_has_id = db.query(SalesOrder.id).filter(
             SalesOrder.customer_id == customer_id, SalesOrder.status != "已取消"
         ).first()
@@ -1795,20 +1794,6 @@ async def get_customer_debt_history(
             _debt_filter,
             SalesOrder.status != "已取消"
         ).order_by(desc(SalesOrder.create_time)).limit(limit).all()
-        
-        for order in sales_orders:
-            transactions.append({
-                "id": f"sale_{order.id}",
-                "type": "sale",
-                "type_label": "销售",
-                "order_no": order.order_no,
-                "description": f"销售单 {order.order_no}",
-                "cash_amount": order.total_labor_cost or 0,
-                "gold_amount": order.total_weight or 0,
-                "status": order.status,
-                "created_at": order.create_time.isoformat() if order.create_time else None,
-                "operator": order.salesperson
-            })
         
         # 2. 结算记录
         try:
@@ -1823,14 +1808,19 @@ async def get_customer_debt_history(
                         "mixed": "混合支付"
                     }.get(s.payment_method, s.payment_method)
                     
+                    if s.payment_method == 'physical_gold':
+                        cash_amt = float(s.labor_amount or 0)
+                    else:
+                        cash_amt = float(s.total_amount or 0)
+                    
                     transactions.append({
                         "id": f"settlement_{s.id}",
                         "type": "settlement",
                         "type_label": "结算",
                         "order_no": s.settlement_no,
                         "description": f"结算单 {s.settlement_no}（{payment_method_label}）",
-                        "cash_amount": s.total_amount or 0,
-                        "gold_amount": s.physical_gold_weight or 0,
+                        "cash_amount": cash_amt,
+                        "gold_amount": 0,
                         "status": s.status,
                         "created_at": s.created_at.isoformat() if s.created_at else None,
                         "operator": s.created_by

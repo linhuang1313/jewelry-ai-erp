@@ -34,7 +34,7 @@ import { USER_ROLES } from './constants/roles'
 import { Header } from './components/layout'
 import { ConversationSidebar } from './components/layout/ConversationSidebar'
 import ChatView from './pages/ChatView'
-import { InlineQuickReceiptModal } from './components/modals/InlineQuickReceiptModal'
+import { QuickReceiptModal } from './components/modals/QuickReceiptModal'
 import { ReceiptEditModal } from './components/modals/ReceiptEditModal'
 import { InlineQuickWithdrawalModal } from './components/modals/InlineQuickWithdrawalModal'
 import VoucherManagement from './components/VoucherManagement'
@@ -169,7 +169,6 @@ function App() {
   const [toastMessage, setToastMessage] = useState('') // Toast 提示消息
   const [quickFormCustomers, setQuickFormCustomers] = useState([]) // 客户列表
   const [quickFormCustomerSearch, setQuickFormCustomerSearch] = useState('') // 客户搜索
-  const [quickReceiptForm, setQuickReceiptForm] = useState({ customer_id: '', gold_weight: '', gold_fineness: '足金999', remark: '' })
   const [quickWithdrawalForm, setQuickWithdrawalForm] = useState({ customer_id: '', gold_weight: '', remark: '' })
   const [selectedCustomerDeposit, setSelectedCustomerDeposit] = useState(null) // 选中客户的存料余额
   const [depositLoading, setDepositLoading] = useState(false)
@@ -639,9 +638,6 @@ function App() {
 
   // 打开快捷收料弹窗
   const openQuickReceiptModal = () => {
-    loadQuickFormCustomers()
-    setQuickReceiptForm({ customer_id: '', gold_weight: '', gold_fineness: '足金999', remark: '' })
-    setQuickFormCustomerSearch('')
     setShowQuickReceiptModal(true)
   }
 
@@ -678,63 +674,6 @@ function App() {
       showToast('查询客户余额失败，显示为0')
     } finally {
       setDepositLoading(false)
-    }
-  }
-
-  // 创建快捷收料单
-  const handleQuickReceipt = async (e) => {
-    e.preventDefault()
-    if (!quickReceiptForm.customer_id) {
-      alert('请选择客户')
-      return
-    }
-    if (!quickReceiptForm.gold_weight || parseFloat(quickReceiptForm.gold_weight) <= 0) {
-      alert('请输入有效的收料克重')
-      return
-    }
-    try {
-      const params = new URLSearchParams({
-        customer_id: quickReceiptForm.customer_id,
-        gold_weight: quickReceiptForm.gold_weight,
-        gold_fineness: quickReceiptForm.gold_fineness,
-        remark: quickReceiptForm.remark || '快捷收料',
-        created_by: '结算专员',
-        user_role: localStorage.getItem('userRole') || 'sales'
-      })
-      const response = await fetch(`${API_BASE_URL}/api/gold-material/gold-receipts?${params}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      })
-      if (response.ok) {
-        const result = await response.json()
-        const customerName = quickFormCustomers.find(c => c.id.toString() === quickReceiptForm.customer_id)?.name || '未知客户'
-        const receiptWeight = parseFloat(quickReceiptForm.gold_weight)
-        const remarkText = quickReceiptForm.remark || ''
-
-        setShowQuickReceiptModal(false)
-        // 重置表单
-        setQuickReceiptForm({ customer_id: '', gold_weight: '', gold_fineness: '足金999', remark: '' })
-        setQuickFormCustomerSearch('')
-
-        // 添加收料单记录到聊天框（使用文本格式+隐藏标记）
-        const downloadUrl = `${API_BASE_URL}/api/gold-material/gold-receipts/${result.data.id}/print`
-        const receiptMessage = `✅ 收料单已生成\n\n📋 单号：${result.data.receipt_no}\n👤 客户：${customerName}\n⚖️ 克重：${receiptWeight.toFixed(2)} 克
-🏷️ 成色：${quickReceiptForm.gold_fineness}${remarkText ? `\n📝 备注：${remarkText}` : ''}\n🕐 时间：${new Date().toLocaleString('zh-CN')}\n\n<!-- GOLD_RECEIPT:${result.data.id}:${result.data.receipt_no} -->`
-        setMessages(prev => [...prev, {
-          id: Date.now(),
-          type: 'system',
-          content: receiptMessage,
-          goldReceiptDownloadUrl: downloadUrl,
-          goldReceiptId: result.data.id,
-          receiptStatus: 'pending'
-        }])
-      } else {
-        const error = await response.json()
-        alert('创建收料单失败：' + (error.detail || '未知错误'))
-      }
-    } catch (error) {
-
-      alert('创建收料单失败')
     }
   }
 
@@ -2983,16 +2922,22 @@ ${itemsList}
       />
 
       {/* 快捷收料弹窗 */}
-      <InlineQuickReceiptModal
-        showQuickReceiptModal={showQuickReceiptModal}
-        setShowQuickReceiptModal={setShowQuickReceiptModal}
-        quickReceiptForm={quickReceiptForm}
-        setQuickReceiptForm={setQuickReceiptForm}
-        quickFormCustomerSearch={quickFormCustomerSearch}
-        setQuickFormCustomerSearch={setQuickFormCustomerSearch}
-        quickFormCustomers={quickFormCustomers}
-        filteredQuickFormCustomers={filteredQuickFormCustomers}
-        handleQuickReceipt={handleQuickReceipt}
+      <QuickReceiptModal
+        isOpen={showQuickReceiptModal}
+        onClose={() => setShowQuickReceiptModal(false)}
+        onSuccess={(receiptData) => {
+          const downloadUrl = `${API_BASE_URL}/api/gold-material/gold-receipts/${receiptData.id}/print`
+          const receiptMessage = `✅ 收料单已生成\n\n📋 单号：${receiptData.receipt_no || '未知'}\n👤 客户：${receiptData.customer_name || '未知客户'}\n⚖️ 克重：${(receiptData.gold_weight || 0).toFixed(2)} 克\n🏷️ 成色：${receiptData.gold_fineness || '足金999'}${receiptData.remark ? `\n📝 备注：${receiptData.remark}` : ''}\n🕐 时间：${new Date().toLocaleString('zh-CN')}\n\n<!-- GOLD_RECEIPT:${receiptData.id}:${receiptData.receipt_no || ''} -->`
+          setMessages(prev => [...prev, {
+            id: Date.now(),
+            type: 'system',
+            content: receiptMessage,
+            goldReceiptDownloadUrl: downloadUrl,
+            goldReceiptId: receiptData.id,
+            receiptStatus: 'pending'
+          }])
+        }}
+        showToast={showToast}
       />
 
       {/* 收料单编辑弹窗 */}
