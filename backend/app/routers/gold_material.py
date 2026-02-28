@@ -372,9 +372,10 @@ async def confirm_gold_payment(
         db.add(supplier_gold_account)
         db.flush()
     
+    tx_gold_weight = float(transaction.gold_weight)
     balance_before = supplier_gold_account.current_balance
-    supplier_gold_account.current_balance = round(supplier_gold_account.current_balance - transaction.gold_weight, 3)
-    supplier_gold_account.total_paid = round(supplier_gold_account.total_paid + transaction.gold_weight, 3)
+    supplier_gold_account.current_balance = round(float(supplier_gold_account.current_balance) - tx_gold_weight, 3)
+    supplier_gold_account.total_paid = round(float(supplier_gold_account.total_paid) + tx_gold_weight, 3)
     supplier_gold_account.last_transaction_at = now
     
     # 创建供应商金料交易记录
@@ -383,7 +384,7 @@ async def confirm_gold_payment(
         supplier_name=transaction.supplier_name,
         transaction_type='pay',
         payment_transaction_id=transaction.id,
-        gold_weight=transaction.gold_weight,
+        gold_weight=tx_gold_weight,
         balance_before=balance_before,
         balance_after=supplier_gold_account.current_balance,
         created_by=confirmed_by,
@@ -504,9 +505,10 @@ async def unconfirm_gold_payment(
         raise HTTPException(status_code=500, detail="供应商金料账户不存在，无法恢复余额")
     
     now = china_now()
+    tx_gold_weight = float(transaction.gold_weight)
     balance_before = supplier_gold_account.current_balance
-    supplier_gold_account.current_balance = round(supplier_gold_account.current_balance + transaction.gold_weight, 3)
-    supplier_gold_account.total_paid = round(max(0, supplier_gold_account.total_paid - transaction.gold_weight), 3)
+    supplier_gold_account.current_balance = round(float(supplier_gold_account.current_balance) + tx_gold_weight, 3)
+    supplier_gold_account.total_paid = round(max(0, float(supplier_gold_account.total_paid) - tx_gold_weight), 3)
     supplier_gold_account.last_transaction_at = now
     
     # 创建反向供应商金料交易记录（留痕）
@@ -519,7 +521,7 @@ async def unconfirm_gold_payment(
         supplier_name=transaction.supplier_name,
         transaction_type='refund',
         payment_transaction_id=transaction.id,
-        gold_weight=transaction.gold_weight,
+        gold_weight=tx_gold_weight,
         balance_before=balance_before,
         balance_after=supplier_gold_account.current_balance,
         created_by=operated_by,
@@ -955,18 +957,18 @@ async def revoke_gold_confirm(
             if total_received_after_revoke < total_due:
                 # 撤销后总收金料 < 应支付，说明之前有存料，需要回滚
                 # 计算之前确认时的存料
-                total_received_before_revoke = other_received + transaction.gold_weight
+                total_received_before_revoke = other_received + float(transaction.gold_weight)
                 if total_received_before_revoke > total_due:
-                    deposit_to_revoke = total_received_before_revoke - total_due
+                    deposit_to_revoke = float(total_received_before_revoke - total_due)
                     
                     # 回滚客户存料
                     deposit = db.query(CustomerGoldDeposit).filter(
                         CustomerGoldDeposit.customer_id == transaction.customer_id
                     ).first()
                     
-                    if deposit and deposit.current_balance >= deposit_to_revoke:
-                        deposit.current_balance = round(deposit.current_balance - deposit_to_revoke, 3)
-                        deposit.total_deposited = round(deposit.total_deposited - deposit_to_revoke, 3)
+                    if deposit and float(deposit.current_balance) >= deposit_to_revoke:
+                        deposit.current_balance = round(float(deposit.current_balance) - deposit_to_revoke, 3)
+                        deposit.total_deposited = round(float(deposit.total_deposited) - deposit_to_revoke, 3)
                         
                         # 取消存料交易记录
                         deposit_transaction = db.query(CustomerGoldDepositTransaction).filter(
@@ -1781,10 +1783,11 @@ async def complete_customer_withdrawal(
     now = china_now()
     
     # 扣减客户存料余额（负数存料：提料后向0靠近，所以 +gold_weight）
-    balance_before = deposit.current_balance
-    balance_after = round(balance_before + withdrawal.gold_weight, 3)
+    w_gold_weight = float(withdrawal.gold_weight)
+    balance_before = float(deposit.current_balance)
+    balance_after = round(balance_before + w_gold_weight, 3)
     deposit.current_balance = balance_after
-    deposit.total_used = round(deposit.total_used + withdrawal.gold_weight, 3)
+    deposit.total_used = round(float(deposit.total_used) + w_gold_weight, 3)
     deposit.last_transaction_at = now
     
     # 创建存料交易记录
@@ -1792,7 +1795,7 @@ async def complete_customer_withdrawal(
         customer_id=withdrawal.customer_id,
         customer_name=withdrawal.customer_name,
         transaction_type="use",
-        amount=withdrawal.gold_weight,
+        amount=w_gold_weight,
         balance_before=balance_before,
         balance_after=balance_after,
         created_by=data.completed_by,
@@ -1914,10 +1917,11 @@ async def unconfirm_customer_withdrawal(
         raise HTTPException(status_code=500, detail="客户存料记录不存在，无法恢复余额")
     
     now = china_now()
-    balance_before = deposit.current_balance
-    balance_after = round(balance_before + withdrawal.gold_weight, 3)
+    w_gold_weight = float(withdrawal.gold_weight)
+    balance_before = float(deposit.current_balance)
+    balance_after = round(balance_before + w_gold_weight, 3)
     deposit.current_balance = balance_after
-    deposit.total_used = round(max(0, deposit.total_used - withdrawal.gold_weight), 3)
+    deposit.total_used = round(max(0, float(deposit.total_used) - w_gold_weight), 3)
     deposit.last_transaction_at = now
     
     # 创建反向存料交易记录（留痕）
@@ -1929,7 +1933,7 @@ async def unconfirm_customer_withdrawal(
         customer_id=withdrawal.customer_id,
         customer_name=withdrawal.customer_name,
         transaction_type="refund",
-        amount=withdrawal.gold_weight,
+        amount=w_gold_weight,
         balance_before=balance_before,
         balance_after=balance_after,
         created_by=operated_by,
@@ -2134,15 +2138,16 @@ async def create_customer_transfer(
     db.flush()
     
     # 扣减转出客户存料
-    from_balance_before = from_deposit.current_balance
-    from_deposit.current_balance = round(from_deposit.current_balance - data.gold_weight, 3)
-    from_deposit.total_used = round(from_deposit.total_used + data.gold_weight, 3)
+    t_gold_weight = float(data.gold_weight)
+    from_balance_before = float(from_deposit.current_balance)
+    from_deposit.current_balance = round(from_balance_before - t_gold_weight, 3)
+    from_deposit.total_used = round(float(from_deposit.total_used) + t_gold_weight, 3)
     from_deposit.last_transaction_at = now
     
     # 增加转入客户存料
-    to_balance_before = to_deposit.current_balance
-    to_deposit.current_balance = round(to_deposit.current_balance + data.gold_weight, 3)
-    to_deposit.total_deposited = round(to_deposit.total_deposited + data.gold_weight, 3)
+    to_balance_before = float(to_deposit.current_balance)
+    to_deposit.current_balance = round(to_balance_before + t_gold_weight, 3)
+    to_deposit.total_deposited = round(float(to_deposit.total_deposited) + t_gold_weight, 3)
     to_deposit.last_transaction_at = now
     
     # 创建转出客户交易记录
@@ -2150,7 +2155,7 @@ async def create_customer_transfer(
         customer_id=from_customer.id,
         customer_name=from_customer.name,
         transaction_type='use',
-        amount=data.gold_weight,
+        amount=t_gold_weight,
         balance_before=from_balance_before,
         balance_after=from_deposit.current_balance,
         created_by=created_by,
@@ -2163,7 +2168,7 @@ async def create_customer_transfer(
         customer_id=to_customer.id,
         customer_name=to_customer.name,
         transaction_type='deposit',
-        amount=data.gold_weight,
+        amount=t_gold_weight,
         balance_before=to_balance_before,
         balance_after=to_deposit.current_balance,
         created_by=created_by,
@@ -2282,15 +2287,16 @@ async def confirm_customer_transfer(
     transfer.confirmed_at = china_now()
     
     # 扣减转出客户存料
-    from_balance_before = from_deposit.current_balance
-    from_deposit.current_balance = round(from_deposit.current_balance - transfer.gold_weight, 3)
-    from_deposit.total_used = round(from_deposit.total_used + transfer.gold_weight, 3)
+    t_gold_weight = float(transfer.gold_weight)
+    from_balance_before = float(from_deposit.current_balance)
+    from_deposit.current_balance = round(from_balance_before - t_gold_weight, 3)
+    from_deposit.total_used = round(float(from_deposit.total_used) + t_gold_weight, 3)
     from_deposit.last_transaction_at = china_now()
     
     # 增加转入客户存料
-    to_balance_before = to_deposit.current_balance
-    to_deposit.current_balance = round(to_deposit.current_balance + transfer.gold_weight, 3)
-    to_deposit.total_deposited = round(to_deposit.total_deposited + transfer.gold_weight, 3)
+    to_balance_before = float(to_deposit.current_balance)
+    to_deposit.current_balance = round(to_balance_before + t_gold_weight, 3)
+    to_deposit.total_deposited = round(float(to_deposit.total_deposited) + t_gold_weight, 3)
     to_deposit.last_transaction_at = china_now()
     
     # 创建转出客户交易记录
@@ -2298,7 +2304,7 @@ async def confirm_customer_transfer(
         customer_id=transfer.from_customer_id,
         customer_name=transfer.from_customer_name,
         transaction_type='use',
-        amount=transfer.gold_weight,
+        amount=t_gold_weight,
         balance_before=from_balance_before,
         balance_after=from_deposit.current_balance,
         created_by=data.confirmed_by,
@@ -2311,7 +2317,7 @@ async def confirm_customer_transfer(
         customer_id=transfer.to_customer_id,
         customer_name=transfer.to_customer_name,
         transaction_type='deposit',
-        amount=transfer.gold_weight,
+        amount=t_gold_weight,
         balance_before=to_balance_before,
         balance_after=to_deposit.current_balance,
         created_by=data.confirmed_by,
@@ -2569,7 +2575,7 @@ async def confirm_gold_receipt(
     customer_id = receipt.customer_id
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     customer_name = customer.name if customer else "未知客户"
-    gold_weight = receipt.gold_weight
+    gold_weight = float(receipt.gold_weight)
     
     # ========== 更新收料单状态 ==========
     receipt.status = "received"
@@ -2582,9 +2588,9 @@ async def confirm_gold_receipt(
     ).with_for_update().first()
     if not deposit:
         deposit = get_or_create_customer_deposit(customer_id, customer_name, db)
-    balance_before = deposit.current_balance
-    deposit.current_balance = round(deposit.current_balance + gold_weight, 3)
-    deposit.total_deposited = round(deposit.total_deposited + gold_weight, 3)
+    balance_before = float(deposit.current_balance)
+    deposit.current_balance = round(balance_before + gold_weight, 3)
+    deposit.total_deposited = round(float(deposit.total_deposited) + gold_weight, 3)
     deposit.last_transaction_at = china_now()
     
     # 计算状态变化说明
@@ -2740,7 +2746,7 @@ async def unconfirm_gold_receipt(
     
     try:
         customer_id = receipt.customer_id
-        gold_weight = receipt.gold_weight
+        gold_weight = float(receipt.gold_weight)
         now = china_now()
         
         # 1. 回滚客户金料余额
@@ -2749,9 +2755,9 @@ async def unconfirm_gold_receipt(
         ).first()
         
         if deposit:
-            balance_before = deposit.current_balance
-            deposit.current_balance = round(deposit.current_balance - gold_weight, 3)
-            deposit.total_deposited = round(max(0, deposit.total_deposited - gold_weight), 3)
+            balance_before = float(deposit.current_balance)
+            deposit.current_balance = round(balance_before - gold_weight, 3)
+            deposit.total_deposited = round(max(0, float(deposit.total_deposited) - gold_weight), 3)
             deposit.last_transaction_at = now
             
             # 创建反向变动记录
@@ -3283,7 +3289,7 @@ async def fix_receipt_transactions(
             customer_id = receipt.customer_id
             customer = db.query(Customer).filter(Customer.id == customer_id).first()
             customer_name = customer.name if customer else "未知客户"
-            gold_weight = receipt.gold_weight
+            gold_weight = float(receipt.gold_weight)
             
             # 查询客户当时的欠料情况（简化处理：全部存入存料）
             # 因为历史欠料状态难以准确还原，这里将所有来料作为存料处理
@@ -3305,9 +3311,9 @@ async def fix_receipt_transactions(
             
             # 更新存料余额
             deposit = get_or_create_customer_deposit(customer_id, customer_name, db)
-            balance_before = deposit.current_balance
-            deposit.current_balance = round(deposit.current_balance + deposit_amount, 3)
-            deposit.total_deposited = round(deposit.total_deposited + deposit_amount, 3)
+            balance_before = float(deposit.current_balance)
+            deposit.current_balance = round(balance_before + deposit_amount, 3)
+            deposit.total_deposited = round(float(deposit.total_deposited) + deposit_amount, 3)
             
             # 创建存料交易记录
             deposit_tx = CustomerGoldDepositTransaction(
