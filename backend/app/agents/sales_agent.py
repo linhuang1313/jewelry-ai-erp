@@ -19,12 +19,23 @@ import logging
 from typing import List, Optional
 
 from .base import BaseAgent
+from .skills.prompt_skill import PromptSkill
+from .skills.system_prompt_skill import SystemPromptSkill
+from .skills.query_prompt_skill import QueryPromptSkill
 
 logger = logging.getLogger(__name__)
 
 
 class SalesAgent(BaseAgent):
-    """业务员 Agent"""
+    """业务员 Agent — 通过 Skill 组合实现分类和 Prompt 生成
+
+    业务员是最受限的角色，只有 query 和 system 两个 Skill。
+    """
+
+    skills: List[PromptSkill] = [
+        SystemPromptSkill(),
+        QueryPromptSkill(),
+    ]
 
     @property
     def role_id(self) -> str:
@@ -46,35 +57,28 @@ class SalesAgent(BaseAgent):
     def classify(self, message: str, conversation_history: Optional[List[dict]] = None) -> str:
         msg = message.strip()
 
-        if re.search(r'(反确认|确认).*(RK|XS|TH|JS)\d', msg) or \
-           re.search(r'(RK|XS|TH|JS)\d.*(反确认|确认)', msg):
+        # SystemPromptSkill 优先（确认/帮助/闲聊）
+        system_skill = self.skills[0]
+        if system_skill.matches(msg):
             return "system"
 
-        if any(kw in msg for kw in ['怎么', '如何', '教我', '帮助', '使用说明']):
-            return "system"
-
-        # 销售单查询
+        # 业务员特有：几乎所有业务消息都归类为 query
         if re.search(r'XS\d', msg):
             return "query"
         if any(kw in msg for kw in ['销售', '销售单', '业绩', '卖']):
             return "query"
-
-        # 客户账务
         if any(kw in msg for kw in ['欠款', '欠料', '账务', '欠', '多少钱', '余额']):
             return "query"
-
-        # 通用查询
         if any(kw in msg for kw in ['查询', '客户', '库存', '统计']):
             return "query"
 
         return self._fallback_classify(msg, conversation_history)
 
     def get_prompt(self, category: str, message: str, context: str) -> str:
-        dispatch = {
-            "query": self._get_query_prompt,
-            "system": self._get_system_prompt,
-        }
-        return dispatch.get(category, self._get_system_prompt)(message, context)
+        for skill in self.skills:
+            if skill.name == category:
+                return skill.get_prompt(message, context, self.role_name, self.system_prompt)
+        return self.skills[0].get_prompt(message, context, self.role_name, self.system_prompt)
 
     def get_allowed_actions(self) -> List[str]:
         return [
@@ -87,66 +91,6 @@ class SalesAgent(BaseAgent):
     def get_data_access(self) -> List[str]:
         return ["inventory", "sales_orders", "customers", "customer_debt"]
 
-    def _get_query_prompt(self, message: str, context: str) -> str:
-        return f"""{self.system_prompt}
-{context}
-用户当前输入：{message}
-
-**当前用户角色**：业务员（只有查询权限，不能创建销售单或执行写操作）
-
-本类别支持的功能（只从以下 action 中选择）：
-1. **查询客户**：查询客户信息
-2. **查询客户账务**：查询客户欠款/欠料/存料
-3. **查询销售单**：查询销售单信息，单号以 XS 开头
-4. **销售数据查询**：查询销售统计数据
-5. **查询库存**：查询库存
-
-**重要**：业务员不能创建销售单，如果用户想开单，返回"闲聊"并提示联系柜台。
-
-请返回 JSON 格式：
-- action: 从上述 action 中选择
-
-查询客户字段：customer_name
-查询客户账务字段：debt_customer_name, debt_query_type, date_start, date_end
-查询销售单字段：sales_order_no, customer_name, start_date, end_date
-销售数据查询字段：sales_query_type, sales_query_salesperson
-
-只返回 JSON，不要其他文字。
-
-示例1（查询客户）：
-用户输入："查询客户张三"
-{{"action": "查询客户", "customer_name": "张三", "products": null}}
-
-示例2（客户账务）：
-用户输入："张三的欠款"
-{{"action": "查询客户账务", "debt_customer_name": "张三", "debt_query_type": "all", "products": null}}
-
-示例3（销售统计）：
-用户输入："今天卖了多少钱"
-{{"action": "销售数据查询", "sales_query_type": "today", "products": null}}
-
-示例4（想开单）：
-用户输入："卖给张三 足金手镯 10g"
-{{"action": "闲聊", "message": "您是业务员角色，暂无开单权限。请联系柜台人员开单。", "products": null}}
-"""
-
-    def _get_system_prompt(self, message: str, context: str) -> str:
-        return f"""{self.system_prompt}
-{context}
-用户当前输入：{message}
-
-**当前用户角色**：业务员
-
-本类别支持的功能：
-1. **系统帮助**：询问系统怎么用
-2. **闲聊**：问候、寒暄
-
-请返回 JSON 格式：
-- action: "系统帮助" / "闲聊"
-
-只返回 JSON，不要其他文字。
-"""
-
     def _fallback_classify(self, message: str, conversation_history: Optional[List[dict]] = None) -> str:
         context_str = ""
         if conversation_history:
@@ -157,8 +101,7 @@ class SalesAgent(BaseAgent):
             context_str += "\n"
 
         prompt = f"""用户是珠宝ERP系统的**业务员**，请判断这句话属于以下哪个类别：
-- query（查询相关：查询客户、查询销售单、查询账务、查询库存、销售统计）
-- system（系统操作、闲聊）
+{chr(10).join(f'- {s.name}（{s.display_name}）' for s in self.skills)}
 
 {context_str}用户消息：「{message}」
 
@@ -172,7 +115,7 @@ class SalesAgent(BaseAgent):
                 messages=[{"role": "user", "content": prompt}]
             )
             result = response.choices[0].message.content.strip().lower()
-            valid = {"query", "system"}
+            valid = {s.name for s in self.skills}
             if result in valid:
                 logger.info(f"[SalesAgent] AI 兜底分类: '{message[:30]}...' → {result}")
                 return result
