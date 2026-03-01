@@ -21,6 +21,7 @@ from ..schemas import InboundOrderResponse, InboundDetailResponse, InventoryResp
 from ..middleware.permissions import has_permission
 from ..timezone_utils import china_now
 from ..dependencies.auth import get_current_role, require_permission
+from ..utils.decimal_utils import to_decimal, round_weight, round_money, safe_float_for_json
 
 logger = logging.getLogger(__name__)
 
@@ -46,14 +47,10 @@ def generate_inbound_order_no(db) -> str:
     return f"RK{date_str}{random_suffix}"
 
 
-def safe_float(value, default=0.0, field_name="数值"):
-    """安全的浮点数转换，带异常处理"""
-    if value is None:
-        return default
-    try:
-        return float(value)
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail=f"{field_name}格式无效: {value}")
+def safe_float(value, default=0, field_name="数值"):
+    """安全地将值转为 Decimal（函数名保留向后兼容，实际返回 Decimal）"""
+    from ..utils.decimal_utils import to_decimal
+    return to_decimal(value, default=str(default))
 
 
 def safe_int(value, default=None, field_name="数值"):
@@ -198,8 +195,8 @@ async def handle_inbound(ai_response, db: Session) -> Dict[str, Any]:
         product.supplier = product_supplier
         
         try:
-            weight = float(product.weight)
-            labor_cost = float(product.labor_cost)
+            weight = to_decimal(product.weight)
+            labor_cost = to_decimal(product.labor_cost)
         except (ValueError, TypeError) as e:
             validation_errors.append({
                 "index": idx + 1,
@@ -236,7 +233,7 @@ async def handle_inbound(ai_response, db: Session) -> Dict[str, Any]:
         
         if product.piece_labor_cost is not None:
             try:
-                piece_labor_cost = float(product.piece_labor_cost)
+                piece_labor_cost = to_decimal(product.piece_labor_cost)
                 if piece_labor_cost < 0:
                     piece_labor_cost = None
             except (ValueError, TypeError):
@@ -538,8 +535,8 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
         
         # 计算总成本（镶嵌产品优先使用 total_amount）
         raw_total_amount = card_data.get("total_amount")
-        if raw_total_amount and float(raw_total_amount) > 0:
-            total_cost = float(raw_total_amount)
+        if raw_total_amount and to_decimal(raw_total_amount) > 0:
+            total_cost = to_decimal(raw_total_amount)
         else:
             gram_cost = labor_cost * weight
             piece_cost = (piece_count or 0) * (piece_labor_cost or 0)
@@ -852,8 +849,8 @@ async def get_inbound_orders(
                 "audited_by": order.audited_by,
                 "audited_at": order.audited_at.isoformat() if order.audited_at else None,
                 "item_count": item_count,
-                "total_weight": round(total_weight, 2),
-                "transferred_weight": round(transferred_weight, 2),
+                "total_weight": round_weight(to_decimal(total_weight)),
+                "transferred_weight": round_weight(to_decimal(transferred_weight)),
                 "suppliers": suppliers_list,
                 "details": [{
                     "id": d.id,
@@ -946,9 +943,9 @@ async def repair_missing_account_payables(
             if not sid:
                 continue
 
-            cost = float(detail.weight or 0) * float(detail.labor_cost or 0)
+            cost = to_decimal(detail.weight) * to_decimal(detail.labor_cost)
             if detail.piece_count and detail.piece_labor_cost:
-                cost += float(detail.piece_count) * float(detail.piece_labor_cost or 0)
+                cost += to_decimal(detail.piece_count) * to_decimal(detail.piece_labor_cost)
             supplier_cost_map[sid] = supplier_cost_map.get(sid, 0.0) + cost
 
         order_date = (order.create_time or china_now()).date() if hasattr(order.create_time, 'date') else date.today()
@@ -967,9 +964,9 @@ async def repair_missing_account_payables(
                     payable_no=payable_no,
                     supplier_id=sid,
                     inbound_order_id=order.id,
-                    total_amount=round(cost, 2),
+                    total_amount=round_money(cost),
                     paid_amount=0.0,
-                    unpaid_amount=round(cost, 2),
+                    unpaid_amount=round_money(cost),
                     credit_days=30,
                     credit_start_date=order_date,
                     due_date=order_date + timedelta(days=30),
@@ -979,7 +976,7 @@ async def repair_missing_account_payables(
                 )
                 db.add(ap)
                 created_count += 1
-                total_amount_created += round(cost, 2)
+                total_amount_created += round_money(cost)
             except Exception as e:
                 errors.append(f"入库单 {order.order_no}, 供应商ID {sid}: {str(e)}")
 
@@ -995,7 +992,7 @@ async def repair_missing_account_payables(
         "success": True,
         "message": f"修复完成：补建 {created_count} 条应付账款，总金额 ¥{total_amount_created:.2f}",
         "created_count": created_count,
-        "total_amount": round(total_amount_created, 2),
+        "total_amount": round_money(to_decimal(total_amount_created)),
         "skipped_existing": len(existing_order_ids),
         "errors": errors[:20] if errors else []
     }
@@ -1103,7 +1100,7 @@ async def rebuild_inventory_from_inbound(
         sold_map = {}
         for pname, tw in sold_weight:
             if pname and tw:
-                sold_map[pname] = float(tw)
+                sold_map[pname] = to_decimal(tw)
 
         # 收集展厅等非仓库位置的现有库存（rebuild 不影响这些）
         other_location_weight = {}
@@ -1116,7 +1113,7 @@ async def rebuild_inventory_from_inbound(
         ).group_by(LocationInventory.product_name).all()
         for pname, tw in other_inv:
             if pname and tw:
-                other_location_weight[pname] = float(tw)
+                other_location_weight[pname] = to_decimal(tw)
 
         total_inbound = 0.0
         total_sold = 0.0
@@ -1126,17 +1123,17 @@ async def rebuild_inventory_from_inbound(
         for product_name, total_w in inbound_weight:
             if not product_name or not total_w:
                 continue
-            w_in = round(float(total_w), 3)
+            w_in = round_weight(to_decimal(total_w))
             if w_in <= 0:
                 continue
 
-            w_out = sold_map.get(product_name, 0.0)
-            warehouse_weight = round(w_in - w_out, 3)
+            w_out = sold_map.get(product_name, to_decimal(0))
+            warehouse_weight = round_weight(w_in - w_out)
             if warehouse_weight < 0:
-                warehouse_weight = 0.0
+                warehouse_weight = to_decimal(0)
 
-            other_w = other_location_weight.pop(product_name, 0.0)
-            total_weight = round(warehouse_weight + other_w, 3)
+            other_w = other_location_weight.pop(product_name, to_decimal(0))
+            total_weight = round_weight(warehouse_weight + other_w)
 
             db.add(Inventory(product_name=product_name, total_weight=total_weight))
             if warehouse_weight > 0:
@@ -1154,7 +1151,7 @@ async def rebuild_inventory_from_inbound(
         # 展厅有库存但没有入库单记录的商品，也需要写入 inventory 总表
         for pname, other_w in other_location_weight.items():
             if pname not in all_products and other_w > 0:
-                db.add(Inventory(product_name=pname, total_weight=round(other_w, 3)))
+                db.add(Inventory(product_name=pname, total_weight=round_weight(to_decimal(other_w))))
                 product_count += 1
 
         db.commit()
@@ -1168,9 +1165,9 @@ async def rebuild_inventory_from_inbound(
             "success": True,
             "message": msg,
             "product_count": product_count,
-            "total_inbound_weight": round(total_inbound, 3),
-            "total_sold_weight": round(total_sold, 3),
-            "net_inventory_weight": round(total_inbound - total_sold, 3)
+            "total_inbound_weight": round_weight(to_decimal(total_inbound)),
+            "total_sold_weight": round_weight(to_decimal(total_sold)),
+            "net_inventory_weight": round_weight(to_decimal(total_inbound) - to_decimal(total_sold))
         }
     except Exception as e:
         db.rollback()
@@ -1217,12 +1214,12 @@ async def update_inbound_order(
                                 changed_fields.append(f"商品名称: {detail.product_name} -> {detail_update['product_name']}")
                             detail.product_name = detail_update["product_name"]
                         if "weight" in detail_update:
-                            new_weight = float(detail_update["weight"])
+                            new_weight = to_decimal(detail_update["weight"])
                             if detail.weight != new_weight:
                                 changed_fields.append(f"克重: {detail.weight} -> {new_weight}")
                             detail.weight = new_weight
                         if "labor_cost" in detail_update:
-                            new_labor = float(detail_update["labor_cost"])
+                            new_labor = to_decimal(detail_update["labor_cost"])
                             if detail.labor_cost != new_labor:
                                 changed_fields.append(f"克工费: {detail.labor_cost} -> {new_labor}")
                             detail.labor_cost = new_labor
@@ -1231,14 +1228,14 @@ async def update_inbound_order(
                         if "piece_count" in detail_update:
                             detail.piece_count = int(detail_update["piece_count"]) if detail_update["piece_count"] else None
                         if "piece_labor_cost" in detail_update:
-                            detail.piece_labor_cost = float(detail_update["piece_labor_cost"]) if detail_update["piece_labor_cost"] else None
+                            detail.piece_labor_cost = to_decimal(detail_update["piece_labor_cost"]) if detail_update["piece_labor_cost"] else None
                         
                         for float_field in ['main_stone_weight', 'main_stone_price', 'main_stone_amount',
                                             'sub_stone_weight', 'sub_stone_price', 'sub_stone_amount',
                                             'stone_setting_fee', 'pearl_weight', 'bearing_weight',
                                             'sale_labor_cost', 'sale_piece_labor_cost']:
                             if float_field in detail_update:
-                                val = float(detail_update[float_field]) if detail_update[float_field] else None
+                                val = to_decimal(detail_update[float_field]) if detail_update[float_field] else None
                                 setattr(detail, float_field, val)
 
                         for int_field in ['main_stone_count', 'sub_stone_count']:
@@ -1251,9 +1248,9 @@ async def update_inbound_order(
                                 setattr(detail, str_field, detail_update[str_field] or None)
 
                         # 重算总成本
-                        gram_cost = float(detail.weight or 0) * float(detail.labor_cost or 0)
+                        gram_cost = to_decimal(detail.weight) * to_decimal(detail.labor_cost)
                         piece_cost = (detail.piece_count or 0) * (detail.piece_labor_cost or 0)
-                        detail.total_cost = round(gram_cost + piece_cost, 2)
+                        detail.total_cost = round_money(gram_cost + piece_cost)
         
         # 编辑留痕
         if changed_fields:
@@ -1373,9 +1370,9 @@ async def confirm_inbound_order(
         db.flush()
     
     # 先按 product_name 汇总重量，再一次性写入（避免同名商品产生重复行）
-    product_weights: Dict[str, float] = {}
+    product_weights: Dict[str, Any] = {}
     for detail in details:
-        product_weights[detail.product_name] = product_weights.get(detail.product_name, 0.0) + float(detail.weight)
+        product_weights[detail.product_name] = to_decimal(product_weights.get(detail.product_name, 0)) + to_decimal(detail.weight)
 
     for product_name, total_weight in product_weights.items():
         # 合并重复的 inventory 行（历史数据可能存在重复）
@@ -1385,7 +1382,7 @@ async def confirm_inbound_order(
         if len(all_inv) > 1:
             keep = all_inv[0]
             for dup in all_inv[1:]:
-                keep.total_weight = round(float(keep.total_weight or 0) + float(dup.total_weight or 0), 3)
+                keep.total_weight = round_weight(to_decimal(keep.total_weight) + to_decimal(dup.total_weight))
                 db.delete(dup)
             db.flush()
             inventory = keep
@@ -1395,9 +1392,9 @@ async def confirm_inbound_order(
             inventory = None
 
         if inventory:
-            inventory.total_weight = round(float(inventory.total_weight or 0) + total_weight, 3)
+            inventory.total_weight = round_weight(to_decimal(inventory.total_weight) + to_decimal(total_weight))
         else:
-            inventory = Inventory(product_name=product_name, total_weight=round(total_weight, 3))
+            inventory = Inventory(product_name=product_name, total_weight=round_weight(to_decimal(total_weight)))
             db.add(inventory)
 
         # 合并重复的 location_inventory 行
@@ -1408,7 +1405,7 @@ async def confirm_inbound_order(
         if len(all_loc) > 1:
             keep_loc = all_loc[0]
             for dup_loc in all_loc[1:]:
-                keep_loc.weight = round(float(keep_loc.weight or 0) + float(dup_loc.weight or 0), 4)
+                keep_loc.weight = round_weight(to_decimal(keep_loc.weight) + to_decimal(dup_loc.weight), precision=4)
                 db.delete(dup_loc)
             db.flush()
             location_inventory = keep_loc
@@ -1418,12 +1415,12 @@ async def confirm_inbound_order(
             location_inventory = None
 
         if location_inventory:
-            location_inventory.weight = round(float(location_inventory.weight or 0) + total_weight, 4)
+            location_inventory.weight = round_weight(to_decimal(location_inventory.weight) + to_decimal(total_weight), precision=4)
         else:
             location_inventory = LocationInventory(
                 product_name=product_name,
                 location_id=default_location.id,
-                weight=round(total_weight, 4)
+                weight=round_weight(to_decimal(total_weight), precision=4)
             )
             db.add(location_inventory)
     
@@ -1434,10 +1431,10 @@ async def confirm_inbound_order(
         sid = detail.supplier_id
         if not sid:
             continue
-        w = float(detail.weight or 0)
-        labor = float(detail.labor_cost or 0)
+        w = to_decimal(detail.weight)
+        labor = to_decimal(detail.labor_cost)
         if sid not in supplier_agg:
-            supplier_agg[sid] = {"total_weight": 0.0, "total_amount": 0.0, "count": 0}
+            supplier_agg[sid] = {"total_weight": to_decimal(0), "total_amount": to_decimal(0), "count": 0}
         supplier_agg[sid]["total_weight"] += w
         supplier_agg[sid]["total_amount"] += w * labor
         supplier_agg[sid]["count"] += 1
@@ -1446,8 +1443,8 @@ async def confirm_inbound_order(
         supplier_obj = db.query(Supplier).filter(Supplier.id == sid).first()
         if not supplier_obj:
             continue
-        supplier_obj.total_supply_amount = round(float(supplier_obj.total_supply_amount or 0) + agg["total_amount"], 2)
-        supplier_obj.total_supply_weight = round(float(supplier_obj.total_supply_weight or 0) + agg["total_weight"], 3)
+        supplier_obj.total_supply_amount = round_money(to_decimal(supplier_obj.total_supply_amount) + to_decimal(agg["total_amount"]))
+        supplier_obj.total_supply_weight = round_weight(to_decimal(supplier_obj.total_supply_weight) + to_decimal(agg["total_weight"]))
         supplier_obj.total_supply_count = (supplier_obj.total_supply_count or 0) + agg["count"]
         supplier_obj.last_supply_time = datetime.now()
 
@@ -1465,9 +1462,9 @@ async def confirm_inbound_order(
             db.add(supplier_gold_account)
             db.flush()
 
-        balance_before = float(supplier_gold_account.current_balance or 0)
-        supplier_gold_account.current_balance = round(balance_before + agg["total_weight"], 3)
-        supplier_gold_account.total_received = round(float(supplier_gold_account.total_received or 0) + agg["total_weight"], 3)
+        balance_before = to_decimal(supplier_gold_account.current_balance)
+        supplier_gold_account.current_balance = round_weight(balance_before + to_decimal(agg["total_weight"]))
+        supplier_gold_account.total_received = round_weight(to_decimal(supplier_gold_account.total_received) + to_decimal(agg["total_weight"]))
         supplier_gold_account.last_transaction_at = china_now()
 
         supplier_gold_tx = SupplierGoldTransaction(
@@ -1488,20 +1485,20 @@ async def confirm_inbound_order(
     
     # ========== 自动生成应付账款（按供应商汇总工费） ==========
     from ..models.finance import AccountPayable
-    supplier_cost_map: Dict[int, float] = {}
+    supplier_cost_map: Dict[int, Any] = {}
     for detail in details:
         if detail.supplier_id:
-            total_cost = float(detail.weight or 0) * float(detail.labor_cost or 0)
+            total_cost = to_decimal(detail.weight) * to_decimal(detail.labor_cost)
             if detail.piece_count and detail.piece_labor_cost:
-                total_cost += float(detail.piece_count) * float(detail.piece_labor_cost or 0)
-            supplier_cost_map[detail.supplier_id] = supplier_cost_map.get(detail.supplier_id, 0.0) + total_cost
+                total_cost += to_decimal(detail.piece_count) * to_decimal(detail.piece_labor_cost)
+            supplier_cost_map[detail.supplier_id] = to_decimal(supplier_cost_map.get(detail.supplier_id, 0)) + total_cost
         elif detail.supplier:
             s = db.query(Supplier).filter(Supplier.name == detail.supplier, Supplier.status == "active").first()
             if s:
-                total_cost = float(detail.weight or 0) * float(detail.labor_cost or 0)
+                total_cost = to_decimal(detail.weight) * to_decimal(detail.labor_cost)
                 if detail.piece_count and detail.piece_labor_cost:
-                    total_cost += float(detail.piece_count) * float(detail.piece_labor_cost or 0)
-                supplier_cost_map[s.id] = supplier_cost_map.get(s.id, 0.0) + total_cost
+                    total_cost += to_decimal(detail.piece_count) * to_decimal(detail.piece_labor_cost)
+                supplier_cost_map[s.id] = to_decimal(supplier_cost_map.get(s.id, 0)) + total_cost
 
     today_str = china_now().strftime('%Y%m%d')
     for sid, cost in supplier_cost_map.items():
@@ -1522,9 +1519,9 @@ async def confirm_inbound_order(
             payable_no=payable_no,
             supplier_id=sid,
             inbound_order_id=order.id,
-            total_amount=round(cost, 2),
+            total_amount=round_money(cost),
             paid_amount=0.0,
-            unpaid_amount=round(cost, 2),
+            unpaid_amount=round_money(cost),
             credit_days=30,
             credit_start_date=credit_start,
             due_date=credit_start + timedelta(days=30),
@@ -1534,7 +1531,7 @@ async def confirm_inbound_order(
         )
         db.add(ap)
         db.flush()
-        logger.info(f"自动生成应付账款: {payable_no}, 供应商ID: {sid}, 金额: {round(cost, 2)}")
+        logger.info(f"自动生成应付账款: {payable_no}, 供应商ID: {sid}, 金额: {round_money(cost)}")
     # ========== 应付账款生成完成 ==========
     
     # 写操作日志
@@ -1584,9 +1581,9 @@ async def unconfirm_inbound_order(
     default_location = db.query(Location).filter(Location.code == "warehouse").first()
     
     # 先按 product_name 汇总重量，再一次性回滚（避免重复行问题）
-    product_weights: Dict[str, float] = {}
+    product_weights: Dict[str, Any] = {}
     for detail in details:
-        product_weights[detail.product_name] = product_weights.get(detail.product_name, 0.0) + float(detail.weight)
+        product_weights[detail.product_name] = to_decimal(product_weights.get(detail.product_name, 0)) + to_decimal(detail.weight)
 
     for product_name, total_weight in product_weights.items():
         # 合并重复的 inventory 行（历史数据可能存在重复）
@@ -1594,7 +1591,7 @@ async def unconfirm_inbound_order(
         if len(all_inv) > 1:
             keep = all_inv[0]
             for dup in all_inv[1:]:
-                keep.total_weight = round(float(keep.total_weight or 0) + float(dup.total_weight or 0), 3)
+                keep.total_weight = round_weight(to_decimal(keep.total_weight) + to_decimal(dup.total_weight))
                 db.delete(dup)
             db.flush()
             inventory = keep
@@ -1603,7 +1600,7 @@ async def unconfirm_inbound_order(
         else:
             inventory = None
         if inventory:
-            inventory.total_weight = round(float(inventory.total_weight or 0) - total_weight, 3)
+            inventory.total_weight = round_weight(to_decimal(inventory.total_weight) - to_decimal(total_weight))
 
         # 合并重复的 location_inventory 行
         if default_location:
@@ -1614,7 +1611,7 @@ async def unconfirm_inbound_order(
             if len(all_loc) > 1:
                 keep_loc = all_loc[0]
                 for dup_loc in all_loc[1:]:
-                    keep_loc.weight = round(float(keep_loc.weight or 0) + float(dup_loc.weight or 0), 4)
+                    keep_loc.weight = round_weight(to_decimal(keep_loc.weight) + to_decimal(dup_loc.weight), precision=4)
                     db.delete(dup_loc)
                 db.flush()
                 location_inventory = keep_loc
@@ -1623,7 +1620,7 @@ async def unconfirm_inbound_order(
             else:
                 location_inventory = None
             if location_inventory:
-                location_inventory.weight = round(float(location_inventory.weight or 0) - total_weight, 4)
+                location_inventory.weight = round_weight(to_decimal(location_inventory.weight) - to_decimal(total_weight), precision=4)
     
     # 按 supplier_id 汇总后一次性回滚（避免同名供应商导致 StaleDataError）
     from ..models import SupplierGoldAccount, SupplierGoldTransaction
@@ -1632,10 +1629,10 @@ async def unconfirm_inbound_order(
         sid = detail.supplier_id
         if not sid:
             continue
-        w = float(detail.weight or 0)
-        labor = float(detail.labor_cost or 0)
+        w = to_decimal(detail.weight)
+        labor = to_decimal(detail.labor_cost)
         if sid not in supplier_agg:
-            supplier_agg[sid] = {"total_weight": 0.0, "total_amount": 0.0, "count": 0}
+            supplier_agg[sid] = {"total_weight": to_decimal(0), "total_amount": to_decimal(0), "count": 0}
         supplier_agg[sid]["total_weight"] += w
         supplier_agg[sid]["total_amount"] += w * labor
         supplier_agg[sid]["count"] += 1
@@ -1644,17 +1641,17 @@ async def unconfirm_inbound_order(
         supplier_obj = db.query(Supplier).filter(Supplier.id == sid).first()
         if not supplier_obj:
             continue
-        supplier_obj.total_supply_weight = round(float(supplier_obj.total_supply_weight or 0) - agg["total_weight"], 3)
-        supplier_obj.total_supply_amount = round(max(0, float(supplier_obj.total_supply_amount or 0) - agg["total_amount"]), 2)
+        supplier_obj.total_supply_weight = round_weight(to_decimal(supplier_obj.total_supply_weight) - to_decimal(agg["total_weight"]))
+        supplier_obj.total_supply_amount = round_money(max(to_decimal(0), to_decimal(supplier_obj.total_supply_amount) - to_decimal(agg["total_amount"])))
         supplier_obj.total_supply_count = max(0, (supplier_obj.total_supply_count or 0) - agg["count"])
 
         supplier_gold_account = db.query(SupplierGoldAccount).filter(
             SupplierGoldAccount.supplier_id == supplier_obj.id
         ).first()
         if supplier_gold_account:
-            balance_before = float(supplier_gold_account.current_balance or 0)
-            supplier_gold_account.current_balance = round(balance_before - agg["total_weight"], 3)
-            supplier_gold_account.total_received = round(float(supplier_gold_account.total_received or 0) - agg["total_weight"], 3)
+            balance_before = to_decimal(supplier_gold_account.current_balance)
+            supplier_gold_account.current_balance = round_weight(balance_before - to_decimal(agg["total_weight"]))
+            supplier_gold_account.total_received = round_weight(to_decimal(supplier_gold_account.total_received) - to_decimal(agg["total_weight"]))
             supplier_gold_account.last_transaction_at = china_now()
 
             supplier_gold_tx = SupplierGoldTransaction(
@@ -1866,8 +1863,8 @@ async def create_batch_inbound_orders(
             try:
                 product_name = item.product_name
                 product_code = item.product_code
-                weight = float(item.weight)
-                labor_cost = float(item.labor_cost)
+                weight = to_decimal(item.weight)
+                labor_cost = to_decimal(item.labor_cost)
                 piece_count = item.piece_count or 0
                 piece_labor_cost = item.piece_labor_cost or 0.0
                 barcode = item.barcode

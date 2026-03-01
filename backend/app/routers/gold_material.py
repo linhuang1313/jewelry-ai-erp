@@ -13,6 +13,7 @@ from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict
 from collections import defaultdict
 import logging
+from decimal import Decimal
 
 from ..database import get_db
 from ..timezone_utils import china_now
@@ -67,6 +68,7 @@ from ..utils.response import (
     success_response, error_response, paginated_response,
     not_found_response, conflict_response, server_error_response, ErrorCode
 )
+from ..utils.decimal_utils import to_decimal, round_weight, round_money, safe_float_for_json
 
 logger = logging.getLogger(__name__)
 
@@ -372,10 +374,10 @@ async def confirm_gold_payment(
         db.add(supplier_gold_account)
         db.flush()
     
-    tx_gold_weight = float(transaction.gold_weight)
+    tx_gold_weight = to_decimal(transaction.gold_weight)
     balance_before = supplier_gold_account.current_balance
-    supplier_gold_account.current_balance = round(float(supplier_gold_account.current_balance) - tx_gold_weight, 3)
-    supplier_gold_account.total_paid = round(float(supplier_gold_account.total_paid) + tx_gold_weight, 3)
+    supplier_gold_account.current_balance = round_weight(to_decimal(supplier_gold_account.current_balance) - tx_gold_weight)
+    supplier_gold_account.total_paid = round_weight(to_decimal(supplier_gold_account.total_paid) + tx_gold_weight)
     supplier_gold_account.last_transaction_at = now
     
     # 创建供应商金料交易记录
@@ -505,10 +507,10 @@ async def unconfirm_gold_payment(
         raise HTTPException(status_code=500, detail="供应商金料账户不存在，无法恢复余额")
     
     now = china_now()
-    tx_gold_weight = float(transaction.gold_weight)
+    tx_gold_weight = to_decimal(transaction.gold_weight)
     balance_before = supplier_gold_account.current_balance
-    supplier_gold_account.current_balance = round(float(supplier_gold_account.current_balance) + tx_gold_weight, 3)
-    supplier_gold_account.total_paid = round(max(0, float(supplier_gold_account.total_paid) - tx_gold_weight), 3)
+    supplier_gold_account.current_balance = round_weight(to_decimal(supplier_gold_account.current_balance) + tx_gold_weight)
+    supplier_gold_account.total_paid = round_weight(max(Decimal("0"), to_decimal(supplier_gold_account.total_paid) - tx_gold_weight))
     supplier_gold_account.last_transaction_at = now
     
     # 创建反向供应商金料交易记录（留痕）
@@ -776,19 +778,19 @@ async def get_customer_transactions(
         SettlementOrder.status.in_(['pending', 'confirmed', 'printed'])
     ).all()
     
-    total_due = 0.0  # 应支付总重量
-    total_received = 0.0  # 已收总重量
+    total_due = Decimal("0")  # 应支付总重量
+    total_received = Decimal("0")  # 已收总重量
     
     for settlement in settlements:
-        total_due += float(settlement.physical_gold_weight or 0)
+        total_due += to_decimal(settlement.physical_gold_weight)
         # 查询该结算单的所有已接收收料单（使用新系统 GoldReceipt）
         receipts = db.query(GoldReceipt).filter(
             GoldReceipt.settlement_id == settlement.id,
             GoldReceipt.status == 'received'
         ).all()
-        total_received += float(sum(r.gold_weight or 0 for r in receipts))
+        total_received += sum(to_decimal(r.gold_weight) for r in receipts)
     
-    current_due = max(0.0, total_due - total_received)  # 当前欠款（不能为负）
+    current_due = max(Decimal("0"), total_due - total_received)  # 当前欠款（不能为负）
     
     # 获取存料信息（使用统一计算函数）
     from ..gold_balance import calculate_customer_net_gold
@@ -940,7 +942,7 @@ async def revoke_gold_confirm(
         ).first()
         
         if settlement:
-            total_due = float(settlement.physical_gold_weight or 0)
+            total_due = to_decimal(settlement.physical_gold_weight)
             # 计算其他已确认收料单的已收金料（不包括当前这条）
             other_receipts = db.query(GoldMaterialTransaction).filter(
                 GoldMaterialTransaction.settlement_order_id == settlement.id,
@@ -948,7 +950,7 @@ async def revoke_gold_confirm(
                 GoldMaterialTransaction.status == 'confirmed',
                 GoldMaterialTransaction.id != transaction.id
             ).all()
-            other_received = float(sum(r.gold_weight or 0 for r in other_receipts))
+            other_received = sum(to_decimal(r.gold_weight) for r in other_receipts)
             
             # 当前撤销后的总收金料
             total_received_after_revoke = other_received
@@ -957,18 +959,18 @@ async def revoke_gold_confirm(
             if total_received_after_revoke < total_due:
                 # 撤销后总收金料 < 应支付，说明之前有存料，需要回滚
                 # 计算之前确认时的存料
-                total_received_before_revoke = other_received + float(transaction.gold_weight)
+                total_received_before_revoke = other_received + to_decimal(transaction.gold_weight)
                 if total_received_before_revoke > total_due:
-                    deposit_to_revoke = float(total_received_before_revoke - total_due)
+                    deposit_to_revoke = to_decimal(total_received_before_revoke - total_due)
                     
                     # 回滚客户存料
                     deposit = db.query(CustomerGoldDeposit).filter(
                         CustomerGoldDeposit.customer_id == transaction.customer_id
                     ).first()
                     
-                    if deposit and float(deposit.current_balance) >= deposit_to_revoke:
-                        deposit.current_balance = round(float(deposit.current_balance) - deposit_to_revoke, 3)
-                        deposit.total_deposited = round(float(deposit.total_deposited) - deposit_to_revoke, 3)
+                    if deposit and to_decimal(deposit.current_balance) >= to_decimal(deposit_to_revoke):
+                        deposit.current_balance = round_weight(to_decimal(deposit.current_balance) - to_decimal(deposit_to_revoke))
+                        deposit.total_deposited = round_weight(to_decimal(deposit.total_deposited) - to_decimal(deposit_to_revoke))
                         
                         # 取消存料交易记录
                         deposit_transaction = db.query(CustomerGoldDepositTransaction).filter(
@@ -1272,7 +1274,7 @@ async def get_gold_ledger(
             if not r.created_at:
                 continue
             date_str = r.created_at.date().strftime('%Y-%m-%d')
-            weight = float(r.gold_weight or 0)
+            weight = safe_float_for_json(r.gold_weight)
             ledger_by_date[date_str]["date"] = date_str
             ledger_by_date[date_str]["income"] += weight
 
@@ -1299,7 +1301,7 @@ async def get_gold_ledger(
             if not t.confirmed_at:
                 continue
             date_str = t.confirmed_at.date().strftime('%Y-%m-%d')
-            weight = float(t.gold_weight or 0)
+            weight = safe_float_for_json(t.gold_weight)
             ledger_by_date[date_str]["date"] = date_str
             ledger_by_date[date_str]["expense"] += weight
 
@@ -1325,7 +1327,7 @@ async def get_gold_ledger(
             if not w.created_at:
                 continue
             date_str = w.created_at.date().strftime('%Y-%m-%d')
-            weight = float(w.gold_weight or 0)
+            weight = safe_float_for_json(w.gold_weight)
             ledger_by_date[date_str]["date"] = date_str
             ledger_by_date[date_str]["withdrawal"] += weight
 
@@ -1783,11 +1785,11 @@ async def complete_customer_withdrawal(
     now = china_now()
     
     # 扣减客户存料余额（负数存料：提料后向0靠近，所以 +gold_weight）
-    w_gold_weight = float(withdrawal.gold_weight)
-    balance_before = float(deposit.current_balance)
-    balance_after = round(balance_before + w_gold_weight, 3)
+    w_gold_weight = to_decimal(withdrawal.gold_weight)
+    balance_before = to_decimal(deposit.current_balance)
+    balance_after = round_weight(balance_before + w_gold_weight)
     deposit.current_balance = balance_after
-    deposit.total_used = round(float(deposit.total_used) + w_gold_weight, 3)
+    deposit.total_used = round_weight(to_decimal(deposit.total_used) + w_gold_weight)
     deposit.last_transaction_at = now
     
     # 创建存料交易记录
@@ -1917,11 +1919,11 @@ async def unconfirm_customer_withdrawal(
         raise HTTPException(status_code=500, detail="客户存料记录不存在，无法恢复余额")
     
     now = china_now()
-    w_gold_weight = float(withdrawal.gold_weight)
-    balance_before = float(deposit.current_balance)
-    balance_after = round(balance_before + w_gold_weight, 3)
+    w_gold_weight = to_decimal(withdrawal.gold_weight)
+    balance_before = to_decimal(deposit.current_balance)
+    balance_after = round_weight(balance_before + w_gold_weight)
     deposit.current_balance = balance_after
-    deposit.total_used = round(max(0, float(deposit.total_used) - w_gold_weight), 3)
+    deposit.total_used = round_weight(max(Decimal("0"), to_decimal(deposit.total_used) - w_gold_weight))
     deposit.last_transaction_at = now
     
     # 创建反向存料交易记录（留痕）
@@ -2138,16 +2140,16 @@ async def create_customer_transfer(
     db.flush()
     
     # 扣减转出客户存料
-    t_gold_weight = float(data.gold_weight)
-    from_balance_before = float(from_deposit.current_balance)
-    from_deposit.current_balance = round(from_balance_before - t_gold_weight, 3)
-    from_deposit.total_used = round(float(from_deposit.total_used) + t_gold_weight, 3)
+    t_gold_weight = to_decimal(data.gold_weight)
+    from_balance_before = to_decimal(from_deposit.current_balance)
+    from_deposit.current_balance = round_weight(from_balance_before - t_gold_weight)
+    from_deposit.total_used = round_weight(to_decimal(from_deposit.total_used) + t_gold_weight)
     from_deposit.last_transaction_at = now
     
     # 增加转入客户存料
-    to_balance_before = float(to_deposit.current_balance)
-    to_deposit.current_balance = round(to_balance_before + t_gold_weight, 3)
-    to_deposit.total_deposited = round(float(to_deposit.total_deposited) + t_gold_weight, 3)
+    to_balance_before = to_decimal(to_deposit.current_balance)
+    to_deposit.current_balance = round_weight(to_balance_before + t_gold_weight)
+    to_deposit.total_deposited = round_weight(to_decimal(to_deposit.total_deposited) + t_gold_weight)
     to_deposit.last_transaction_at = now
     
     # 创建转出客户交易记录
@@ -2287,16 +2289,16 @@ async def confirm_customer_transfer(
     transfer.confirmed_at = china_now()
     
     # 扣减转出客户存料
-    t_gold_weight = float(transfer.gold_weight)
-    from_balance_before = float(from_deposit.current_balance)
-    from_deposit.current_balance = round(from_balance_before - t_gold_weight, 3)
-    from_deposit.total_used = round(float(from_deposit.total_used) + t_gold_weight, 3)
+    t_gold_weight = to_decimal(transfer.gold_weight)
+    from_balance_before = to_decimal(from_deposit.current_balance)
+    from_deposit.current_balance = round_weight(from_balance_before - t_gold_weight)
+    from_deposit.total_used = round_weight(to_decimal(from_deposit.total_used) + t_gold_weight)
     from_deposit.last_transaction_at = china_now()
     
     # 增加转入客户存料
-    to_balance_before = float(to_deposit.current_balance)
-    to_deposit.current_balance = round(to_balance_before + t_gold_weight, 3)
-    to_deposit.total_deposited = round(float(to_deposit.total_deposited) + t_gold_weight, 3)
+    to_balance_before = to_decimal(to_deposit.current_balance)
+    to_deposit.current_balance = round_weight(to_balance_before + t_gold_weight)
+    to_deposit.total_deposited = round_weight(to_decimal(to_deposit.total_deposited) + t_gold_weight)
     to_deposit.last_transaction_at = china_now()
     
     # 创建转出客户交易记录
@@ -2575,7 +2577,7 @@ async def confirm_gold_receipt(
     customer_id = receipt.customer_id
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     customer_name = customer.name if customer else "未知客户"
-    gold_weight = float(receipt.gold_weight)
+    gold_weight = to_decimal(receipt.gold_weight)
     
     # ========== 更新收料单状态 ==========
     receipt.status = "received"
@@ -2588,9 +2590,9 @@ async def confirm_gold_receipt(
     ).with_for_update().first()
     if not deposit:
         deposit = get_or_create_customer_deposit(customer_id, customer_name, db)
-    balance_before = float(deposit.current_balance)
-    deposit.current_balance = round(balance_before + gold_weight, 3)
-    deposit.total_deposited = round(float(deposit.total_deposited) + gold_weight, 3)
+    balance_before = to_decimal(deposit.current_balance)
+    deposit.current_balance = round_weight(balance_before + gold_weight)
+    deposit.total_deposited = round_weight(to_decimal(deposit.total_deposited) + gold_weight)
     deposit.last_transaction_at = china_now()
     
     # 计算状态变化说明
@@ -2746,7 +2748,7 @@ async def unconfirm_gold_receipt(
     
     try:
         customer_id = receipt.customer_id
-        gold_weight = float(receipt.gold_weight)
+        gold_weight = to_decimal(receipt.gold_weight)
         now = china_now()
         
         # 1. 回滚客户金料余额
@@ -2755,9 +2757,9 @@ async def unconfirm_gold_receipt(
         ).first()
         
         if deposit:
-            balance_before = float(deposit.current_balance)
-            deposit.current_balance = round(balance_before - gold_weight, 3)
-            deposit.total_deposited = round(max(0, float(deposit.total_deposited) - gold_weight), 3)
+            balance_before = to_decimal(deposit.current_balance)
+            deposit.current_balance = round_weight(balance_before - gold_weight)
+            deposit.total_deposited = round_weight(max(Decimal("0"), to_decimal(deposit.total_deposited) - gold_weight))
             deposit.last_transaction_at = now
             
             # 创建反向变动记录
@@ -3182,13 +3184,13 @@ async def get_gold_daily_summary(
             },
             "receipt_summary": {
                 "total_count": receipt_stats.count or 0,
-                "total_weight": float(receipt_stats.total_weight or 0),
+                "total_weight": safe_float_for_json(receipt_stats.total_weight),
                 "by_customer": [
                     {
                         "customer_id": r.customer_id,
                         "customer_name": r.customer_name,
                         "count": r.count,
-                        "total_weight": float(r.total_weight or 0)
+                        "total_weight": safe_float_for_json(r.total_weight)
                     }
                     for r in receipt_by_customer
                 ],
@@ -3198,7 +3200,7 @@ async def get_gold_daily_summary(
                         "receipt_no": r.receipt_no,
                         "customer_id": r.customer_id,
                         "customer_name": db.query(Customer.name).filter(Customer.id == r.customer_id).scalar() or "未知",
-                        "gold_weight": float(r.gold_weight or 0),
+                        "gold_weight": safe_float_for_json(r.gold_weight),
                         "gold_fineness": r.gold_fineness,
                         "status": r.status,
                         "created_at": r.created_at.isoformat() if r.created_at else None,
@@ -3209,26 +3211,26 @@ async def get_gold_daily_summary(
             },
             "payment_summary": {
                 "total_count": payment_stats.count or 0,
-                "total_weight": float(payment_stats.total_weight or 0),
+                "total_weight": safe_float_for_json(payment_stats.total_weight),
                 "by_supplier": [
                     {
                         "supplier_id": p.supplier_id,
                         "supplier_name": p.supplier_name or "未知供应商",
                         "count": p.count,
-                        "total_weight": float(p.total_weight or 0)
+                        "total_weight": safe_float_for_json(p.total_weight)
                     }
                     for p in payment_by_supplier
                 ]
             },
             "withdrawal_summary": {
                 "total_count": withdrawal_stats.count or 0,
-                "total_weight": float(withdrawal_stats.total_weight or 0),
+                "total_weight": safe_float_for_json(withdrawal_stats.total_weight),
                 "by_customer": [
                     {
                         "customer_id": w.customer_id,
                         "customer_name": w.customer_name,
                         "count": w.count,
-                        "total_weight": float(w.total_weight or 0)
+                        "total_weight": safe_float_for_json(w.total_weight)
                     }
                     for w in withdrawal_by_customer
                 ],
@@ -3238,7 +3240,7 @@ async def get_gold_daily_summary(
                         "withdrawal_no": w.withdrawal_no,
                         "customer_id": w.customer_id,
                         "customer_name": w.customer_name,
-                        "gold_weight": float(w.gold_weight or 0),
+                        "gold_weight": safe_float_for_json(w.gold_weight),
                         "status": w.status,
                         "created_at": w.created_at.isoformat() if w.created_at else None,
                         "remark": w.remark
@@ -3289,7 +3291,7 @@ async def fix_receipt_transactions(
             customer_id = receipt.customer_id
             customer = db.query(Customer).filter(Customer.id == customer_id).first()
             customer_name = customer.name if customer else "未知客户"
-            gold_weight = float(receipt.gold_weight)
+            gold_weight = to_decimal(receipt.gold_weight)
             
             # 查询客户当时的欠料情况（简化处理：全部存入存料）
             # 因为历史欠料状态难以准确还原，这里将所有来料作为存料处理
@@ -3311,9 +3313,9 @@ async def fix_receipt_transactions(
             
             # 更新存料余额
             deposit = get_or_create_customer_deposit(customer_id, customer_name, db)
-            balance_before = float(deposit.current_balance)
-            deposit.current_balance = round(balance_before + deposit_amount, 3)
-            deposit.total_deposited = round(float(deposit.total_deposited) + deposit_amount, 3)
+            balance_before = to_decimal(deposit.current_balance)
+            deposit.current_balance = round_weight(balance_before + deposit_amount)
+            deposit.total_deposited = round_weight(to_decimal(deposit.total_deposited) + deposit_amount)
             
             # 创建存料交易记录
             deposit_tx = CustomerGoldDepositTransaction(
@@ -3486,7 +3488,7 @@ async def get_supplier_gold_account_detail(
     ).filter(
         InboundDetail.supplier_id == supplier_id
     ).scalar() or 0.0
-    labor_cost_total = float(labor_cost_total)
+    labor_cost_total = to_decimal(labor_cost_total)
 
     # 工费已付从 SupplierPayment 汇总（仅已确认的）
     labor_paid_total = db.query(
@@ -3495,7 +3497,7 @@ async def get_supplier_gold_account_detail(
         SupplierPayment.supplier_id == supplier_id,
         SupplierPayment.status == 'confirmed'
     ).scalar() or 0.0
-    labor_paid_total = float(labor_paid_total)
+    labor_paid_total = to_decimal(labor_paid_total)
 
     labor_debt_total = labor_cost_total - labor_paid_total
 
@@ -3507,7 +3509,7 @@ async def get_supplier_gold_account_detail(
     for p in payables:
         if p.inbound_order_id:
             payable_map.setdefault(p.inbound_order_id, 0)
-            payable_map[p.inbound_order_id] += float(p.total_amount or 0)
+            payable_map[p.inbound_order_id] += safe_float_for_json(p.total_amount)
     
     # 按入库单号聚合明细
     order_groups = {}
@@ -3520,7 +3522,7 @@ async def get_supplier_gold_account_detail(
                 "total_weight": 0,
                 "products": []
             }
-        weight = float(record.weight or 0)
+        weight = safe_float_for_json(record.weight)
         order_groups[oid]["total_weight"] += weight
         total_inbound += weight
         if record.product_name:
@@ -3550,7 +3552,7 @@ async def get_supplier_gold_account_detail(
     ).all()
     
     for record in pay_records:
-        weight = float(record.gold_weight or 0)
+        weight = safe_float_for_json(record.gold_weight)
         total_paid += weight
         unified.append({
             "date": record.created_at.isoformat() if record.created_at else None,
@@ -3572,7 +3574,7 @@ async def get_supplier_gold_account_detail(
     ).all()
     
     for record in return_records:
-        weight = float(record.gold_weight or 0)
+        weight = safe_float_for_json(record.gold_weight)
         total_return += weight
         unified.append({
             "date": record.created_at.isoformat() if record.created_at else None,
@@ -3601,14 +3603,14 @@ async def get_supplier_gold_account_detail(
             "order_no": sp.payment_no,
             "gold_change": None,
             "gold_balance": 0,
-            "labor_change": round(-float(sp.amount or 0), 2),
+            "labor_change": round(-safe_float_for_json(sp.amount), 2),
             "labor_balance": 0,
             "remark": sp.remark or f"工费付款 {sp.payment_no}"
         })
     
     # ===== 插入期初余额行 =====
-    init_gold = float(supplier.initial_gold_debt or 0)
-    init_labor = float(supplier.initial_labor_debt or 0)
+    init_gold = to_decimal(supplier.initial_gold_debt)
+    init_labor = to_decimal(supplier.initial_labor_debt)
     if init_gold != 0 or init_labor != 0:
         unified.insert(0, {
             "date": "2026-02-25T00:00:00",

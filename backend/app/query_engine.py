@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, asc, and_, cast, Date
 
 from .ai_parser import get_client
+from .utils.decimal_utils import safe_json_value
 from .models import (
     InboundOrder, InboundDetail, Inventory,
     Customer, SalesOrder, SalesDetail, Supplier,
@@ -305,11 +306,7 @@ def generate_query_plan(
 
 def _safe_value(val):
     """Convert Decimal/datetime to JSON-friendly types."""
-    if isinstance(val, Decimal):
-        return float(val)
-    if isinstance(val, datetime):
-        return val.strftime("%Y-%m-%d %H:%M")
-    return val
+    return safe_json_value(val)
 
 
 def execute_query_plan(plan: Dict[str, Any], db: Session) -> Dict[str, Any]:

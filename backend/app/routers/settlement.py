@@ -1,6 +1,7 @@
 """
 结算单管理 API 路由
 """
+from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse, HTMLResponse, Response
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -14,6 +15,7 @@ import html
 
 from ..database import get_db
 from ..timezone_utils import china_now, to_china_time, format_china_time
+from ..utils.decimal_utils import to_decimal, round_weight, round_money, safe_float_for_json
 from ..models import (
     SettlementOrder, 
     SalesOrder, 
@@ -107,11 +109,11 @@ def _build_detail_responses(details: list, db: Session) -> list:
             "id": d.id,
             "product_code": d.product_code,
             "product_name": d.product_name or "",
-            "weight": float(d.weight or 0),
-            "labor_cost": float(d.labor_cost or 0),
+            "weight": safe_float_for_json(d.weight),
+            "labor_cost": safe_float_for_json(d.labor_cost),
             "piece_count": d.piece_count,
-            "piece_labor_cost": float(d.piece_labor_cost) if d.piece_labor_cost else None,
-            "total_labor_cost": float(d.total_labor_cost or 0),
+            "piece_labor_cost": safe_float_for_json(d.piece_labor_cost) if d.piece_labor_cost else None,
+            "total_labor_cost": safe_float_for_json(d.total_labor_cost),
         }
         if d.product_code and d.product_code.startswith('F'):
             ib = inbound_map.get(d.product_code)
@@ -119,7 +121,7 @@ def _build_detail_responses(details: list, db: Session) -> list:
                 for f in INLAY_FIELDS:
                     val = getattr(ib, f, None)
                     if val is not None:
-                        kwargs[f] = float(val) if isinstance(val, (int, float)) or hasattr(val, '__float__') else val
+                        kwargs[f] = safe_float_for_json(val) if isinstance(val, (int, float, Decimal)) or hasattr(val, '__float__') else val
         result.append(SalesDetailResponse(**kwargs))
     return result
 
@@ -445,8 +447,8 @@ async def create_settlement_order(
     customer_name = sales_order.customer_name
     
     # 安全获取销售单数值（防止迁移数据 NULL）
-    so_total_weight = float(sales_order.total_weight or 0)
-    so_total_labor_cost = float(sales_order.total_labor_cost or 0)
+    so_total_weight = to_decimal(sales_order.total_weight)
+    so_total_labor_cost = to_decimal(sales_order.total_labor_cost)
     
     if so_total_weight <= 0:
         raise HTTPException(status_code=400, detail=f"销售单总克重为 {so_total_weight}，无法创建结算单，请先补全销售单数据")
@@ -710,9 +712,9 @@ async def update_settlement_order(
     
     # 根据新的支付方式重新计算金额
     payment_method = settlement.payment_method
-    gold_price = float(settlement.gold_price or 0)
-    total_weight = float(sales_order.total_weight or 0)
-    labor_amount = float(sales_order.total_labor_cost or 0)
+    gold_price = to_decimal(settlement.gold_price)
+    total_weight = to_decimal(sales_order.total_weight)
+    labor_amount = to_decimal(sales_order.total_labor_cost)
     
     if payment_method == "cash_price":
         if gold_price <= 0:
@@ -857,7 +859,7 @@ async def confirm_settlement_order(
     # ========== 确认时扣减客户金料账户 ==========
     customer_id = sales_order.customer_id if sales_order else None
     customer_name = sales_order.customer_name if sales_order else None
-    actual_gold_due = float(settlement.physical_gold_weight or 0)
+    actual_gold_due = to_decimal(settlement.physical_gold_weight)
     
     if settlement.payment_method in ["physical_gold", "mixed"] and customer_id and actual_gold_due > 0:
         from .gold_material import get_or_create_customer_deposit
@@ -867,9 +869,9 @@ async def confirm_settlement_order(
         if not customer_deposit:
             customer_deposit = get_or_create_customer_deposit(customer_id, customer_name, db)
         
-        balance_before = float(customer_deposit.current_balance or 0)
-        customer_deposit.current_balance = round(balance_before - actual_gold_due, 3)
-        customer_deposit.total_used = round(float(customer_deposit.total_used or 0) + actual_gold_due, 3)
+        balance_before = to_decimal(customer_deposit.current_balance)
+        customer_deposit.current_balance = round_weight(balance_before - actual_gold_due)
+        customer_deposit.total_used = round_weight(to_decimal(customer_deposit.total_used) + actual_gold_due)
         customer_deposit.last_transaction_at = now_confirm
         
         deposit_transaction = CustomerGoldDepositTransaction(
@@ -887,11 +889,11 @@ async def confirm_settlement_order(
         logger.info(f"确认结算-扣减金料: 客户={customer_name}, 扣减={actual_gold_due}克, {balance_before:.2f} -> {customer_deposit.current_balance:.2f}克")
         
         # 处理少付差额：记为金料欠款
-        if settlement.payment_status == "underpaid" and settlement.payment_difference and float(settlement.payment_difference) < -0.01:
-            underpay_weight = float(abs(settlement.payment_difference))
-            balance_before_underpay = float(customer_deposit.current_balance)
-            customer_deposit.current_balance = round(balance_before_underpay - underpay_weight, 3)
-            customer_deposit.total_used = round(float(customer_deposit.total_used or 0) + underpay_weight, 3)
+        if settlement.payment_status == "underpaid" and settlement.payment_difference and to_decimal(settlement.payment_difference) < Decimal("-0.01"):
+            underpay_weight = to_decimal(abs(settlement.payment_difference))
+            balance_before_underpay = to_decimal(customer_deposit.current_balance)
+            customer_deposit.current_balance = round_weight(balance_before_underpay - underpay_weight)
+            customer_deposit.total_used = round_weight(to_decimal(customer_deposit.total_used) + underpay_weight)
             
             underpay_tx = CustomerGoldDepositTransaction(
                 customer_id=customer_id,
@@ -915,16 +917,16 @@ async def confirm_settlement_order(
     # 根据支付方式计算应收金额
     if settlement.payment_method == "cash_price":
         # 结价：应收全额（料价+工费）
-        receivable_amount = float(settlement.total_amount or 0)
+        receivable_amount = to_decimal(settlement.total_amount)
     elif settlement.payment_method == "physical_gold":
         # 结料：只应收工费（原料用金料抵扣）
-        receivable_amount = float(settlement.labor_amount or 0)
+        receivable_amount = to_decimal(settlement.labor_amount)
     elif settlement.payment_method == "mixed":
         # 混合支付：结价部分的料价 + 工费
-        cash_material_amount = float(settlement.cash_payment_weight or 0) * float(settlement.gold_price or 0)
-        receivable_amount = cash_material_amount + float(settlement.labor_amount or 0)
+        cash_material_amount = to_decimal(settlement.cash_payment_weight) * to_decimal(settlement.gold_price)
+        receivable_amount = round_money(cash_material_amount + to_decimal(settlement.labor_amount))
     else:
-        receivable_amount = float(settlement.total_amount or 0)
+        receivable_amount = to_decimal(settlement.total_amount)
     
     # 只有应收金额大于0才创建记录
     if receivable_amount > 0 and sales_order:
@@ -2140,8 +2142,8 @@ async def revert_settlement_order(
                     gold_to_rollback = deposit_tx.amount or 0
                     if gold_to_rollback > 0:
                         balance_before = customer_deposit.current_balance
-                        customer_deposit.current_balance = round(float(customer_deposit.current_balance) + gold_to_rollback, 3)
-                        customer_deposit.total_used = round(max(0, float(customer_deposit.total_used) - gold_to_rollback), 3)
+                        customer_deposit.current_balance = round_weight(to_decimal(customer_deposit.current_balance) + to_decimal(gold_to_rollback))
+                        customer_deposit.total_used = round_weight(max(Decimal("0"), to_decimal(customer_deposit.total_used) - to_decimal(gold_to_rollback)))
                         
                         deposit_tx.status = 'cancelled'
                         
@@ -2321,7 +2323,7 @@ async def refund_sales_order(
                 LocationInventory.product_name == detail.product_name
             ).first()
             if inventory:
-                inventory.weight = float(inventory.weight or 0) + float(detail.weight or 0)
+                inventory.weight = round_weight(to_decimal(inventory.weight) + to_decimal(detail.weight))
             else:
                 # 如果库存记录不存在，创建新记录
                 new_inventory = LocationInventory(
@@ -2414,7 +2416,7 @@ async def create_deposit_settlement(
     now = china_now()
     settlement_no = _generate_sequential_no(db, DepositSettlement, DepositSettlement.settlement_no, "CJ")
     
-    total_amount = round(float(data.gold_weight) * float(data.gold_price), 2)
+    total_amount = round_money(to_decimal(data.gold_weight) * to_decimal(data.gold_price))
     
     new_settlement = DepositSettlement(
         settlement_no=settlement_no,
@@ -2492,8 +2494,8 @@ async def confirm_deposit_settlement(
         
         # 1. 扣减存料余额（同步更新 CustomerGoldDeposit 缓存字段）
         balance_before = deposit.current_balance
-        deposit.current_balance = round(float(deposit.current_balance) - float(settlement.gold_weight), 3)
-        deposit.total_used = round(float(deposit.total_used or 0) + float(settlement.gold_weight), 3)
+        deposit.current_balance = round_weight(to_decimal(deposit.current_balance) - to_decimal(settlement.gold_weight))
+        deposit.total_used = round_weight(to_decimal(deposit.total_used) + to_decimal(settlement.gold_weight))
         deposit.last_transaction_at = now
         
         # 2. 创建存料交易记录
@@ -2540,8 +2542,8 @@ async def confirm_deposit_settlement(
             if unpaid <= 0:
                 continue
             apply_amount = min(remaining, unpaid)
-            ar.received_amount = round(float(ar.received_amount or 0) + apply_amount, 2)
-            ar.unpaid_amount = round(float(unpaid) - apply_amount, 2)
+            ar.received_amount = round_money(to_decimal(ar.received_amount) + to_decimal(apply_amount))
+            ar.unpaid_amount = round_money(to_decimal(unpaid) - to_decimal(apply_amount))
             if ar.unpaid_amount <= 0:
                 ar.status = 'paid'
             remaining -= apply_amount
