@@ -55,6 +55,32 @@ interface OrderResultItem {
   piece_labor_cost?: number;
 }
 
+interface FCodeDetail {
+  product_code: string;
+  product_name: string;
+  weight: number | null;
+  labor_cost: number | null;
+  piece_count: number | null;
+  piece_labor_cost: number | null;
+  sale_labor_cost: number | null;
+  sale_piece_labor_cost: number | null;
+  supplier: string | null;
+  main_stone_weight: number | null;
+  main_stone_count: number | null;
+  main_stone_price: number | null;
+  main_stone_amount: number | null;
+  sub_stone_weight: number | null;
+  sub_stone_count: number | null;
+  sub_stone_price: number | null;
+  sub_stone_amount: number | null;
+  stone_setting_fee: number | null;
+  total_amount: number | null;
+  main_stone_mark: string | null;
+  sub_stone_mark: string | null;
+  pearl_weight: number | null;
+  bearing_weight: number | null;
+}
+
 interface OrderResult {
   order_id: number;
   order_no: string;
@@ -107,7 +133,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   const [productCodes, setProductCodes] = useState<ProductCode[]>([]);
   const [codeDropdownId, setCodeDropdownId] = useState<string | null>(null);
   const [codeSearchResults, setCodeSearchResults] = useState<ProductCode[]>([]);
-  const [fCodeDetails, setFCodeDetails] = useState<Record<string, any>>({});
+  const [fCodeDetails, setFCodeDetails] = useState<Record<string, FCodeDetail>>({});
 
   // 获取库存商品列表（展厅库存）
   const fetchInventory = async () => {
@@ -178,7 +204,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   // 获取 F码商品的入库详情（镶嵌字段）
   const fetchFCodeDetail = async (itemId: string, code: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/inbound/detail-by-code/${encodeURIComponent(code)}`);
+      const response = await fetch(`${API_BASE_URL}/api/inventory/by-code?code=${encodeURIComponent(code)}`);
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.data) {
@@ -645,7 +671,8 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                 const itemSubtotal = w * lc + pc * plc;
 
                 return (
-                <div key={item.id} className="flex items-center space-x-2 bg-gray-50 p-3 rounded-xl">
+                <React.Fragment key={item.id}>
+                <div className="flex items-center space-x-2 bg-gray-50 p-3 rounded-xl">
                   <span className="text-sm text-gray-400 w-6 shrink-0">{index + 1}.</span>
                   {/* 商品编码 */}
                   <div className="relative">
@@ -747,47 +774,44 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                   </button>
                 </div>
                 {/* F码入库详情面板 */}
-                {fCodeDetails[item.id] && (() => {
-                  const detail = fCodeDetails[item.id];
-                  return (
-                    <div className="ml-8 mr-2 -mt-1 mb-1 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs">
-                      <div className="text-amber-700 font-medium mb-2">入库详情</div>
-                      <div className="grid grid-cols-4 gap-x-4 gap-y-1.5 text-gray-600">
-                        {[
-                          { label: '主石重', field: 'main_stone_weight', type: 'number', readonly: true },
-                          { label: '主石粒数', field: 'main_stone_count', type: 'number', readonly: true },
-                          { label: '副石重', field: 'sub_stone_weight', type: 'number', readonly: true },
-                          { label: '副石粒数', field: 'sub_stone_count', type: 'number', readonly: true },
-                          { label: '主石字印', field: 'main_stone_mark', type: 'text', readonly: true },
-                          { label: '副石字印', field: 'sub_stone_mark', type: 'text', readonly: true },
-                          { label: '珍珠重', field: 'pearl_weight', type: 'number', readonly: true },
-                          { label: '轴承重', field: 'bearing_weight', type: 'number', readonly: true },
-                          { label: '销售克工费', field: 'sale_labor_cost', type: 'number', highlight: true, readonly: false },
-                          { label: '销售件工费', field: 'sale_piece_labor_cost', type: 'number', prefix: '¥', highlight: true, readonly: false },
-                        ].map(({ label, field, type, prefix, highlight, readonly }) => (
-                          <div key={field} className="flex items-center gap-1">
-                            <span className="text-gray-400 whitespace-nowrap">{label}:</span>
-                            <div className="flex items-center">
-                              {prefix && detail[field] != null && <span className="text-gray-400">{prefix}</span>}
-                              <input
-                                type={type}
-                                value={detail[field] ?? ''}
-                                onChange={(e) => !readonly && updateFCodeDetail(item.id, field, e.target.value)}
-                                readOnly={readonly}
-                                className={`w-16 px-1 py-0.5 border rounded text-xs text-center
-                                  ${readonly ? 'bg-gray-50 border-gray-100 text-gray-500 cursor-default' : 'bg-white border-gray-200'}
-                                  ${highlight ? 'border-emerald-300 text-emerald-700 font-medium bg-white' : ''}`}
-                                placeholder="-"
-                              />
-                            </div>
+                {fCodeDetails[item.id] && (
+                  <div className="ml-8 mr-2 -mt-1 mb-1 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs">
+                    <div className="text-amber-700 font-medium mb-2">入库详情</div>
+                    <div className="grid grid-cols-4 gap-x-4 gap-y-1.5 text-gray-600">
+                      {[
+                        { label: '主石重', field: 'main_stone_weight', type: 'number', readonly: true },
+                        { label: '主石粒数', field: 'main_stone_count', type: 'number', readonly: true },
+                        { label: '副石重', field: 'sub_stone_weight', type: 'number', readonly: true },
+                        { label: '副石粒数', field: 'sub_stone_count', type: 'number', readonly: true },
+                        { label: '主石字印', field: 'main_stone_mark', type: 'text', readonly: true },
+                        { label: '副石字印', field: 'sub_stone_mark', type: 'text', readonly: true },
+                        { label: '珍珠重', field: 'pearl_weight', type: 'number', readonly: true },
+                        { label: '轴承重', field: 'bearing_weight', type: 'number', readonly: true },
+                        { label: '销售克工费', field: 'sale_labor_cost', type: 'number', highlight: true, readonly: false },
+                        { label: '销售件工费', field: 'sale_piece_labor_cost', type: 'number', prefix: '¥', highlight: true, readonly: false },
+                      ].map(({ label, field, type, prefix, highlight, readonly }) => (
+                        <div key={field} className="flex items-center gap-1">
+                          <span className="text-gray-400 whitespace-nowrap">{label}:</span>
+                          <div className="flex items-center">
+                            {prefix && fCodeDetails[item.id]?.[field] != null && <span className="text-gray-400">{prefix}</span>}
+                            <input
+                              type={type}
+                              value={fCodeDetails[item.id]?.[field] ?? ''}
+                              onChange={(e) => !readonly && updateFCodeDetail(item.id, field, e.target.value)}
+                              readOnly={readonly}
+                              className={`w-16 px-1 py-0.5 border rounded text-xs text-center
+                                ${readonly ? 'bg-gray-50 border-gray-100 text-gray-500 cursor-default' : 'bg-white border-gray-200'}
+                                ${highlight ? 'border-emerald-300 text-emerald-700 font-medium bg-white' : ''}`}
+                              placeholder="-"
+                            />
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      ))}
                     </div>
-                  );
-                })()}
-                );
-              })}
+                  </div>
+                )}
+                </React.Fragment>
+              )})}
             </div>
 
             {/* 总工费汇总 */}
