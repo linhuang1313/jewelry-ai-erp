@@ -230,7 +230,7 @@ export default function InventoryOverview({ userRole }: InventoryOverviewProps) 
                   {(overview.warehouse.total_weight ?? 0).toFixed(3)} <span className="text-lg">g</span>
                 </div>
                 <div className="text-sm text-amber-600">
-                  {overview.warehouse.product_count} 种商品
+                  {overview.warehouse.product_count} 种商品 · {overview.warehouse.total_quantity ?? 0} 件
                 </div>
               </div>
               {expandedLocation === 'warehouse' && (
@@ -346,7 +346,7 @@ export default function InventoryOverview({ userRole }: InventoryOverviewProps) 
                   {(overview.showroom.total_weight ?? 0).toFixed(3)} <span className="text-lg">g</span>
                 </div>
                 <div className="text-sm text-blue-600">
-                  {overview.showroom.product_count} 种商品
+                  {overview.showroom.product_count} 种商品 · {overview.showroom.total_quantity ?? 0} 件
                 </div>
               </div>
               {expandedLocation === 'showroom' && (

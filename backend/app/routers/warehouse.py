@@ -880,7 +880,21 @@ async def get_inventory_overview(
             return cached_data
 
     from sqlalchemy import func
-    from ..models import ReturnOrder
+    from ..models import ReturnOrder, InboundDetail, InboundOrder
+    
+    def _count_quantity_for_location(db, location_id):
+        """统计某位置下有库存商品的入库件数"""
+        product_names_sq = db.query(LocationInventory.product_name).filter(
+            LocationInventory.location_id == location_id,
+            LocationInventory.weight > 0
+        ).subquery()
+        return db.query(func.count(InboundDetail.id)).join(
+            InboundOrder, InboundDetail.order_id == InboundOrder.id
+        ).filter(
+            InboundOrder.status.in_(["confirmed", "completed"]),
+            InboundOrder.deleted_at.is_(None),
+            InboundDetail.product_name.in_(db.query(product_names_sq.c.product_name))
+        ).scalar() or 0
     
     result = {
         "warehouse": None,  # 商品部仓库
@@ -916,7 +930,8 @@ async def get_inventory_overview(
                 "location_id": warehouse_id,
                 "location_name": warehouse_location.name if warehouse_location else "商品部仓库",
                 "total_weight": float(warehouse_stats.total_weight or 0),
-                "product_count": warehouse_stats.product_count or 0
+                "product_count": warehouse_stats.product_count or 0,
+                "total_quantity": _count_quantity_for_location(db, warehouse_id)
             }
     
     # 柜台、结算或管理层：可以看展厅
@@ -935,7 +950,8 @@ async def get_inventory_overview(
                 "location_id": showroom_id,
                 "location_name": showroom_location.name if showroom_location else "展厅",
                 "total_weight": float(showroom_stats.total_weight or 0),
-                "product_count": showroom_stats.product_count or 0
+                "product_count": showroom_stats.product_count or 0,
+                "total_quantity": _count_quantity_for_location(db, showroom_id)
             }
     
     # 流转信息
