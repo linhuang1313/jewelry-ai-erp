@@ -39,12 +39,29 @@ interface InboundDetailItem {
   product_name: string;
   weight: number;
   labor_cost: number;
+  piece_count: number | null;
   piece_labor_cost: number | null;
   total_cost: number;
   supplier: string | null;
   order_no: string;
   inbound_time: string | null;
   source?: string;
+  main_stone_weight: number | null;
+  main_stone_count: number | null;
+  main_stone_price: number | null;
+  main_stone_amount: number | null;
+  sub_stone_weight: number | null;
+  sub_stone_count: number | null;
+  sub_stone_price: number | null;
+  sub_stone_amount: number | null;
+  stone_setting_fee: number | null;
+  total_amount: number | null;
+  main_stone_mark: string | null;
+  sub_stone_mark: string | null;
+  pearl_weight: number | null;
+  bearing_weight: number | null;
+  sale_labor_cost: number | null;
+  sale_piece_labor_cost: number | null;
 }
 
 interface InventoryOverviewProps {
@@ -274,12 +291,31 @@ export default function InventoryOverview({ userRole }: InventoryOverviewProps) 
                                       ) : (productDetailsCache.get(item.product_name) || []).length === 0 ? (
                                         <div className="text-xs text-gray-400 py-2">暂无入库明细</div>
                                       ) : (
-                                        <table className="w-full text-xs bg-white rounded border border-gray-200">
+                                        <div className="overflow-x-auto">
+                                        <table className="w-full text-xs bg-white rounded border border-gray-200 whitespace-nowrap">
                                           <thead className="bg-gray-50">
                                             <tr>
                                               <th className="px-2 py-1 text-left text-gray-500">编码</th>
-                                              <th className="px-2 py-1 text-right text-gray-500">克重</th>
+                                              <th className="px-2 py-1 text-right text-gray-500">件数</th>
+                                              <th className="px-2 py-1 text-right text-gray-500">重量</th>
                                               <th className="px-2 py-1 text-right text-gray-500">克工费</th>
+                                              <th className="px-2 py-1 text-right text-gray-500">件工费</th>
+                                              <th className="px-2 py-1 text-right text-gray-500">主石重</th>
+                                              <th className="px-2 py-1 text-right text-gray-500">主石粒数</th>
+                                              <th className="px-2 py-1 text-right text-gray-500">主石单价</th>
+                                              <th className="px-2 py-1 text-right text-gray-500">主石额</th>
+                                              <th className="px-2 py-1 text-right text-gray-500">副石重</th>
+                                              <th className="px-2 py-1 text-right text-gray-500">副石粒数</th>
+                                              <th className="px-2 py-1 text-right text-gray-500">副石单价</th>
+                                              <th className="px-2 py-1 text-right text-gray-500">副石额</th>
+                                              <th className="px-2 py-1 text-right text-gray-500">镶石费</th>
+                                              <th className="px-2 py-1 text-right text-gray-500">总金额</th>
+                                              <th className="px-2 py-1 text-left text-gray-500">主石字印</th>
+                                              <th className="px-2 py-1 text-left text-gray-500">副石字印</th>
+                                              <th className="px-2 py-1 text-right text-gray-500">珍珠重</th>
+                                              <th className="px-2 py-1 text-right text-gray-500">轴承重</th>
+                                              <th className="px-2 py-1 text-right text-gray-500">销售克工费</th>
+                                              <th className="px-2 py-1 text-right text-gray-500">销售件工费</th>
                                               <th className="px-2 py-1 text-left text-gray-500">供应商</th>
                                               <th className="px-2 py-1 text-left text-gray-500">入库时间</th>
                                             </tr>
@@ -291,14 +327,33 @@ export default function InventoryOverview({ userRole }: InventoryOverviewProps) 
                                                   {d.product_code}
                                                   {d.source === 'product_codes' && <span className="ml-1 text-amber-500">（仅编码）</span>}
                                                 </td>
+                                                <td className="px-2 py-1 text-right">{d.piece_count ?? '-'}</td>
                                                 <td className="px-2 py-1 text-right">{d.source === 'product_codes' ? '-' : `${d.weight.toFixed(3)}g`}</td>
                                                 <td className="px-2 py-1 text-right">{d.source === 'product_codes' ? '-' : `¥${d.labor_cost}/g`}</td>
+                                                <td className="px-2 py-1 text-right">{d.piece_labor_cost != null ? `¥${d.piece_labor_cost}` : '-'}</td>
+                                                <td className="px-2 py-1 text-right">{d.main_stone_weight != null ? `${d.main_stone_weight}` : '-'}</td>
+                                                <td className="px-2 py-1 text-right">{d.main_stone_count ?? '-'}</td>
+                                                <td className="px-2 py-1 text-right">{d.main_stone_price != null ? `¥${d.main_stone_price}` : '-'}</td>
+                                                <td className="px-2 py-1 text-right">{d.main_stone_amount != null ? `¥${d.main_stone_amount}` : '-'}</td>
+                                                <td className="px-2 py-1 text-right">{d.sub_stone_weight != null ? `${d.sub_stone_weight}` : '-'}</td>
+                                                <td className="px-2 py-1 text-right">{d.sub_stone_count ?? '-'}</td>
+                                                <td className="px-2 py-1 text-right">{d.sub_stone_price != null ? `¥${d.sub_stone_price}` : '-'}</td>
+                                                <td className="px-2 py-1 text-right">{d.sub_stone_amount != null ? `¥${d.sub_stone_amount}` : '-'}</td>
+                                                <td className="px-2 py-1 text-right">{d.stone_setting_fee != null ? `¥${d.stone_setting_fee}` : '-'}</td>
+                                                <td className="px-2 py-1 text-right">{d.total_amount != null ? `¥${d.total_amount}` : '-'}</td>
+                                                <td className="px-2 py-1 text-gray-600">{d.main_stone_mark || '-'}</td>
+                                                <td className="px-2 py-1 text-gray-600">{d.sub_stone_mark || '-'}</td>
+                                                <td className="px-2 py-1 text-right">{d.pearl_weight != null ? `${d.pearl_weight}` : '-'}</td>
+                                                <td className="px-2 py-1 text-right">{d.bearing_weight != null ? `${d.bearing_weight}` : '-'}</td>
+                                                <td className="px-2 py-1 text-right">{d.sale_labor_cost != null ? `¥${d.sale_labor_cost}/g` : '-'}</td>
+                                                <td className="px-2 py-1 text-right">{d.sale_piece_labor_cost != null ? `¥${d.sale_piece_labor_cost}` : '-'}</td>
                                                 <td className="px-2 py-1 text-gray-600">{d.supplier || '-'}</td>
                                                 <td className="px-2 py-1 text-gray-500">{d.inbound_time || '-'}</td>
                                               </tr>
                                             ))}
                                           </tbody>
                                         </table>
+                                        </div>
                                       )}
                                     </div>
                                   </td>
@@ -402,12 +457,31 @@ export default function InventoryOverview({ userRole }: InventoryOverviewProps) 
                                           ) : (productDetailsCache.get(item.product_name) || []).length === 0 ? (
                                             <div className="text-xs text-gray-400 py-2">暂无入库明细</div>
                                           ) : (
-                                            <table className="w-full text-xs bg-white rounded border border-gray-200">
+                                            <div className="overflow-x-auto">
+                                            <table className="w-full text-xs bg-white rounded border border-gray-200 whitespace-nowrap">
                                               <thead className="bg-gray-50">
                                                 <tr>
                                                   <th className="px-2 py-1 text-left text-gray-500">编码</th>
-                                                  <th className="px-2 py-1 text-right text-gray-500">克重</th>
+                                                  <th className="px-2 py-1 text-right text-gray-500">件数</th>
+                                                  <th className="px-2 py-1 text-right text-gray-500">重量</th>
                                                   <th className="px-2 py-1 text-right text-gray-500">克工费</th>
+                                                  <th className="px-2 py-1 text-right text-gray-500">件工费</th>
+                                                  <th className="px-2 py-1 text-right text-gray-500">主石重</th>
+                                                  <th className="px-2 py-1 text-right text-gray-500">主石粒数</th>
+                                                  <th className="px-2 py-1 text-right text-gray-500">主石单价</th>
+                                                  <th className="px-2 py-1 text-right text-gray-500">主石额</th>
+                                                  <th className="px-2 py-1 text-right text-gray-500">副石重</th>
+                                                  <th className="px-2 py-1 text-right text-gray-500">副石粒数</th>
+                                                  <th className="px-2 py-1 text-right text-gray-500">副石单价</th>
+                                                  <th className="px-2 py-1 text-right text-gray-500">副石额</th>
+                                                  <th className="px-2 py-1 text-right text-gray-500">镶石费</th>
+                                                  <th className="px-2 py-1 text-right text-gray-500">总金额</th>
+                                                  <th className="px-2 py-1 text-left text-gray-500">主石字印</th>
+                                                  <th className="px-2 py-1 text-left text-gray-500">副石字印</th>
+                                                  <th className="px-2 py-1 text-right text-gray-500">珍珠重</th>
+                                                  <th className="px-2 py-1 text-right text-gray-500">轴承重</th>
+                                                  <th className="px-2 py-1 text-right text-gray-500">销售克工费</th>
+                                                  <th className="px-2 py-1 text-right text-gray-500">销售件工费</th>
                                                   <th className="px-2 py-1 text-left text-gray-500">供应商</th>
                                                   <th className="px-2 py-1 text-left text-gray-500">入库时间</th>
                                                 </tr>
@@ -419,14 +493,33 @@ export default function InventoryOverview({ userRole }: InventoryOverviewProps) 
                                                       {d.product_code}
                                                       {d.source === 'product_codes' && <span className="ml-1 text-amber-500">（仅编码）</span>}
                                                     </td>
+                                                    <td className="px-2 py-1 text-right">{d.piece_count ?? '-'}</td>
                                                     <td className="px-2 py-1 text-right">{d.source === 'product_codes' ? '-' : `${d.weight.toFixed(3)}g`}</td>
                                                     <td className="px-2 py-1 text-right">{d.source === 'product_codes' ? '-' : `¥${d.labor_cost}/g`}</td>
+                                                    <td className="px-2 py-1 text-right">{d.piece_labor_cost != null ? `¥${d.piece_labor_cost}` : '-'}</td>
+                                                    <td className="px-2 py-1 text-right">{d.main_stone_weight != null ? `${d.main_stone_weight}` : '-'}</td>
+                                                    <td className="px-2 py-1 text-right">{d.main_stone_count ?? '-'}</td>
+                                                    <td className="px-2 py-1 text-right">{d.main_stone_price != null ? `¥${d.main_stone_price}` : '-'}</td>
+                                                    <td className="px-2 py-1 text-right">{d.main_stone_amount != null ? `¥${d.main_stone_amount}` : '-'}</td>
+                                                    <td className="px-2 py-1 text-right">{d.sub_stone_weight != null ? `${d.sub_stone_weight}` : '-'}</td>
+                                                    <td className="px-2 py-1 text-right">{d.sub_stone_count ?? '-'}</td>
+                                                    <td className="px-2 py-1 text-right">{d.sub_stone_price != null ? `¥${d.sub_stone_price}` : '-'}</td>
+                                                    <td className="px-2 py-1 text-right">{d.sub_stone_amount != null ? `¥${d.sub_stone_amount}` : '-'}</td>
+                                                    <td className="px-2 py-1 text-right">{d.stone_setting_fee != null ? `¥${d.stone_setting_fee}` : '-'}</td>
+                                                    <td className="px-2 py-1 text-right">{d.total_amount != null ? `¥${d.total_amount}` : '-'}</td>
+                                                    <td className="px-2 py-1 text-gray-600">{d.main_stone_mark || '-'}</td>
+                                                    <td className="px-2 py-1 text-gray-600">{d.sub_stone_mark || '-'}</td>
+                                                    <td className="px-2 py-1 text-right">{d.pearl_weight != null ? `${d.pearl_weight}` : '-'}</td>
+                                                    <td className="px-2 py-1 text-right">{d.bearing_weight != null ? `${d.bearing_weight}` : '-'}</td>
+                                                    <td className="px-2 py-1 text-right">{d.sale_labor_cost != null ? `¥${d.sale_labor_cost}/g` : '-'}</td>
+                                                    <td className="px-2 py-1 text-right">{d.sale_piece_labor_cost != null ? `¥${d.sale_piece_labor_cost}` : '-'}</td>
                                                     <td className="px-2 py-1 text-gray-600">{d.supplier || '-'}</td>
                                                     <td className="px-2 py-1 text-gray-500">{d.inbound_time || '-'}</td>
                                                   </tr>
                                                 ))}
                                               </tbody>
                                             </table>
+                                            </div>
                                           )}
                                         </div>
                                       </td>

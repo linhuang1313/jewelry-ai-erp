@@ -299,7 +299,23 @@ async def get_inventory_by_product_name(
                 "supplier": detail.supplier,
                 "order_no": order.order_no,
                 "inbound_time": format_china_time(china_time, "%Y-%m-%d %H:%M") if china_time else None,
-                "status": order.status
+                "status": order.status,
+                "main_stone_weight": float(detail.main_stone_weight) if detail.main_stone_weight else None,
+                "main_stone_count": detail.main_stone_count,
+                "main_stone_price": float(detail.main_stone_price) if detail.main_stone_price else None,
+                "main_stone_amount": float(detail.main_stone_amount) if detail.main_stone_amount else None,
+                "sub_stone_weight": float(detail.sub_stone_weight) if detail.sub_stone_weight else None,
+                "sub_stone_count": detail.sub_stone_count,
+                "sub_stone_price": float(detail.sub_stone_price) if detail.sub_stone_price else None,
+                "sub_stone_amount": float(detail.sub_stone_amount) if detail.sub_stone_amount else None,
+                "stone_setting_fee": float(detail.stone_setting_fee) if detail.stone_setting_fee else None,
+                "total_amount": float(detail.total_amount) if detail.total_amount else None,
+                "main_stone_mark": detail.main_stone_mark,
+                "sub_stone_mark": detail.sub_stone_mark,
+                "pearl_weight": float(detail.pearl_weight) if detail.pearl_weight else None,
+                "bearing_weight": float(detail.bearing_weight) if detail.bearing_weight else None,
+                "sale_labor_cost": float(detail.sale_labor_cost) if detail.sale_labor_cost else None,
+                "sale_piece_labor_cost": float(detail.sale_piece_labor_cost) if detail.sale_piece_labor_cost else None,
             })
 
         if not items:

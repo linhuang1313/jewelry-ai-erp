@@ -1,6 +1,6 @@
 # PROGRESS.md — 珠宝 AI-ERP 项目进度存档
 
-> 最后更新：2026-03-02（第十一次对话结束存档）
+> 最后更新：2026-03-02（第十二次对话结束存档）
 > 维护者：AI CTO
 > 规则：每次对话开始前静默读取，结束前更新
 
@@ -14,7 +14,7 @@
 - [x] 退库管理：退给供应商、退给商品部、退货确认、库存回滚（原"退货管理"，第五次对话重命名）
 - [x] 结算管理：结价/结料/混合支付三种模式、创建/确认/取消/撤销/打印
 - [x] 金料管理：收料（客户来料）、付料（给供应商）、提料（客户取料）、转料
-- [x] 仓库管理：多位置库存（商品部/展厅）、库存转移、转移确认
+- [x] 仓库管理：多位置库存（商品部/展厅）、库存转移、转移确认、转移单明细字段持久化（14 个入库明细字段）
 - [x] 暂借管理：创建暂借单、确认借出、归还、件工费、商品编码显示
 - [x] 销退管理：销售退货、库存恢复
 
@@ -335,10 +335,11 @@
 - [ ] `inventory_maintenance.py`、`analytics.py`、`export.py` 未检查/未迁移
 - [ ] `services/card_executor.py`、`services/fbl_voucher_service.py` 未检查/未迁移
 
-### AI Agent 架构升级（Phase 3，代码完成但未正式接入）
+### AI Agent 架构升级（Phase 3，代码已提交主分支但未正式接入 chat.py）
 - [x] BaseAgent 基类 + AgentRegistry 注册中心（`backend/app/agents/`）
 - [x] 7 个角色 Agent（Settlement/Sales/Finance/Inbound/Inventory/Loan/GoldMaterial）
 - [x] PromptSkill 基类 + 7 个共享 Skill + SkillRegistry 单例（`backend/app/agents/skills/`）
+- [x] 440+ 测试用例（含 102 个 PromptSkill 测试 + 14 个 SkillRegistry 测试）
 - [~] 与 `chat.py` 主流程集成：代码存在但未正式切换（当前仍走旧 chat_handlers 路径）
 - [ ] Agent 测试在生产环境验证
 - [ ] Agent 行为日志与 behavior_logger 集成
@@ -366,6 +367,12 @@
 - [ ] `SettlementOrder` 缺少 `customer_name` 冗余字段，旧 `sales_order_id` 无法关联新系统 `SalesOrder`
 - [ ] `import_sales_xlsx.py` 硬编码 `total_weight=0.0`、`material_amount=0.0`，导致迁移数据克重和金额显示为 0
 - [ ] 需要数据修复/重导入，或添加 `customer_name` 字段 + 回填脚本
+
+### 快捷开单商品编码自动带出工费（待实现）
+- [x] F码商品选择后自动获取入库详情面板（`fetchFCodeDetail` + `fCodeDetails` state）
+- [x] F码入库详情面板中销售工费可编辑，联动上方主输入框（`updateFCodeDetail` → `sale_labor_cost` / `sale_piece_labor_cost`）
+- [ ] 输入商品编码后自动填充对应的克重、工费到主输入框（当前仅填充 product_code 和 product_name，不填充工费）
+- [ ] 非 F码商品（普通编码）输入后也应自动带出工费信息
 
 ### 前端下拉选择器优化（部分完成）
 - [x] `LoanPage.tsx`、`QuickWithdrawalModal.jsx`、`QuickReceiptModal.jsx` 已改为 AsyncSearchSelect
@@ -456,8 +463,9 @@
 | 结算单迁移数据缺客户名/克重/金额 | 中 | `import_sales_xlsx.py` + `SettlementOrder` 模型 | 待修复（需数据修复/重导入） |
 | SettlementOrder 无 customer_name 冗余字段 | 中 | `models/__init__.py` | 待修复（需加字段+回填） |
 | PostgreSQL 备份策略 | 中 | 运维 | 待确认（第六次对话识别） |
-| AI Agent 架构未接入 chat.py 主流程 | 中 | `backend/app/agents/` + `chat.py` | 待完成（第十一次对话：代码完成但未正式切换） |
+| AI Agent 架构未接入 chat.py 主流程 | 中 | `backend/app/agents/` + `chat.py` | 代码已提交主分支，待正式切换（第十一次对话） |
 | QuickOrderModal F码详情 as const/类型断言 workaround | 低 | `QuickOrderModal.tsx` | 已 workaround（第十一次对话：移除 as const 用字符串字面量，避免 JSX 解析问题） |
+| 快捷开单输入编码不自动带出工费 | 中 | `QuickOrderModal.tsx` | 待实现（第十二次对话识别：仅填充 code+name，不填充工费/克重） |
 | 新增导入方式须同步创建 InboundDetail | 中 | 导入脚本 | 架构约束（第十次对话识别，否则库存展开行无明细） |
 | ~~展厅导入不创建 InboundDetail~~ | ~~中~~ | ~~import_showroom_inventory.py~~ | **已修复 2026-02-26（增加 InboundOrder+InboundDetail 创建）** |
 | ~~展厅库存展开行无明细数据~~ | ~~中~~ | ~~inventory_maintenance.py + 前端~~ | **已修复 2026-02-26（product_codes 回退 + 数据补全 817 条）** |
@@ -679,10 +687,32 @@
 - [x] JSX 结构修复 — `items.map()` 的 `return (...)` 中有两个并列根元素，用 `<React.Fragment key={item.id}>` 包裹
 - [x] `FCodeDetail` 接口类型定义 — 替代 `Record<string, any>`，包含后端返回的全部 23 个字段
 
-#### AI Agent 架构（Phase 3，代码已完成但未提交到主分支）
-- [~] `backend/app/agents/` — BaseAgent + 7 个角色 Agent（SettlementAgent, SalesAgent, FinanceAgent 等）
-- [~] `backend/app/agents/skills/` — PromptSkill 基类 + 7 个共享 Skill + SkillRegistry 单例
-- [~] `backend/tests/` — 440+ 测试用例（含 102 个 PromptSkill 测试 + 14 个 SkillRegistry 测试）
+#### AI Agent 架构（Phase 3，代码已提交到主分支）
+- [x] `backend/app/agents/` — BaseAgent + 7 个角色 Agent（SettlementAgent, SalesAgent, FinanceAgent 等）
+- [x] `backend/app/agents/skills/` — PromptSkill 基类 + 7 个共享 Skill + SkillRegistry 单例
+- [x] `backend/tests/` — 440+ 测试用例（含 102 个 PromptSkill 测试 + 14 个 SkillRegistry 测试）
+
+#### F码编码唯一性修复（3 个独立问题）
+- [x] Excel 导入脚本 + 批量入库 API 中镶嵌产品 F码重复 — 改为生成唯一 F码（`import_inventory_xlsx.py` + `inbound.py`）
+- [x] F码预定义记录复用防护 — F 开头的编码跳过 predefined 匹配，确保每件商品获得唯一 F码（`inbound.py`）
+- [x] 转移单 code_map 回退时添加 warning 日志（`warehouse.py`）
+
+#### 转移单（入库→展厅）全链路增强
+- [x] `product_code` 全链路传递 — ChatView transferPrompt → TransferPromptCard POST body → warehouse API 所有 TransferItemResponse 实例（`ChatView.jsx` + `TransferPromptCard.jsx` + `warehouse.py`）
+- [x] 14 个入库明细字段持久化到转移单 — barcode/labor_cost/piece_count/piece_labor_cost/main_stone_weight/main_stone_count/sub_stone_weight/sub_stone_count/main_stone_mark/sub_stone_mark/pearl_weight/bearing_weight/sale_labor_cost/sale_piece_labor_cost（`models/__init__.py` + `schemas/__init__.py` + `warehouse.py` + `database.py` 自动迁移）
+- [x] TransferPromptCard 智能表格 — 从列表样式替换为与 WarehousePage 一致的表格样式（`TransferPromptCard.jsx`）
+- [x] 转移单重复商品名 UNIQUE 约束修复 — `db.flush()` 防止 LocationInventory 创建循环中的唯一约束冲突（`warehouse.py`）
+
+#### 库存概览增强
+- [x] 库存概览显示件数 — 商品数量旁同时显示件数（`InventoryOverview.tsx`）
+
+#### TypeScript 编译错误修复（18 处）
+- [x] `CustomerPage.tsx` — ReturnRecord 接口补充 return_to 字段
+- [x] `GoldMaterialPage.tsx` — safeData 提供类型化默认值替代空对象
+- [x] `InboundOrdersPage.tsx` — InboundDetail 接口补充 barcode 字段
+- [x] `AsyncSearchSelect.tsx` — `NodeJS.Timeout` 替换为 `ReturnType<typeof setTimeout>`
+- [x] `excelImport.ts` — `Partial<>` 索引赋值类型收窄修复
+- [x] `pdfExport.ts` — `formatDate`/`formatDateTime` 接受 `Date | string` 以匹配 StatementData
 
 ### 第八次对话（2026-02-25）
 **涉及文件：**
@@ -783,9 +813,31 @@
 - `backend/app/utils/__init__.py` — 清空（仅保留包标识作用）
 - `backend/app/routers/gold_material.py` — ~50 处 float()→decimal_utils 替换
 - `backend/app/routers/settlement.py` — ~40 处 float()→decimal_utils 替换
-- `backend/app/routers/inbound.py` — ~30 处替换 + safe_float 改为返回 Decimal
+- `backend/app/routers/inbound.py` — ~30 处替换 + safe_float 改为返回 Decimal + F码唯一性修复
 - `backend/app/query_engine.py` — _safe_value 改用 safe_json_value
 - `frontend/src/components/QuickOrderModal.tsx` — F码入库详情面板（fCodeDetails state + fetchFCodeDetail + UI）+ API 路径修复 + JSX Fragment 修复 + FCodeDetail 接口类型
 - `frontend/src/App.jsx` — InlineQuickReceiptModal → QuickReceiptModal 替换 + state/handler 清理
 - `frontend/src/components/modals/QuickReceiptModal.jsx` — 新增"板料"/"旧料"成色选项
 - `backend/app/routers/customers.py` — 结算金额计算修复（cash_price/physical_gold/mixed 三种模式）+ 欠款历史 API 修复
+- `backend/app/routers/warehouse.py` — 转移单 product_code 全链路传递 + 14 字段持久化 + UNIQUE 约束修复 + code_map 回退 warning
+- `backend/app/models/__init__.py` — InventoryTransferItem 新增 14 个入库明细字段
+- `backend/app/schemas/__init__.py` — TransferItemResponse 新增 14 个字段
+- `backend/app/database.py` — 自动迁移 InventoryTransferItem 14 个新列
+- `backend/scripts/import_inventory_xlsx.py` — F码唯一性修复（镶嵌产品生成唯一 F码）
+- `backend/tests/__init__.py` — 新建，测试包标识
+- `frontend/src/pages/ChatView.jsx` — transferPrompt 传递 product_code + 入库明细字段
+- `frontend/src/components/chat/cards/TransferPromptCard.jsx` — 智能表格替换列表 + POST body 传递 product_code 和明细字段
+- `frontend/src/components/WarehousePage.tsx` — 转移单明细表格动态列显示/隐藏
+- `frontend/src/components/InventoryOverview.tsx` — 库存概览件数显示
+- `frontend/src/components/CustomerPage.tsx` — ReturnRecord 接口补充 return_to 字段
+- `frontend/src/components/GoldMaterialPage.tsx` — safeData 类型化默认值
+- `frontend/src/components/InboundOrdersPage.tsx` — InboundDetail 接口补充 barcode 字段
+- `frontend/src/components/ui/AsyncSearchSelect.tsx` — NodeJS.Timeout 类型修复
+- `frontend/src/utils/excelImport.ts` — Partial<> 索引赋值类型修复
+- `frontend/src/utils/pdfExport.ts` — formatDate/formatDateTime 接受 Date | string
+
+### 第十二次对话（2026-03-02）
+
+#### 进度存档更新
+- [x] PROGRESS.md 全面更新 — 补充第十一次对话后半段遗漏的 9 个提交记录（F码唯一性修复、转移单全链路增强、TypeScript 编译修复、库存概览件数等）
+- [x] 识别新需求：快捷开单输入商品编码后应自动带出工费和信息明细（当前仅填充 code+name）
