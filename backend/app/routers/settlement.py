@@ -551,7 +551,7 @@ async def create_settlement_order(
         physical_gold_weight = None
     
     # ========== 计算支付差额和状态 ==========
-    payment_difference = 0.0
+    payment_difference = Decimal("0")
     payment_status = "full"
     
     if data.payment_method == "mixed":
@@ -738,8 +738,8 @@ async def update_settlement_order(
     elif payment_method == "mixed":
         if gold_price <= 0:
             raise HTTPException(status_code=400, detail="混合支付需要填写当日金价（金价必须大于0）")
-        gold_payment_weight = data.gold_payment_weight if data.gold_payment_weight is not None else (settlement.gold_payment_weight or 0)
-        cash_payment_weight = data.cash_payment_weight if data.cash_payment_weight is not None else (settlement.cash_payment_weight or 0)
+        gold_payment_weight = to_decimal(data.gold_payment_weight) if data.gold_payment_weight is not None else to_decimal(settlement.gold_payment_weight)
+        cash_payment_weight = to_decimal(data.cash_payment_weight) if data.cash_payment_weight is not None else to_decimal(settlement.cash_payment_weight)
         
         if gold_payment_weight + cash_payment_weight <= 0:
             raise HTTPException(status_code=400, detail="混合支付必须指定结料和结价的克重")
@@ -760,13 +760,13 @@ async def update_settlement_order(
     # draft状态修改不需要处理金料账户（金料扣减在确认时才执行）
     
     # 重新计算支付差额
-    payment_difference = 0.0
+    payment_difference = Decimal("0")
     if payment_method == "mixed":
-        total_input = (settlement.gold_payment_weight or 0) + (settlement.cash_payment_weight or 0)
+        total_input = to_decimal(settlement.gold_payment_weight) + to_decimal(settlement.cash_payment_weight)
         payment_difference = total_input - total_weight
     elif payment_method == "physical_gold":
         if settlement.physical_gold_weight:
-            payment_difference = settlement.physical_gold_weight - total_weight
+            payment_difference = to_decimal(settlement.physical_gold_weight) - total_weight
     
     if payment_difference > 0.01:
         settlement.payment_status = "overpaid"
@@ -1340,17 +1340,17 @@ async def download_settlement_order(
                 # 表格数据行
                 y -= 10
                 total_qty = 0
-                total_weight = 0.0
-                total_material = 0.0
-                total_labor = 0.0
-                total_sales = 0.0
-                gold_price = settlement.gold_price or 0
+                total_weight = Decimal("0")
+                total_material = Decimal("0")
+                total_labor = Decimal("0")
+                total_sales = Decimal("0")
+                gold_price = to_decimal(settlement.gold_price)
                 
                 for detail in details:
-                    weight = detail.weight or 0
-                    labor_cost = detail.labor_cost or 0
-                    total_labor_cost = detail.total_labor_cost or 0
-                    material_cost = gold_price * weight if settlement.payment_method in ["cash_price", "mixed"] else 0
+                    weight = to_decimal(detail.weight)
+                    labor_cost = to_decimal(detail.labor_cost)
+                    total_labor_cost = to_decimal(detail.total_labor_cost)
+                    material_cost = gold_price * weight if settlement.payment_method in ["cash_price", "mixed"] else Decimal("0")
                     sales_amount = material_cost + total_labor_cost
                     
                     total_qty += 1
@@ -1514,18 +1514,17 @@ async def download_settlement_order(
             # 生成饰品出货表格行
             detail_rows_html = ""
             total_quantity = 0
-            total_weight = 0.0
-            total_material_cost = 0.0
-            total_labor_cost = 0.0
-            total_sales_amount = 0.0
+            total_weight = Decimal("0")
+            total_material_cost = Decimal("0")
+            total_labor_cost = Decimal("0")
+            total_sales_amount = Decimal("0")
             
             for idx, detail in enumerate(details, 1):
-                weight = detail.weight or 0
-                labor_cost = detail.labor_cost or 0
-                total_labor = detail.total_labor_cost or 0
-                gold_price = settlement.gold_price or 0
-                # 销售金额 = 金价*重量 + 工费
-                material_cost = gold_price * weight if settlement.payment_method in ["cash_price", "mixed"] else 0
+                weight = to_decimal(detail.weight)
+                labor_cost = to_decimal(detail.labor_cost)
+                total_labor = to_decimal(detail.total_labor_cost)
+                gold_price = to_decimal(settlement.gold_price)
+                material_cost = gold_price * weight if settlement.payment_method in ["cash_price", "mixed"] else Decimal("0")
                 sales_amount = material_cost + total_labor
                 
                 total_quantity += 1
@@ -2090,13 +2089,13 @@ async def revert_settlement_order(
             AccountReceivable.status.in_(["unpaid", "overdue", "paid"])
         ).with_for_update().all()
         
-        cancelled_cash = 0.0
-        total_received = 0.0
+        cancelled_cash = Decimal("0")
+        total_received = Decimal("0")
         customer_id_for_prepayment = sales_order.customer_id
         
         for receivable in receivables:
-            cancelled_cash += receivable.unpaid_amount or 0
-            total_received += receivable.received_amount or 0
+            cancelled_cash += to_decimal(receivable.unpaid_amount)
+            total_received += to_decimal(receivable.received_amount)
             receivable.status = "cancelled"
             receivable.remark = (receivable.remark or "") + f" | 撤销结算于 {now.strftime('%Y-%m-%d %H:%M')}"
         
@@ -2119,7 +2118,7 @@ async def revert_settlement_order(
         
         # ========== 回滚金料账户（如果是结料/混合支付）==========
         # 查找确认时创建的所有扣减记录（可能有多条：正常结料 + 少付差额）
-        rolled_back_gold = 0.0
+        rolled_back_gold = Decimal("0")
         customer_id = sales_order.customer_id
         
         if settlement.payment_method in ["physical_gold", "mixed"] and customer_id:
@@ -2139,7 +2138,7 @@ async def revert_settlement_order(
                     customer_deposit = get_or_create_customer_deposit(customer_id, sales_order.customer_name, db)
                 
                 for deposit_tx in deposit_txs:
-                    gold_to_rollback = deposit_tx.amount or 0
+                    gold_to_rollback = to_decimal(deposit_tx.amount)
                     if gold_to_rollback > 0:
                         balance_before = customer_deposit.current_balance
                         customer_deposit.current_balance = round_weight(to_decimal(customer_deposit.current_balance) + to_decimal(gold_to_rollback))
