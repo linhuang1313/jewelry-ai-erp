@@ -448,11 +448,40 @@ const SalesReturnPage: React.FC<SalesReturnPageProps> = (props) => {
 
   const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
+  const fetchFCodeDetail = async (index: number, code: string) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/inventory/by-code?code=${encodeURIComponent(code)}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data) {
+          const d = data.data;
+          setCreateItems(prev => prev.map((item, i) =>
+            i === index ? {
+              ...item,
+              weight: d.weight != null ? String(d.weight) : item.weight,
+              labor_cost_per_gram: d.sale_labor_cost != null ? String(d.sale_labor_cost)
+                        : d.labor_cost != null ? String(d.labor_cost) : item.labor_cost_per_gram,
+              quantity: d.piece_count != null ? String(d.piece_count) : item.quantity,
+              labor_cost_per_piece: d.sale_piece_labor_cost != null ? String(d.sale_piece_labor_cost)
+                              : d.piece_labor_cost != null ? String(d.piece_labor_cost) : item.labor_cost_per_piece,
+            } : item
+          ));
+        }
+      }
+    } catch (error) {
+      console.error('获取F码入库详情失败', error);
+    }
+  };
+
   const selectInventoryItem = (index: number, inv: InventoryItem) => {
     const newItems = [...createItems];
     newItems[index] = { ...newItems[index], product_code: inv.product_code, product_name: inv.product_name };
     setCreateItems(newItems);
     setInventoryDropdownIndex(null);
+    const code = (inv.product_code || '').trim().toUpperCase();
+    if (code.startsWith('F') && code.length > 1) {
+      fetchFCodeDetail(index, code);
+    }
   };
 
   const searchCode = (index: number, query: string) => {
@@ -497,6 +526,10 @@ const SalesReturnPage: React.FC<SalesReturnPageProps> = (props) => {
     setCreateItems(newItems);
     setCodeDropdownIndex(null);
     setCodeSearchResults([]);
+    const code = pc.code.trim().toUpperCase();
+    if (code.startsWith('F') && code.length > 1) {
+      fetchFCodeDetail(index, code);
+    }
   };
 
   const handleProductNameChange = (index: number, name: string) => {
@@ -1524,7 +1557,8 @@ const SalesReturnPage: React.FC<SalesReturnPageProps> = (props) => {
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-3 py-2 text-left font-medium text-gray-600 w-44">商品（编码 + 品名）</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-600 w-28">商品编码</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-600 w-32">品名</th>
                           <th className="px-3 py-2 text-center font-medium text-gray-600 w-28">克重(g)</th>
                           <th className="px-3 py-2 text-center font-medium text-gray-600 w-24">工费(元/g)</th>
                           <th className="px-3 py-2 text-center font-medium text-gray-600 w-16">件数</th>
@@ -1541,52 +1575,55 @@ const SalesReturnPage: React.FC<SalesReturnPageProps> = (props) => {
                             <tr key={index}>
                               <td className="px-3 py-2">
                                 {customerInventory.length > 0 ? (
-                                  /* 从客户库存中选择商品 */
-                                  <div className="relative">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        const rect = e.currentTarget.getBoundingClientRect();
-                                        setInventoryDropdownPos({ top: rect.bottom + 2, left: rect.left });
-                                        setInventoryDropdownIndex(inventoryDropdownIndex === index ? null : index);
-                                      }}
-                                      className={`w-full px-2 py-1 border rounded text-sm text-left truncate ${item.product_name
-                                          ? 'border-gray-200 text-gray-900'
-                                          : 'border-dashed border-gray-300 text-gray-400'
-                                        } focus:ring-1 focus:ring-amber-500 focus:outline-none`}
-                                    >
-                                      {item.product_name ? (
-                                        <span>
-                                          {item.product_code && <span className="font-mono text-amber-600 mr-1">{item.product_code}</span>}
-                                          {item.product_name}
-                                        </span>
-                                      ) : '点击选择商品'}
-                                    </button>
-                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      setInventoryDropdownPos({ top: rect.bottom + 2, left: rect.left });
+                                      setInventoryDropdownIndex(inventoryDropdownIndex === index ? null : index);
+                                    }}
+                                    className={`w-full px-2 py-1 border rounded text-sm text-left truncate font-mono ${item.product_code
+                                        ? 'border-gray-200 text-amber-600'
+                                        : 'border-dashed border-gray-300 text-gray-400'
+                                      } focus:ring-1 focus:ring-amber-500 focus:outline-none`}
+                                  >
+                                    {item.product_code || '选择'}
+                                  </button>
                                 ) : (
-                                  /* 无库存时使用原来的手动输入 */
-                                  <div className="flex gap-1">
-                                    <input
-                                      type="text"
-                                      value={item.product_code}
-                                      onChange={(e) => handleProductCodeChange(index, e.target.value)}
-                                      onFocus={(e) => {
-                                        const rect = e.currentTarget.getBoundingClientRect();
-                                        setDropdownPos({ top: rect.bottom + 2, left: rect.left });
-                                        if (item.product_code) searchCode(index, item.product_code);
-                                      }}
-                                      onBlur={() => setTimeout(() => { if (codeDropdownIndex === index) setCodeDropdownIndex(null); }, 200)}
-                                      placeholder="编码"
-                                      className="w-20 px-2 py-1 border border-gray-200 rounded text-sm font-mono focus:ring-1 focus:ring-amber-500 focus:outline-none"
-                                    />
-                                    <input
-                                      type="text"
-                                      value={item.product_name}
-                                      onChange={(e) => handleProductNameChange(index, e.target.value)}
-                                      placeholder="品名"
-                                      className="flex-1 px-2 py-1 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-amber-500 focus:outline-none"
-                                    />
-                                  </div>
+                                  <input
+                                    type="text"
+                                    value={item.product_code}
+                                    onChange={(e) => handleProductCodeChange(index, e.target.value)}
+                                    onFocus={(e) => {
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      setDropdownPos({ top: rect.bottom + 2, left: rect.left });
+                                      if (item.product_code) searchCode(index, item.product_code);
+                                    }}
+                                    onBlur={() => setTimeout(() => {
+                                      if (codeDropdownIndex === index) setCodeDropdownIndex(null);
+                                      const code = item.product_code.trim().toUpperCase();
+                                      if (code.startsWith('F') && code.length > 1) {
+                                        fetchFCodeDetail(index, code);
+                                      }
+                                    }, 200)}
+                                    placeholder="编码"
+                                    className="w-full px-2 py-1 border border-gray-200 rounded text-sm font-mono focus:ring-1 focus:ring-amber-500 focus:outline-none"
+                                  />
+                                )}
+                              </td>
+                              <td className="px-3 py-2">
+                                {customerInventory.length > 0 ? (
+                                  <span className={`text-sm ${item.product_name ? 'text-gray-900' : 'text-gray-400'}`}>
+                                    {item.product_name || '-'}
+                                  </span>
+                                ) : (
+                                  <input
+                                    type="text"
+                                    value={item.product_name}
+                                    onChange={(e) => handleProductNameChange(index, e.target.value)}
+                                    placeholder="品名"
+                                    className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-amber-500 focus:outline-none"
+                                  />
                                 )}
                               </td>
                               <td className="px-3 py-2">
