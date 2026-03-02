@@ -4,7 +4,7 @@
 """
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, update
+from sqlalchemy import func, update, or_
 from datetime import datetime
 import logging
 from typing import Optional
@@ -160,7 +160,7 @@ async def get_inbound_detail_by_code(
         result = db.query(InboundDetail).join(
             InboundOrder, InboundDetail.order_id == InboundOrder.id
         ).filter(
-            InboundDetail.product_code == code,
+            or_(InboundDetail.product_code == code, InboundDetail.barcode == code),
             InboundOrder.status.in_(['confirmed', 'completed'])
         ).order_by(InboundOrder.create_time.desc()).first()
 

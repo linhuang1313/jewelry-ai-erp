@@ -350,7 +350,8 @@ async def handle_inbound(ai_response, db: Session) -> Dict[str, Any]:
                     db.add(new_code)
                     db.flush()
             
-            p_code, p_name, p_barcode = _normalize_inbound_code_fields(db, p_name, p_code, p_barcode)
+            p_code, p_name, _ = _normalize_inbound_code_fields(db, p_name, p_code, None)
+            p_barcode = p_code
 
             detail = InboundDetail(
                 order_id=order.id,
@@ -527,9 +528,10 @@ async def execute_inbound(card_data: Dict[str, Any], db: Session) -> Dict[str, A
             piece_cost = (piece_count or 0) * (piece_labor_cost or 0)
             total_cost = gram_cost + piece_cost
         
-        product_code, product_name, barcode = _normalize_inbound_code_fields(
+        product_code, product_name, _ = _normalize_inbound_code_fields(
             db, product_name, product_code, barcode
         )
+        barcode = product_code
 
         # 创建入库明细
         detail = InboundDetail(
@@ -1909,9 +1911,10 @@ async def create_batch_inbound_orders(
                     piece_cost = piece_count * piece_labor_cost
                     item_total_cost = gram_cost + piece_cost
                 
-                product_code, product_name, barcode = _normalize_inbound_code_fields(
+                product_code, product_name, _ = _normalize_inbound_code_fields(
                     db, product_name, product_code, barcode
                 )
+                barcode = product_code
 
                 detail = InboundDetail(
                     order_id=order.id,
