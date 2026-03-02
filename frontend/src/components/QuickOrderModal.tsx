@@ -214,9 +214,11 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
             item.id === itemId ? {
               ...item,
               weight: d.weight != null ? String(d.weight) : item.weight,
-              labor_cost: d.labor_cost != null ? String(d.labor_cost) : item.labor_cost,
+              labor_cost: d.sale_labor_cost != null ? String(d.sale_labor_cost)
+                        : d.labor_cost != null ? String(d.labor_cost) : item.labor_cost,
               piece_count: d.piece_count != null ? String(d.piece_count) : item.piece_count,
-              piece_labor_cost: d.piece_labor_cost != null ? String(d.piece_labor_cost) : item.piece_labor_cost,
+              piece_labor_cost: d.sale_piece_labor_cost != null ? String(d.sale_piece_labor_cost)
+                              : d.piece_labor_cost != null ? String(d.piece_labor_cost) : item.piece_labor_cost,
             } : item
           ));
         }
