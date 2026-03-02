@@ -590,6 +590,7 @@ async def update_return_order(
 
 @router.get("/stats/summary")
 async def get_return_stats(
+    return_type: Optional[str] = Query(None, description="退货类型: to_supplier/to_warehouse"),
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     db: Session = Depends(get_db)
@@ -598,6 +599,8 @@ async def get_return_stats(
     try:
         query = db.query(ReturnOrder)
         
+        if return_type:
+            query = query.filter(ReturnOrder.return_type == return_type)
         if start_date:
             query = query.filter(ReturnOrder.created_at >= start_date)
         if end_date:

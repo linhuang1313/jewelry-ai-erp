@@ -99,8 +99,13 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState<ReturnOrder | null>(null);
 
+  // Tab 切换（替代原来的类型下拉筛选）
+  const showSupplierTab = hasPermission(userRole, 'canReturnToSupplier');
+  const [activeTab, setActiveTab] = useState<string>(
+    userRole === 'product' ? 'to_supplier' : 'to_warehouse'
+  );
+
   // 筛选条件
-  const [filterType, setFilterType] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [keyword, setKeyword] = useState('');
 
@@ -112,13 +117,13 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
   useEffect(() => {
     fetchReturns();
     fetchStats();
-  }, [filterType, filterStatus, keyword]);
+  }, [activeTab, filterStatus, keyword]);
 
   const fetchReturns = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (filterType) params.append('return_type', filterType);
+      params.append('return_type', activeTab);
       if (filterStatus) params.append('status', filterStatus);
       if (keyword) params.append('keyword', keyword);
 
@@ -148,7 +153,7 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
         }
       };
 
-      const data = await fetchWithCacheJson(`${API_ENDPOINTS.API_BASE_URL}/api/returns/stats/summary`, {}, processData);
+      const data = await fetchWithCacheJson(`${API_ENDPOINTS.API_BASE_URL}/api/returns/stats/summary?return_type=${activeTab}`, {}, processData);
       processData(data);
     } catch (error) {
       console.error('获取统计失败:', error);
@@ -405,18 +410,45 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
         </div>
       )}
 
+      {/* Tab 切换栏 */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+        <button
+          onClick={() => setActiveTab('to_warehouse')}
+          style={{
+            padding: '10px 20px',
+            borderRadius: '8px',
+            fontWeight: '600',
+            fontSize: '14px',
+            cursor: 'pointer',
+            background: activeTab === 'to_warehouse' ? 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)' : '#1e293b',
+            color: activeTab === 'to_warehouse' ? 'white' : '#94a3b8',
+            border: activeTab === 'to_warehouse' ? 'none' : '1px solid #475569',
+          }}
+        >
+          退给商品部
+        </button>
+        {showSupplierTab && (
+          <button
+            onClick={() => setActiveTab('to_supplier')}
+            style={{
+              padding: '10px 20px',
+              borderRadius: '8px',
+              fontWeight: '600',
+              fontSize: '14px',
+              cursor: 'pointer',
+              background: activeTab === 'to_supplier' ? 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)' : '#1e293b',
+              color: activeTab === 'to_supplier' ? 'white' : '#94a3b8',
+              border: activeTab === 'to_supplier' ? 'none' : '1px solid #475569',
+            }}
+          >
+            退给供应商
+          </button>
+        )}
+      </div>
+
       {/* 操作栏 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: '8px', background: '#1e293b', border: '1px solid #475569', color: '#e2e8f0' }}
-          >
-            <option value="">全部类型</option>
-            <option value="to_supplier">退给供应商</option>
-            <option value="to_warehouse">退给商品部</option>
-          </select>
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
@@ -426,10 +458,6 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
             <option value="draft">未确认</option>
             <option value="confirmed">已确认</option>
             <option value="cancelled">已取消</option>
-            <option value="pending">待审批（旧）</option>
-            <option value="approved">已批准（旧）</option>
-            <option value="completed">已完成（旧）</option>
-            <option value="rejected">已驳回（旧）</option>
           </select>
           <input
             type="text"
@@ -467,7 +495,6 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
           <thead>
             <tr style={{ background: '#0f172a' }}>
               <th style={{ padding: '14px', textAlign: 'left', color: '#94a3b8', fontWeight: '500' }}>退货单号</th>
-              <th style={{ padding: '14px', textAlign: 'left', color: '#94a3b8', fontWeight: '500' }}>类型</th>
               <th style={{ padding: '14px', textAlign: 'left', color: '#94a3b8', fontWeight: '500' }}>供应商</th>
               <th style={{ padding: '14px', textAlign: 'left', color: '#94a3b8', fontWeight: '500' }}>商品名称</th>
               <th style={{ padding: '14px', textAlign: 'right', color: '#94a3b8', fontWeight: '500' }}>克重</th>
@@ -481,17 +508,16 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={10} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>加载中...</td>
+                <td colSpan={9} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>加载中...</td>
               </tr>
             ) : returns.length === 0 ? (
               <tr>
-                <td colSpan={10} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>暂无退货记录</td>
+                <td colSpan={9} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>暂无退货记录</td>
               </tr>
             ) : (
               returns.map((r) => (
                 <tr key={r.id} style={{ borderTop: '1px solid #334155' }}>
                   <td style={{ padding: '14px', color: '#f8fafc', fontFamily: 'monospace' }}>{r.return_no}</td>
-                  <td style={{ padding: '14px', color: '#e2e8f0' }}>{TYPE_MAP[r.return_type] || r.return_type}</td>
                   <td style={{ padding: '14px', color: '#e2e8f0' }}>{r.supplier_name || '-'}</td>
                   <td style={{ padding: '14px', color: '#e2e8f0' }}>{r.product_name}</td>
                   <td style={{ padding: '14px', textAlign: 'right', color: '#fbbf24', fontWeight: '600' }}>{r.return_weight}g</td>
