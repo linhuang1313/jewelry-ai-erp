@@ -709,29 +709,39 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
             
             <div className="overflow-x-auto">
               {/* 表头 */}
-              <div className="min-w-[1200px]">
-                <div className="grid grid-cols-[120px_140px_80px_80px_60px_80px_70px_60px_70px_60px_80px_80px_60px_60px_70px_40px] gap-1 px-3 py-2 bg-gray-100 text-xs font-medium text-gray-600">
+              {(() => {
+                const hasFCode = items.some(item => {
+                  const code = item.product_code.trim().toUpperCase();
+                  return code.startsWith('F') && code.length > 1;
+                });
+                const gridCols = hasFCode
+                  ? 'grid-cols-[120px_140px_80px_80px_60px_80px_70px_60px_70px_60px_80px_80px_60px_60px_70px_40px]'
+                  : 'grid-cols-[140px_180px_100px_100px_80px_100px_80px_40px]';
+                const minW = hasFCode ? 'min-w-[1200px]' : 'min-w-[820px]';
+                return (
+              <div className={minW}>
+                <div className={`grid ${gridCols} gap-1 px-3 py-2 bg-gray-100 text-xs font-medium text-gray-600`}>
                   <div>商品编码</div>
                   <div>商品名称 *</div>
                   <div>退货克重 *</div>
                   <div>克工费</div>
                   <div>件数</div>
                   <div>件工费</div>
-                  <div>主石重</div>
-                  <div>主石数</div>
-                  <div>副石重</div>
-                  <div>副石数</div>
-                  <div>主石字印</div>
-                  <div>副石字印</div>
-                  <div>珍珠重</div>
-                  <div>轴承重</div>
+                  {hasFCode && <div>主石重</div>}
+                  {hasFCode && <div>主石数</div>}
+                  {hasFCode && <div>副石重</div>}
+                  {hasFCode && <div>副石数</div>}
+                  {hasFCode && <div>主石字印</div>}
+                  {hasFCode && <div>副石字印</div>}
+                  {hasFCode && <div>珍珠重</div>}
+                  {hasFCode && <div>轴承重</div>}
                   <div>小计</div>
                   <div></div>
                 </div>
                 
                 {/* 商品行 */}
                 {items.map((item, index) => (
-                  <div key={index} className="grid grid-cols-[120px_140px_80px_80px_60px_80px_70px_60px_70px_60px_80px_80px_60px_60px_70px_40px] gap-1 px-3 py-1.5 border-b border-gray-100 items-center">
+                  <div key={index} className={`grid ${gridCols} gap-1 px-3 py-1.5 border-b border-gray-100 items-center`}>
                     {/* 商品编码 */}
                     <div className="relative code-dropdown-container">
                       <input
@@ -854,77 +864,69 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                       />
                     </div>
 
-                    {/* 主石重 */}
-                    <div>
+                    {hasFCode && <div>
                       <input type="number" step="0.01" min="0" value={item.main_stone_weight}
                         onChange={(e) => updateItem(index, 'main_stone_weight', e.target.value)}
                         placeholder="0"
                         className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
                       />
-                    </div>
+                    </div>}
 
-                    {/* 主石数 */}
-                    <div>
+                    {hasFCode && <div>
                       <input type="number" min="0" value={item.main_stone_count}
                         onChange={(e) => updateItem(index, 'main_stone_count', e.target.value)}
                         placeholder="0"
                         className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
                       />
-                    </div>
+                    </div>}
 
-                    {/* 副石重 */}
-                    <div>
+                    {hasFCode && <div>
                       <input type="number" step="0.01" min="0" value={item.sub_stone_weight}
                         onChange={(e) => updateItem(index, 'sub_stone_weight', e.target.value)}
                         placeholder="0"
                         className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
                       />
-                    </div>
+                    </div>}
 
-                    {/* 副石数 */}
-                    <div>
+                    {hasFCode && <div>
                       <input type="number" min="0" value={item.sub_stone_count}
                         onChange={(e) => updateItem(index, 'sub_stone_count', e.target.value)}
                         placeholder="0"
                         className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
                       />
-                    </div>
+                    </div>}
 
-                    {/* 主石字印 */}
-                    <div>
+                    {hasFCode && <div>
                       <input type="text" value={item.main_stone_mark}
                         onChange={(e) => updateItem(index, 'main_stone_mark', e.target.value)}
                         placeholder=""
                         className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
                       />
-                    </div>
+                    </div>}
 
-                    {/* 副石字印 */}
-                    <div>
+                    {hasFCode && <div>
                       <input type="text" value={item.sub_stone_mark}
                         onChange={(e) => updateItem(index, 'sub_stone_mark', e.target.value)}
                         placeholder=""
                         className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
                       />
-                    </div>
+                    </div>}
 
-                    {/* 珍珠重 */}
-                    <div>
+                    {hasFCode && <div>
                       <input type="number" step="0.01" min="0" value={item.pearl_weight}
                         onChange={(e) => updateItem(index, 'pearl_weight', e.target.value)}
                         placeholder="0"
                         className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
                       />
-                    </div>
+                    </div>}
 
-                    {/* 轴承重 */}
-                    <div>
+                    {hasFCode && <div>
                       <input type="number" step="0.01" min="0" value={item.bearing_weight}
                         onChange={(e) => updateItem(index, 'bearing_weight', e.target.value)}
                         placeholder="0"
                         className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
                       />
-                    </div>
+                    </div>}
                     
                     {/* 小计 */}
                     <div className="text-xs font-medium text-orange-600">
@@ -947,15 +949,17 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
                 ))}
                 
                 {/* 汇总行 */}
-                <div className="grid grid-cols-[120px_140px_80px_80px_60px_80px_70px_60px_70px_60px_80px_80px_60px_60px_70px_40px] gap-1 px-3 py-3 bg-red-50 font-medium text-xs">
+                <div className={`grid ${gridCols} gap-1 px-3 py-3 bg-red-50 font-medium text-xs`}>
                   <div className="text-gray-700">合计 ({items.length} 个商品)</div>
                   <div></div>
                   <div className="text-red-600">{totalWeight.toFixed(2)}克</div>
-                  <div className="col-span-11"></div>
+                  {hasFCode ? <div className="col-span-11"></div> : <div className="col-span-3"></div>}
                   <div className="text-red-600">¥{totalLaborCost.toFixed(2)}</div>
                   <div></div>
                 </div>
               </div>
+                );
+              })()}
             </div>
           </div>
 
