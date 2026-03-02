@@ -1,6 +1,6 @@
 # PROGRESS.md — 珠宝 AI-ERP 项目进度存档
 
-> 最后更新：2026-02-26（第十次对话结束存档）
+> 最后更新：2026-03-02（第十一次对话结束存档）
 > 维护者：AI CTO
 > 规则：每次对话开始前静默读取，结束前更新
 
@@ -328,6 +328,21 @@
 
 ## [WIP] 进行中 / 半完成
 
+### Decimal 精度工具库（部分完成）
+- [x] `decimal_utils.py` 工具库已创建并部署
+- [x] `gold_material.py`、`settlement.py`、`inbound.py`、`query_engine.py` 已迁移到 Decimal 工具库
+- [ ] `sales.py`、`sales_returns.py`、`warehouse.py`、`customers.py`、`loan.py`、`finance.py` 仍使用 `float()` 临时方案（第九次对话的修复），尚未迁移到 `decimal_utils`
+- [ ] `inventory_maintenance.py`、`analytics.py`、`export.py` 未检查/未迁移
+- [ ] `services/card_executor.py`、`services/fbl_voucher_service.py` 未检查/未迁移
+
+### AI Agent 架构升级（Phase 3，代码完成但未正式接入）
+- [x] BaseAgent 基类 + AgentRegistry 注册中心（`backend/app/agents/`）
+- [x] 7 个角色 Agent（Settlement/Sales/Finance/Inbound/Inventory/Loan/GoldMaterial）
+- [x] PromptSkill 基类 + 7 个共享 Skill + SkillRegistry 单例（`backend/app/agents/skills/`）
+- [~] 与 `chat.py` 主流程集成：代码存在但未正式切换（当前仍走旧 chat_handlers 路径）
+- [ ] Agent 测试在生产环境验证
+- [ ] Agent 行为日志与 behavior_logger 集成
+
 ### 上下文工程（context_manager.py 已有框架，未完全接入）
 - [x] 会话状态持久化：框架完成，chat 路由已完全接入（第四次对话修复）
 - [~] 阶段管理（task_phases）：代码已写，但无业务场景触发
@@ -403,6 +418,7 @@
 
 ### AI 增强
 - [x] ~~多轮对话上下文优化~~ → 已完成（第七次对话：session_id 过滤 + conversation_history 传递 + AI 驱动查询引擎）
+- [~] AI Agent 架构（Phase 3 代码完成，见 [WIP] 部分，待正式接入 chat.py 主流程）
 - [ ] AI 建议置信度展示（让用户知道 AI 有多确定）
 - [ ] 异常检测（如异常大额交易、异常退货频率）
 - [ ] 智能定价建议（基于历史数据和市场金价）
@@ -440,13 +456,16 @@
 | 结算单迁移数据缺客户名/克重/金额 | 中 | `import_sales_xlsx.py` + `SettlementOrder` 模型 | 待修复（需数据修复/重导入） |
 | SettlementOrder 无 customer_name 冗余字段 | 中 | `models/__init__.py` | 待修复（需加字段+回填） |
 | PostgreSQL 备份策略 | 中 | 运维 | 待确认（第六次对话识别） |
+| AI Agent 架构未接入 chat.py 主流程 | 中 | `backend/app/agents/` + `chat.py` | 待完成（第十一次对话：代码完成但未正式切换） |
+| QuickOrderModal F码详情 as const/类型断言 workaround | 低 | `QuickOrderModal.tsx` | 已 workaround（第十一次对话：移除 as const 用字符串字面量，避免 JSX 解析问题） |
 | 新增导入方式须同步创建 InboundDetail | 中 | 导入脚本 | 架构约束（第十次对话识别，否则库存展开行无明细） |
 | ~~展厅导入不创建 InboundDetail~~ | ~~中~~ | ~~import_showroom_inventory.py~~ | **已修复 2026-02-26（增加 InboundOrder+InboundDetail 创建）** |
 | ~~展厅库存展开行无明细数据~~ | ~~中~~ | ~~inventory_maintenance.py + 前端~~ | **已修复 2026-02-26（product_codes 回退 + 数据补全 817 条）** |
 | ~~InboundOrder.status 过滤遗漏 completed~~ | ~~中~~ | ~~inventory_maintenance.py~~ | **已修复 2026-02-26（改为 in\_(['confirmed','completed'])）** |
 | ~~导入脚本手动指定 ID 导致重复~~ | ~~P0~~ | ~~导入脚本~~ | **已修复 2026-02-25（Bug #31: setval + nextval）** |
 | ~~product_codes 脏数据（空格/NULL）~~ | ~~中~~ | ~~product_codes 表~~ | **已修复 2026-02-25（启动时 TRIM + NULL→0）** |
-| ~~Decimal vs float 类型不兼容~~ | ~~中~~ | ~~sales.py/sales_returns.py/warehouse.py~~ | **已修复 2026-02-25（显式 float() 转换）** |
+| ~~Decimal vs float 类型不兼容（核心模块）~~ | ~~中~~ | ~~gold_material/settlement/inbound/query_engine~~ | **已修复 2026-02-28（decimal_utils 工具库替换）** |
+| Decimal 精度迁移未完成（剩余模块） | 中 | sales/sales_returns/warehouse/customers/loan/finance 等 | 待修复（仍用 float() 临时方案，需迁移到 decimal_utils） |
 | ~~客户搜索精确匹配被挤出~~ | ~~中~~ | ~~customers.py~~ | **已修复 2026-02-25（case 排序）** |
 | ~~InventoryOverview null toFixed 崩溃~~ | ~~中~~ | ~~InventoryOverview.tsx~~ | **已修复 2026-02-25（?? 0 防护）** |
 | ~~商品编码列显示 -~~ | ~~中~~ | ~~warehouse.py + InventoryOverview.tsx~~ | **已修复 2026-02-25（后端嵌入 product_code）** |
@@ -637,6 +656,34 @@
 - `frontend/src/components/analytics/InventoryAnalysisTab.tsx` — 表格空状态
 - `frontend/src/components/analytics/FinanceAnalysisTab.tsx` — 表格空状态
 
+### 第十一次对话完成的功能与修复（2026-02-28 ~ 2026-03-02）
+
+#### Decimal 精度升级（从 float() 临时方案 → 完整 Decimal 工具库）
+- [x] `backend/app/utils/decimal_utils.py` — 新建，精度安全工具库（`to_decimal`, `round_weight`, `round_money`, `round_rate`, `safe_float_for_json`, `safe_json_value` 共 6 个函数）
+- [x] `backend/app/routers/gold_material.py` — 约 50 处 `float()` → `to_decimal()`/`round_weight()` 替换
+- [x] `backend/app/routers/settlement.py` — 约 40 处 `float()` → Decimal 精度函数替换
+- [x] `backend/app/routers/inbound.py` — 约 30 处替换 + `safe_float` 函数改为返回 Decimal
+- [x] `backend/app/query_engine.py` — `_safe_value` 改用 `safe_json_value`
+- [x] `backend/app/utils/__init__.py` — 清空冗余的顶层导出（所有导入都通过直接子模块路径）
+
+#### 旧项目提交迁移（48 个提交中的关键功能迁移）
+- [x] 快捷开单 F码入库详情面板 — `QuickOrderModal.tsx` 新增 `fCodeDetails` state + `fetchFCodeDetail` + 入库详情面板 UI（主石重/副石重/字印/珍珠重等，销售工费可编辑联动）
+- [x] 收金弹窗改造 — `App.jsx` 从 `InlineQuickReceiptModal` 替换为 `QuickReceiptModal`，移除内联 state/handler
+- [x] `QuickReceiptModal.jsx` — 新增"板料"和"旧料"成色选项
+- [x] 结算金额计算修复 — `customers.py` 修正 `cash_price`/`physical_gold`/`mixed` 三种支付方式的金额计算逻辑
+- [x] 欠款历史 API 修复 — 移除销售记录直接加入欠款明细的错误逻辑，结算记录 `gold_amount` 改为 0
+
+#### QuickOrderModal.tsx 编译错误修复（3 个独立问题）
+- [x] API 路径修复 — `fetchFCodeDetail` 从错误的 `/api/inbound/detail-by-code/` 改为正确的 `/api/inventory/by-code?code=`
+- [x] IIFE 语法简化 — 移除多余的 `);`（IIFE → 条件渲染遗留）
+- [x] JSX 结构修复 — `items.map()` 的 `return (...)` 中有两个并列根元素，用 `<React.Fragment key={item.id}>` 包裹
+- [x] `FCodeDetail` 接口类型定义 — 替代 `Record<string, any>`，包含后端返回的全部 23 个字段
+
+#### AI Agent 架构（Phase 3，代码已完成但未提交到主分支）
+- [~] `backend/app/agents/` — BaseAgent + 7 个角色 Agent（SettlementAgent, SalesAgent, FinanceAgent 等）
+- [~] `backend/app/agents/skills/` — PromptSkill 基类 + 7 个共享 Skill + SkillRegistry 单例
+- [~] `backend/tests/` — 440+ 测试用例（含 102 个 PromptSkill 测试 + 14 个 SkillRegistry 测试）
+
 ### 第八次对话（2026-02-25）
 **涉及文件：**
 - `backend/app/models/__init__.py` — 新增 GoldPurchaseOrder/GoldPurchasePayment 模型、移除 supplier_id ForeignKey 和 supplier relationship（修复 502/500 部署错误）
@@ -729,3 +776,16 @@
 - `frontend/src/components/WarehousePage.tsx` — 展开行 per-product 按需加载 + source 适配
 - `frontend/src/components/InventoryOverview.tsx` — 展开行明细功能 + source 适配
 - `.cursor/rules/infra-config.mdc` — 新建，基础设施配置规则
+
+### 第十一次对话（2026-02-28 ~ 2026-03-02）
+**涉及文件：**
+- `backend/app/utils/decimal_utils.py` — 新建，Decimal 精度安全工具库（to_decimal/round_weight/round_money/round_rate/safe_float_for_json/safe_json_value）
+- `backend/app/utils/__init__.py` — 清空（仅保留包标识作用）
+- `backend/app/routers/gold_material.py` — ~50 处 float()→decimal_utils 替换
+- `backend/app/routers/settlement.py` — ~40 处 float()→decimal_utils 替换
+- `backend/app/routers/inbound.py` — ~30 处替换 + safe_float 改为返回 Decimal
+- `backend/app/query_engine.py` — _safe_value 改用 safe_json_value
+- `frontend/src/components/QuickOrderModal.tsx` — F码入库详情面板（fCodeDetails state + fetchFCodeDetail + UI）+ API 路径修复 + JSX Fragment 修复 + FCodeDetail 接口类型
+- `frontend/src/App.jsx` — InlineQuickReceiptModal → QuickReceiptModal 替换 + state/handler 清理
+- `frontend/src/components/modals/QuickReceiptModal.jsx` — 新增"板料"/"旧料"成色选项
+- `backend/app/routers/customers.py` — 结算金额计算修复（cash_price/physical_gold/mixed 三种模式）+ 欠款历史 API 修复
