@@ -330,7 +330,7 @@ export default function ReturnPage({ userRole }: ReturnPageProps) {
   };
 
   // 审批权限：管理层或商品专员（可以退给供应商的角色）
-  const canApprove = hasPermission(userRole, 'canDelete') || hasPermission(userRole, 'canReturnToSupplier');
+  const canApprove = hasPermission(userRole, 'canDelete') || hasPermission(userRole, 'canReturnToSupplier') || hasPermission(userRole, 'canReturnToWarehouse');
   // 创建权限：任何有退货权限的角色
   const canCreate = hasPermission(userRole, 'canReturnToSupplier') || hasPermission(userRole, 'canReturnToWarehouse');
   // 财务审核权限：财务和管理层
