@@ -16,25 +16,27 @@ const formatCurrency = (amount: number): string => {
 /**
  * 格式化日期
  */
-const formatDate = (date: Date): string => {
+const formatDate = (date: Date | string): string => {
+  const d = typeof date === 'string' ? new Date(date) : date;
   return new Intl.DateTimeFormat('zh-CN', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(date);
+  }).format(d);
 };
 
 /**
  * 格式化日期时间
  */
-const formatDateTime = (date: Date): string => {
+const formatDateTime = (date: Date | string): string => {
+  const d = typeof date === 'string' ? new Date(date) : date;
   return new Intl.DateTimeFormat('zh-CN', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(date);
+  }).format(d);
 };
 
 /**

@@ -712,10 +712,9 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
       }>(`/api/suppliers/daily-transactions?${params.toString()}`, { showErrorToast: false });
       
       if (data?.success) {
-        // 确保 daily_summary 是数组
-        const safeData = data.data || {};
+        const safeData = data.data || { daily_summary: [], summary: { total_inbound: 0, total_paid: 0, total_net_change: 0 } };
         if (safeData.daily_summary && !Array.isArray(safeData.daily_summary)) {
-          safeData.daily_summary = [];
+          (safeData as any).daily_summary = [];
         }
         setDailyTransactions(safeData);
       }
@@ -739,10 +738,9 @@ export default function GoldMaterialPage({ userRole }: GoldMaterialPageProps) {
       }>(`/api/gold-material/supplier-gold-accounts/${supplierId}?user_role=${userRole}`, { showErrorToast: false });
       
       if (data?.success) {
-        // 确保 transactions 是数组
-        const safeData = data.data || {};
+        const safeData = data.data || { account: null, transactions: [] };
         if (safeData.transactions && !Array.isArray(safeData.transactions)) {
-          safeData.transactions = [];
+          (safeData as any).transactions = [];
         }
         setSupplierDetail(safeData);
       }

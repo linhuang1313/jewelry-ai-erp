@@ -121,7 +121,7 @@ export const parseInboundTable = (table: unknown[][]): {
       if (!key) return
       const value = rawRow[index]
       if (value === null || value === undefined) return
-      rowData[key] = String(value).trim()
+      ;(rowData as any)[key] = String(value).trim()
     })
 
     const productNameParts: string[] = []

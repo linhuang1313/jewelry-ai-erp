@@ -35,7 +35,7 @@ const AsyncSearchSelect: React.FC<AsyncSearchSelectProps> = ({
   const [selectedOption, setSelectedOption] = useState<Option | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<NodeJS.Timeout>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     if (value !== null && value !== undefined) {

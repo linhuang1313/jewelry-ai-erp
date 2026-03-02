@@ -23,6 +23,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 interface InboundDetail {
   id: number;
   product_code?: string;
+  barcode?: string;
   product_name: string;
   product_category?: string;
   weight: number;

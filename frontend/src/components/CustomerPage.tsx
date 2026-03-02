@@ -42,6 +42,7 @@ interface SalesRecord {
 interface ReturnRecord {
   id: number;
   return_no: string;
+  return_to?: string;
   product_name: string;
   return_weight: number;
   return_reason: string;
