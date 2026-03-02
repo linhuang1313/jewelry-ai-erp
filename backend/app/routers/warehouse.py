@@ -1341,6 +1341,7 @@ async def receive_transfer_order(
                     weight=item.weight
                 )
                 db.add(to_inventory)
+                db.flush()
         
         # 记录操作日志
         log = OrderStatusLog(
@@ -1432,6 +1433,7 @@ async def reject_transfer_order(
                 weight=item.weight
             )
             db.add(from_inventory)
+            db.flush()
     
     old_status = order.status
     order.status = "rejected"
@@ -1494,6 +1496,7 @@ async def confirm_transfer_order(
                 weight=transfer_weight
             )
             db.add(to_inventory)
+            db.flush()
         
         # 如果actual_weight未设置，设置为weight（保持一致性）
         if item.actual_weight is None:
@@ -1751,6 +1754,7 @@ async def delete_transfer_order(
                         weight=item.weight
                     )
                     db.add(from_inventory)
+                    db.flush()
                 
                 inventory_details.append(f"{item.product_name} {item.weight}g")
         else:
@@ -1838,6 +1842,7 @@ async def reject_confirm_transfer_order(
                 weight=item.weight
             )
             db.add(from_inventory)
+            db.flush()
     
     # 状态变为 returned（已退回，转移单结束，保留记录用于留痕）
     order.status = "returned"
