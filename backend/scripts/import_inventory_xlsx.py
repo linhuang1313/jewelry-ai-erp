@@ -10,8 +10,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.database import SessionLocal
 from app.models import (
-    Supplier, InboundOrder, InboundDetail
+    Supplier, InboundOrder, InboundDetail, ProductCode
 )
+from app.init_product_codes import get_next_f_code
 
 IMPORT_OPERATOR = "Excel批量导入"
 
@@ -175,9 +176,27 @@ def bulk_insert_inventory(all_records, clean_first=False):
             db.add(io)
 
             for d in data["details"]:
+                pc = d["product_code"]
+                pn = d["product_name"]
+
+                if not pc:
+                    predefined = db.query(ProductCode).filter(
+                        ProductCode.name == pn,
+                        ProductCode.code_type == 'predefined'
+                    ).first()
+                    if predefined:
+                        pc = predefined.code
+                    else:
+                        pc = get_next_f_code(db)
+                        db.add(ProductCode(
+                            code=pc, name=pn, code_type="f_single",
+                            is_unique=1, is_used=1, created_by="Excel导入"
+                        ))
+                        db.flush()
+
                 det = InboundDetail(
-                    product_code=d["product_code"],
-                    product_name=d["product_name"],
+                    product_code=pc,
+                    product_name=pn,
                     weight=d["weight"],
                     labor_cost=d["labor_cost"],
                     piece_count=d["piece_count"],

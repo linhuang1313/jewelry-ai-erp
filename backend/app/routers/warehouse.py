@@ -1112,11 +1112,20 @@ async def create_transfer_order(
         inventory.weight = float(inventory.weight or 0) - item.weight
         inventory.updated_at = china_now()
         
-        # 创建明细（优先使用前端传入的编码，回退到 code_map 查询）
+        resolved_code = item.product_code or code_map.get(item.product_name)
+        if not item.product_code and resolved_code:
+            logger.warning(
+                f"转移单明细 '{item.product_name}' 无前端编码，"
+                f"使用 code_map fallback: {resolved_code}（同名商品可能共享编码）"
+            )
+        elif not resolved_code:
+            logger.warning(
+                f"转移单明细 '{item.product_name}' 无编码且 code_map 中无匹配"
+            )
         transfer_item = InventoryTransferItem(
             order_id=order.id,
             product_name=item.product_name,
-            product_code=item.product_code or code_map.get(item.product_name),
+            product_code=resolved_code,
             weight=item.weight
         )
         db.add(transfer_item)

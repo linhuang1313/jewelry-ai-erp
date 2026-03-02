@@ -1893,16 +1893,15 @@ async def create_batch_inbound_orders(
                     getattr(item, 'total_amount', None),
                 ])
                 
-                # 非镶嵌产品：匹配预定义编码或自动生成F编码
-                if not is_inlay_product:
+                # 匹配预定义编码或自动生成F编码（镶嵌产品同样需要独立编码）
+                if not product_code:
                     valid_product = db.query(ProductCodeModel).filter(
                         ProductCodeModel.name == product_name,
                         ProductCodeModel.code_type == 'predefined'
                     ).first()
-                    if valid_product and not product_code:
+                    if valid_product:
                         product_code = valid_product.code
-                    elif not valid_product and not product_code:
-                        # 非预定义商品 → 自动生成唯一F编码
+                    else:
                         from ..init_product_codes import get_next_f_code
                         product_code = get_next_f_code(db)
                         new_code = ProductCodeModel(
