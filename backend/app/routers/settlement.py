@@ -457,7 +457,7 @@ async def create_settlement_order(
     if data.payment_method == "cash_price":
         if not data.gold_price or data.gold_price <= 0:
             raise HTTPException(status_code=400, detail="结价支付需要填写当日金价")
-        material_amount = data.gold_price * so_total_weight
+        material_amount = to_decimal(data.gold_price) * so_total_weight
         actual_gold_due = 0.0  # 结价不需要支付金料
     elif data.payment_method == "physical_gold":
         material_amount = 0  # 结料，原料金额为0
@@ -478,7 +478,7 @@ async def create_settlement_order(
             raise HTTPException(status_code=400, detail="混合支付需要填写结价部分的克重")
         
         # 计算支付差额（支付克重 - 应付克重）
-        total_input = (data.gold_payment_weight or 0) + (data.cash_payment_weight or 0)
+        total_input = to_decimal(data.gold_payment_weight) + to_decimal(data.cash_payment_weight)
         weight_difference = total_input - so_total_weight
         
         # 灵活支付：少付时需要前端确认
@@ -489,9 +489,9 @@ async def create_settlement_order(
             )
         
         # 计算金额：结价部分按金价换算成现金
-        material_amount = data.gold_price * (data.cash_payment_weight or 0)
+        material_amount = to_decimal(data.gold_price) * to_decimal(data.cash_payment_weight)
         # 客户需要支付的金料 = 结料部分的克重
-        actual_gold_due = data.gold_payment_weight or 0
+        actual_gold_due = to_decimal(data.gold_payment_weight)
         
         logger.info(f"混合支付: 结料{data.gold_payment_weight}克 + 结价{data.cash_payment_weight}克×{data.gold_price}元/克 = 料费¥{material_amount}, 差额={weight_difference:.2f}克")
         # ==================== 混合支付结束 ====================
@@ -556,12 +556,12 @@ async def create_settlement_order(
     
     if data.payment_method == "mixed":
         # 混合支付：基于克重计算差额
-        total_input = (data.gold_payment_weight or 0) + (data.cash_payment_weight or 0)
+        total_input = to_decimal(data.gold_payment_weight) + to_decimal(data.cash_payment_weight)
         payment_difference = total_input - so_total_weight
     elif data.payment_method == "physical_gold":
         # 结料支付：基于金料重量计算差额
         if data.physical_gold_weight:
-            payment_difference = data.physical_gold_weight - so_total_weight
+            payment_difference = to_decimal(data.physical_gold_weight) - so_total_weight
     # 结价支付暂不支持差额（需要额外参数）
     
     # 设置支付状态
