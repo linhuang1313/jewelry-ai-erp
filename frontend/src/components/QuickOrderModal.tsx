@@ -201,7 +201,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
     }
   };
 
-  // 获取 F码商品的入库详情（镶嵌字段）
+  // 获取 F码商品的入库详情（镶嵌字段）+ 自动填充克重/工费
   const fetchFCodeDetail = async (itemId: string, code: string) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/inventory/by-code?code=${encodeURIComponent(code)}`);
@@ -209,6 +209,16 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
         const data = await response.json();
         if (data.success && data.data) {
           setFCodeDetails(prev => ({ ...prev, [itemId]: data.data }));
+          const d = data.data;
+          setItems(prev => prev.map(item =>
+            item.id === itemId ? {
+              ...item,
+              weight: d.weight != null ? String(d.weight) : item.weight,
+              labor_cost: d.labor_cost != null ? String(d.labor_cost) : item.labor_cost,
+              piece_count: d.piece_count != null ? String(d.piece_count) : item.piece_count,
+              piece_labor_cost: d.piece_labor_cost != null ? String(d.piece_labor_cost) : item.piece_labor_cost,
+            } : item
+          ));
         }
       }
     } catch (error) {
