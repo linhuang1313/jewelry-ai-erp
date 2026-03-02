@@ -184,7 +184,7 @@ def bulk_insert_inventory(all_records, clean_first=False):
                         ProductCode.name == pn,
                         ProductCode.code_type == 'predefined'
                     ).first()
-                    if predefined:
+                    if predefined and not predefined.code.startswith('F'):
                         pc = predefined.code
                     else:
                         pc = get_next_f_code(db)

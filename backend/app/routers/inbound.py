@@ -128,7 +128,7 @@ def _normalize_inbound_code_fields(
             ProductCodeModel.name == p_name,
             ProductCodeModel.code_type == 'predefined'
         ).first()
-        if valid_product:
+        if valid_product and not valid_product.code.startswith('F'):
             p_code = valid_product.code
         else:
             from ..init_product_codes import get_next_f_code
@@ -1899,7 +1899,7 @@ async def create_batch_inbound_orders(
                         ProductCodeModel.name == product_name,
                         ProductCodeModel.code_type == 'predefined'
                     ).first()
-                    if valid_product:
+                    if valid_product and not valid_product.code.startswith('F'):
                         product_code = valid_product.code
                     else:
                         from ..init_product_codes import get_next_f_code
