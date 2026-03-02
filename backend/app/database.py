@@ -3,6 +3,7 @@
 数据库连接模块
 配置SQLAlchemy连接池和字符集参数，防止中文乱码
 """
+from pathlib import Path
 from sqlalchemy import create_engine, event, text, inspect
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, sessionmaker
@@ -10,7 +11,7 @@ import os
 from dotenv import load_dotenv
 from .utils.text_sanitizer import sanitize_session_instances
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # 获取数据库URL，优先使用环境变量中的PostgreSQL连接
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./jewelry_erp.db")

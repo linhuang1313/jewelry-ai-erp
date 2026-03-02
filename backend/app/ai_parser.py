@@ -2,13 +2,14 @@ import json
 import os
 import re
 import logging
+from pathlib import Path
 from typing import Dict, List, Optional
 from openai import OpenAI
 from dotenv import load_dotenv
 from .schemas import AIResponse
 from .ai_prompts import pre_classify, build_context, get_category_prompt
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -23,6 +24,11 @@ def get_client():
     global _client
     if _client is None:
         api_key = os.getenv("DEEPSEEK_API_KEY")
+        if not api_key:
+            _env_path = Path(__file__).resolve().parent.parent / ".env"
+            load_dotenv(_env_path, override=True)
+            logger.info(f"重新加载 .env: {_env_path}, exists={_env_path.exists()}")
+            api_key = os.getenv("DEEPSEEK_API_KEY")
         if not api_key:
             raise RuntimeError("DEEPSEEK_API_KEY 环境变量未设置，无法使用 AI 解析功能")
         _client = OpenAI(

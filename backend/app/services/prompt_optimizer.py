@@ -6,12 +6,13 @@ AI 提示词优化服务
 import json
 import logging
 import os
+from pathlib import Path
 from typing import List, Optional
 
 from openai import OpenAI
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 logger = logging.getLogger(__name__)
 
 _client = None

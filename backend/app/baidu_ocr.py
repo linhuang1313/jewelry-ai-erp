@@ -8,10 +8,11 @@ import base64
 import requests
 import logging
 import json
+from pathlib import Path
 from typing import Dict, Optional, List
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 logger = logging.getLogger(__name__)
 
