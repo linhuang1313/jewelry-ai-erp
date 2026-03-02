@@ -67,6 +67,7 @@ def init_db():
     _auto_migrate_payment_records()
     _auto_migrate_action_cards()
     _auto_migrate_transfer_items()
+    _auto_migrate_return_order_details()
 
 
 def _auto_migrate_inbound_orders():
@@ -209,3 +210,30 @@ def _auto_migrate_transfer_items():
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"Auto-migrate inventory_transfer_items: {e}")
+
+
+def _auto_migrate_return_order_details():
+    """Auto-add missing columns to return_order_details."""
+    try:
+        insp = inspect(engine)
+        if 'return_order_details' not in insp.get_table_names():
+            return
+        columns = {col['name'] for col in insp.get_columns('return_order_details')}
+        new_cols = {
+            'product_code': 'VARCHAR(100)',
+            'main_stone_weight': 'NUMERIC(10,4)',
+            'main_stone_count': 'INTEGER',
+            'sub_stone_weight': 'NUMERIC(10,4)',
+            'sub_stone_count': 'INTEGER',
+            'main_stone_mark': 'VARCHAR(100)',
+            'sub_stone_mark': 'VARCHAR(100)',
+            'pearl_weight': 'NUMERIC(10,4)',
+            'bearing_weight': 'NUMERIC(10,4)',
+        }
+        with engine.begin() as conn:
+            for col_name, col_type in new_cols.items():
+                if col_name not in columns:
+                    conn.execute(text(f"ALTER TABLE return_order_details ADD COLUMN {col_name} {col_type}"))
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Auto-migrate return_order_details: {e}")

@@ -500,6 +500,7 @@ class ReturnOrderDetail(Base):
     order_id = Column(Integer, ForeignKey("return_orders.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # 商品信息
+    product_code = Column(String(100), nullable=True)  # 商品编码
     product_name = Column(String(200), nullable=False)  # 商品名称
     return_weight = Column(Numeric(12, 4), nullable=False)  # 退货克重
     
@@ -508,6 +509,16 @@ class ReturnOrderDetail(Base):
     piece_count = Column(Integer, nullable=True)  # 件数
     piece_labor_cost = Column(Numeric(10, 2), nullable=True)  # 件工费（元/件）
     total_labor_cost = Column(Numeric(14, 2), default=0.0)  # 总工费 = 克工费*克重 + 件工费*件数
+    
+    # 宝石信息
+    main_stone_weight = Column(Numeric(10, 4), nullable=True)  # 主石重
+    main_stone_count = Column(Integer, nullable=True)  # 主石粒数
+    sub_stone_weight = Column(Numeric(10, 4), nullable=True)  # 副石重
+    sub_stone_count = Column(Integer, nullable=True)  # 副石粒数
+    main_stone_mark = Column(String(100), nullable=True)  # 主石字印
+    sub_stone_mark = Column(String(100), nullable=True)  # 副石字印
+    pearl_weight = Column(Numeric(10, 4), nullable=True)  # 珍珠重
+    bearing_weight = Column(Numeric(10, 4), nullable=True)  # 轴承重
     
     # 备注
     remark = Column(Text, nullable=True)

@@ -57,24 +57,41 @@ def build_return_response_from_maps(
         for d in details_list:
             items.append({
                 "id": d.id,
+                "product_code": getattr(d, 'product_code', None),
                 "product_name": d.product_name,
                 "return_weight": d.return_weight,
                 "labor_cost": d.labor_cost or 0.0,
                 "piece_count": d.piece_count,
                 "piece_labor_cost": d.piece_labor_cost,
                 "total_labor_cost": d.total_labor_cost or 0.0,
+                "main_stone_weight": getattr(d, 'main_stone_weight', None),
+                "main_stone_count": getattr(d, 'main_stone_count', None),
+                "sub_stone_weight": getattr(d, 'sub_stone_weight', None),
+                "sub_stone_count": getattr(d, 'sub_stone_count', None),
+                "main_stone_mark": getattr(d, 'main_stone_mark', None),
+                "sub_stone_mark": getattr(d, 'sub_stone_mark', None),
+                "pearl_weight": getattr(d, 'pearl_weight', None),
+                "bearing_weight": getattr(d, 'bearing_weight', None),
                 "remark": d.remark
             })
     else:
-        # 兼容旧数据：使用主表的单商品字段
         items.append({
             "id": 0,
+            "product_code": None,
             "product_name": return_order.product_name,
             "return_weight": return_order.return_weight,
             "labor_cost": 0.0,
             "piece_count": None,
             "piece_labor_cost": None,
             "total_labor_cost": 0.0,
+            "main_stone_weight": None,
+            "main_stone_count": None,
+            "sub_stone_weight": None,
+            "sub_stone_count": None,
+            "main_stone_mark": None,
+            "sub_stone_mark": None,
+            "pearl_weight": None,
+            "bearing_weight": None,
             "remark": None
         })
     
@@ -324,12 +341,21 @@ async def create_return_order(
             # 创建明细
             detail = ReturnOrderDetail(
                 order_id=return_order.id,
+                product_code=item.product_code,
                 product_name=item.product_name,
                 return_weight=item.return_weight,
                 labor_cost=item.labor_cost,
                 piece_count=item.piece_count,
                 piece_labor_cost=item.piece_labor_cost,
                 total_labor_cost=item_total_labor_cost,
+                main_stone_weight=item.main_stone_weight,
+                main_stone_count=item.main_stone_count,
+                sub_stone_weight=item.sub_stone_weight,
+                sub_stone_count=item.sub_stone_count,
+                main_stone_mark=item.main_stone_mark,
+                sub_stone_mark=item.sub_stone_mark,
+                pearl_weight=item.pearl_weight,
+                bearing_weight=item.bearing_weight,
                 remark=item.remark
             )
             db.add(detail)

@@ -672,11 +672,20 @@ class TransferOrderResponse(BaseModel):
 
 class ReturnItemCreate(BaseModel):
     """退货商品明细"""
+    product_code: Optional[str] = None  # 商品编码
     product_name: str  # 商品名称
     return_weight: float  # 退货克重
     labor_cost: float = 0.0  # 克工费（元/克）
     piece_count: Optional[int] = None  # 件数
     piece_labor_cost: Optional[float] = None  # 件工费（元/件）
+    main_stone_weight: Optional[float] = None  # 主石重
+    main_stone_count: Optional[int] = None  # 主石粒数
+    sub_stone_weight: Optional[float] = None  # 副石重
+    sub_stone_count: Optional[int] = None  # 副石粒数
+    main_stone_mark: Optional[str] = None  # 主石字印
+    sub_stone_mark: Optional[str] = None  # 副石字印
+    pearl_weight: Optional[float] = None  # 珍珠重
+    bearing_weight: Optional[float] = None  # 轴承重
     remark: Optional[str] = None  # 备注
 
 
@@ -684,12 +693,21 @@ class ReturnItemResponse(BaseModel):
     """退货商品明细响应"""
     model_config = ConfigDict(from_attributes=True)
     id: int
+    product_code: Optional[str] = None
     product_name: str
     return_weight: float
     labor_cost: float
     piece_count: Optional[int]
     piece_labor_cost: Optional[float]
     total_labor_cost: float
+    main_stone_weight: Optional[float] = None
+    main_stone_count: Optional[int] = None
+    sub_stone_weight: Optional[float] = None
+    sub_stone_count: Optional[int] = None
+    main_stone_mark: Optional[str] = None
+    sub_stone_mark: Optional[str] = None
+    pearl_weight: Optional[float] = None
+    bearing_weight: Optional[float] = None
     remark: Optional[str]
 
 

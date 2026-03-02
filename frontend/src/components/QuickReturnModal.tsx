@@ -27,12 +27,27 @@ interface InventoryItem {
   location_name?: string;
 }
 
+interface ProductCode {
+  code: string;
+  name: string;
+  status?: string;
+}
+
 interface ReturnItem {
+  product_code: string;
   product_name: string;
   return_weight: string;
   labor_cost: string;
   piece_count: string;
   piece_labor_cost: string;
+  main_stone_weight: string;
+  main_stone_count: string;
+  sub_stone_weight: string;
+  sub_stone_count: string;
+  main_stone_mark: string;
+  sub_stone_mark: string;
+  pearl_weight: string;
+  bearing_weight: string;
   remark: string;
 }
 
@@ -59,11 +74,20 @@ interface QuickReturnModalProps {
 const RETURN_REASONS = ['质量问题', '款式不符', '数量差异', '工艺瑕疵', '其他'];
 
 const emptyItem: ReturnItem = {
+  product_code: '',
   product_name: '',
   return_weight: '',
   labor_cost: '',
   piece_count: '',
   piece_labor_cost: '',
+  main_stone_weight: '',
+  main_stone_count: '',
+  sub_stone_weight: '',
+  sub_stone_count: '',
+  main_stone_mark: '',
+  sub_stone_mark: '',
+  pearl_weight: '',
+  bearing_weight: '',
   remark: ''
 };
 
@@ -84,6 +108,11 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
   const [activeDropdownIndex, setActiveDropdownIndex] = useState<number | null>(null);
   const [supplierKeyword, setSupplierKeyword] = useState('');
   const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
+
+  // 商品编码搜索相关
+  const [productCodes, setProductCodes] = useState<ProductCode[]>([]);
+  const [codeSearchResults, setCodeSearchResults] = useState<ProductCode[]>([]);
+  const [codeDropdownIndex, setCodeDropdownIndex] = useState<number | null>(null);
   
   // 根据角色确定退货配置
   const getReturnConfig = () => {
@@ -127,11 +156,11 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
   // 创建成功后的退货单信息
   const [createdReturn, setCreatedReturn] = useState<any>(null);
 
-  // 加载供应商和位置列表
+  // 加载供应商、位置列表和商品编码
   useEffect(() => {
     if (isOpen) {
       setDataLoading(true);
-      const promises: Promise<void>[] = [fetchLocations()];
+      const promises: Promise<void>[] = [fetchLocations(), fetchProductCodes()];
       if (returnConfig.needSupplier) {
         promises.push(fetchSuppliers());
       }
@@ -178,13 +207,16 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
       if (!target.closest('.supplier-dropdown-container')) {
         setShowSupplierDropdown(false);
       }
+      if (!target.closest('.code-dropdown-container')) {
+        setCodeDropdownIndex(null);
+      }
     };
     
-    if (activeDropdownIndex !== null || showSupplierDropdown) {
+    if (activeDropdownIndex !== null || showSupplierDropdown || codeDropdownIndex !== null) {
       document.addEventListener('click', handleClickOutside);
       return () => document.removeEventListener('click', handleClickOutside);
     }
-  }, [activeDropdownIndex, showSupplierDropdown]);
+  }, [activeDropdownIndex, showSupplierDropdown, codeDropdownIndex]);
 
   // 供应商搜索过滤
   const filteredSuppliers = supplierKeyword.trim()
@@ -244,6 +276,82 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
     } catch (error) {
       console.error('获取位置失败:', error);
       toast.error('获取仓库位置失败，请刷新重试');
+    }
+  };
+
+  // 加载商品编码列表
+  const fetchProductCodes = async (): Promise<void> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/product-codes?limit=10000&include_used=true`);
+      if (response.ok) {
+        const data = await response.json();
+        const codeList = Array.isArray(data) ? data : (data.codes || []);
+        setProductCodes(codeList);
+      }
+    } catch (error) {
+      console.error('获取商品编码列表失败', error);
+    }
+  };
+
+  // 搜索商品编码
+  const searchCode = (index: number, query: string) => {
+    if (!query.trim()) {
+      setCodeSearchResults([]);
+      setCodeDropdownIndex(null);
+      return;
+    }
+    const upperQuery = query.toUpperCase();
+    const results = productCodes.filter(pc =>
+      pc.code.toUpperCase().includes(upperQuery) ||
+      pc.name.includes(query)
+    ).slice(0, 8);
+    setCodeSearchResults(results);
+    setCodeDropdownIndex(results.length > 0 ? index : null);
+  };
+
+  // 选择商品编码后填充
+  const selectProductCode = (index: number, pc: ProductCode) => {
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], product_code: pc.code, product_name: pc.name };
+    setItems(newItems);
+    setCodeDropdownIndex(null);
+    setCodeSearchResults([]);
+    if (pc.code.toUpperCase().startsWith('F')) {
+      fetchFCodeDetail(index, pc.code);
+    }
+  };
+
+  // F码自动填充入库详情
+  const fetchFCodeDetail = async (index: number, code: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/inventory/by-code?code=${encodeURIComponent(code)}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data) {
+          const d = data.data;
+          setItems(prev => prev.map((item, i) =>
+            i === index ? {
+              ...item,
+              return_weight: d.weight != null ? String(d.weight) : item.return_weight,
+              labor_cost: d.sale_labor_cost != null ? String(d.sale_labor_cost)
+                        : d.labor_cost != null ? String(d.labor_cost) : item.labor_cost,
+              piece_count: d.piece_count != null ? String(d.piece_count) : item.piece_count,
+              piece_labor_cost: d.sale_piece_labor_cost != null ? String(d.sale_piece_labor_cost)
+                              : d.piece_labor_cost != null ? String(d.piece_labor_cost) : item.piece_labor_cost,
+              main_stone_weight: d.main_stone_weight != null ? String(d.main_stone_weight) : item.main_stone_weight,
+              main_stone_count: d.main_stone_count != null ? String(d.main_stone_count) : item.main_stone_count,
+              sub_stone_weight: d.sub_stone_weight != null ? String(d.sub_stone_weight) : item.sub_stone_weight,
+              sub_stone_count: d.sub_stone_count != null ? String(d.sub_stone_count) : item.sub_stone_count,
+              main_stone_mark: d.main_stone_mark || item.main_stone_mark,
+              sub_stone_mark: d.sub_stone_mark || item.sub_stone_mark,
+              pearl_weight: d.pearl_weight != null ? String(d.pearl_weight) : item.pearl_weight,
+              bearing_weight: d.bearing_weight != null ? String(d.bearing_weight) : item.bearing_weight,
+            } : item
+          ));
+        }
+      }
+    } catch (error) {
+      console.error('获取F码入库详情失败', error);
     }
   };
 
@@ -313,11 +421,20 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
     try {
       // 构建请求数据
       const requestItems = items.map(item => ({
+        product_code: item.product_code?.trim() || null,
         product_name: item.product_name.trim(),
         return_weight: parseFloat(item.return_weight),
         labor_cost: parseFloat(item.labor_cost) || 0,
         piece_count: item.piece_count ? parseInt(item.piece_count) : null,
         piece_labor_cost: item.piece_labor_cost ? parseFloat(item.piece_labor_cost) : null,
+        main_stone_weight: item.main_stone_weight ? parseFloat(item.main_stone_weight) : null,
+        main_stone_count: item.main_stone_count ? parseInt(item.main_stone_count) : null,
+        sub_stone_weight: item.sub_stone_weight ? parseFloat(item.sub_stone_weight) : null,
+        sub_stone_count: item.sub_stone_count ? parseInt(item.sub_stone_count) : null,
+        main_stone_mark: item.main_stone_mark?.trim() || null,
+        sub_stone_mark: item.sub_stone_mark?.trim() || null,
+        pearl_weight: item.pearl_weight ? parseFloat(item.pearl_weight) : null,
+        bearing_weight: item.bearing_weight ? parseFloat(item.bearing_weight) : null,
         remark: item.remark.trim() || null
       }));
 
@@ -499,7 +616,7 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
       />
       
       {/* 弹窗内容 */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] mx-4 max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
         {/* 标题栏 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-red-50 to-orange-50">
           <div className="flex items-center space-x-3">
@@ -590,140 +707,255 @@ export const QuickReturnModal: React.FC<QuickReturnModalProps> = ({
               </button>
             </div>
             
-            {/* 表头 */}
-            <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gray-100 text-xs font-medium text-gray-600">
-              <div className="col-span-3">商品名称 *</div>
-              <div className="col-span-2">退货克重 *</div>
-              <div className="col-span-2">克工费(元/克)</div>
-              <div className="col-span-1">件数</div>
-              <div className="col-span-2">件工费(元/件)</div>
-              <div className="col-span-1">小计</div>
-              <div className="col-span-1"></div>
-            </div>
-            
-            {/* 商品行 */}
-            {items.map((item, index) => (
-              <div key={index} className="grid grid-cols-12 gap-2 px-4 py-2 border-b border-gray-100 items-center">
-                {/* 商品名称 */}
-                <div className="col-span-3 relative product-dropdown-container">
-                  <input
-                    type="text"
-                    value={item.product_name}
-                    onChange={(e) => updateItem(index, 'product_name', e.target.value)}
-                    onFocus={() => setActiveDropdownIndex(index)}
-                    placeholder="选择或输入"
-                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
-                  />
-                  {activeDropdownIndex === index && (
-                    <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-auto">
-                      {(item.product_name.trim() 
-                        ? inventoryItems.filter(inv => {
-                            const keyword = item.product_name.toUpperCase();
-                            return inv.product_name.includes(item.product_name) ||
-                                   (inv.pinyin_initials && inv.pinyin_initials.includes(keyword));
-                          })
-                        : inventoryItems
-                      ).slice(0, 15).map((inv) => (
-                        <button
-                          key={inv.id}
-                          type="button"
-                          onClick={() => {
-                            updateItem(index, 'product_name', inv.product_name);
-                            setActiveDropdownIndex(null);
-                          }}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-red-50 flex items-center justify-between border-b border-gray-50 last:border-b-0"
-                        >
-                          <span className="text-gray-700 truncate">{inv.product_name}</span>
-                          <span className="font-mono text-orange-500 text-xs ml-2">{inv.weight?.toFixed(2)}g</span>
-                        </button>
-                      ))}
-                      {inventoryItems.length === 0 && (
-                        <div className="px-3 py-3 text-center text-gray-400 text-sm">
-                          {dataLoading ? '加载中...' : '暂无库存'}
+            <div className="overflow-x-auto">
+              {/* 表头 */}
+              <div className="min-w-[1200px]">
+                <div className="grid grid-cols-[120px_140px_80px_80px_60px_80px_70px_60px_70px_60px_80px_80px_60px_60px_70px_40px] gap-1 px-3 py-2 bg-gray-100 text-xs font-medium text-gray-600">
+                  <div>商品编码</div>
+                  <div>商品名称 *</div>
+                  <div>退货克重 *</div>
+                  <div>克工费</div>
+                  <div>件数</div>
+                  <div>件工费</div>
+                  <div>主石重</div>
+                  <div>主石数</div>
+                  <div>副石重</div>
+                  <div>副石数</div>
+                  <div>主石字印</div>
+                  <div>副石字印</div>
+                  <div>珍珠重</div>
+                  <div>轴承重</div>
+                  <div>小计</div>
+                  <div></div>
+                </div>
+                
+                {/* 商品行 */}
+                {items.map((item, index) => (
+                  <div key={index} className="grid grid-cols-[120px_140px_80px_80px_60px_80px_70px_60px_70px_60px_80px_80px_60px_60px_70px_40px] gap-1 px-3 py-1.5 border-b border-gray-100 items-center">
+                    {/* 商品编码 */}
+                    <div className="relative code-dropdown-container">
+                      <input
+                        type="text"
+                        value={item.product_code}
+                        onChange={(e) => {
+                          updateItem(index, 'product_code', e.target.value);
+                          searchCode(index, e.target.value);
+                        }}
+                        onFocus={() => {
+                          if (item.product_code) searchCode(index, item.product_code);
+                        }}
+                        onBlur={() => setTimeout(() => {
+                          if (codeDropdownIndex === index) setCodeDropdownIndex(null);
+                          const code = item.product_code.trim().toUpperCase();
+                          if (code.startsWith('F') && code.length > 1) {
+                            const matched = productCodes.find(pc => pc.code.toUpperCase() === code);
+                            if (matched) {
+                              selectProductCode(index, matched);
+                            } else {
+                              fetchFCodeDetail(index, code);
+                            }
+                          }
+                        }, 200)}
+                        placeholder="编码"
+                        className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
+                      />
+                      {codeDropdownIndex === index && codeSearchResults.length > 0 && (
+                        <div className="absolute z-20 left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-auto min-w-[200px]">
+                          {codeSearchResults.map((pc) => (
+                            <button
+                              key={pc.code}
+                              type="button"
+                              onClick={() => selectProductCode(index, pc)}
+                              className="w-full px-3 py-2 text-left text-xs hover:bg-red-50 flex items-center justify-between border-b border-gray-50 last:border-b-0"
+                            >
+                              <span className="font-mono text-red-600">{pc.code}</span>
+                              <span className="text-gray-500 ml-2 truncate">{pc.name}</span>
+                            </button>
+                          ))}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
+
+                    {/* 商品名称 */}
+                    <div className="relative product-dropdown-container">
+                      <input
+                        type="text"
+                        value={item.product_name}
+                        onChange={(e) => updateItem(index, 'product_name', e.target.value)}
+                        onFocus={() => setActiveDropdownIndex(index)}
+                        placeholder="选择或输入"
+                        className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
+                      />
+                      {activeDropdownIndex === index && (
+                        <div className="absolute z-20 left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-auto min-w-[200px]">
+                          {(item.product_name.trim() 
+                            ? inventoryItems.filter(inv => {
+                                const keyword = item.product_name.toUpperCase();
+                                return inv.product_name.includes(item.product_name) ||
+                                       (inv.pinyin_initials && inv.pinyin_initials.includes(keyword));
+                              })
+                            : inventoryItems
+                          ).slice(0, 15).map((inv) => (
+                            <button
+                              key={inv.id}
+                              type="button"
+                              onClick={() => {
+                                updateItem(index, 'product_name', inv.product_name);
+                                setActiveDropdownIndex(null);
+                              }}
+                              className="w-full px-3 py-2 text-left text-xs hover:bg-red-50 flex items-center justify-between border-b border-gray-50 last:border-b-0"
+                            >
+                              <span className="text-gray-700 truncate">{inv.product_name}</span>
+                              <span className="font-mono text-orange-500 ml-2">{inv.weight?.toFixed(2)}g</span>
+                            </button>
+                          ))}
+                          {inventoryItems.length === 0 && (
+                            <div className="px-3 py-3 text-center text-gray-400 text-xs">
+                              {dataLoading ? '加载中...' : '暂无库存'}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* 退货克重 */}
+                    <div>
+                      <input type="number" step="0.01" min="0" value={item.return_weight}
+                        onChange={(e) => updateItem(index, 'return_weight', e.target.value)}
+                        placeholder="克重"
+                        className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
+                      />
+                    </div>
+                    
+                    {/* 克工费 */}
+                    <div>
+                      <input type="number" step="0.01" min="0" value={item.labor_cost}
+                        onChange={(e) => updateItem(index, 'labor_cost', e.target.value)}
+                        placeholder="0"
+                        className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
+                      />
+                    </div>
+                    
+                    {/* 件数 */}
+                    <div>
+                      <input type="number" min="0" value={item.piece_count}
+                        onChange={(e) => updateItem(index, 'piece_count', e.target.value)}
+                        placeholder="0"
+                        className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
+                      />
+                    </div>
+                    
+                    {/* 件工费 */}
+                    <div>
+                      <input type="number" step="0.01" min="0" value={item.piece_labor_cost}
+                        onChange={(e) => updateItem(index, 'piece_labor_cost', e.target.value)}
+                        placeholder="0"
+                        className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
+                      />
+                    </div>
+
+                    {/* 主石重 */}
+                    <div>
+                      <input type="number" step="0.01" min="0" value={item.main_stone_weight}
+                        onChange={(e) => updateItem(index, 'main_stone_weight', e.target.value)}
+                        placeholder="0"
+                        className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
+                      />
+                    </div>
+
+                    {/* 主石数 */}
+                    <div>
+                      <input type="number" min="0" value={item.main_stone_count}
+                        onChange={(e) => updateItem(index, 'main_stone_count', e.target.value)}
+                        placeholder="0"
+                        className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
+                      />
+                    </div>
+
+                    {/* 副石重 */}
+                    <div>
+                      <input type="number" step="0.01" min="0" value={item.sub_stone_weight}
+                        onChange={(e) => updateItem(index, 'sub_stone_weight', e.target.value)}
+                        placeholder="0"
+                        className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
+                      />
+                    </div>
+
+                    {/* 副石数 */}
+                    <div>
+                      <input type="number" min="0" value={item.sub_stone_count}
+                        onChange={(e) => updateItem(index, 'sub_stone_count', e.target.value)}
+                        placeholder="0"
+                        className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
+                      />
+                    </div>
+
+                    {/* 主石字印 */}
+                    <div>
+                      <input type="text" value={item.main_stone_mark}
+                        onChange={(e) => updateItem(index, 'main_stone_mark', e.target.value)}
+                        placeholder=""
+                        className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
+                      />
+                    </div>
+
+                    {/* 副石字印 */}
+                    <div>
+                      <input type="text" value={item.sub_stone_mark}
+                        onChange={(e) => updateItem(index, 'sub_stone_mark', e.target.value)}
+                        placeholder=""
+                        className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
+                      />
+                    </div>
+
+                    {/* 珍珠重 */}
+                    <div>
+                      <input type="number" step="0.01" min="0" value={item.pearl_weight}
+                        onChange={(e) => updateItem(index, 'pearl_weight', e.target.value)}
+                        placeholder="0"
+                        className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
+                      />
+                    </div>
+
+                    {/* 轴承重 */}
+                    <div>
+                      <input type="number" step="0.01" min="0" value={item.bearing_weight}
+                        onChange={(e) => updateItem(index, 'bearing_weight', e.target.value)}
+                        placeholder="0"
+                        className="w-full px-1.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
+                      />
+                    </div>
+                    
+                    {/* 小计 */}
+                    <div className="text-xs font-medium text-orange-600">
+                      ¥{calcItemLaborCost(item).toFixed(2)}
+                    </div>
+                    
+                    {/* 删除按钮 */}
+                    <div>
+                      {items.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeItem(index)}
+                          className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
                 
-                {/* 退货克重 */}
-                <div className="col-span-2">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={item.return_weight}
-                    onChange={(e) => updateItem(index, 'return_weight', e.target.value)}
-                    placeholder="克重"
-                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
-                  />
-                </div>
-                
-                {/* 克工费 */}
-                <div className="col-span-2">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={item.labor_cost}
-                    onChange={(e) => updateItem(index, 'labor_cost', e.target.value)}
-                    placeholder="0"
-                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
-                  />
-                </div>
-                
-                {/* 件数 */}
-                <div className="col-span-1">
-                  <input
-                    type="number"
-                    min="0"
-                    value={item.piece_count}
-                    onChange={(e) => updateItem(index, 'piece_count', e.target.value)}
-                    placeholder="0"
-                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
-                  />
-                </div>
-                
-                {/* 件工费 */}
-                <div className="col-span-2">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={item.piece_labor_cost}
-                    onChange={(e) => updateItem(index, 'piece_labor_cost', e.target.value)}
-                    placeholder="0"
-                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-900 placeholder:text-gray-400"
-                  />
-                </div>
-                
-                {/* 小计 */}
-                <div className="col-span-1 text-sm font-medium text-orange-600">
-                  ¥{calcItemLaborCost(item).toFixed(2)}
-                </div>
-                
-                {/* 删除按钮 */}
-                <div className="col-span-1">
-                  {items.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeItem(index)}
-                      className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+                {/* 汇总行 */}
+                <div className="grid grid-cols-[120px_140px_80px_80px_60px_80px_70px_60px_70px_60px_80px_80px_60px_60px_70px_40px] gap-1 px-3 py-3 bg-red-50 font-medium text-xs">
+                  <div className="text-gray-700">合计 ({items.length} 个商品)</div>
+                  <div></div>
+                  <div className="text-red-600">{totalWeight.toFixed(2)}克</div>
+                  <div className="col-span-11"></div>
+                  <div className="text-red-600">¥{totalLaborCost.toFixed(2)}</div>
+                  <div></div>
                 </div>
               </div>
-            ))}
-            
-            {/* 汇总行 */}
-            <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-red-50 font-medium">
-              <div className="col-span-3 text-gray-700">合计 ({items.length} 个商品)</div>
-              <div className="col-span-2 text-red-600">{totalWeight.toFixed(2)} 克</div>
-              <div className="col-span-5"></div>
-              <div className="col-span-1 text-red-600">¥{totalLaborCost.toFixed(2)}</div>
-              <div className="col-span-1"></div>
             </div>
           </div>
 
