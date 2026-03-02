@@ -230,7 +230,21 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
     weight: number;
     transfer_weight: number;
     selected: boolean;
-    order_no: string;  // 来源入库单号
+    order_no: string;
+    barcode?: string;
+    labor_cost?: number;
+    piece_count?: number;
+    piece_labor_cost?: number;
+    main_stone_weight?: number;
+    main_stone_count?: number;
+    sub_stone_weight?: number;
+    sub_stone_count?: number;
+    main_stone_mark?: string;
+    sub_stone_mark?: string;
+    pearl_weight?: number;
+    bearing_weight?: number;
+    sale_labor_cost?: number;
+    sale_piece_labor_cost?: number;
   }>>([]);
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(new Set());  // 已选择的入库单ID
   const [batchLoading, setBatchLoading] = useState(false);
@@ -248,6 +262,20 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
       weight: number;
       fineness?: string;
       craft?: string;
+      barcode?: string;
+      labor_cost?: number;
+      piece_count?: number;
+      piece_labor_cost?: number;
+      main_stone_weight?: number;
+      main_stone_count?: number;
+      sub_stone_weight?: number;
+      sub_stone_count?: number;
+      main_stone_mark?: string;
+      sub_stone_mark?: string;
+      pearl_weight?: number;
+      bearing_weight?: number;
+      sale_labor_cost?: number;
+      sale_piece_labor_cost?: number;
     }>;
   }>>([]);
 
@@ -559,10 +587,24 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
           weight: d.weight,
           transfer_weight: d.weight,
           selected: true,
-          order_no: order.order_no
+          order_no: order.order_no,
+          barcode: d.barcode,
+          labor_cost: d.labor_cost,
+          piece_count: d.piece_count,
+          piece_labor_cost: d.piece_labor_cost,
+          main_stone_weight: d.main_stone_weight,
+          main_stone_count: d.main_stone_count,
+          sub_stone_weight: d.sub_stone_weight,
+          sub_stone_count: d.sub_stone_count,
+          main_stone_mark: d.main_stone_mark,
+          sub_stone_mark: d.sub_stone_mark,
+          pearl_weight: d.pearl_weight,
+          bearing_weight: d.bearing_weight,
+          sale_labor_cost: d.sale_labor_cost,
+          sale_piece_labor_cost: d.sale_piece_labor_cost,
         }));
         setBatchItems(items);
-        setSelectedOrderIds(new Set());  // 清除多选状态
+        setSelectedOrderIds(new Set());
         toast.success(`找到 ${items.length} 个商品`);
       } else {
         toast.error('未找到该入库单');
@@ -607,7 +649,21 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
           weight: d.weight,
           transfer_weight: d.weight,
           selected: true,
-          order_no: order.order_no
+          order_no: order.order_no,
+          barcode: d.barcode,
+          labor_cost: d.labor_cost,
+          piece_count: d.piece_count,
+          piece_labor_cost: d.piece_labor_cost,
+          main_stone_weight: d.main_stone_weight,
+          main_stone_count: d.main_stone_count,
+          sub_stone_weight: d.sub_stone_weight,
+          sub_stone_count: d.sub_stone_count,
+          main_stone_mark: d.main_stone_mark,
+          sub_stone_mark: d.sub_stone_mark,
+          pearl_weight: d.pearl_weight,
+          bearing_weight: d.bearing_weight,
+          sale_labor_cost: d.sale_labor_cost,
+          sale_piece_labor_cost: d.sale_piece_labor_cost,
         });
       });
     });
@@ -647,7 +703,21 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
           weight: d.weight,
           transfer_weight: d.weight,
           selected: true,
-          order_no: order.order_no
+          order_no: order.order_no,
+          barcode: d.barcode,
+          labor_cost: d.labor_cost,
+          piece_count: d.piece_count,
+          piece_labor_cost: d.piece_labor_cost,
+          main_stone_weight: d.main_stone_weight,
+          main_stone_count: d.main_stone_count,
+          sub_stone_weight: d.sub_stone_weight,
+          sub_stone_count: d.sub_stone_count,
+          main_stone_mark: d.main_stone_mark,
+          sub_stone_mark: d.sub_stone_mark,
+          pearl_weight: d.pearl_weight,
+          bearing_weight: d.bearing_weight,
+          sale_labor_cost: d.sale_labor_cost,
+          sale_piece_labor_cost: d.sale_piece_labor_cost,
         });
       });
     });
@@ -687,7 +757,21 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
           items: allItems.map(item => ({
             product_name: item.product_name,
             product_code: item.product_code || undefined,
-            weight: item.transfer_weight
+            weight: item.transfer_weight,
+            barcode: item.barcode || undefined,
+            labor_cost: item.labor_cost ?? undefined,
+            piece_count: item.piece_count ?? undefined,
+            piece_labor_cost: item.piece_labor_cost ?? undefined,
+            main_stone_weight: item.main_stone_weight ?? undefined,
+            main_stone_count: item.main_stone_count ?? undefined,
+            sub_stone_weight: item.sub_stone_weight ?? undefined,
+            sub_stone_count: item.sub_stone_count ?? undefined,
+            main_stone_mark: item.main_stone_mark || undefined,
+            sub_stone_mark: item.sub_stone_mark || undefined,
+            pearl_weight: item.pearl_weight ?? undefined,
+            bearing_weight: item.bearing_weight ?? undefined,
+            sale_labor_cost: item.sale_labor_cost ?? undefined,
+            sale_piece_labor_cost: item.sale_piece_labor_cost ?? undefined,
           })),
           from_location_id: fromLocationId,
           to_location_id: toLocationId,
@@ -832,7 +916,21 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
           items: selectedItems.map(item => ({
             product_name: item.product_name,
             product_code: item.product_code || undefined,
-            weight: item.transfer_weight
+            weight: item.transfer_weight,
+            barcode: item.barcode || undefined,
+            labor_cost: item.labor_cost ?? undefined,
+            piece_count: item.piece_count ?? undefined,
+            piece_labor_cost: item.piece_labor_cost ?? undefined,
+            main_stone_weight: item.main_stone_weight ?? undefined,
+            main_stone_count: item.main_stone_count ?? undefined,
+            sub_stone_weight: item.sub_stone_weight ?? undefined,
+            sub_stone_count: item.sub_stone_count ?? undefined,
+            main_stone_mark: item.main_stone_mark || undefined,
+            sub_stone_mark: item.sub_stone_mark || undefined,
+            pearl_weight: item.pearl_weight ?? undefined,
+            bearing_weight: item.bearing_weight ?? undefined,
+            sale_labor_cost: item.sale_labor_cost ?? undefined,
+            sale_piece_labor_cost: item.sale_piece_labor_cost ?? undefined,
           })),
           from_location_id: fromLocationId,
           to_location_id: toLocationId,
@@ -2782,24 +2880,52 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                             </div>
                           </div>
                           {/* 商品明细 */}
+                          {(() => {
+                            const items = order.items;
+                            const hasBarcode = items.some((i: any) => i.barcode);
+                            const hasLaborCost = items.some((i: any) => i.labor_cost != null);
+                            const hasPieceCount = items.some((i: any) => i.piece_count != null);
+                            const hasPieceLaborCost = items.some((i: any) => i.piece_labor_cost != null);
+                            const hasMainStone = items.some((i: any) => i.main_stone_weight != null || i.main_stone_count != null);
+                            const hasSubStone = items.some((i: any) => i.sub_stone_weight != null || i.sub_stone_count != null);
+                            const hasMarks = items.some((i: any) => i.main_stone_mark || i.sub_stone_mark);
+                            const hasPearl = items.some((i: any) => i.pearl_weight != null);
+                            const hasBearing = items.some((i: any) => i.bearing_weight != null);
+                            const hasSaleCost = items.some((i: any) => i.sale_labor_cost != null || i.sale_piece_labor_cost != null);
+                            return (
                           <div className="border-t border-orange-200 bg-white/50 overflow-x-auto">
                             <table className="w-full text-sm min-w-[300px]">
                               <thead className="bg-orange-100/50">
                                 <tr>
-                                  <th className="px-4 py-2 text-left text-gray-600">商品名称</th>
-                                  <th className="px-4 py-2 text-left text-gray-600">商品编码</th>
-                                  <th className="px-4 py-2 text-right text-gray-600">重量</th>
+                                  <th className="px-3 py-2 text-left text-gray-600 whitespace-nowrap">商品名称</th>
+                                  <th className="px-3 py-2 text-left text-gray-600 whitespace-nowrap">商品编码</th>
+                                  {hasBarcode && <th className="px-3 py-2 text-left text-gray-600 whitespace-nowrap">条码</th>}
+                                  <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">重量(g)</th>
+                                  {hasLaborCost && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">克工费</th>}
+                                  {hasPieceCount && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">件数</th>}
+                                  {hasPieceLaborCost && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">件工费</th>}
+                                  {hasMainStone && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">主石重</th>}
+                                  {hasMainStone && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">主石粒数</th>}
+                                  {hasSubStone && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">副石重</th>}
+                                  {hasSubStone && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">副石粒数</th>}
+                                  {hasMarks && <th className="px-3 py-2 text-left text-gray-600 whitespace-nowrap">主石字印</th>}
+                                  {hasMarks && <th className="px-3 py-2 text-left text-gray-600 whitespace-nowrap">副石字印</th>}
+                                  {hasPearl && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">珍珠重</th>}
+                                  {hasBearing && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">轴承重</th>}
+                                  {hasSaleCost && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">销售克工费</th>}
+                                  {hasSaleCost && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">销售件工费</th>}
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-orange-100">
-                                {order.items.map(item => {
+                                {items.map((item: any) => {
                                   const editForm = editItemForms[item.id] || { actual_weight: String(item.weight ?? ''), diff_reason: '' };
                                   const editing = editOrderId === order.id;
                                   return (
                                     <tr key={item.id}>
-                                      <td className="px-4 py-2">{item.product_name}</td>
-                                      <td className="px-4 py-2 text-gray-500 font-mono text-xs">{item.product_code || '-'}</td>
-                                      <td className="px-4 py-2 text-right">
+                                      <td className="px-3 py-2">{item.product_name}</td>
+                                      <td className="px-3 py-2 text-gray-500 font-mono text-xs">{item.product_code || '-'}</td>
+                                      {hasBarcode && <td className="px-3 py-2 text-gray-500 font-mono text-xs">{item.barcode || '-'}</td>}
+                                      <td className="px-3 py-2 text-right">
                                         {editing ? (
                                           <input
                                             type="number"
@@ -2815,12 +2941,27 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                                           <span className="font-medium">{item.weight}g</span>
                                         )}
                                       </td>
+                                      {hasLaborCost && <td className="px-3 py-2 text-right">{item.labor_cost ?? '-'}</td>}
+                                      {hasPieceCount && <td className="px-3 py-2 text-right">{item.piece_count ?? '-'}</td>}
+                                      {hasPieceLaborCost && <td className="px-3 py-2 text-right">{item.piece_labor_cost ?? '-'}</td>}
+                                      {hasMainStone && <td className="px-3 py-2 text-right">{item.main_stone_weight ?? '-'}</td>}
+                                      {hasMainStone && <td className="px-3 py-2 text-right">{item.main_stone_count ?? '-'}</td>}
+                                      {hasSubStone && <td className="px-3 py-2 text-right">{item.sub_stone_weight ?? '-'}</td>}
+                                      {hasSubStone && <td className="px-3 py-2 text-right">{item.sub_stone_count ?? '-'}</td>}
+                                      {hasMarks && <td className="px-3 py-2 text-gray-500 text-xs">{item.main_stone_mark || '-'}</td>}
+                                      {hasMarks && <td className="px-3 py-2 text-gray-500 text-xs">{item.sub_stone_mark || '-'}</td>}
+                                      {hasPearl && <td className="px-3 py-2 text-right">{item.pearl_weight ?? '-'}</td>}
+                                      {hasBearing && <td className="px-3 py-2 text-right">{item.bearing_weight ?? '-'}</td>}
+                                      {hasSaleCost && <td className="px-3 py-2 text-right">{item.sale_labor_cost ?? '-'}</td>}
+                                      {hasSaleCost && <td className="px-3 py-2 text-right">{item.sale_piece_labor_cost ?? '-'}</td>}
                                     </tr>
                                   );
                                 })}
                               </tbody>
                             </table>
                           </div>
+                            );
+                          })()}
                         </div>
                       ))}
                     </>
@@ -2902,24 +3043,52 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                             </div>
                           </div>
                           {/* 商品明细 */}
+                          {(() => {
+                            const items = order.items;
+                            const hasBarcode = items.some((i: any) => i.barcode);
+                            const hasLaborCost = items.some((i: any) => i.labor_cost != null);
+                            const hasPieceCount = items.some((i: any) => i.piece_count != null);
+                            const hasPieceLaborCost = items.some((i: any) => i.piece_labor_cost != null);
+                            const hasMainStone = items.some((i: any) => i.main_stone_weight != null || i.main_stone_count != null);
+                            const hasSubStone = items.some((i: any) => i.sub_stone_weight != null || i.sub_stone_count != null);
+                            const hasMarks = items.some((i: any) => i.main_stone_mark || i.sub_stone_mark);
+                            const hasPearl = items.some((i: any) => i.pearl_weight != null);
+                            const hasBearing = items.some((i: any) => i.bearing_weight != null);
+                            const hasSaleCost = items.some((i: any) => i.sale_labor_cost != null || i.sale_piece_labor_cost != null);
+                            return (
                           <div className="border-t border-red-200 bg-white/50 overflow-x-auto">
                             <table className="w-full text-sm min-w-[300px]">
                               <thead className="bg-red-100/50">
                                 <tr>
-                                  <th className="px-4 py-2 text-left text-gray-600">商品名称</th>
-                                  <th className="px-4 py-2 text-left text-gray-600">商品编码</th>
-                                  <th className="px-4 py-2 text-right text-gray-600">重量</th>
+                                  <th className="px-3 py-2 text-left text-gray-600 whitespace-nowrap">商品名称</th>
+                                  <th className="px-3 py-2 text-left text-gray-600 whitespace-nowrap">商品编码</th>
+                                  {hasBarcode && <th className="px-3 py-2 text-left text-gray-600 whitespace-nowrap">条码</th>}
+                                  <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">重量(g)</th>
+                                  {hasLaborCost && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">克工费</th>}
+                                  {hasPieceCount && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">件数</th>}
+                                  {hasPieceLaborCost && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">件工费</th>}
+                                  {hasMainStone && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">主石重</th>}
+                                  {hasMainStone && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">主石粒数</th>}
+                                  {hasSubStone && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">副石重</th>}
+                                  {hasSubStone && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">副石粒数</th>}
+                                  {hasMarks && <th className="px-3 py-2 text-left text-gray-600 whitespace-nowrap">主石字印</th>}
+                                  {hasMarks && <th className="px-3 py-2 text-left text-gray-600 whitespace-nowrap">副石字印</th>}
+                                  {hasPearl && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">珍珠重</th>}
+                                  {hasBearing && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">轴承重</th>}
+                                  {hasSaleCost && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">销售克工费</th>}
+                                  {hasSaleCost && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">销售件工费</th>}
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-red-100">
-                                {order.items.map(item => {
+                                {items.map((item: any) => {
                                   const editForm = editItemForms[item.id] || { actual_weight: String(item.weight ?? ''), diff_reason: '' };
                                   const editing = editOrderId === order.id;
                                   return (
                                     <tr key={item.id}>
-                                      <td className="px-4 py-2">{item.product_name}</td>
-                                      <td className="px-4 py-2 text-gray-500 font-mono text-xs">{item.product_code || '-'}</td>
-                                      <td className="px-4 py-2 text-right">
+                                      <td className="px-3 py-2">{item.product_name}</td>
+                                      <td className="px-3 py-2 text-gray-500 font-mono text-xs">{item.product_code || '-'}</td>
+                                      {hasBarcode && <td className="px-3 py-2 text-gray-500 font-mono text-xs">{item.barcode || '-'}</td>}
+                                      <td className="px-3 py-2 text-right">
                                         {editing ? (
                                           <input
                                             type="number"
@@ -2935,12 +3104,27 @@ export const WarehousePage: React.FC<WarehousePageProps> = ({ userRole = 'produc
                                           <span className="font-medium">{item.weight}g</span>
                                         )}
                                       </td>
+                                      {hasLaborCost && <td className="px-3 py-2 text-right">{item.labor_cost ?? '-'}</td>}
+                                      {hasPieceCount && <td className="px-3 py-2 text-right">{item.piece_count ?? '-'}</td>}
+                                      {hasPieceLaborCost && <td className="px-3 py-2 text-right">{item.piece_labor_cost ?? '-'}</td>}
+                                      {hasMainStone && <td className="px-3 py-2 text-right">{item.main_stone_weight ?? '-'}</td>}
+                                      {hasMainStone && <td className="px-3 py-2 text-right">{item.main_stone_count ?? '-'}</td>}
+                                      {hasSubStone && <td className="px-3 py-2 text-right">{item.sub_stone_weight ?? '-'}</td>}
+                                      {hasSubStone && <td className="px-3 py-2 text-right">{item.sub_stone_count ?? '-'}</td>}
+                                      {hasMarks && <td className="px-3 py-2 text-gray-500 text-xs">{item.main_stone_mark || '-'}</td>}
+                                      {hasMarks && <td className="px-3 py-2 text-gray-500 text-xs">{item.sub_stone_mark || '-'}</td>}
+                                      {hasPearl && <td className="px-3 py-2 text-right">{item.pearl_weight ?? '-'}</td>}
+                                      {hasBearing && <td className="px-3 py-2 text-right">{item.bearing_weight ?? '-'}</td>}
+                                      {hasSaleCost && <td className="px-3 py-2 text-right">{item.sale_labor_cost ?? '-'}</td>}
+                                      {hasSaleCost && <td className="px-3 py-2 text-right">{item.sale_piece_labor_cost ?? '-'}</td>}
                                     </tr>
                                   );
                                 })}
                               </tbody>
                             </table>
                           </div>
+                            );
+                          })()}
                         </div>
                       ))}
                     </>

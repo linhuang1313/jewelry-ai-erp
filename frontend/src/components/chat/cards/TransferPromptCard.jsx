@@ -71,7 +71,21 @@ export default function TransferPromptCard({ data, onStatusChange }) {
             items: data.items.map(item => ({
               product_name: item.product_name,
               product_code: item.product_code || undefined,
-              weight: item.weight
+              weight: item.weight,
+              barcode: item.barcode || undefined,
+              labor_cost: item.labor_cost ?? undefined,
+              piece_count: item.piece_count ?? undefined,
+              piece_labor_cost: item.piece_labor_cost ?? undefined,
+              main_stone_weight: item.main_stone_weight ?? undefined,
+              main_stone_count: item.main_stone_count ?? undefined,
+              sub_stone_weight: item.sub_stone_weight ?? undefined,
+              sub_stone_count: item.sub_stone_count ?? undefined,
+              main_stone_mark: item.main_stone_mark || undefined,
+              sub_stone_mark: item.sub_stone_mark || undefined,
+              pearl_weight: item.pearl_weight ?? undefined,
+              bearing_weight: item.bearing_weight ?? undefined,
+              sale_labor_cost: item.sale_labor_cost ?? undefined,
+              sale_piece_labor_cost: item.sale_piece_labor_cost ?? undefined,
             })),
             remark
           })

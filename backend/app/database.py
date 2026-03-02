@@ -179,15 +179,33 @@ def _auto_migrate_action_cards():
 
 
 def _auto_migrate_transfer_items():
-    """Auto-add product_code column to inventory_transfer_items if missing."""
+    """Auto-add missing columns to inventory_transfer_items."""
     try:
         insp = inspect(engine)
         if 'inventory_transfer_items' not in insp.get_table_names():
             return
         columns = {col['name'] for col in insp.get_columns('inventory_transfer_items')}
-        if 'product_code' not in columns:
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE inventory_transfer_items ADD COLUMN product_code VARCHAR(100)"))
+        new_cols = {
+            'product_code': 'VARCHAR(100)',
+            'barcode': 'VARCHAR(50)',
+            'labor_cost': 'FLOAT',
+            'piece_count': 'INTEGER',
+            'piece_labor_cost': 'FLOAT',
+            'main_stone_weight': 'FLOAT',
+            'main_stone_count': 'INTEGER',
+            'sub_stone_weight': 'FLOAT',
+            'sub_stone_count': 'INTEGER',
+            'main_stone_mark': 'VARCHAR(50)',
+            'sub_stone_mark': 'VARCHAR(50)',
+            'pearl_weight': 'FLOAT',
+            'bearing_weight': 'FLOAT',
+            'sale_labor_cost': 'FLOAT',
+            'sale_piece_labor_cost': 'FLOAT',
+        }
+        with engine.begin() as conn:
+            for col_name, col_type in new_cols.items():
+                if col_name not in columns:
+                    conn.execute(text(f"ALTER TABLE inventory_transfer_items ADD COLUMN {col_name} {col_type}"))
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"Auto-migrate inventory_transfer_items: {e}")

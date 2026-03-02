@@ -391,6 +391,22 @@ class InventoryTransferItem(Base):
     weight_diff = Column(Numeric(12, 4), nullable=True)  # 重量差异
     diff_reason = Column(Text, nullable=True)  # 差异原因
     
+    # 入库明细冗余字段（转移时从入库单复制）
+    barcode = Column(String(50), nullable=True)
+    labor_cost = Column(Numeric(10, 2), nullable=True)
+    piece_count = Column(Integer, nullable=True)
+    piece_labor_cost = Column(Numeric(10, 2), nullable=True)
+    main_stone_weight = Column(Numeric(10, 4), nullable=True)
+    main_stone_count = Column(Integer, nullable=True)
+    sub_stone_weight = Column(Numeric(10, 4), nullable=True)
+    sub_stone_count = Column(Integer, nullable=True)
+    main_stone_mark = Column(String(50), nullable=True)
+    sub_stone_mark = Column(String(50), nullable=True)
+    pearl_weight = Column(Numeric(12, 4), nullable=True)
+    bearing_weight = Column(Numeric(12, 4), nullable=True)
+    sale_labor_cost = Column(Numeric(10, 2), nullable=True)
+    sale_piece_labor_cost = Column(Numeric(10, 2), nullable=True)
+    
     # 关系
     order = relationship("InventoryTransferOrder", back_populates="items")
 

@@ -1126,7 +1126,21 @@ async def create_transfer_order(
             order_id=order.id,
             product_name=item.product_name,
             product_code=resolved_code,
-            weight=item.weight
+            weight=item.weight,
+            barcode=item.barcode,
+            labor_cost=item.labor_cost,
+            piece_count=item.piece_count,
+            piece_labor_cost=item.piece_labor_cost,
+            main_stone_weight=item.main_stone_weight,
+            main_stone_count=item.main_stone_count,
+            sub_stone_weight=item.sub_stone_weight,
+            sub_stone_count=item.sub_stone_count,
+            main_stone_mark=item.main_stone_mark,
+            sub_stone_mark=item.sub_stone_mark,
+            pearl_weight=item.pearl_weight,
+            bearing_weight=item.bearing_weight,
+            sale_labor_cost=item.sale_labor_cost,
+            sale_piece_labor_cost=item.sale_piece_labor_cost,
         )
         db.add(transfer_item)
         total_weight += float(item.weight or 0)
@@ -1148,12 +1162,7 @@ async def create_transfer_order(
         created_by=order.created_by,
         created_at=order.created_at,
         remark=order.remark,
-        items=[TransferItemResponse(
-            id=item.id,
-            product_name=item.product_name,
-            product_code=item.product_code,
-            weight=item.weight
-        ) for item in order.items],
+        items=[TransferItemResponse.model_validate(item) for item in order.items],
         total_weight=total_weight
     )
 
@@ -1210,15 +1219,7 @@ async def get_transfer_orders(
             remark=order.remark,
             received_by=order.received_by,
             received_at=order.received_at,
-            items=[TransferItemResponse(
-                id=item.id,
-                product_name=item.product_name,
-                product_code=item.product_code,
-                weight=item.weight,
-                actual_weight=item.actual_weight,
-                weight_diff=item.weight_diff,
-                diff_reason=item.diff_reason
-            ) for item in order.items],
+            items=[TransferItemResponse.model_validate(item) for item in order.items],
             total_weight=total_weight,
             total_actual_weight=total_actual_weight,
             source_order_id=order.source_order_id,
@@ -1271,15 +1272,7 @@ async def get_transfer_order(
         remark=order.remark,
         received_by=order.received_by,
         received_at=order.received_at,
-        items=[TransferItemResponse(
-            id=item.id,
-            product_name=item.product_name,
-            product_code=item.product_code,
-            weight=item.weight,
-            actual_weight=item.actual_weight,
-            weight_diff=item.weight_diff,
-            diff_reason=item.diff_reason
-        ) for item in order.items],
+        items=[TransferItemResponse.model_validate(item) for item in order.items],
         total_weight=total_weight,
         total_actual_weight=total_actual_weight,
         source_order_id=order.source_order_id,
@@ -1386,15 +1379,7 @@ async def receive_transfer_order(
         remark=order.remark,
         received_by=order.received_by,
         received_at=order.received_at,
-        items=[TransferItemResponse(
-            id=item.id,
-            product_name=item.product_name,
-            product_code=item.product_code,
-            weight=item.weight,
-            actual_weight=item.actual_weight,
-            weight_diff=item.weight_diff,
-            diff_reason=item.diff_reason
-        ) for item in order.items],
+        items=[TransferItemResponse.model_validate(item) for item in order.items],
         total_weight=total_weight,
         total_actual_weight=total_actual_weight
     )
@@ -1544,15 +1529,7 @@ async def confirm_transfer_order(
         remark=order.remark,
         received_by=order.received_by,
         received_at=order.received_at,
-        items=[TransferItemResponse(
-            id=item.id,
-            product_name=item.product_name,
-            product_code=item.product_code,
-            weight=item.weight,
-            actual_weight=item.actual_weight,
-            weight_diff=item.weight_diff,
-            diff_reason=item.diff_reason
-        ) for item in order.items],
+        items=[TransferItemResponse.model_validate(item) for item in order.items],
         total_weight=total_weight,
         total_actual_weight=total_actual_weight
     )
@@ -1701,15 +1678,7 @@ async def update_transfer_order_actual(
         remark=order.remark,
         received_by=order.received_by,
         received_at=order.received_at,
-        items=[TransferItemResponse(
-            id=item.id,
-            product_name=item.product_name,
-            product_code=item.product_code,
-            weight=item.weight,
-            actual_weight=item.actual_weight,
-            weight_diff=item.weight_diff,
-            diff_reason=item.diff_reason
-        ) for item in order.items],
+        items=[TransferItemResponse.model_validate(item) for item in order.items],
         total_weight=total_weight,
         total_actual_weight=total_actual_weight
     )
@@ -1976,15 +1945,7 @@ async def resubmit_transfer_order(
         remark=new_order.remark,
         received_by=new_order.received_by,
         received_at=new_order.received_at,
-        items=[TransferItemResponse(
-            id=item.id,
-            product_name=item.product_name,
-            product_code=item.product_code,
-            weight=item.weight,
-            actual_weight=item.actual_weight,
-            weight_diff=item.weight_diff,
-            diff_reason=item.diff_reason
-        ) for item in new_order.items],
+        items=[TransferItemResponse.model_validate(item) for item in new_order.items],
         total_weight=total_weight,
         total_actual_weight=None,
         source_order_id=new_order.source_order_id,

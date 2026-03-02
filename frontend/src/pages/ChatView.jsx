@@ -1174,7 +1174,16 @@ const ChatView = ({
                                               const order = detailData.data?.[0]
                                               if (order?.details?.length > 0) {
                                                 transferPrompt = {
-                                                  items: order.details.map(d => ({ product_name: d.product_name, product_code: d.product_code, weight: d.weight })),
+                                                  items: order.details.map(d => ({
+                                                    product_name: d.product_name, product_code: d.product_code, weight: d.weight,
+                                                    barcode: d.barcode, labor_cost: d.labor_cost, piece_count: d.piece_count,
+                                                    piece_labor_cost: d.piece_labor_cost, main_stone_weight: d.main_stone_weight,
+                                                    main_stone_count: d.main_stone_count, sub_stone_weight: d.sub_stone_weight,
+                                                    sub_stone_count: d.sub_stone_count, main_stone_mark: d.main_stone_mark,
+                                                    sub_stone_mark: d.sub_stone_mark, pearl_weight: d.pearl_weight,
+                                                    bearing_weight: d.bearing_weight, sale_labor_cost: d.sale_labor_cost,
+                                                    sale_piece_labor_cost: d.sale_piece_labor_cost,
+                                                  })),
                                                   status: 'pending',
                                                   orderNos: order.order_no || ''
                                                 }
@@ -1755,7 +1764,16 @@ const ChatView = ({
                                           type: 'system',
                                           content: `✅ ${confirmedCards.length} 个商品入库已确认，库存已更新。`,
                                           transferPrompt: {
-                                            items: confirmedCards.map(c => ({ product_name: c.productName, product_code: c.productCode, weight: c.goldWeight })),
+                                            items: confirmedCards.map(c => ({
+                                              product_name: c.productName, product_code: c.productCode, weight: c.goldWeight,
+                                              barcode: c.barcode, labor_cost: c.laborCost, piece_count: c.pieceCount,
+                                              piece_labor_cost: c.pieceLaborCost, main_stone_weight: c.mainStoneWeight,
+                                              main_stone_count: c.mainStoneCount, sub_stone_weight: c.subStoneWeight,
+                                              sub_stone_count: c.subStoneCount, main_stone_mark: c.mainStoneMark,
+                                              sub_stone_mark: c.subStoneMark, pearl_weight: c.pearlWeight,
+                                              bearing_weight: c.bearingWeight, sale_labor_cost: c.saleLaborCost,
+                                              sale_piece_labor_cost: c.salePieceLaborCost,
+                                            })),
                                             status: 'pending',
                                             orderNos: confirmedCards.map(c => c.orderNo).filter(Boolean).join(', ')
                                           }

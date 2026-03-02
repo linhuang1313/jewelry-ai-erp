@@ -576,6 +576,20 @@ class TransferItemCreate(BaseModel):
     product_name: str
     product_code: Optional[str] = None
     weight: float
+    barcode: Optional[str] = None
+    labor_cost: Optional[float] = None
+    piece_count: Optional[int] = None
+    piece_labor_cost: Optional[float] = None
+    main_stone_weight: Optional[float] = None
+    main_stone_count: Optional[int] = None
+    sub_stone_weight: Optional[float] = None
+    sub_stone_count: Optional[int] = None
+    main_stone_mark: Optional[str] = None
+    sub_stone_mark: Optional[str] = None
+    pearl_weight: Optional[float] = None
+    bearing_weight: Optional[float] = None
+    sale_labor_cost: Optional[float] = None
+    sale_piece_labor_cost: Optional[float] = None
 
 
 class TransferOrderCreate(BaseModel):
@@ -613,6 +627,20 @@ class TransferItemResponse(BaseModel):
     actual_weight: Optional[float] = None
     weight_diff: Optional[float] = None
     diff_reason: Optional[str] = None
+    barcode: Optional[str] = None
+    labor_cost: Optional[float] = None
+    piece_count: Optional[int] = None
+    piece_labor_cost: Optional[float] = None
+    main_stone_weight: Optional[float] = None
+    main_stone_count: Optional[int] = None
+    sub_stone_weight: Optional[float] = None
+    sub_stone_count: Optional[int] = None
+    main_stone_mark: Optional[str] = None
+    sub_stone_mark: Optional[str] = None
+    pearl_weight: Optional[float] = None
+    bearing_weight: Optional[float] = None
+    sale_labor_cost: Optional[float] = None
+    sale_piece_labor_cost: Optional[float] = None
 
 
 class TransferOrderResponse(BaseModel):
