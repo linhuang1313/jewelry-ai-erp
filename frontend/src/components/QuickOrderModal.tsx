@@ -162,7 +162,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   // 获取商品编码列表
   const fetchProductCodes = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/product-codes?limit=1000&include_used=true`);
+      const response = await fetch(`${API_BASE_URL}/api/product-codes?limit=10000&include_used=true`);
       if (response.ok) {
         const data = await response.json();
         const codeList = Array.isArray(data) ? data : (data.codes || []);
@@ -696,7 +696,18 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                       onFocus={() => {
                         if (item.product_code) searchCode(item.id, item.product_code);
                       }}
-                      onBlur={() => setTimeout(() => { if (codeDropdownId === item.id) setCodeDropdownId(null); }, 200)}
+                      onBlur={() => setTimeout(() => {
+                        if (codeDropdownId === item.id) setCodeDropdownId(null);
+                        const code = item.product_code.trim().toUpperCase();
+                        if (code.startsWith('F') && code.length > 1 && !fCodeDetails[item.id]) {
+                          const matched = productCodes.find(pc => pc.code.toUpperCase() === code);
+                          if (matched) {
+                            selectProductCode(item.id, matched);
+                          } else {
+                            fetchFCodeDetail(item.id, code);
+                          }
+                        }
+                      }, 200)}
                       placeholder="商品编码"
                       className="w-28 px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none 
                                  focus:ring-2 focus:ring-emerald-500 text-sm bg-white"
