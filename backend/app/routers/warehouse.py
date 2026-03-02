@@ -1151,6 +1151,7 @@ async def create_transfer_order(
         items=[TransferItemResponse(
             id=item.id,
             product_name=item.product_name,
+            product_code=item.product_code,
             weight=item.weight
         ) for item in order.items],
         total_weight=total_weight
@@ -1273,6 +1274,7 @@ async def get_transfer_order(
         items=[TransferItemResponse(
             id=item.id,
             product_name=item.product_name,
+            product_code=item.product_code,
             weight=item.weight,
             actual_weight=item.actual_weight,
             weight_diff=item.weight_diff,
@@ -1387,6 +1389,7 @@ async def receive_transfer_order(
         items=[TransferItemResponse(
             id=item.id,
             product_name=item.product_name,
+            product_code=item.product_code,
             weight=item.weight,
             actual_weight=item.actual_weight,
             weight_diff=item.weight_diff,
@@ -1544,6 +1547,7 @@ async def confirm_transfer_order(
         items=[TransferItemResponse(
             id=item.id,
             product_name=item.product_name,
+            product_code=item.product_code,
             weight=item.weight,
             actual_weight=item.actual_weight,
             weight_diff=item.weight_diff,
@@ -1700,6 +1704,7 @@ async def update_transfer_order_actual(
         items=[TransferItemResponse(
             id=item.id,
             product_name=item.product_name,
+            product_code=item.product_code,
             weight=item.weight,
             actual_weight=item.actual_weight,
             weight_diff=item.weight_diff,
@@ -1974,6 +1979,7 @@ async def resubmit_transfer_order(
         items=[TransferItemResponse(
             id=item.id,
             product_name=item.product_name,
+            product_code=item.product_code,
             weight=item.weight,
             actual_weight=item.actual_weight,
             weight_diff=item.weight_diff,

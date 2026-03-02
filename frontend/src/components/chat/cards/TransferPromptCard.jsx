@@ -70,6 +70,7 @@ export default function TransferPromptCard({ data, onStatusChange }) {
             to_location_id: showroomLoc.id,
             items: data.items.map(item => ({
               product_name: item.product_name,
+              product_code: item.product_code || undefined,
               weight: item.weight
             })),
             remark
@@ -126,7 +127,10 @@ export default function TransferPromptCard({ data, onStatusChange }) {
       <div className="bg-white/60 rounded-lg p-3 mb-3 space-y-1.5">
         {data.items.map((item, idx) => (
           <div key={idx} className="flex justify-between text-sm">
-            <span className="text-gray-700">{item.product_name}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-700">{item.product_name}</span>
+              {item.product_code && <span className="text-gray-400 font-mono text-xs">({item.product_code})</span>}
+            </div>
             <span className="text-gray-500 font-mono">{item.weight.toFixed(2)}g</span>
           </div>
         ))}

@@ -1174,7 +1174,7 @@ const ChatView = ({
                                               const order = detailData.data?.[0]
                                               if (order?.details?.length > 0) {
                                                 transferPrompt = {
-                                                  items: order.details.map(d => ({ product_name: d.product_name, weight: d.weight })),
+                                                  items: order.details.map(d => ({ product_name: d.product_name, product_code: d.product_code, weight: d.weight })),
                                                   status: 'pending',
                                                   orderNos: order.order_no || ''
                                                 }
@@ -1755,7 +1755,7 @@ const ChatView = ({
                                           type: 'system',
                                           content: `✅ ${confirmedCards.length} 个商品入库已确认，库存已更新。`,
                                           transferPrompt: {
-                                            items: confirmedCards.map(c => ({ product_name: c.productName, weight: c.goldWeight })),
+                                            items: confirmedCards.map(c => ({ product_name: c.productName, product_code: c.productCode, weight: c.goldWeight })),
                                             status: 'pending',
                                             orderNos: confirmedCards.map(c => c.orderNo).filter(Boolean).join(', ')
                                           }
