@@ -138,17 +138,69 @@ export default function TransferPromptCard({ data, onStatusChange }) {
       </div>
 
       {/* 商品列表 */}
-      <div className="bg-white/60 rounded-lg p-3 mb-3 space-y-1.5">
-        {data.items.map((item, idx) => (
-          <div key={idx} className="flex justify-between text-sm">
-            <div className="flex items-center gap-2">
-              <span className="text-gray-700">{item.product_name}</span>
-              {item.product_code && <span className="text-gray-400 font-mono text-xs">({item.product_code})</span>}
-            </div>
-            <span className="text-gray-500 font-mono">{item.weight.toFixed(2)}g</span>
-          </div>
-        ))}
+      {(() => {
+        const items = data.items
+        const hasBarcode = items.some(i => i.barcode)
+        const hasLaborCost = items.some(i => i.labor_cost != null)
+        const hasPieceCount = items.some(i => i.piece_count != null)
+        const hasPieceLaborCost = items.some(i => i.piece_labor_cost != null)
+        const hasMainStone = items.some(i => i.main_stone_weight != null || i.main_stone_count != null)
+        const hasSubStone = items.some(i => i.sub_stone_weight != null || i.sub_stone_count != null)
+        const hasMarks = items.some(i => i.main_stone_mark || i.sub_stone_mark)
+        const hasPearl = items.some(i => i.pearl_weight != null)
+        const hasBearing = items.some(i => i.bearing_weight != null)
+        const hasSaleCost = items.some(i => i.sale_labor_cost != null || i.sale_piece_labor_cost != null)
+        return (
+      <div className="bg-white/60 rounded-lg mb-3 overflow-x-auto">
+        <table className="w-full text-sm min-w-[300px]">
+          <thead className="bg-blue-50/80">
+            <tr>
+              <th className="px-3 py-2 text-left text-gray-600 whitespace-nowrap">商品名称</th>
+              <th className="px-3 py-2 text-left text-gray-600 whitespace-nowrap">商品编码</th>
+              {hasBarcode && <th className="px-3 py-2 text-left text-gray-600 whitespace-nowrap">条码</th>}
+              <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">重量(g)</th>
+              {hasLaborCost && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">克工费</th>}
+              {hasPieceCount && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">件数</th>}
+              {hasPieceLaborCost && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">件工费</th>}
+              {hasMainStone && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">主石重</th>}
+              {hasMainStone && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">主石粒数</th>}
+              {hasSubStone && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">副石重</th>}
+              {hasSubStone && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">副石粒数</th>}
+              {hasMarks && <th className="px-3 py-2 text-left text-gray-600 whitespace-nowrap">主石字印</th>}
+              {hasMarks && <th className="px-3 py-2 text-left text-gray-600 whitespace-nowrap">副石字印</th>}
+              {hasPearl && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">珍珠重</th>}
+              {hasBearing && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">轴承重</th>}
+              {hasSaleCost && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">销售克工费</th>}
+              {hasSaleCost && <th className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">销售件工费</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-blue-100/50">
+            {items.map((item, idx) => (
+              <tr key={idx}>
+                <td className="px-3 py-1.5 text-gray-700">{item.product_name}</td>
+                <td className="px-3 py-1.5 text-gray-500 font-mono text-xs">{item.product_code || '-'}</td>
+                {hasBarcode && <td className="px-3 py-1.5 text-gray-500 font-mono text-xs">{item.barcode || '-'}</td>}
+                <td className="px-3 py-1.5 text-right font-medium">{item.weight?.toFixed(2)}g</td>
+                {hasLaborCost && <td className="px-3 py-1.5 text-right">{item.labor_cost ?? '-'}</td>}
+                {hasPieceCount && <td className="px-3 py-1.5 text-right">{item.piece_count ?? '-'}</td>}
+                {hasPieceLaborCost && <td className="px-3 py-1.5 text-right">{item.piece_labor_cost ?? '-'}</td>}
+                {hasMainStone && <td className="px-3 py-1.5 text-right">{item.main_stone_weight ?? '-'}</td>}
+                {hasMainStone && <td className="px-3 py-1.5 text-right">{item.main_stone_count ?? '-'}</td>}
+                {hasSubStone && <td className="px-3 py-1.5 text-right">{item.sub_stone_weight ?? '-'}</td>}
+                {hasSubStone && <td className="px-3 py-1.5 text-right">{item.sub_stone_count ?? '-'}</td>}
+                {hasMarks && <td className="px-3 py-1.5 text-gray-500 text-xs">{item.main_stone_mark || '-'}</td>}
+                {hasMarks && <td className="px-3 py-1.5 text-gray-500 text-xs">{item.sub_stone_mark || '-'}</td>}
+                {hasPearl && <td className="px-3 py-1.5 text-right">{item.pearl_weight ?? '-'}</td>}
+                {hasBearing && <td className="px-3 py-1.5 text-right">{item.bearing_weight ?? '-'}</td>}
+                {hasSaleCost && <td className="px-3 py-1.5 text-right">{item.sale_labor_cost ?? '-'}</td>}
+                {hasSaleCost && <td className="px-3 py-1.5 text-right">{item.sale_piece_labor_cost ?? '-'}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
+        )
+      })()}
 
       {/* 错误提示 */}
       {error && (
