@@ -392,19 +392,24 @@ async def handle_inbound(ai_response, db: Session) -> Dict[str, Any]:
             "message": f"创建入库单失败: {str(e)}",
         }
     
-    if len(created_details) == 1:
-        d = created_details[0]
-        card_data = {
+    def _build_card_data(d, oid, ono, sup):
+        return {
             "product_name": d["product_name"],
+            "product_code": d.get("product_code"),
+            "barcode": d.get("barcode"),
             "weight": d["weight"],
             "labor_cost": d["labor_cost"],
             "piece_count": d.get("piece_count"),
             "piece_labor_cost": d.get("piece_labor_cost"),
-            "supplier": supplier_name,
+            "supplier": d.get("supplier") or sup,
             "total_cost": d["total_cost"],
-            "order_id": order.id,
-            "order_no": order.order_no,
+            "order_id": oid,
+            "order_no": ono,
         }
+
+    if len(created_details) == 1:
+        d = created_details[0]
+        card_data = _build_card_data(d, order.id, order.order_no, supplier_name)
         return {
             "success": True,
             "message": f"请核对入库信息: {d['product_name']} {d['weight']}克",
@@ -414,34 +419,14 @@ async def handle_inbound(ai_response, db: Session) -> Dict[str, Any]:
     else:
         first = created_details[0]
         all_products_list = [
-            {
-                "product_name": d["product_name"],
-                "weight": d["weight"],
-                "labor_cost": d["labor_cost"],
-                "piece_count": d.get("piece_count"),
-                "piece_labor_cost": d.get("piece_labor_cost"),
-                "supplier": d["supplier"],
-                "total_cost": d["total_cost"],
-                "order_id": order.id,
-                "order_no": order.order_no,
-            }
+            _build_card_data(d, order.id, order.order_no, supplier_name)
             for d in created_details
         ]
         return {
             "success": True,
             "message": f"请核对入库信息，共{len(created_details)}个商品",
             "pending": True,
-            "card_data": {
-                "product_name": first["product_name"],
-                "weight": first["weight"],
-                "labor_cost": first["labor_cost"],
-                "piece_count": first.get("piece_count"),
-                "piece_labor_cost": first.get("piece_labor_cost"),
-                "supplier": supplier_name,
-                "total_cost": first["total_cost"],
-                "order_id": order.id,
-                "order_no": order.order_no,
-            },
+            "card_data": _build_card_data(first, order.id, order.order_no, supplier_name),
             "all_products": all_products_list
         }
 

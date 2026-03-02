@@ -291,9 +291,21 @@ export function useChatStream({
                               source: 'api',
                               createdAt: new Date(),
                             })
-                            card.barcode = ''
+                            card.barcode = cardData.barcode || ''
+                            card.productCode = cardData.product_code || ''
                             card.orderId = cardData.order_id
                             card.orderNo = cardData.order_no
+                            card.laborCost = cardData.labor_cost
+                            card.mainStoneWeight = cardData.main_stone_weight
+                            card.mainStoneCount = cardData.main_stone_count
+                            card.subStoneWeight = cardData.sub_stone_weight
+                            card.subStoneCount = cardData.sub_stone_count
+                            card.mainStoneMark = cardData.main_stone_mark
+                            card.subStoneMark = cardData.sub_stone_mark
+                            card.pearlWeight = cardData.pearl_weight
+                            card.bearingWeight = cardData.bearing_weight
+                            card.saleLaborCost = cardData.sale_labor_cost
+                            card.salePieceLaborCost = cardData.sale_piece_labor_cost
                             return card
                           })
                           

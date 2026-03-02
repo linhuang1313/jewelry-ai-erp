@@ -605,7 +605,25 @@ export const SystemMessage = ({ msg, setMessages, setCurrentPage, userRole, API_
                         type: 'system',
                         content: '✅ 入库单已确认，库存已更新。',
                         transferPrompt: {
-                          items: [{ product_name: card.productName, weight: card.goldWeight }],
+                          items: [{
+                            product_name: card.productName,
+                            product_code: card.productCode || card.barcode || '',
+                            weight: card.goldWeight,
+                            barcode: card.barcode,
+                            labor_cost: card.laborCostPerGram,
+                            piece_count: card.pieceCount,
+                            piece_labor_cost: card.pieceLaborCost,
+                            main_stone_weight: card.mainStoneWeight,
+                            main_stone_count: card.mainStoneCount,
+                            sub_stone_weight: card.subStoneWeight,
+                            sub_stone_count: card.subStoneCount,
+                            main_stone_mark: card.mainStoneMark,
+                            sub_stone_mark: card.subStoneMark,
+                            pearl_weight: card.pearlWeight,
+                            bearing_weight: card.bearingWeight,
+                            sale_labor_cost: card.saleLaborCost,
+                            sale_piece_labor_cost: card.salePieceLaborCost,
+                          }],
                           status: 'pending',
                           orderNos: confirmedOrderNo || ''
                         }
@@ -830,7 +848,25 @@ export const SystemMessage = ({ msg, setMessages, setCurrentPage, userRole, API_
                         type: 'system',
                         content: `✅ ${confirmedCards.length} 个商品入库已确认，库存已更新。`,
                         transferPrompt: {
-                          items: confirmedCards.map(c => ({ product_name: c.productName, weight: c.goldWeight })),
+                          items: confirmedCards.map(c => ({
+                            product_name: c.productName,
+                            product_code: c.productCode || c.barcode || '',
+                            weight: c.goldWeight,
+                            barcode: c.barcode,
+                            labor_cost: c.laborCostPerGram,
+                            piece_count: c.pieceCount,
+                            piece_labor_cost: c.pieceLaborCost,
+                            main_stone_weight: c.mainStoneWeight,
+                            main_stone_count: c.mainStoneCount,
+                            sub_stone_weight: c.subStoneWeight,
+                            sub_stone_count: c.subStoneCount,
+                            main_stone_mark: c.mainStoneMark,
+                            sub_stone_mark: c.subStoneMark,
+                            pearl_weight: c.pearlWeight,
+                            bearing_weight: c.bearingWeight,
+                            sale_labor_cost: c.saleLaborCost,
+                            sale_piece_labor_cost: c.salePieceLaborCost,
+                          })),
                           status: 'pending',
                           orderNos: confirmedCards.map(c => c.orderNo).filter(Boolean).join(', ')
                         }
