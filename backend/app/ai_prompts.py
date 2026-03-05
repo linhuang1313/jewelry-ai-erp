@@ -610,10 +610,10 @@ def get_return_prompt(message: str, context: str) -> str:
 
 - 退货字段（action为"退货"时）：
   - return_type: "to_supplier"（退给供应商）/ "to_warehouse"（退给商品部），默认"to_supplier"
-  - return_product_name: 退货商品名称
-  - return_weight: 退货克重（克）
+  - return_product_name: 退货商品名称（注意区分商品名和供应商名，如"足金5G吊坠"是商品名）
+  - return_weight: 退货克重（克），注意"5G"是工艺名称不是克重
   - return_labor_cost: 退货克工费（元/克）
-  - return_supplier_name: 退给哪个供应商
+  - return_supplier_name: 退给哪个供应商（从"退货给/退给/退回给"后面提取，供应商名可能很短如"嘉彩"、"华昌"、"金源"，也可能较长如"金源珠宝"、"深圳嘉彩珠宝"，只要出现在"退给"后面的名称都应提取）
   - return_reason: 退货原因（默认"质量问题"）
   - return_from_location: 退出位置
 
@@ -643,6 +643,18 @@ def get_return_prompt(message: str, context: str) -> str:
 示例28（退货 - 退回商品部）：
 用户输入："退回商品部 古法手镯 50克"
 {{"action": "退货", "return_product_name": "古法手镯", "return_weight": 50, "return_type": "to_warehouse", "products": null}}
+
+示例29（退货 - 简短供应商名 + 克重在前）：
+用户输入："10克 足金5G吊坠 退货给 嘉彩"
+{{"action": "退货", "return_product_name": "足金5G吊坠", "return_weight": 10, "return_supplier_name": "嘉彩", "return_type": "to_supplier", "products": null}}
+
+示例30（退货 - 退给简写）：
+用户输入："足金手链 5克 退给 华昌"
+{{"action": "退货", "return_product_name": "足金手链", "return_weight": 5, "return_supplier_name": "华昌", "return_type": "to_supplier", "products": null}}
+
+示例31（退货 - 口语化表达）：
+用户输入："把那个古法戒指15克退回给嘉彩"
+{{"action": "退货", "return_product_name": "古法戒指", "return_weight": 15, "return_supplier_name": "嘉彩", "return_type": "to_supplier", "products": null}}
 
 示例-销退1：
 用户输入："张三要退货 足金手镯 10g"

@@ -270,13 +270,22 @@ async def handle_return(ai_response, db: Session, user_role: str = "manager") ->
         reason = getattr(ai_response, 'return_reason', None) or '质量问题'
         
         if not raw_product_name:
-            return {"success": False, "message": "未识别到退货商品名称，请提供商品名（如：退货 足金手镯 10g 退给XX珠宝）", "action": "退货"}
+            parts = []
+            if weight is not None:
+                parts.append(f"{weight}克")
+            if supplier_name:
+                parts.append(f"供应商「{supplier_name}」")
+            recognized = f"（已识别：{'、'.join(parts)}）" if parts else ""
+            return {"success": False, "message": f"未识别到退货商品名称{recognized}，请补充商品名（如：足金手镯 10克 退给XX）", "action": "退货"}
         
         # 解析商品编码
         product_name, _code = resolve_product_code(raw_product_name, db)
         
         if weight is None:
-            return {"success": False, "message": "未识别到退货克重，请提供克重（如：退货 足金手镯 10g）", "action": "退货"}
+            parts = [f"商品「{product_name}」"]
+            if supplier_name:
+                parts.append(f"供应商「{supplier_name}」")
+            return {"success": False, "message": f"已识别{'和'.join(parts)}，请补充退货克重（如：10克）", "action": "退货"}
         
         weight = float(weight)
         labor_cost = float(labor_cost)
@@ -286,7 +295,7 @@ async def handle_return(ai_response, db: Session, user_role: str = "manager") ->
         supplier_obj = None
         if return_type == 'to_supplier':
             if not supplier_name:
-                return {"success": False, "message": "退给供应商需要指定供应商名称（如：退货 足金手镯 10g 退给XX珠宝）", "action": "退货"}
+                return {"success": False, "message": f"已识别商品「{product_name}」{weight}克，请补充供应商名称（如：退给XX）", "action": "退货"}
             
             supplier_obj = db.query(Supplier).filter(Supplier.name == supplier_name).first()
             if not supplier_obj:
