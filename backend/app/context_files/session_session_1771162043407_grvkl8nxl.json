@@ -1,0 +1,30 @@
+{
+  "session_id": "session_1771162043407_grvkl8nxl",
+  "created_at": "2026-02-17T22:31:57.892679",
+  "last_updated": "2026-02-17T22:31:57.892679",
+  "goal": null,
+  "current_task": null,
+  "task_phases": [],
+  "current_phase": 0,
+  "completed_actions": [
+    {
+      "action": "登记收款",
+      "result": "✅ **收款登记成功**\n\n📋 单号：SK20260217223157\n👤 客户：张三\n💰 金额：¥8000.00\n💳 方式：转账\n🕐 时间：2026-02-17 22:31:57\n📝 冲抵明细：\n   • 冲抵应收款#9(销售单#32)：¥7029.90\n💰 剩余预收款：¥970.10\n\n<!-- PAYMENT:5:SK20260217223157 -->",
+      "success": true,
+      "timestamp": "2026-02-17T22:31:57.892679",
+      "data": {
+        "payment_id": 5,
+        "payment_no": "SK20260217223157",
+        "customer_name": "张三",
+        "amount": 8000.0,
+        "payment_method": "转账"
+      }
+    }
+  ],
+  "errors": [],
+  "notes": [],
+  "entities": {
+    "last_action": "登记收款",
+    "last_customer_name": "张三"
+  }
+}

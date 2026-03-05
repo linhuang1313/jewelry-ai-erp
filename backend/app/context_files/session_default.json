@@ -1,0 +1,21 @@
+{
+  "session_id": "default",
+  "created_at": "2026-02-19T00:31:35.809222",
+  "last_updated": "2026-02-19T00:31:35.809222",
+  "goal": null,
+  "current_task": null,
+  "task_phases": [],
+  "current_phase": 0,
+  "completed_actions": [
+    {
+      "action": "入库",
+      "result": "请核对入库信息: 足金手链 15.5克",
+      "success": true,
+      "timestamp": "2026-02-19T00:31:35.809222",
+      "data": {}
+    }
+  ],
+  "errors": [],
+  "notes": [],
+  "entities": {}
+}

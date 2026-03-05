@@ -1,0 +1,31 @@
+{
+  "session_id": "session_1771310632801_72kezh19s",
+  "created_at": "2026-02-17T17:04:26.413313",
+  "last_updated": "2026-02-17T17:04:26.413313",
+  "goal": null,
+  "current_task": null,
+  "task_phases": [],
+  "current_phase": 0,
+  "completed_actions": [
+    {
+      "action": "创建销售单",
+      "result": "✅ **销售单已创建（未确认）**\n\n📋 单号：XS20260217170426\n👤 客户：张三\n📦 商品明细：\n  - 3DDZ（足金3D硬金吊坠）10.0g ¥15.0/g\n💰 总工费：¥150.00\n⚖️ 总克重：10.00g\n\n⚠️ 销售单为**未确认**状态，库存尚未扣减。\n请在销售单列表中点击\"确认\"使库存生效，或输入\"确认销售单 XS20260217170426\"。\n\n<!-- SA",
+      "success": true,
+      "timestamp": "2026-02-17T17:04:26.413313",
+      "data": {
+        "sales_order_id": 33,
+        "order_no": "XS20260217170426",
+        "customer_name": "张三",
+        "total_labor_cost": 150.0,
+        "total_weight": 10.0
+      }
+    }
+  ],
+  "errors": [],
+  "notes": [],
+  "entities": {
+    "last_action": "创建销售单",
+    "last_order_no": "XS20260217170426",
+    "last_customer_name": "张三"
+  }
+}

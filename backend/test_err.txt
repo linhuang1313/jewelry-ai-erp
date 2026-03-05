@@ -1,0 +1,51 @@
+Traceback (most recent call last):
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.NotNullViolation: 错误:  null value in column "labor_amount" of relation "settlement_orders" violates not-null constraint
+DETAIL:  失败, 行包含(3, XSJ220722021, 10817, null, 393, null, 0, null, null, 2252.16, completed, null, null, null, null, null, null, 0, 0, 0, 0, null, null, 0, full).
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<string>", line 54, in <module>
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 4331, in flush
+    self._flush(objects)
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 4466, in _flush
+    with util.safe_reraise():
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 4427, in _flush
+    flush_context.execute()
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 1233, in _emit_insert_statements
+    result = connection.execute(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\sql\elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) 错误:  null value in column "labor_amount" of relation "settlement_orders" violates not-null constraint
+DETAIL:  失败, 行包含(3, XSJ220722021, 10817, null, 393, null, 0, null, null, 2252.16, completed, null, null, null, null, null, null, 0, 0, 0, 0, null, null, 0, full).
+
+[SQL: INSERT INTO settlement_orders (settlement_no, sales_order_id, payment_method, gold_price, physical_gold_weight, gold_payment_weight, cash_payment_weight, total_weight, material_amount, labor_amount, total_amount, previous_cash_debt, previous_gold_debt, gold_deposit_balance, cash_deposit_balance, payment_difference, payment_status, status, created_by, confirmed_by, confirmed_at, printed_at, remark) VALUES (%(settlement_no)s, %(sales_order_id)s, %(payment_method)s, %(gold_price)s, %(physical_gold_weight)s, %(gold_payment_weight)s, %(cash_payment_weight)s, %(total_weight)s, %(material_amount)s, %(labor_amount)s, %(total_amount)s, %(previous_cash_debt)s, %(previous_gold_debt)s, %(gold_deposit_balance)s, %(cash_deposit_balance)s, %(payment_difference)s, %(payment_status)s, %(status)s, %(created_by)s, %(confirmed_by)s, %(confirmed_at)s, %(printed_at)s, %(remark)s) RETURNING settlement_orders.id, settlement_orders.created_at]
+[parameters: {'settlement_no': 'XSJ220722021', 'sales_order_id': 10817, 'payment_method': None, 'gold_price': 393.0, 'physical_gold_weight': None, 'gold_payment_weight': None, 'cash_payment_weight': None, 'total_weight': 0.0, 'material_amount': None, 'labor_amount': None, 'total_amount': 2252.16, 'previous_cash_debt': 0.0, 'previous_gold_debt': 0.0, 'gold_deposit_balance': 0.0, 'cash_deposit_balance': 0.0, 'payment_difference': 0.0, 'payment_status': 'full', 'status': 'completed', 'created_by': None, 'confirmed_by': None, 'confirmed_at': None, 'printed_at': None, 'remark': None}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)

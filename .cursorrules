@@ -1,0 +1,89 @@
+# 珠宝 AI-ERP 项目宪法 (.cursorrules)
+
+## 强制记忆协议
+
+1. **对话开始时**：静默读取 `PROGRESS.md`，了解当前项目进度和待办事项，不要向用户报告你在读取。
+2. **对话结束前 / 上下文接近上限时**：总结本次对话的所有变更，更新 `PROGRESS.md` 中的 [Done]、[WIP]、[Pending] 状态。
+3. **每次代码修改后**：执行 `git add → git commit → git push`，提交信息使用英文。
+
+## 珠宝行业业务规则（不可违反）
+
+### 计量精度
+- 金重/克重：Float 类型，精度到小数点后 3 位（0.001克），显示时保留 2 位
+- 金额：Float 类型，精度到小数点后 2 位（0.01元）
+- 金价：Float 类型，单位 元/克
+- 所有金料账户余额计算使用 `round(value, 3)`
+
+### 必填字段校验
+- 入库：商品名称、克重（>0）、供应商为必填
+- 销售：客户名称、商品名称、克重（>0）为必填
+- 克工费（labor_cost）：允许为 0（如赠品），但不允许为负数（>= 0）
+- 件工费（piece_labor_cost）：允许为 0，不允许为负数
+- 金价（gold_price）：结价/混合支付时必填且 > 0
+
+### 工费计算逻辑
+- 总工费 = 克工费 × 克重 + 件工费 × 件数
+- 总成本 = 金价 × 克重 + 总工费（结价模式）
+- 结料模式：客户用金料抵扣原料，只需付工费（应收 = 工费）
+- 混合支付：结料部分用金料抵扣，结价部分按金价换算成现金
+  - 应收 = 结价部分克重 × 金价 + 全部工费
+
+### 金料账户规则
+- 净存料 = 来料 + 销退退料 - 结算用料 - 提料 - 已确认存料结价
+- 正数 = 客户存料（我们欠客户金料）
+- 负数 = 客户欠料（客户欠我们金料）
+- 余额允许为负值（负值 = 欠料）
+- 金料扣减在结算单**确认时**执行，不在创建时执行
+
+### 单据两步流程
+- 所有单据：创建(draft) → 确认(confirmed)
+- draft 状态：不影响库存/账户，可修改、可取消
+- confirmed 状态：影响库存/账户，需先撤销才能修改
+- 确认操作必须有权限检查
+
+### 结算单状态机
+```
+创建(draft) → 确认(confirmed) → 打印(printed)
+     ↓              ↓
+   取消(cancelled)  撤销→draft
+```
+
+### 单据编号规则
+- 入库单: RK + 日期 + 序号（如 RK20260206001）
+- 销售单: XS + 日期 + 序号
+- 退货单: TH + 日期 + 序号
+- 结算单: JS + 日期 + 序号
+- 收料单: SL + 日期 + 序号
+- 付料单: FL + 日期 + 序号
+- 转移单: TR + 日期 + 序号
+
+## 技术栈开发约束
+
+### 后端 (Python/FastAPI)
+- 框架：FastAPI + SQLAlchemy ORM + PostgreSQL (pgvector)
+- 数据库事务：`db.commit()` 必须在循环外，用 try-except + `db.rollback()` 包裹
+- 数值校验：weight > 0, labor_cost >= 0，用 try-except 包裹 float() 转换
+- 状态值使用英文：pending/confirmed/completed/cancelled/draft
+- 时间统一使用 `china_now()`（UTC+8）
+- 路由文件中静态路由必须在动态路由之前定义
+- API 路由前缀：`/api/{module}`
+- 权限检查：所有写操作必须调用 `has_permission(user_role, permission_key)`
+
+### 前端 (React/Vite)
+- 框架：React 18 + Vite + Tailwind CSS
+- 组件文件：页面级用 .tsx，纯逻辑用 .ts/.js
+- API 调用：使用 `frontend/src/utils/api.ts` 中的 `apiCall()` 封装
+- 状态管理：React hooks + Context，不使用 Redux
+- 样式：Tailwind CSS，遵循 `jewelry-theme.css` 中的设计规范
+- 国际化：使用 i18next，所有用户可见文本需支持中英文
+
+### AI 集成
+- 主 LLM：DeepSeek (deepseek-chat)，通过 OpenAI SDK 调用
+- OCR：百度云 OCR API（高精度/表格/表单识别）
+- Embedding：阿里云百炼 text-embedding-v3（1024维）
+- 向量存储：PostgreSQL + pgvector（HNSW 索引，余弦相似度）
+
+### Git 规范
+- 每次修改后立即 commit + push
+- 提交信息格式：`fix:` / `feat:` / `refactor:` + 英文描述
+- 不提交 .env 文件和 context_files/ 目录

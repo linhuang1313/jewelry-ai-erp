@@ -1,0 +1,242 @@
+--- Tables starting with aa_ ---
+aa_account
+aa_accountassociation
+aa_accounttype
+aa_account_auxproperty
+aa_account_ext
+aa_adjustitem
+aa_adjustsolution
+aa_bankaccount
+aa_bankaccount_balance
+aa_barcodeinformation
+aa_barcodeinformationclass
+aa_bizusage
+aa_busitype
+aa_canceltype
+aa_cashflowitem
+aa_cashflowitemclass
+aa_cashflowitemclass_ext
+aa_cashitemaccountdetail
+aa_commonsummary
+aa_commonsummaryclass
+aa_commonsummaryclass_ext
+aa_currency
+aa_dr_membertype
+aa_department
+aa_department_ext
+aa_deprmethod
+aa_doctype
+aa_documentsusage
+aa_expenseitem
+aa_handlereason
+aa_handlereason_ext
+aa_incdecway
+aa_incdecway_ext
+aa_marketingorgan
+aa_marketingorgan_ext
+aa_maxtsrecord
+aa_outsourcedpricesource
+aa_parentaccount
+aa_parentcashflowitemclass
+aa_parentcommonsummaryclass
+aa_parentdepartment
+aa_parentexpenseitem
+aa_parenthandlereason
+aa_parentincdecway
+aa_parentmarketingorgan
+aa_parentpartnerclass
+aa_parentrdstyle
+aa_parentusestatus
+aa_partner
+aa_partneraddress
+aa_partnerclass
+aa_partner_pay
+aa_partner_receive
+aa_person
+aa_person_paybalance
+aa_person_receivebalance
+aa_pricestrategy
+aa_project_afterupgrade
+aa_project_beforeupgrade
+aa_purchasepricesource
+aa_rdstyle
+aa_rdstyle_ext
+aa_salepricesource
+aa_settlestyle
+aa_tickettype
+aa_unit
+aa_usestatus
+aa_usestatus_ext
+aa_expenseitem_ext
+aa_partnerclass_ext
+aa_dimensionset
+
+--- aa_account columns ---
+idUnit: integer
+idaccounttypeDTO: integer
+iddefaultcurrencyDTO: integer
+bookformat: integer
+dcdirection: integer
+createdtime: timestamp without time zone
+accountingyear: integer
+isquantity: integer
+isexchange: integer
+isgatherprinting: integer
+canmakedoc: integer
+iscontrolled: integer
+iscontrolledbussinesssys: integer
+iscontrolledcash: integer
+iscash: integer
+isbank: integer
+iscashequivalents: integer
+isauxaccdepartment: integer
+isauxaccperson: integer
+isauxacccustomer: integer
+isauxaccsupplier: integer
+isauxaccproject: integer
+isauxaccinventory: integer
+isexauxacc1: integer
+isexauxacc2: integer
+isexauxacc3: integer
+isexauxacc4: integer
+isexauxacc5: integer
+isexauxacc6: integer
+isexauxacc7: integer
+isexauxacc8: integer
+isexauxacc9: integer
+isexauxacc10: integer
+isEndNode: integer
+disabled: integer
+depth: integer
+ts: bytea
+IsAux: integer
+isFinalTransferExchange: integer
+isBillingInfo: integer
+Remainder: numeric
+id: integer
+idGatherPrintingAccountDTO: integer
+idParent: integer
+name: character varying
+inId: character varying
+shorthand: character varying
+code: character varying
+ModifyLog: character varying
+
+--- aa_doctype columns ---
+limitedtype: integer
+ts: bytea
+disabled: integer
+id: integer
+sequencenumber: integer
+name: character varying
+docword: character varying
+code: character varying
+
+--- aa_partner columns ---
+customerType: integer
+partnerType: integer
+priceGrade: integer
+purchaseSettleStyle: integer
+saleSettleStyle: integer
+taxRate: integer
+saleStartDate: timestamp without time zone
+purchaseStartDate: timestamp without time zone
+madeDate: timestamp without time zone
+updated: timestamp without time zone
+createdTime: timestamp without time zone
+priuserdefdecm4: numeric
+IsModifiedCode: integer
+ElectronicInvoiceReceiveMode: integer
+purchaseSpaceMonth: integer
+priuserdefdecm5: numeric
+DefaultInvoiceTypeOfReceive: integer
+iddefaultSettleStyleOfReceive: integer
+iddefaultBankAccountOfReceive: integer
+DefaultInvoiceTypeOfPayment: integer
+iddefaultSettleStyleOfPayment: integer
+iddefaultBankAccountOfPayment: integer
+isAutoCancel: integer
+IsSystem: integer
+isContainTaxOnPurchase: integer
+purchaseCheckMonth: integer
+purchaseCheckDate: integer
+AdvRBalance_Abandon: numeric
+CheckInScope: numeric
+VisitFrequency: numeric
+IsNeedCheckInPhoto: integer
+IsNeedLyHuoPhoto: integer
+IsNeedPromotionPhoto: integer
+IsNeedCompetitorPhoto: integer
+PrintCount: integer
+AdvPBalance_Abandon: numeric
+saleCreditLine: numeric
+Changedate: timestamp without time zone
+ARBalance_Abandon: numeric
+APBalance_Abandon: numeric
+disabled: integer
+ts: bytea
+saleCreditDays: numeric
+purchaseCreditDays: numeric
+priuserdefdecm1: numeric
+saleSpaceMonth: integer
+priuserdefdecm2: numeric
+creditBalance: numeric
+extendedAccounts: numeric
+SellCustomer: integer
+MadeRecordDate: timestamp without time zone
+saleCheckMonth: integer
+RunShop: integer
+priuserdefdecm3: numeric
+saleCheckDate: integer
+Birthday: timestamp without time zone
+AutoCreateMember: integer
+id: integer
+idsaledepartment: integer
+iddistrict: integer
+idMarketingOrgan: integer
+idPmarketingOrgan: integer
+idsettlementPartner: integer
+idpartnerclass: integer
+idsaleman: integer
+idMemberType: integer
+accbank: integer
+SavedRoutes: character varying
+name: character varying
+partnerAbbName: character varying
+shortHand: character varying
+representative: character varying
+bankAccount: character varying
+taxRegcode: character varying
+customeraddressphone: character varying
+updatedBy: character varying
+priuserdefnvc1: character varying
+priuserdefnvc2: character varying
+priuserdefnvc3: character varying
+priuserdefnvc4: character varying
+priuserdefnvc5: character varying
+HasEverChanged: character varying
+codeSettlementPartner: character varying
+addressJC: character varying
+ShipmentAddress: character varying
+Contact: character varying
+MobilePhone: character varying
+TelephoneNo: character varying
+Fax: character varying
+EmailAddr: character varying
+QqNo: character varying
+MsnAddress: character varying
+UuNo: character varying
+Position: character varying
+CheckAddress: character varying
+CustomerAddress: character varying
+eAccount: character varying
+ElectronicInvoiceReceiveEMail: character varying
+ElectronicInvoiceReceiveMobilePhone: character varying
+VisitAddress: character varying
+Coordinate: character varying
+Longitude: character varying
+Latitude: character varying
+Creater: character varying
+Changer: character varying
+Route: character varying
+code: character varying

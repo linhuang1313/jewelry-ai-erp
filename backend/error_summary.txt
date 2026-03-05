@@ -1,0 +1,52 @@
+Traceback (most recent call last):
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.UniqueViolation: 错误:  重复键违反唯一约束"ix_customers_customer_no"
+DETAIL:  键值"(customer_no)=(CUST202602210041004101)" 已经存在
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\dev\jewelry-ai-erp\backend\scripts\import_sales_xlsx.py", line 60, in bulk_insert_records
+    try:
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 4331, in flush
+    self._flush(objects)
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 4466, in _flush
+    with util.safe_reraise():
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 4427, in _flush
+    flush_context.execute()
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 1233, in _emit_insert_statements
+    result = connection.execute(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\sql\elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "D:\dev\jewelry-ai-erp\backend\.venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.IntegrityError: (psycopg2.errors.UniqueViolation) 错误:  重复键违反唯一约束"ix_customers_customer_no"
+DETAIL:  键值"(customer_no)=(CUST202602210041004101)" 已经存在
+
+[SQL: INSERT INTO customers (customer_no, name, phone, wechat, address, customer_type, total_purchase_amount, total_purchase_weight, total_purchase_count, last_purchase_time, status, remark) VALUES (%(customer_no)s, %(name)s, %(phone)s, %(wechat)s, %(address)s, %(customer_type)s, %(total_purchase_amount)s, %(total_purchase_weight)s, %(total_purchase_count)s, %(last_purchase_time)s, %(status)s, %(remark)s) RETURNING customers.id, customers.create_time]
+[parameters: {'customer_no': 'CUST202602210041004101', 'name': '许攀', 'phone': None, 'wechat': None, 'address': None, 'customer_type': '个人', 'total_purchase_amount': 0.0, 'total_purchase_weight': 0.0, 'total_purchase_count': 0, 'last_purchase_time': None, 'status': 'active', 'remark': None}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)

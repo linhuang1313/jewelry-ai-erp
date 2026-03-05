@@ -1,0 +1,1 @@
+cd .\backend &&  .\start_server_venv.bat
